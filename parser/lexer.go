@@ -10,15 +10,32 @@ type Lexer struct {
 
 // NewLexer returns a new lexer for the providing input string.
 func NewLexer(input []byte) *Lexer {
-	return &Lexer{
+	l := &Lexer{
 		input: input,
 	}
+
+	if len(input) > 0 {
+		l.readPos++
+	}
+
+	return l
 }
 
 // Next returns true if there are more tokens to process
 // and advances the cursor till end of file is reached.
 func (l *Lexer) Next() bool {
-	return false
+	if len(l.input) == 0 {
+		// nothing to do
+		return false
+	}
+
+	if l.readPos > len(l.input) {
+		return false
+	}
+
+	l.curPos++
+	l.readPos++
+	return true
 }
 
 // Token returns the current token at the cursor position.

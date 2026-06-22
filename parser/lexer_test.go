@@ -3,6 +3,7 @@ package parser
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -17,9 +18,30 @@ func (suite *LexerTestSuite) TestLexing__readChar() {
 	l := NewLexer(input)
 	suite.NotNil(l)
 
-	suite.Equal('a', l.readChar())
-	suite.Equal('b', l.readChar())
-	suite.Equal(rune(0), l.readChar())
+	// don't need to call .readChar here because
+	// when we create the lexer it will automatically
+	// advance the pointer to the firat char in the input
+	suite.Equal(byte('a'), l.ch)
+
+	l.readChar()
+	suite.Equal(byte('b'), l.ch)
+
+	l.readChar()
+	suite.Equal(byte(0), l.ch)
+}
+
+func (suite *LexerTestSuite) TestLexing__NextToken() {
+	input := ":"
+
+	l := NewLexer(input)
+	suite.NotNil(l)
+
+	got := l.NextToken()
+	want := Token{Type: COLON, Value: []byte(":")}
+
+	if diff := cmp.Diff(want, got); diff != "" {
+		suite.T().Errorf("%s() mismatch (-want +got):\n%s", suite.T().Name(), diff)
+	}
 }
 
 //func (suite *LexerTestSuite) _TestLexing__Single_task() {

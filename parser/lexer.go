@@ -17,7 +17,11 @@ func NewLexer(input []byte) *Lexer {
 
 // Next returns true if there are more tokens to process
 // and advances the cursor till end of file is reached.
-func (l *Lexer) Next() bool {}
+func (l *Lexer) Next() bool {
+	return false
+}
 
 // Token returns the current token at the cursor position.
-func (l *Lexer) Token() Token {}
+func (l *Lexer) Token() Token {
+	return Token{}
+}

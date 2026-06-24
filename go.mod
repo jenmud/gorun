@@ -7,5 +7,8 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
+	golang.org/x/tools v0.46.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+tool golang.org/x/tools/cmd/goyacc

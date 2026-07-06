@@ -8,6 +8,12 @@ identityfile = "/some/file"
 [envvars]
 OTEL_SERVICE_NAME = "Gorun"
 
+[[servers]]
+hostname = "some-server-A"
+
+[[servers]]
+hostname = "some-server-B"
+
 [[tasks]]
 name = "create group docker"
 cmd = "group add docker"
@@ -26,3 +32,6 @@ cmd = "usermod -Ga docker foo"
 [[tasks.tasks]]
 name = "echo date"
 cmd = "date"
+
+[[tasks.servers]]
+hostname = "some-server-B"

@@ -1,0 +1,28 @@
+title = "Deployment for example server"
+
+[ssh]
+username = "foo"
+password = "bar"
+identityfile = "/some/file"
+
+[envvars]
+OTEL_SERVICE_NAME = "Gorun"
+
+[[tasks]]
+name = "create group docker"
+cmd = "group add docker"
+
+[[tasks]]
+name = "create user foo"
+cmd = "useradd foo"
+
+[[tasks.servers]]
+hostname = "localhost"
+
+[[tasks.tasks]]
+name = "add user to docker group"
+cmd = "usermod -Ga docker foo"
+
+[[tasks.tasks]]
+name = "echo date"
+cmd = "date"

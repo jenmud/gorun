@@ -32,5 +32,6 @@ func main() {
 		fmt.Printf("\t- %s\n", s.Hostname)
 	}
 
+	fmt.Println()
 	cfg.RunTaskPipeline()
 }

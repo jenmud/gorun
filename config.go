@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"log/slog"
 
 	"github.com/BurntSushi/toml"
 )
@@ -76,7 +75,9 @@ func run(t Task, indent int) {
 	for range indent {
 		indentStr += "\t"
 	}
-	slog.Info(fmt.Sprintf("%s -> %s\n", indentStr, t.Name))
+
+	fmt.Printf("%s -> %s\n", indentStr, t.Name)
+
 	for _, subT := range t.Tasks {
 		indent++
 		run(subT, indent)
@@ -84,8 +85,6 @@ func run(t Task, indent int) {
 }
 
 func (c Config) RunTaskPipeline() {
-	slog.Info("running task pipeline")
-
 	for _, task := range c.Tasks {
 		run(task, 0)
 	}

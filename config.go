@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log/slog"
 
 	"github.com/BurntSushi/toml"
 )
@@ -52,4 +53,40 @@ func (c Config) UniqueServers() []Server {
 	}
 
 	return found
+}
+
+// TaskPipeline returns the full task execution pipeline.
+func (c Config) TaskPipeline() []Task {
+	pipeline := []Task{}
+
+	for _, t := range c.Tasks {
+		pipeline = append(pipeline, t)
+
+		for _, subT := range t.Tasks {
+			subTasks := subT.TaskPipeline()
+			pipeline = append(pipeline, subTasks...)
+		}
+	}
+
+	return pipeline
+}
+
+func run(t Task, indent int) {
+	indentStr := ""
+	for range indent {
+		indentStr += "\t"
+	}
+	slog.Info(fmt.Sprintf("%s -> %s\n", indentStr, t.Name))
+	for _, subT := range t.Tasks {
+		indent++
+		run(subT, indent)
+	}
+}
+
+func (c Config) RunTaskPipeline() {
+	slog.Info("running task pipeline")
+
+	for _, task := range c.Tasks {
+		run(task, 0)
+	}
 }

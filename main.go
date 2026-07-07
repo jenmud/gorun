@@ -31,4 +31,6 @@ func main() {
 	for _, s := range cfg.UniqueServers() {
 		fmt.Printf("\t- %s\n", s.Hostname)
 	}
+
+	cfg.RunTaskPipeline()
 }

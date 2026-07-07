@@ -34,3 +34,18 @@ func (t Task) UniqueServers() []Server {
 
 	return found
 }
+
+// TaskPipeline returns the full task execution pipeline.
+func (t Task) TaskPipeline() []Task {
+	pipeline := []Task{}
+
+	for _, task := range t.Tasks {
+		pipeline = append(pipeline, task)
+
+		for _, subTask := range task.Tasks {
+			pipeline = append(pipeline, subTask)
+		}
+	}
+
+	return pipeline
+}

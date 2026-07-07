@@ -18,20 +18,24 @@ hostname = "some-server-B"
 name = "create group docker"
 cmd = "group add docker"
 
+    [[tasks.tasks]]
+    name = "verify group exists"
+    cmd = "echo 'some verification command'"
+
 [[tasks]]
 name = "create user foo"
 cmd = "useradd foo"
 
+    [[tasks.tasks]]
+    name = "add user to docker group"
+    cmd = "usermod -Ga docker foo"
+
+        [[tasks.tasks.tasks]]
+        name = "echo date"
+        cmd = "date"
+
 [[tasks.servers]]
 hostname = "localhost"
-
-[[tasks.tasks]]
-name = "add user to docker group"
-cmd = "usermod -Ga docker foo"
-
-[[tasks.tasks]]
-name = "echo date"
-cmd = "date"
 
 [[tasks.servers]]
 hostname = "some-server-B"

@@ -27,6 +27,9 @@ name = "create user foo"
 cmd = "useradd foo"
 
     [[tasks.tasks]]
+    name = "echo running some check"
+
+    [[tasks.tasks]]
     name = "add user to docker group"
     cmd = "usermod -Ga docker foo"
 

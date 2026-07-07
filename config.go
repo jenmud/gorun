@@ -86,6 +86,7 @@ func run(t Task, indent int) {
 
 func (c Config) RunTaskPipeline() {
 	for _, task := range c.Tasks {
+		fmt.Println()
 		run(task, 0)
 	}
 }

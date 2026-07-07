@@ -70,23 +70,17 @@ func (c Config) TaskPipeline() []Task {
 	return pipeline
 }
 
-func run(t Task, indent int) {
-	indentStr := ""
-	for range indent {
-		indentStr += "\t"
-	}
-
-	fmt.Printf("%s -> %s\n", indentStr, t.Name)
+func run(t Task, indent string) {
+	fmt.Printf("%s -> %s\n", indent, t.Name)
 
 	for _, subT := range t.Tasks {
-		indent++
-		run(subT, indent)
+		run(subT, indent+"\t")
 	}
 }
 
 func (c Config) RunTaskPipeline() {
 	for _, task := range c.Tasks {
 		fmt.Println()
-		run(task, 0)
+		run(task, "")
 	}
 }

@@ -27,33 +27,22 @@ func (c *Config) Load(r io.Reader) error {
 	return nil
 }
 
-// TaskPipeline returns the full task execution pipeline.
-func (c Config) TaskPipeline() []Task {
+// TaskMap returns a map of all the loaded tasks for fast lookup.
+func (c *Config) TaskMap() map[string]Task {
+	m := make(map[string]Task)
+	for _, t := range c.Tasks {
+		m[t.Name] = t
+	}
+	return m
+}
+
+func (c *Config) Pipeline() [][]Task {
+	//tasks := c.TaskMap()
 	pipeline := []Task{}
 
 	for _, t := range c.Tasks {
 		pipeline = append(pipeline, t)
-
-		for _, subT := range t.Tasks {
-			subTasks := subT.TaskPipeline()
-			pipeline = append(pipeline, subTasks...)
-		}
 	}
 
-	return pipeline
-}
-
-func run(t Task, indent string) {
-	fmt.Printf("%s -> %s\n", indent, t.Name)
-
-	for _, subT := range t.Tasks {
-		run(subT, indent+"\t")
-	}
-}
-
-func (c Config) RunTaskPipeline() {
-	for _, task := range c.Tasks {
-		fmt.Println()
-		run(task, "")
-	}
+	return [][]Task{pipeline}
 }

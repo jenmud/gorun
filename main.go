@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -27,5 +28,13 @@ func main() {
 	slog.Info("parsed config file")
 
 	fmt.Println()
-	cfg.RunTaskPipeline()
+
+	fmt.Println()
+	for _, t := range cfg.Pipeline() {
+		names := []string{}
+		for _, subT := range t {
+			names = append(names, subT.Name)
+		}
+		fmt.Printf("%s\n", strings.Join(names, " -> "))
+	}
 }

@@ -15,7 +15,8 @@ GORUN_ADDRESS = "localhost:8080"
 
 # List of servers in the inventory
 [[servers]]
-hostname = "some-server-A"
+name = "docker-server"
+hostname = "serverA.some-dns.org"
 
     # Optional server SSH details
     [servers.ssh]
@@ -23,29 +24,52 @@ hostname = "some-server-A"
     password = "bar-password"
 
 [[servers]]
-hostname = "some-server-B"
+name = "caddy-server"
+hostname = "serverB.some-dns.org"
 
 # tasks to run
 [[tasks]]
-name = "create group docker"
-cmd = "group add docker"
-
-    # child sub tasks
-    [[tasks.tasks]]
-    name = "verify group exists"
-    cmd = "echo 'some verification command'"
+name = "apt update"
+cmd = "apt update"
 
 [[tasks]]
-name = "create user foo"
-cmd = "useradd foo"
+name = "install docker"
+cmd = """
+sudo apt remove -y $(dpkg --get-selections docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc | cut -f1)
 
-    [[tasks.tasks]]
-    name = "echo running some check"
+# Add Docker's official GPG key:
+sudo apt update
+sudo apt install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
 
-    [[tasks.tasks]]
-    name = "add user to docker group"
-    cmd = "usermod -Ga docker foo"
+# Add the repository to Apt sources:
+sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/ubuntu
+Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
 
-        [[tasks.tasks.tasks]]
-        name = "echo date"
-        cmd = "date"
+sudo apt update
+"""
+
+[[tasks]]
+name = "enable docker"
+cmd = "sudo systemctl enable docker"
+depends_on = ["install docker"]
+
+[[tasks]]
+name = "install caddy"
+cmd = """
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+sudo chmod o+r /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update
+sudo apt install -y caddy
+"""

@@ -25,12 +25,6 @@ func main() {
 	}
 
 	slog.Info("parsed config file")
-	slog.Info("config parsed", slog.Any("cfg", cfg))
-
-	fmt.Println()
-	for _, s := range cfg.UniqueServers() {
-		fmt.Printf("\t- %s\n", s.Hostname)
-	}
 
 	fmt.Println()
 	cfg.RunTaskPipeline()

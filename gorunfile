@@ -1,0 +1,51 @@
+#
+# Gorunfile is a TOML formatted file.
+#
+title = "Deployment for example server"
+
+# Global SSH details
+[ssh]
+username = "foo"
+password = "bar"
+identityfile = "/some/file"
+
+# Global environment variables
+[envvars]
+GORUN_ADDRESS = "localhost:8080"
+
+# List of servers in the inventory
+[[servers]]
+hostname = "some-server-A"
+
+    # Optional server SSH details
+    [servers.ssh]
+    username = "bar"
+    password = "bar-password"
+
+[[servers]]
+hostname = "some-server-B"
+
+# tasks to run
+[[tasks]]
+name = "create group docker"
+cmd = "group add docker"
+
+    # child sub tasks
+    [[tasks.tasks]]
+    name = "verify group exists"
+    cmd = "echo 'some verification command'"
+
+[[tasks]]
+name = "create user foo"
+cmd = "useradd foo"
+
+    [[tasks.tasks]]
+    name = "echo running some check"
+
+    [[tasks.tasks]]
+    name = "add user to docker group"
+    cmd = "usermod -Ga docker foo"
+
+        [[tasks.tasks.tasks]]
+        name = "echo date"
+        cmd = "date"

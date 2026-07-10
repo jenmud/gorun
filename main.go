@@ -30,7 +30,13 @@ func main() {
 	fmt.Println()
 
 	fmt.Println()
-	for _, t := range cfg.Pipeline() {
+
+	pipeline, err := cfg.Pipeline()
+	if err != nil {
+		panic(err)
+	}
+
+	for _, t := range pipeline {
 		names := []string{}
 		for _, subT := range t {
 			names = append(names, subT.Name)

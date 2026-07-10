@@ -36,7 +36,7 @@ func (c *Config) TaskMap() map[string]Task {
 	return m
 }
 
-func (c *Config) Pipeline() [][]Task {
+func (c *Config) Pipeline() ([][]Task, error) {
 	//tasks := c.TaskMap()
 	pipeline := []Task{}
 
@@ -44,5 +44,5 @@ func (c *Config) Pipeline() [][]Task {
 		pipeline = append(pipeline, t)
 	}
 
-	return [][]Task{pipeline}
+	return [][]Task{pipeline}, nil
 }

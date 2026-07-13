@@ -10,7 +10,7 @@ func TestConfig_Pipeline(t *testing.T) {
 	tests := []struct {
 		name    string // description of this test case
 		tasks   []Task
-		want    [][]Task
+		want    []Task
 		wantErr bool
 	}{
 		{
@@ -20,12 +20,10 @@ func TestConfig_Pipeline(t *testing.T) {
 				{Name: "TaskB"},
 				{Name: "TaskC"},
 			},
-			want: [][]Task{
-				{
-					{Name: "TaskA"},
-					{Name: "TaskB"},
-					{Name: "TaskC"},
-				},
+			want: []Task{
+				{Name: "TaskA"},
+				{Name: "TaskB"},
+				{Name: "TaskC"},
 			},
 		},
 		{
@@ -35,12 +33,10 @@ func TestConfig_Pipeline(t *testing.T) {
 				{Name: "TaskB"},
 				{Name: "TaskC"},
 			},
-			want: [][]Task{
-				{
-					{Name: "TaskB"},
-					{Name: "TaskA"},
-					{Name: "TaskC"},
-				},
+			want: []Task{
+				{Name: "TaskB"},
+				{Name: "TaskA"},
+				{Name: "TaskC"},
 			},
 		},
 		{
@@ -50,12 +46,10 @@ func TestConfig_Pipeline(t *testing.T) {
 				{Name: "TaskB"},
 				{Name: "TaskC", DependsOn: []string{"TaskB"}},
 			},
-			want: [][]Task{
-				{
-					{Name: "TaskB"},
-					{Name: "TaskC"},
-					{Name: "TaskA"},
-				},
+			want: []Task{
+				{Name: "TaskB"},
+				{Name: "TaskC"},
+				{Name: "TaskA"},
 			},
 		},
 		{
@@ -65,12 +59,10 @@ func TestConfig_Pipeline(t *testing.T) {
 				{Name: "TaskB", DependsOn: []string{"TaskC"}},
 				{Name: "TaskC", DependsOn: []string{"TaskB"}},
 			},
-			want: [][]Task{
-				{
-					{Name: "TaskB"},
-					{Name: "TaskC"},
-					{Name: "TaskA"},
-				},
+			want: []Task{
+				{Name: "TaskB"},
+				{Name: "TaskC"},
+				{Name: "TaskA"},
 			},
 			wantErr: true,
 		},

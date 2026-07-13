@@ -36,11 +36,9 @@ func main() {
 		panic(err)
 	}
 
+	names := []string{}
 	for _, t := range pipeline {
-		names := []string{}
-		for _, subT := range t {
-			names = append(names, subT.Name)
-		}
-		fmt.Printf("%s\n", strings.Join(names, " -> "))
+		names = append(names, t.Name)
 	}
+	fmt.Printf("%s\n", strings.Join(names, " -> "))
 }

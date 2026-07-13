@@ -96,3 +96,54 @@ func TestConfig_Pipeline(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_TaskMap(t *testing.T) {
+	tests := []struct {
+		name  string // description of this test case
+		tasks []Task
+		want  map[string]Task
+	}{
+		{
+			name: "simple",
+			tasks: []Task{
+				{Name: "a"},
+				{Name: "b"},
+				{Name: "c"},
+			},
+			want: map[string]Task{
+				"a": {Name: "a"},
+				"b": {Name: "b"},
+				"c": {Name: "c"},
+			},
+		},
+		{
+			name: "complex",
+			tasks: []Task{
+				{Name: "a"},
+				{Name: "b", DependsOn: []string{"d"}},
+				{Name: "c"},
+				{Name: "d"},
+				{Name: "c"},
+			},
+			want: map[string]Task{
+				"a": {Name: "a"},
+				"b": {Name: "b", DependsOn: []string{"d"}},
+				"c": {Name: "c"},
+				"d": {Name: "d"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var c Config
+			c.Tasks = tt.tasks
+
+			got := c.TaskMap()
+
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("%s = %s (- want, + got)", tt.name, diff)
+			}
+		})
+	}
+}

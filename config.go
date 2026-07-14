@@ -37,10 +37,12 @@ func (c *Config) TaskMap() map[string]Task {
 }
 
 func (c *Config) Pipeline() ([]Task, error) {
-	//tasks := c.TaskMap()
+	// Using Kahn's topological sort
+	// we will need to first build a directed graph
+	// so that we can look at the incoming edges etc...
 	pipeline := []Task{}
 
-	for _, t := range c.Tasks {
+	for _, t := range c.TaskMap() {
 		pipeline = append(pipeline, t)
 	}
 

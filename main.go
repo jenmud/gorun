@@ -31,14 +31,16 @@ func main() {
 
 	fmt.Println()
 
-	pipeline, err := cfg.Pipeline()
+	graph, err := NewGraph(cfg.Tasks...)
 	if err != nil {
 		panic(err)
 	}
 
 	names := []string{}
-	for _, t := range pipeline {
-		names = append(names, t.Name)
+	for _, n := range graph.Nodes() {
+		name := fmt.Sprintf("%s (in: %d, out: %d)", n.Task.Name, len(n.Inbound), len(n.Outbound))
+		names = append(names, name)
 	}
+
 	fmt.Printf("%s\n", strings.Join(names, " -> "))
 }

@@ -1,6 +1,8 @@
 package main
 
-import "errors"
+import (
+	"fmt"
+)
 
 type Node struct {
 	Task     Task
@@ -34,7 +36,7 @@ func NewGraph(task ...Task) (*Graph, error) {
 		for _, dep := range node.Task.DependsOn {
 			d, ok := g.nodes[dep]
 			if !ok {
-				return nil, errors.New("depends on task not found")
+				return nil, fmt.Errorf("depends_on task %q not found", dep)
 			}
 
 			d.Outbound = append(d.Outbound, node)
@@ -53,7 +55,7 @@ func NewGraph(task ...Task) (*Graph, error) {
 func (g *Graph) Node(name string) (Node, error) {
 	n, ok := g.nodes[name]
 	if !ok {
-		return Node{}, errors.New("node not found")
+		return Node{}, fmt.Errorf("node task %q not found", name)
 	}
 	return n, nil
 }

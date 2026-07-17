@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sort"
 )
 
 type Node struct {
@@ -70,5 +71,19 @@ func (g *Graph) Nodes() []Node {
 		i++
 	}
 
+	sort.SliceStable(nodes, func(i, j int) bool {
+		return nodes[i].Task.Name < nodes[j].Task.Name
+	})
+
 	return nodes
+}
+
+func (g *Graph) Ordered() ([]Task, error) {
+	pipeline := []Task{}
+
+	for _, node := range g.Nodes() {
+		pipeline = append(pipeline, node.Task)
+	}
+
+	return pipeline, nil
 }

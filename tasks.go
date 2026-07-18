@@ -1,5 +1,7 @@
 package main
 
+import "time"
+
 // Task is a task to execute on one or more servers.
 type Task struct {
 	Name      string   `toml:"name"`
@@ -7,11 +9,13 @@ type Task struct {
 	DependsOn []string `toml:"depends_on"`
 }
 
-// ExecutionTask is a task to be executed on a server
-type ExecutionTask struct {
-	name      string
-	server    Server
-	cmd       string
-	completed bool
-	failed    bool
+// TaskExec is a execution task to be run on a server.
+type TaskExec struct {
+	task        Task
+	server      Server
+	createdAt   time.Time
+	completedAt time.Time
+	stdout      []byte
+	stderr      []byte
+	exitCode    int
 }

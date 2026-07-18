@@ -27,10 +27,12 @@ hostname = "serverA.some-dns.org"
 name = "caddy-server"
 hostname = "serverB.some-dns.org"
 
+
 # tasks to run
 [[tasks]]
 name = "apt update"
 cmd = "apt update"
+
 
 [[tasks]]
 name = "install docker"
@@ -58,10 +60,12 @@ EOF
 sudo apt update
 """
 
+
 [[tasks]]
 name = "enable docker"
 cmd = "sudo systemctl enable docker"
 depends_on = ["install docker"]
+
 
 [[tasks]]
 name = "install caddy"
@@ -76,10 +80,12 @@ sudo apt update
 sudo apt install -y caddy
 """
 
+
 [[tasks]]
 name = "add user to docker group"
 depends_on = ["enable docker", "add ubuntu user"]
 cmd = "sudo usermod -Ga docker ubuntu"
+
 
 [[tasks]]
 name = "add ubuntu user"

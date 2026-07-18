@@ -1,16 +1,21 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
 
 	_ "github.com/joho/godotenv/autoload"
 )
 
 func main() {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	defer cancel()
+
 	flag.Parse()
 	filename := flag.Arg(0)
 
@@ -44,4 +49,9 @@ func main() {
 	}
 
 	fmt.Printf("%s\n", strings.Join(names, " -> "))
+
+	if err := cfg.Run(ctx); err != nil {
+		panic(err)
+	}
+
 }

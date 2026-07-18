@@ -1,3 +1,5 @@
+.PHONY: vendor run test build-otel build-go build
+
 vendor:
 	go mod tidy && go mod vendor
 

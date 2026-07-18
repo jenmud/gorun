@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"sync"
+	"time"
 
 	"github.com/BurntSushi/toml"
 )
@@ -97,4 +100,55 @@ func (c *Config) Pipeline() ([]Task, error) {
 	}
 
 	return result, nil
+}
+
+// RunTask runs a single task one or more servers.
+func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
+	return errors.New("not implemented")
+}
+
+// Run runs all the tasks as returned by `Pipeline` on one or more servers.
+func (c *Config) Run(ctx context.Context, server ...Server) error {
+	pipeline, err := c.Pipeline()
+	if err != nil {
+		return fmt.Errorf("error building task execution pipeline: %w", err)
+	}
+
+	var wg sync.WaitGroup
+
+	for _, server := range c.Servers {
+		wg.Go(func() {
+			sshClient, err := NewSSHClient(ctx, server)
+			if err != nil {
+				// TODO: need to catch this in a error group
+				panic(err)
+			}
+
+			defer sshClient.Close()
+
+			session, err := sshClient.NewSession()
+			if err != nil {
+				// TODO: need to catch this in a error group
+				panic(err)
+			}
+
+			defer session.Close()
+
+			for _, task := range pipeline {
+				t := TaskExec{
+					task:      task,
+					server:    session,
+					createdAt: time.Now(),
+				}
+
+				if err := t.Execute(ctx); err != nil {
+					// TODO: need to catch this in a error group
+					panic(err)
+				}
+			}
+		})
+	}
+
+	wg.Wait()
+	return nil
 }

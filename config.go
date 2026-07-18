@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
@@ -36,15 +37,64 @@ func (c *Config) TaskMap() map[string]Task {
 	return m
 }
 
+// Pipeline returns the tasks sorted using Kahn topological soring.
 func (c *Config) Pipeline() ([]Task, error) {
-	// Using Kahn's topological sort
-	// we will need to first build a directed graph
-	// so that we can look at the incoming edges etc...
-	pipeline := []Task{}
+	// keep track of tasks and the count of inbound edges.
+	inDegree := map[string]int{}
 
-	for _, t := range c.TaskMap() {
-		pipeline = append(pipeline, t)
+	// fast lookup for pulling out task lists
+	adj := map[string][]Task{}
+
+	// fist build a unique lookup map of tasks
+	tasks := map[string]Task{}
+	for _, task := range c.Tasks {
+		tasks[task.Name] = task
+		inDegree[task.Name] = 0
 	}
 
-	return pipeline, nil
+	edges := [][2]Task{}
+	for _, task := range tasks {
+		for _, dep := range task.DependsOn {
+			d, ok := tasks[dep]
+			if !ok {
+				return nil, fmt.Errorf("tasks %q not found", dep)
+			}
+			edges = append(edges, [2]Task{d, task})
+		}
+	}
+
+	// build the dependency graph
+	for _, edge := range edges {
+		u, v := edge[0], edge[1]
+		adj[u.Name] = append(adj[u.Name], v)
+		inDegree[v.Name]++
+	}
+
+	queue := []Task{}
+	for task, degree := range inDegree {
+		if degree == 0 {
+			queue = append(queue, tasks[task])
+		}
+	}
+
+	result := []Task{}
+
+	for len(queue) > 0 {
+		task := queue[0]
+		queue = queue[1:]
+		result = append(result, task)
+
+		for _, d := range adj[task.Name] {
+			inDegree[d.Name]--
+			if inDegree[d.Name] == 0 {
+				queue = append(queue, d)
+			}
+		}
+	}
+
+	if len(result) != len(tasks) {
+		return nil, errors.New("cyclic dependency detected")
+	}
+
+	return result, nil
 }

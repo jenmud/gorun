@@ -34,7 +34,7 @@ func main() {
 	fmt.Println()
 
 	names := []string{}
-	items, err := TopologicalSort(cfg.Tasks...)
+	items, err := cfg.Pipeline()
 	if err != nil {
 		panic(err)
 	}

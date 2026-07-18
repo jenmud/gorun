@@ -6,6 +6,10 @@ run:
 	go run . Gorunfile
 
 
+test:
+	go test -race ./...
+
+
 build-otel:
 	# CTI - compile time instrumentation
 	go tool otelc go build -o builds/gorun-otel-CTI . && chmod +x builds/gorun-otel-CTI

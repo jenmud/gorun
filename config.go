@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -118,9 +119,19 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 	for _, server := range c.Servers {
 		wg.Go(func() {
+			logger := slog.With(
+				slog.Group(
+					"server",
+					slog.String("address", server.Hostname),
+				),
+			)
+
+			logger.Info("connecting to server via SSH")
 			sshClient, err := NewSSHClient(ctx, server)
 			if err != nil {
 				// TODO: need to catch this in a error group
+				err = fmt.Errorf("error creating SSH connection: %w", err)
+				logger.Error("error with running tasks", slog.String("reason", err.Error()))
 				panic(err)
 			}
 
@@ -129,6 +140,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			session, err := sshClient.NewSession()
 			if err != nil {
 				// TODO: need to catch this in a error group
+				err = fmt.Errorf("error creating SSH session: %w", err)
+				logger.Error("error with running tasks", slog.String("reason", err.Error()))
 				panic(err)
 			}
 
@@ -143,6 +156,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 				if err := t.Execute(ctx); err != nil {
 					// TODO: need to catch this in a error group
+					err = fmt.Errorf("error executing task via the SSH session: %w", err)
+					logger.Error("error with running tasks", slog.String("reason", err.Error()))
 					panic(err)
 				}
 			}

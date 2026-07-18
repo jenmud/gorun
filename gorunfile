@@ -16,7 +16,7 @@ GORUN_ADDRESS = "localhost:8080"
 # List of servers in the inventory
 [[servers]]
 name = "docker-server"
-hostname = "serverA.some-dns.org"
+hostname = "serverA.some-dns.org:22"
 
     # Optional server SSH details
     [servers.ssh]
@@ -25,7 +25,7 @@ hostname = "serverA.some-dns.org"
 
 [[servers]]
 name = "caddy-server"
-hostname = "serverB.some-dns.org"
+hostname = "serverB.some-dns.org:22"
 
 
 # tasks to run

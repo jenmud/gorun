@@ -25,7 +25,7 @@ hostname = "serverA.some-dns.org:22"
 
 [[servers]]
 name = "caddy-server"
-hostname = "serverB.some-dns.org:22"
+hostname = "localhost"  # localhost is special and skips creating a SSH session.
 
 
 # tasks to run

@@ -25,7 +25,7 @@ hostname = "serverA.some-dns.org:22"
 
 [[servers]]
 name = "caddy-server"
-hostname = "serverB.some-dns.org:22"
+hostname = "localhost"
 
 
 # tasks to run

@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
-	"time"
 
 	"github.com/BurntSushi/toml"
+	"golang.org/x/crypto/ssh"
 )
 
 // Config represents a config file.
@@ -126,35 +127,35 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				),
 			)
 
-			logger.Info("connecting to server via SSH")
-			sshClient, err := NewSSHClient(ctx, server)
-			if err != nil {
-				// TODO: need to catch this in a error group
-				err = fmt.Errorf("error creating SSH connection: %w", err)
-				logger.Error("error with running tasks", slog.String("reason", err.Error()))
-				panic(err)
-			}
+			var session *ssh.Session
 
-			defer sshClient.Close()
-
-			session, err := sshClient.NewSession()
-			if err != nil {
-				// TODO: need to catch this in a error group
-				err = fmt.Errorf("error creating SSH session: %w", err)
-				logger.Error("error with running tasks", slog.String("reason", err.Error()))
-				panic(err)
-			}
-
-			defer session.Close()
-
-			for _, task := range pipeline {
-				t := TaskExec{
-					task:      task,
-					server:    session,
-					createdAt: time.Now(),
+			if strings.ToLower(server.Hostname) != "localhost" {
+				logger.Debug("connecting to server via SSH")
+				sshClient, err := NewSSHClient(ctx, server)
+				if err != nil {
+					// TODO: need to catch this in a error group
+					err = fmt.Errorf("error creating SSH connection: %w", err)
+					logger.Error("error with running tasks", slog.String("reason", err.Error()))
+					panic(err)
 				}
 
-				if err := t.Execute(ctx); err != nil {
+				defer sshClient.Close()
+
+				sshSession, err := sshClient.NewSession()
+				if err != nil {
+					// TODO: need to catch this in a error group
+					err = fmt.Errorf("error creating SSH session: %w", err)
+					logger.Error("error with running tasks", slog.String("reason", err.Error()))
+					panic(err)
+				}
+
+				defer sshSession.Close()
+
+				session = sshSession
+			}
+
+			for _, task := range NewTaskExec(session, pipeline...) {
+				if err := task.Execute(ctx); err != nil {
 					// TODO: need to catch this in a error group
 					err = fmt.Errorf("error executing task via the SSH session: %w", err)
 					logger.Error("error with running tasks", slog.String("reason", err.Error()))

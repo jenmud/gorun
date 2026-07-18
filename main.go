@@ -31,15 +31,14 @@ func main() {
 
 	fmt.Println()
 
-	graph, err := NewGraph(cfg.Tasks...)
+	names := []string{}
+	items, err := TopologicalSort(cfg.Tasks...)
 	if err != nil {
 		panic(err)
 	}
 
-	names := []string{}
-	for _, n := range graph.Nodes() {
-		name := fmt.Sprintf("%s (in: %d, out: %d)", n.Task.Name, len(n.Inbound), len(n.Outbound))
-		names = append(names, name)
+	for _, task := range items {
+		names = append(names, task.Name)
 	}
 
 	fmt.Printf("%s\n", strings.Join(names, " -> "))

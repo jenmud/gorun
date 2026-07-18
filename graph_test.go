@@ -6,212 +6,98 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestGraph_Node(t *testing.T) {
+func TestTopologicalSort(t *testing.T) {
 	tests := []struct {
-		name string // description of this test case
-		// Named input parameters for receiver constructor.
-		taskName string
-		task     []Task
-		want     Node
-		wantErr  bool
-	}{
-		{
-			name:     "empty graph",
-			taskName: "some-task",
-			task:     []Task{},
-			want:     Node{},
-			wantErr:  true,
-		},
-		{
-			name:     "multiple tasks",
-			taskName: "b",
-			task: []Task{
-				{Name: "c"},
-				{Name: "a"},
-				{Name: "b"},
-			},
-			want: Node{
-				Task: Task{
-					Name: "b",
-				},
-				Inbound:  []Node{},
-				Outbound: []Node{},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g, err := NewGraph(tt.task...)
-			if err != nil {
-				t.Fatalf("could not construct receiver type: %v", err)
-			}
-
-			got, gotErr := g.Node(tt.taskName)
-			if gotErr != nil {
-				if !tt.wantErr {
-					t.Errorf("%s failed: %v", tt.name, gotErr)
-				}
-				return
-			}
-
-			if tt.wantErr {
-				t.Errorf("%s expected error but got nil", tt.name)
-				return
-			}
-
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("%s = %s (- want, + got)", tt.name, diff)
-			}
-		})
-	}
-}
-
-func TestGraph_Nodes(t *testing.T) {
-	tests := []struct {
-		name string // description of this test case
-		// Named input parameters for receiver constructor.
-		task []Task
-		want []Node
-	}{
-		{
-			name: "empty graph",
-			task: []Task{},
-			want: []Node{},
-		},
-		{
-			name: "multiple tasks with no depends on",
-			task: []Task{
-				{Name: "c"},
-				{Name: "a"},
-				{Name: "b"},
-			},
-			want: []Node{
-				{
-					Task:     Task{Name: "a"},
-					Inbound:  []Node{},
-					Outbound: []Node{},
-				},
-				{
-					Task:     Task{Name: "b"},
-					Inbound:  []Node{},
-					Outbound: []Node{},
-				},
-				{
-					Task:     Task{Name: "c"},
-					Inbound:  []Node{},
-					Outbound: []Node{},
-				},
-			},
-		},
-		{
-			name: "multiple tasks with depends on",
-			task: []Task{
-				{Name: "c"},
-				{Name: "a", DependsOn: []string{"b"}},
-				{Name: "b"},
-			},
-			want: []Node{
-				{
-					Task: Task{Name: "a", DependsOn: []string{"b"}},
-					Inbound: []Node{
-						{
-							Task:    Task{Name: "b"},
-							Inbound: []Node{},
-							Outbound: []Node{
-								{
-									Task:     Task{Name: "a", DependsOn: []string{"b"}},
-									Inbound:  []Node{},
-									Outbound: []Node{},
-								},
-							},
-						},
-					},
-					Outbound: []Node{},
-				},
-				{
-					Task:    Task{Name: "b"},
-					Inbound: []Node{},
-					Outbound: []Node{
-						{
-							Task:     Task{Name: "a", DependsOn: []string{"b"}},
-							Inbound:  []Node{},
-							Outbound: []Node{},
-						},
-					},
-				},
-				{
-					Task:     Task{Name: "c"},
-					Inbound:  []Node{},
-					Outbound: []Node{},
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g, err := NewGraph(tt.task...)
-			if err != nil {
-				t.Fatalf("could not construct receiver type: %v", err)
-			}
-
-			got := g.Nodes()
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("%s = %s (- want, + got)", tt.name, diff)
-			}
-		})
-	}
-}
-
-func TestGraph_Ordered(t *testing.T) {
-	tests := []struct {
-		name string // description of this test case
-		// Named input parameters for receiver constructor.
-		task    []Task
+		name    string // description of this test case
+		tasks   []Task
 		want    []Task
 		wantErr bool
 	}{
 		{
-			name:    "empty graph",
-			task:    []Task{},
-			want:    []Task{},
-			wantErr: false,
+			name:  "empty",
+			tasks: []Task{},
+			want:  []Task{},
 		},
 		{
-			name: "multiple tasks with no depends on",
-			task: []Task{
-				{Name: "a"},
-				{Name: "b"},
-				{Name: "c"},
+			name: "tasks with no depends on",
+			tasks: []Task{
+				{Name: "taskA"},
+				{Name: "taskB"},
+				{Name: "taskC"},
 			},
 			want: []Task{
-				{Name: "a"},
-				{Name: "b"},
-				{Name: "c"},
+				{Name: "taskA"},
+				{Name: "taskB"},
+				{Name: "taskC"},
 			},
-			wantErr: false,
+		},
+		{
+			name: "a depends on b",
+			tasks: []Task{
+				{Name: "taskA", DependsOn: []string{"taskB"}},
+				{Name: "taskB"},
+				{Name: "taskC"},
+			},
+			want: []Task{
+				{Name: "taskB"},
+				{Name: "taskC"},
+				{Name: "taskA", DependsOn: []string{"taskB"}},
+			},
+		},
+		{
+			name: "a depends on b, and c",
+			tasks: []Task{
+				{Name: "taskA", DependsOn: []string{"taskB", "taskC"}},
+				{Name: "taskB"},
+				{Name: "taskC"},
+			},
+			want: []Task{
+				{Name: "taskB"},
+				{Name: "taskC"},
+				{Name: "taskA", DependsOn: []string{"taskB", "taskC"}},
+			},
+		},
+		{
+			name: "a depends on b and b depends on c",
+			tasks: []Task{
+				{Name: "taskA", DependsOn: []string{"taskB"}},
+				{Name: "taskB", DependsOn: []string{"taskC"}},
+				{Name: "taskC"},
+			},
+			want: []Task{
+				{Name: "taskC"},
+				{Name: "taskB", DependsOn: []string{"taskC"}},
+				{Name: "taskA", DependsOn: []string{"taskB"}},
+			},
+		},
+		{
+			name: "a depends on missing task",
+			tasks: []Task{
+				{Name: "taskA", DependsOn: []string{"some-missing-task"}},
+				{Name: "taskB"},
+				{Name: "taskC"},
+			},
+			want:    nil,
+			wantErr: true,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			g, err := NewGraph(tt.task...)
+			got, err := TopologicalSort(tt.tasks...)
 			if err != nil {
-				t.Fatalf("could not construct receiver type: %v", err)
-			}
-
-			got, gotErr := g.Ordered()
-			if gotErr != nil {
 				if !tt.wantErr {
-					t.Errorf("Ordered() failed: %v", gotErr)
+					t.Errorf("%s: did not expect error but got: %v", tt.name, err)
 				}
 				return
 			}
 
 			if tt.wantErr {
-				t.Fatal("Ordered() succeeded unexpectedly")
+				t.Errorf("%s: expected error but got nil", tt.name)
 			}
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("%s = %s (- want, + got)", tt.name, diff)
+				t.Errorf("%s: %s (want -, got +)", tt.name, diff)
 			}
 		})
 	}

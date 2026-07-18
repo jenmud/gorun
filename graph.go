@@ -1,89 +1,71 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"sort"
+	"log/slog"
 )
 
-type Node struct {
-	Task     Task
-	Inbound  []Node
-	Outbound []Node
-}
+// TopologicalSort is a function which takes one of more tasks and will return the tasks topically sorted based on the Kahn's topological sorting
+func TopologicalSort(t ...Task) ([]Task, error) {
+	// keep track of tasks and the count of inbound edges.
+	inDegree := map[string]int{}
 
-// newNode creates a new node from that given task.
-func newNode(t Task) Node {
-	return Node{Task: t, Inbound: []Node{}, Outbound: []Node{}}
-}
+	// fast lookup for pulling out task lists
+	adj := map[string][]Task{}
 
-// Graph is a execution graph.
-type Graph struct {
-	nodes map[string]Node
-}
-
-// NewGraph returns a new graph with the given tasks.
-func NewGraph(task ...Task) (*Graph, error) {
-	g := &Graph{nodes: make(map[string]Node)}
-
-	// add in all the nodes to the graph
-	for _, t := range task {
-		if _, ok := g.nodes[t.Name]; !ok {
-			g.nodes[t.Name] = newNode(t)
-		}
+	// fist build a unique lookup map of tasks
+	tasks := map[string]Task{}
+	for _, task := range t {
+		tasks[task.Name] = task
+		inDegree[task.Name] = 0
 	}
 
-	// now we will run over all the tasks and link them up.
-	for _, node := range g.nodes {
-		for _, dep := range node.Task.DependsOn {
-			d, ok := g.nodes[dep]
+	edges := [][2]Task{}
+	for _, task := range tasks {
+		for _, dep := range task.DependsOn {
+			d, ok := tasks[dep]
 			if !ok {
-				return nil, fmt.Errorf("depends_on task %q not found", dep)
+				return nil, fmt.Errorf("tasks %q not found", dep)
 			}
-
-			d.Outbound = append(d.Outbound, node)
-			node.Inbound = append(node.Inbound, d)
-
-			// update the nodes
-			g.nodes[d.Task.Name] = d
-			g.nodes[node.Task.Name] = node
+			edges = append(edges, [2]Task{d, task})
 		}
 	}
 
-	return g, nil
-}
-
-// Node will return a node if found.
-func (g *Graph) Node(name string) (Node, error) {
-	n, ok := g.nodes[name]
-	if !ok {
-		return Node{}, fmt.Errorf("node task %q not found", name)
-	}
-	return n, nil
-}
-
-// Nodes will return all known nodes.
-func (g *Graph) Nodes() []Node {
-	nodes := make([]Node, len(g.nodes))
-
-	i := 0
-	for _, node := range g.nodes {
-		nodes[i] = node
-		i++
+	// build the dependency graph
+	for _, edge := range edges {
+		u, v := edge[0], edge[1]
+		adj[u.Name] = append(adj[u.Name], v)
+		inDegree[v.Name]++
 	}
 
-	sort.SliceStable(nodes, func(i, j int) bool {
-		return nodes[i].Task.Name < nodes[j].Task.Name
-	})
-
-	return nodes
-}
-
-func (g *Graph) Ordered() ([]Task, error) {
-	pipeline := []Task{}
-
-	for _, node := range g.Nodes() {
-		pipeline = append(pipeline, node.Task)
+	queue := []Task{}
+	for task, degree := range inDegree {
+		if degree == 0 {
+			queue = append(queue, tasks[task])
+		}
 	}
 
-	return pipeline, nil
+	result := []Task{}
+
+	for len(queue) > 0 {
+		task := queue[0]
+		queue = queue[1:]
+		result = append(result, task)
+
+		for _, d := range adj[task.Name] {
+			inDegree[d.Name]--
+			if inDegree[d.Name] == 0 {
+				queue = append(queue, d)
+			}
+		}
+	}
+
+	if len(result) != len(tasks) {
+		slog.Error("tasks ->", "tasks", tasks)
+		slog.Error("results ->", "results", result)
+		return nil, errors.New("cyclic dependency detected")
+	}
+
+	return result, nil
 }

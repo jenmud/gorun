@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+
+	_ "github.com/joho/godotenv/autoload"
 )
 
 func main() {

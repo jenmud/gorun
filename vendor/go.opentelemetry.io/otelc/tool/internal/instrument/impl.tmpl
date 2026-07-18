@@ -1,0 +1,117 @@
+// Copyright The OpenTelemetry Authors
+// SPDX-License-Identifier: Apache-2.0
+
+package instrument
+
+//line <generated>:1
+type HookContextImpl struct {
+	params      []interface{}
+	returnVals  []interface{}
+	skipCall    bool
+	data        interface{}
+	funcName    string
+	packageName string
+}
+
+func (c *HookContextImpl) SetSkipCall(skip bool)    { c.skipCall = skip }
+func (c *HookContextImpl) IsSkipCall() bool         { return c.skipCall }
+func (c *HookContextImpl) SetData(data interface{}) { c.data = data }
+func (c *HookContextImpl) GetData() interface{}     { return c.data }
+func (c *HookContextImpl) GetKeyData(key string) interface{} {
+	if c.data == nil {
+		return nil
+	}
+	return c.data.(map[string]interface{})[key]
+}
+
+func (c *HookContextImpl) SetKeyData(key string, val interface{}) {
+	if c.data == nil {
+		c.data = make(map[string]interface{})
+	}
+	c.data.(map[string]interface{})[key] = val
+}
+
+func (c *HookContextImpl) HasKeyData(key string) bool {
+	if c.data == nil {
+		return false
+	}
+	_, ok := c.data.(map[string]interface{})[key]
+	return ok
+}
+
+func (c *HookContextImpl) GetParam(idx int) interface{} {
+	switch idx {
+	}
+	return nil
+}
+
+func (c *HookContextImpl) SetParam(idx int, val interface{}) {
+	if val == nil {
+		c.params[idx] = nil
+		return
+	}
+	switch idx {
+	}
+}
+
+func (c *HookContextImpl) GetReturnVal(idx int) interface{} {
+	switch idx {
+	}
+	return nil
+}
+
+func (c *HookContextImpl) SetReturnVal(idx int, val interface{}) {
+	if val == nil {
+		c.returnVals[idx] = nil
+		return
+	}
+	switch idx {
+	}
+}
+func (c *HookContextImpl) GetParamCount() int     { return len(c.params) }
+func (c *HookContextImpl) GetReturnValCount() int { return len(c.returnVals) }
+func (c *HookContextImpl) GetFuncName() string    { return c.funcName }
+func (c *HookContextImpl) GetPackageName() string { return c.packageName }
+
+// Variable Template
+var (
+	OtelGetStackImpl   func() []byte = nil
+	OtelPrintStackImpl func([]byte)  = nil
+)
+
+// Trampoline Template
+func OtelBeforeTrampoline() (hookContext *HookContextImpl, skipCall bool) {
+	defer func() {
+		if err := recover(); err != nil {
+			println("failed to exec Before hook", "OtelBeforeNamePlaceholder")
+			if e, ok := err.(error); ok {
+				println(e.Error())
+			}
+			fetchStack, printStack := OtelGetStackImpl, OtelPrintStackImpl
+			if fetchStack != nil && printStack != nil {
+				printStack(fetchStack())
+			}
+		}
+	}()
+	hookContext = &HookContextImpl{}
+	hookContext.params = []interface{}{}
+	hookContext.funcName = ""
+	hookContext.packageName = ""
+	return hookContext, hookContext.skipCall
+}
+
+func OtelAfterTrampoline(hookContext HookContext) {
+	defer func() {
+		if err := recover(); err != nil {
+			println("failed to exec After hook", "OtelAfterNamePlaceholder")
+			if e, ok := err.(error); ok {
+				println(e.Error())
+			}
+			fetchStack, printStack := OtelGetStackImpl, OtelPrintStackImpl
+			if fetchStack != nil && printStack != nil {
+				printStack(fetchStack())
+			}
+		}
+	}()
+	hookContext.(*HookContextImpl).returnVals = []interface{}{}
+}

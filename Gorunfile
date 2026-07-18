@@ -75,3 +75,12 @@ sudo chmod o+r /etc/apt/sources.list.d/caddy-stable.list
 sudo apt update
 sudo apt install -y caddy
 """
+
+[[tasks]]
+name = "add user to docker group"
+depends_on = ["enable docker", "add ubuntu user"]
+cmd = "sudo usermod -Ga docker ubuntu"
+
+[[tasks]]
+name = "add ubuntu user"
+cmd = "useradd ubuntu"

@@ -4,4 +4,5 @@ package main
 type Server struct {
 	Hostname string `toml:"hostname"`
 	SSH      SSH    `toml:"ssh"`
+	Tasks    []Task `toml:"tasks"`
 }

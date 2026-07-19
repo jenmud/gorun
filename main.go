@@ -1,20 +1,18 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"log/slog"
 	"os"
-	"os/signal"
 	"strings"
 
 	_ "github.com/joho/godotenv/autoload"
 )
 
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
-	defer cancel()
+	//ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	//defer cancel()
 
 	flag.Parse()
 	filename := flag.Arg(0)
@@ -48,10 +46,18 @@ func main() {
 		names = append(names, task.Name)
 	}
 
-	fmt.Printf("%s\n", strings.Join(names, " -> "))
+	fmt.Printf("%s\n\n", strings.Join(names, " -> "))
 
-	if err := cfg.Run(ctx); err != nil {
-		panic(err)
+	//if err := cfg.Run(ctx); err != nil {
+	//	panic(err)
+	//}
+
+	sTasks, err := cfg.ServersPipeline()
+	for s, tasks := range sTasks {
+		names := make([]string, len(tasks))
+		for i, name := range tasks {
+			names[i] = name.Name
+		}
+		fmt.Printf("%s: %s\n", s, strings.Join(names, " -> "))
 	}
-
 }

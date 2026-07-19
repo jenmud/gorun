@@ -42,8 +42,8 @@ func (c *Config) TaskMap() map[string]Task {
 	return m
 }
 
-// Pipeline returns the tasks sorted using Kahn topological soring.
-func (c *Config) Pipeline() ([]Task, error) {
+// topological returns all the tasks in a topological sort using the Kahn method.
+func topological(tasks ...Task) ([]Task, error) {
 	// keep track of tasks and the count of inbound edges.
 	inDegree := map[string]int{}
 
@@ -51,16 +51,16 @@ func (c *Config) Pipeline() ([]Task, error) {
 	adj := map[string][]Task{}
 
 	// fist build a unique lookup map of tasks
-	tasks := map[string]Task{}
-	for _, task := range c.Tasks {
-		tasks[task.Name] = task
+	mappedTasks := map[string]Task{}
+	for _, task := range tasks {
+		mappedTasks[task.Name] = task
 		inDegree[task.Name] = 0
 	}
 
 	edges := [][2]Task{}
 	for _, task := range tasks {
 		for _, dep := range task.DependsOn {
-			d, ok := tasks[dep]
+			d, ok := mappedTasks[dep]
 			if !ok {
 				return nil, fmt.Errorf("tasks %q not found", dep)
 			}
@@ -78,7 +78,7 @@ func (c *Config) Pipeline() ([]Task, error) {
 	queue := []Task{}
 	for task, degree := range inDegree {
 		if degree == 0 {
-			queue = append(queue, tasks[task])
+			queue = append(queue, mappedTasks[task])
 		}
 	}
 
@@ -102,6 +102,31 @@ func (c *Config) Pipeline() ([]Task, error) {
 	}
 
 	return result, nil
+}
+
+// Pipeline returns the tasks sorted using Kahn topological soring.
+func (c *Config) Pipeline() ([]Task, error) {
+	return topological(c.Tasks...)
+}
+
+// ServersPipeline returns all the servers tasks in topological sort.
+func (c *Config) ServersPipeline() (map[string][]Task, error) {
+	sTasks := make(map[string][]Task)
+	tasks := append([]Task{}, c.Tasks...)
+
+	for _, server := range c.Servers {
+		serverTasks := append(tasks, server.Tasks...)
+
+		pipeline, err := topological(serverTasks...)
+		if err != nil {
+			err = fmt.Errorf("error building server task pipeline: %w", err)
+			return nil, err
+		}
+
+		sTasks[server.Hostname] = pipeline
+	}
+
+	return sTasks, nil
 }
 
 // RunTask runs a single task one or more servers.

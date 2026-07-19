@@ -55,8 +55,8 @@ func main() {
 	sTasks, err := cfg.ServersPipeline()
 	for s, tasks := range sTasks {
 		names := make([]string, len(tasks))
-		for i, name := range tasks {
-			names[i] = name.Name
+		for i, task := range tasks {
+			names[i] = task.Name
 		}
 		fmt.Printf("%s: %s\n", s, strings.Join(names, " -> "))
 	}

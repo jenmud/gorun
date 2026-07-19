@@ -10,9 +10,10 @@ import (
 
 // Task is a task to execute on one or more servers.
 type Task struct {
-	Name      string   `toml:"name"`
-	Cmd       string   `toml:"cmd"`
-	DependsOn []string `toml:"depends_on"`
+	Name      string            `toml:"name"`
+	Cmd       string            `toml:"cmd"`
+	EnvVars   map[string]string `toml:"envvars"`
+	DependsOn []string          `toml:"depends_on"`
 }
 
 // TaskExec is a execution task to be run on a server.

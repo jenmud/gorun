@@ -10,8 +10,11 @@ import (
 	"sync"
 
 	"github.com/BurntSushi/toml"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/crypto/ssh"
 )
+
+var tracer = otel.Tracer("gorun")
 
 // Config represents a config file.
 type Config struct {
@@ -152,11 +155,12 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				),
 			)
 
-			var session *ssh.Session
+			var sshClient *ssh.Client
 
 			if strings.ToLower(server.Hostname) != "localhost" {
 				logger.Debug("connecting to server via SSH")
-				sshClient, err := NewSSHClient(ctx, server)
+
+				client, err := NewSSHClient(ctx, server)
 				if err != nil {
 					// TODO: need to catch this in a error group
 					err = fmt.Errorf("error creating SSH connection: %w", err)
@@ -164,22 +168,11 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 					panic(err)
 				}
 
-				defer sshClient.Close()
-
-				sshSession, err := sshClient.NewSession()
-				if err != nil {
-					// TODO: need to catch this in a error group
-					err = fmt.Errorf("error creating SSH session: %w", err)
-					logger.Error("error with running tasks", slog.String("reason", err.Error()))
-					panic(err)
-				}
-
-				defer sshSession.Close()
-
-				session = sshSession
+				defer client.Close()
+				sshClient = client
 			}
 
-			for _, task := range NewTaskExec(session, pipeline...) {
+			for _, task := range NewTaskExec(sshClient, pipeline...) {
 				if err := task.Execute(ctx); err != nil {
 					// TODO: need to catch this in a error group
 					err = fmt.Errorf("error executing task via the SSH session: %w", err)

@@ -1,0 +1,33 @@
+package main
+
+import (
+	"io"
+	"log/slog"
+	"strings"
+)
+
+// NewLogger returns a new logger.
+func NewLogger(level string, w io.Writer, json bool) *slog.Logger {
+	var l slog.Level
+
+	switch strings.ToUpper(level) {
+	case "INFO":
+		l = slog.LevelInfo
+	case "WARN", "WARNING":
+		l = slog.LevelWarn
+	case "ERROR":
+		l = slog.LevelError
+	case "DEBUG":
+		l = slog.LevelDebug
+	default:
+		l = slog.LevelInfo
+	}
+
+	if json {
+		handler := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: l})
+		return slog.New(handler)
+	}
+
+	handler := slog.NewTextHandler(w, &slog.HandlerOptions{Level: l})
+	return slog.New(handler)
+}

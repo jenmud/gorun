@@ -2,6 +2,7 @@
 # Gorunfile is a TOML formatted file.
 #
 title = "Deployment for example server"
+log_level = "info"
 
 # Global SSH details
 [ssh]
@@ -17,6 +18,7 @@ GORUN_ADDRESS = "localhost:8080"
 [[servers]]
 name = "docker-server"
 hostname = "serverA.some-dns.org:22"
+log_level = "debug"
 
     # Optional server SSH details
     [servers.ssh]
@@ -24,6 +26,7 @@ hostname = "serverA.some-dns.org:22"
     password = "bar-password"
 
     [[servers.tasks]]
+    log_level = "debug"
     name = "some task only for this server"
     cmd = "echo 'task only for this server'"
     depends_on = ["install caddy"]

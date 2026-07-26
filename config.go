@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 
@@ -18,11 +19,12 @@ var tracer = otel.Tracer("gorun")
 
 // Config represents a config file.
 type Config struct {
-	Title   string            `toml:"title"`
-	EnvVars map[string]string `toml:"envvars"`
-	SSH     SSH               `toml:"ssh"`
-	Servers []Server          `toml:"servers"`
-	Tasks   []Task            `toml:"tasks"`
+	Title    string            `toml:"title"`
+	LogLevel string            `toml:"log_level"`
+	EnvVars  map[string]string `toml:"envvars"`
+	SSH      SSH               `toml:"ssh"`
+	Servers  []Server          `toml:"servers"`
+	Tasks    []Task            `toml:"tasks"`
 }
 
 // Load reads and updates the config.
@@ -147,8 +149,14 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 	var wg sync.WaitGroup
 
 	for _, server := range c.Servers {
+
+		if server.LogLevel == "" {
+			server.LogLevel = c.LogLevel
+		}
+
 		wg.Go(func() {
-			logger := slog.With(
+			logger := NewLogger(server.LogLevel, os.Stdout, false)
+			logger = logger.With(
 				slog.Group(
 					"server",
 					slog.String("address", server.Hostname),
@@ -172,7 +180,17 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				sshClient = client
 			}
 
+			// update tasks logging level based on the server logging level
+			for i, task := range pipeline {
+				if task.LogLevel == "" {
+					task.LogLevel = server.LogLevel
+				}
+
+				pipeline[i] = task
+			}
+
 			for _, task := range NewTaskExec(sshClient, pipeline...) {
+
 				if err := task.Execute(ctx); err != nil {
 					// TODO: need to catch this in a error group
 					err = fmt.Errorf("error executing task via the SSH session: %w", err)

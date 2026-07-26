@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 
 // Task is a task to execute on one or more servers.
 type Task struct {
+	LogLevel  string            `toml:"log_level"`
 	Name      string            `toml:"name"`
 	Cmd       string            `toml:"cmd"`
 	EnvVars   map[string]string `toml:"envvars"`
@@ -37,36 +40,31 @@ type TaskExec struct {
 func NewTaskExec(server *ssh.Client, task ...Task) []*TaskExec {
 	tasks := make([]*TaskExec, len(task))
 
-	logger := slog.Default()
-
-	if server != nil {
-		logger = logger.With(
-			slog.Group(
-				"server",
-				slog.String("user", server.User()),
-				slog.String("session", server.RemoteAddr().String()),
-			),
-		)
-	} else {
-		logger = logger.With(
-			slog.Group(
-				"server",
-				slog.String("user", os.Getenv("USER")),
-				slog.String("session", "localhost"),
-			),
-		)
-	}
-
 	for i, t := range task {
-		tasks[i] = &TaskExec{
-			task:   t,
-			server: server,
-			logger: logger.With(
+		logger := NewLogger(t.LogLevel, os.Stdout, false)
+
+		if server != nil {
+			logger = logger.With(
 				slog.Group(
-					"task",
-					slog.String("name", t.Name),
+					"server",
+					slog.String("user", server.User()),
+					slog.String("session", server.RemoteAddr().String()),
 				),
-			),
+			)
+		} else {
+			logger = logger.With(
+				slog.Group(
+					"server",
+					slog.String("user", os.Getenv("USER")),
+					slog.String("session", "localhost"),
+				),
+			)
+		}
+
+		tasks[i] = &TaskExec{
+			task:      t,
+			server:    server,
+			logger:    logger,
 			createdAt: time.Now(),
 		}
 	}
@@ -74,11 +72,47 @@ func NewTaskExec(server *ssh.Client, task ...Task) []*TaskExec {
 	return tasks
 }
 
+// LocalExecute executes the task as a local task.
 func (t *TaskExec) LocalExecute(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "TaskExec.LocalExecute")
 	defer span.End()
 
 	t.logger.InfoContext(ctx, "running local task", slog.String("name", t.task.Name))
+
+	defer func() {
+		// make sure that the completed at always is set at the end
+		t.completedAt = time.Now()
+	}()
+
+	cmd := exec.CommandContext(ctx, t.task.Cmd)
+
+	for key, value := range t.task.EnvVars {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", strings.ToUpper(key), value))
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	t.startedAt = time.Now()
+
+	err := cmd.Run()
+
+	t.stderr = stderr.Bytes()
+	t.stdout = stdout.Bytes()
+
+	if err != nil {
+		span.RecordError(err)
+		t.logger.ErrorContext(ctx, "task failed", slog.String("reason", err.Error()))
+		t.stderr = []byte(err.Error())
+		t.exitCode = 2
+		return err
+	}
+
+	t.logger.DebugContext(ctx, "task completed")
+	t.exitCode = 0
 	return nil
 }
 
@@ -88,7 +122,6 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 	defer span.End()
 
 	if t.server == nil {
-		t.logger.WarnContext(ctx, "no SSH client connected, running local task execution...")
 		return t.LocalExecute(ctx)
 	}
 

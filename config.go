@@ -115,8 +115,8 @@ func (c *Config) Pipeline() ([]Task, error) {
 }
 
 // ServersPipeline returns all the servers tasks in topological sort.
-func (c *Config) ServersPipeline() (map[string][]Task, error) {
-	sTasks := make(map[string][]Task)
+func (c *Config) ServersPipeline() (map[string]Server, error) {
+	sTasks := make(map[string]Server)
 	tasks := append([]Task{}, c.Tasks...)
 
 	for _, server := range c.Servers {
@@ -128,7 +128,8 @@ func (c *Config) ServersPipeline() (map[string][]Task, error) {
 			return nil, err
 		}
 
-		sTasks[server.Hostname] = pipeline
+		server.Tasks = pipeline
+		sTasks[server.Hostname] = server
 	}
 
 	return sTasks, nil
@@ -141,17 +142,21 @@ func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
 
 // Run runs all the tasks as returned by `Pipeline` on one or more servers.
 func (c *Config) Run(ctx context.Context, server ...Server) error {
-	pipeline, err := c.Pipeline()
-	if err != nil {
-		return fmt.Errorf("error building task execution pipeline: %w", err)
-	}
-
 	var wg sync.WaitGroup
 
 	for _, server := range c.Servers {
 
 		if server.LogLevel == "" {
 			server.LogLevel = c.LogLevel
+		}
+
+		// update tasks logging level based on the server logging level
+		for i, task := range server.Tasks {
+			if task.LogLevel == "" {
+				task.LogLevel = server.LogLevel
+			}
+
+			server.Tasks[i] = task
 		}
 
 		wg.Go(func() {
@@ -180,17 +185,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				sshClient = client
 			}
 
-			// update tasks logging level based on the server logging level
-			for i, task := range pipeline {
-				if task.LogLevel == "" {
-					task.LogLevel = server.LogLevel
-				}
-
-				pipeline[i] = task
-			}
-
-			for _, task := range NewTaskExec(sshClient, pipeline...) {
-
+			for _, task := range NewTaskExec(sshClient, server.Tasks...) {
 				if err := task.Execute(ctx); err != nil {
 					// TODO: need to catch this in a error group
 					err = fmt.Errorf("error executing task via the SSH session: %w", err)

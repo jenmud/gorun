@@ -34,13 +34,19 @@ func main() {
 
 	slog.Info("parsed config file")
 
-	sTasks, err := cfg.ServersPipeline()
-	for s, tasks := range sTasks {
-		names := make([]string, len(tasks))
-		for i, task := range tasks {
+	servers, err := cfg.ServersPipeline()
+	if err != nil {
+		panic(err)
+	}
+
+	for _, server := range servers {
+		names := make([]string, len(server.Tasks))
+
+		for i, task := range server.Tasks {
 			names[i] = task.Name
 		}
-		fmt.Printf("%s: %s\n", s, strings.Join(names, " -> "))
+
+		fmt.Printf("%s: %s\n", server.Hostname, strings.Join(names, " -> "))
 	}
 
 	if err := cfg.Run(ctx); err != nil {

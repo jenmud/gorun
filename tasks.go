@@ -105,13 +105,13 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 
 	if err != nil {
 		span.RecordError(err)
-		t.logger.ErrorContext(ctx, "task failed", slog.String("reason", err.Error()))
+		t.logger.ErrorContext(ctx, "task failed", slog.String("reason", err.Error()), slog.String("stderr", string(t.stderr)))
 		t.stderr = []byte(err.Error())
 		t.exitCode = 2
 		return err
 	}
 
-	t.logger.DebugContext(ctx, "task completed")
+	t.logger.DebugContext(ctx, "task completed", slog.String("stdout", string(t.stdout)))
 	t.exitCode = 0
 	return nil
 }
@@ -181,12 +181,12 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		return err
 	case err := <-errChan:
 		span.RecordError(err)
-		t.logger.ErrorContext(ctx, "task failed", slog.String("reason", err.Error()))
+		t.logger.ErrorContext(ctx, "task failed", slog.String("reason", err.Error()), slog.String("stderr", string(t.stderr)))
 		t.stderr = []byte(err.Error())
 		t.exitCode = 2
 		return err
 	case <-doneChan:
-		t.logger.DebugContext(ctx, "task completed")
+		t.logger.DebugContext(ctx, "task completed", slog.String("stdout", string(t.stdout)))
 		t.exitCode = 0
 	}
 

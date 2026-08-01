@@ -21,6 +21,7 @@ type Task struct {
 	Cmd       string            `toml:"cmd"`
 	EnvVars   map[string]string `toml:"envvars"`
 	DependsOn []string          `toml:"depends_on"`
+	Shell     string            `toml:"shell"`
 }
 
 // TaskExec is a execution task to be run on a server.
@@ -42,6 +43,18 @@ func NewTaskExec(server *ssh.Client, task ...Task) []*TaskExec {
 
 	for i, t := range task {
 		logger := NewLogger(t.LogLevel, os.Stdout, false)
+
+		envvars := []string{}
+		for key, value := range t.EnvVars {
+			envvars = append(envvars, fmt.Sprintf("%s=%s", key, value))
+		}
+
+		logger = logger.With(
+			slog.String("name", t.Name),
+			slog.String("shell", t.Shell),
+			slog.Any("depends_on", t.DependsOn),
+			slog.Any("envvars", envvars),
+		)
 
 		if server != nil {
 			logger = logger.With(
@@ -77,7 +90,7 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "TaskExec.LocalExecute")
 	defer span.End()
 
-	t.logger.InfoContext(ctx, "running local task", slog.String("name", t.task.Name))
+	t.logger.InfoContext(ctx, "running local task")
 
 	defer func() {
 		// make sure that the completed at always is set at the end
@@ -85,6 +98,19 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 	}()
 
 	cmd := exec.CommandContext(ctx, t.task.Cmd)
+
+	if t.task.Shell != "" {
+		command := strings.Split(t.task.Shell, " ")
+		name := command[0]
+
+		args := []string{}
+		if len(command) > 1 {
+			args = append(args, command[1:]...)
+		}
+
+		args = append(args, t.task.Cmd)
+		cmd = exec.CommandContext(ctx, name, args...)
+	}
 
 	for key, value := range t.task.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", strings.ToUpper(key), value))
@@ -125,7 +151,7 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		return t.LocalExecute(ctx)
 	}
 
-	t.logger.InfoContext(ctx, "running task", slog.String("name", t.task.Name))
+	t.logger.InfoContext(ctx, "running task")
 
 	defer func() {
 		// make sure that the completed at always is set at the end

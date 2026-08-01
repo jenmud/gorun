@@ -144,7 +144,13 @@ func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
 func (c *Config) Run(ctx context.Context, server ...Server) error {
 	var wg sync.WaitGroup
 
-	for _, server := range c.Servers {
+	pipline, err := c.ServersPipeline()
+	if err != nil {
+		err = fmt.Errorf("error buiding servers task execution pipeline: %w", err)
+		return err
+	}
+
+	for _, server := range pipline {
 
 		if server.LogLevel == "" {
 			server.LogLevel = c.LogLevel
@@ -178,20 +184,26 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 					// TODO: need to catch this in a error group
 					err = fmt.Errorf("error creating SSH connection: %w", err)
 					logger.Error("error with running tasks", slog.String("reason", err.Error()))
-					panic(err)
+					return
 				}
 
 				defer client.Close()
 				sshClient = client
 			}
 
+			var parent *TaskExec
+
 			for _, task := range NewTaskExec(sshClient, server.Tasks...) {
-				if err := task.Execute(ctx); err != nil {
-					// TODO: need to catch this in a error group
-					err = fmt.Errorf("error executing task via the SSH session: %w", err)
-					logger.Error("error with running tasks", slog.String("reason", err.Error()))
-					panic(err)
+				tlogger := logger.With(slog.String("task", task.task.Name))
+
+				if parent != nil && parent.exitCode != 0 {
+					err = fmt.Errorf("dependent task (%s, exit code=%d) failed, aborting task (%s)", parent.task.Name, parent.exitCode, task.task.Name)
+					tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
+					continue
 				}
+
+				parent = task
+				task.Execute(ctx)
 			}
 		})
 	}

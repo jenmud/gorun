@@ -124,7 +124,7 @@ func (c *Config) ServersPipeline() (map[string]Server, error) {
 			return nil, err
 		}
 
-		sTasks[server.Hostname] = server
+		sTasks[server.Name] = server
 	}
 
 	return sTasks, nil

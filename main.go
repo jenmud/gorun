@@ -46,7 +46,7 @@ func main() {
 			names = append(names, task.Name)
 		}
 
-		fmt.Printf("%s: %s\n", server.Hostname, strings.Join(names, " -> "))
+		fmt.Printf("%s: %s\n", server.Name, strings.Join(names, " -> "))
 	}
 
 	if err := cfg.Run(ctx); err != nil {

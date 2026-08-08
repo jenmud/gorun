@@ -40,10 +40,10 @@ func main() {
 	}
 
 	for _, server := range servers {
-		names := make([]string, len(server.Tasks))
+		names := []string{}
 
-		for i, task := range server.Tasks {
-			names[i] = task.Name
+		for _, task := range server.Tasks {
+			names = append(names, task.Name)
 		}
 
 		fmt.Printf("%s: %s\n", server.Hostname, strings.Join(names, " -> "))

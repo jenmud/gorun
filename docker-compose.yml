@@ -1,0 +1,47 @@
+# Local SSH targets for exercising Gorun remote tasks.
+#
+# Start: docker compose up -d
+# Stop:  docker compose down
+#
+# Both servers accept password authentication as `gorun` / `gorun-test-password`.
+# From the host, use 127.0.0.1:2222 or 127.0.0.1:2223.
+services:
+  ssh-target-1:
+    image: ubuntu:24.04
+    container_name: gorun-ssh-target-1
+    ports:
+      - "127.0.0.1:2222:22"
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install --yes --no-install-recommends openssh-server sudo
+        id gorun > /dev/null 2>&1 || useradd --create-home --shell /bin/bash gorun
+        echo 'gorun:gorun-test-password' | chpasswd
+        echo 'gorun ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/gorun
+        chmod 0440 /etc/sudoers.d/gorun
+        ssh-keygen -A
+        exec /usr/sbin/sshd -D -e
+    restart: unless-stopped
+
+  ssh-target-2:
+    image: ubuntu:24.04
+    container_name: gorun-ssh-target-2
+    ports:
+      - "127.0.0.1:2223:22"
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update
+        apt-get install --yes --no-install-recommends openssh-server sudo
+        id gorun > /dev/null 2>&1 || useradd --create-home --shell /bin/bash gorun
+        echo 'gorun:gorun-test-password' | chpasswd
+        echo 'gorun ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/gorun
+        chmod 0440 /etc/sudoers.d/gorun
+        ssh-keygen -A
+        exec /usr/sbin/sshd -D -e
+    restart: unless-stopped

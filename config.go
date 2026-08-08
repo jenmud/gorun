@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"strings"
 	"sync"
 
 	"github.com/BurntSushi/toml"
@@ -117,22 +116,34 @@ func (c *Config) Pipeline() ([]Task, error) {
 // ServersPipeline returns all the servers tasks in topological sort.
 func (c *Config) ServersPipeline() (map[string]Server, error) {
 	sTasks := make(map[string]Server)
-	tasks := append([]Task{}, c.Tasks...)
 
 	for _, server := range c.Servers {
-		serverTasks := append(tasks, server.Tasks...)
+		server, err := c.ServerPipeline(server)
 
-		pipeline, err := topological(serverTasks...)
 		if err != nil {
-			err = fmt.Errorf("error building server task pipeline: %w", err)
 			return nil, err
 		}
 
-		server.Tasks = pipeline
 		sTasks[server.Hostname] = server
 	}
 
 	return sTasks, nil
+}
+
+// ServerPipeline returns a server's tasks in topological sort.
+func (c *Config) ServerPipeline(server Server) (Server, error) {
+	tasks := append([]Task{}, c.Tasks...)
+
+	serverTasks := append(tasks, server.Tasks...)
+
+	pipeline, err := topological(serverTasks...)
+	if err != nil {
+		err = fmt.Errorf("error building server task pipeline: %w", err)
+		return Server{}, err
+	}
+
+	server.Tasks = pipeline
+	return server, nil
 }
 
 // RunTask runs a single task one or more servers.
@@ -144,13 +155,28 @@ func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
 func (c *Config) Run(ctx context.Context, server ...Server) error {
 	var wg sync.WaitGroup
 
-	pipline, err := c.ServersPipeline()
-	if err != nil {
-		err = fmt.Errorf("error buiding servers task execution pipeline: %w", err)
-		return err
+	var err error
+	pipeline := make(map[string]Server)
+
+	if len(server) > 0 {
+		for _, s := range server {
+			s, err := c.ServerPipeline(s)
+			if err != nil {
+				err = fmt.Errorf("error buiding servers task execution pipeline: %w", err)
+				return err
+			}
+			pipeline[s.Hostname] = s
+		}
+	} else {
+		pipelines, err := c.ServersPipeline()
+		if err != nil {
+			err = fmt.Errorf("error buiding servers task execution pipeline: %w", err)
+			return err
+		}
+		pipeline = pipelines
 	}
 
-	for _, server := range pipline {
+	for _, server := range pipeline {
 
 		if server.LogLevel == "" {
 			server.LogLevel = c.LogLevel
@@ -170,13 +196,14 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			logger = logger.With(
 				slog.Group(
 					"server",
+					slog.String("name", server.Name),
 					slog.String("address", server.Hostname),
 				),
 			)
 
 			var sshClient *ssh.Client
 
-			if strings.ToLower(server.Hostname) != "localhost" {
+			if server.SSH != (SSH{}) {
 				logger.Debug("connecting to server via SSH")
 
 				client, err := NewSSHClient(ctx, server)

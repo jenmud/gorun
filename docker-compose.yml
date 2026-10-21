@@ -1,47 +1,42 @@
-# Local SSH targets for exercising Gorun remote tasks.
-#
-# Start: docker compose up -d
-# Stop:  docker compose down
-#
-# Both servers accept password authentication as `gorun` / `gorun-test-password`.
-# From the host, use 127.0.0.1:2222 or 127.0.0.1:2223.
+version: '3.8'
+
 services:
-  ssh-target-1:
-    image: ubuntu:24.04
-    container_name: gorun-ssh-target-1
+  ssh-server-1:
+    image: linuxserver/openssh-server
+    container_name: ssh-server-1
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - USER_NAME=testuser
+      - USER_PASSWORD=testpassword
+      - PUBLIC_KEY_FILE=/config/ssh/keys/id_rsa.pub
+    volumes:
+      - ./ssh-keys:/config/ssh/keys
+      - ./test-scripts:/test-scripts
     ports:
-      - "127.0.0.1:2222:22"
-    command:
-      - /bin/sh
-      - -ec
-      - |
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install --yes --no-install-recommends openssh-server sudo
-        id gorun > /dev/null 2>&1 || useradd --create-home --shell /bin/bash gorun
-        echo 'gorun:gorun-test-password' | chpasswd
-        echo 'gorun ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/gorun
-        chmod 0440 /etc/sudoers.d/gorun
-        ssh-keygen -A
-        exec /usr/sbin/sshd -D -e
+      - "2221:22"
+    networks:
+      - gorun-network
     restart: unless-stopped
 
-  ssh-target-2:
-    image: ubuntu:24.04
-    container_name: gorun-ssh-target-2
+  ssh-server-2:
+    image: linuxserver/openssh-server
+    container_name: ssh-server-2
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - USER_NAME=testuser
+      - USER_PASSWORD=testpassword
+      - PUBLIC_KEY_FILE=/config/ssh/keys/id_rsa.pub
+    volumes:
+      - ./ssh-keys:/config/ssh/keys
+      - ./test-scripts:/test-scripts
     ports:
-      - "127.0.0.1:2223:22"
-    command:
-      - /bin/sh
-      - -ec
-      - |
-        export DEBIAN_FRONTEND=noninteractive
-        apt-get update
-        apt-get install --yes --no-install-recommends openssh-server sudo
-        id gorun > /dev/null 2>&1 || useradd --create-home --shell /bin/bash gorun
-        echo 'gorun:gorun-test-password' | chpasswd
-        echo 'gorun ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/gorun
-        chmod 0440 /etc/sudoers.d/gorun
-        ssh-keygen -A
-        exec /usr/sbin/sshd -D -e
+      - "2222:22"
+    networks:
+      - gorun-network
     restart: unless-stopped
+
+networks:
+  gorun-network:
+    driver: bridge

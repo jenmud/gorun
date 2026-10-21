@@ -1,7 +1,8 @@
 
+# gorun
+
 **CAUTION:** This is still under development and does not work yet!!
 
-# gorun
 Gorun is a deployment orchestrator that executes remote server commands through SSH using a simple declarative configuration file.
 
 ## What It Does
@@ -12,6 +13,160 @@ Gorun is a deployment orchestrator that executes remote server commands through 
 * Loads environment variables from config or .env files
 * Runs deployments without requiring SSH installed
 
+## Project Structure
+
+The project consists of the following components:
+
+- `main.go` - The main entry point of the application
+- `config/` - Configuration handling and parsing
+- `deploy/` - Deployment logic and task execution
+- `ssh/` - SSH connection management
+- `utils/` - Utility functions
+
+## Features
+
+- Declarative configuration using YAML
+- Task dependency resolution
+- Secure SSH connection handling
+- Environment variable management
+- Logging and error handling
+- Parallel task execution capabilities
+
 ## Configuration
 
 Configuration is done via environment variables. See `.env` for supported environment variable options.
+
+### Environment Variables
+
+- `GORUN_CONFIG_PATH` - Path to the configuration file (default: ./gorun.yaml)
+- `GORUN_SSH_KEY_PATH` - Path to SSH private key (default: ~/.ssh/id_rsa)
+- `GORUN_SSH_USER` - SSH username (default: $USER)
+- `GORUN_SSH_PORT` - SSH port (default: 22)
+- `GORUN_LOG_LEVEL` - Logging level (default: info)
+
+## Installation
+
+```bash
+# Clone the repository
+https://github.com/your-username/gorun.git
+
+cd gorun
+
+# Build the project
+make build
+```
+
+## Usage
+
+```bash
+# Run the deployment
+./gorun
+```
+
+## Development
+
+To contribute to this project:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## Development Environment Setup
+
+This project includes a Docker Compose setup for testing and development. The environment includes two SSH servers that can be used to test gorun's deployment capabilities.
+
+### Prerequisites
+
+- Docker and Docker Compose installed
+
+### Setting up the Development Environment
+
+1. Start the development environment:
+
+   ```bash
+   docker-compose up -d
+   ```
+
+2. Verify the containers are running:
+
+   ```bash
+   docker-compose ps
+   ```
+
+3. The development environment will expose two SSH servers on ports 2221 and 2222 with the following credentials:
+   - Username: testuser
+   - Password: testpassword
+   - SSH Key: ./ssh-keys/id_rsa
+
+### Stopping the Development Environment
+
+To stop the development environment:
+
+```bash
+# Stop the containers
+
+docker-compose down
+```
+
+### Running Tests
+
+To run tests against the development environment:
+
+```bash
+# Run the tests
+make test
+```
+
+You can also run specific tests by specifying a package:
+
+```bash
+# Run tests in a specific package
+make test PKG=./deploy
+```
+
+## Running Gorun Against the Development Environment
+
+To test gorun against the development environment, you'll need to configure it with the appropriate SSH settings.
+
+### Example Configuration
+
+An example configuration file is available in `examples/gorun-example.yaml`:
+
+```yaml
+version: '1'
+tasks:
+  - name: test-task-1
+    host: localhost
+    port: 2221
+    user: testuser
+    password: testpassword
+    command: "echo 'Hello from SSH server 1'"
+
+  - name: test-task-2
+    host: localhost
+    port: 2222
+    user: testuser
+    password: testpassword
+    command: "echo 'Hello from SSH server 2'"
+```
+
+Then run:
+
+```bash
+./gorun
+```
+
+### Environment Variables
+
+Alternatively, you can use environment variables to configure gorun:
+
+```bash
+export GORUN_CONFIG_PATH=./gorun.yaml
+export GORUN_SSH_USER=testuser
+export GORUN_SSH_PASSWORD=testpassword
+```
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

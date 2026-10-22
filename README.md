@@ -85,13 +85,13 @@ This project includes a Docker Compose setup for testing and development. The en
 1. Start the development environment:
 
    ```bash
-   docker-compose up -d
+   docker compose up -d
    ```
 
 2. Verify the containers are running:
 
    ```bash
-   docker-compose ps
+   docker compose ps
    ```
 
 3. The development environment will expose two SSH servers on ports 2221 and 2222 with the following credentials:
@@ -106,7 +106,7 @@ To stop the development environment:
 ```bash
 # Stop the containers
 
-docker-compose down
+docker compose down
 ```
 
 ### Running Tests

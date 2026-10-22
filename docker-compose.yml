@@ -1,45 +1,47 @@
-version: '3.8'
-
 services:
   ssh-server-1:
-    image: linuxserver/openssh-server
+    image: lscr.io/linuxserver/openssh-server:latest
     container_name: ssh-server-1
+    hostname: ssh-server-1
     environment:
       - PUID=1000
       - PGID=1000
+      - TZ=Etc/UTC
+      - PUBLIC_KEY_DIR=/ssh-keys
+      - SUDO_ACCESS=false
+      - PASSWORD_ACCESS=true
       - USER_NAME=testuser
       - USER_PASSWORD=testpassword
-      - PASSWORD_ACCESS=1
-      - PUBLIC_KEY_FILE=/config/ssh/keys/id_rsa.pub
     volumes:
-      - ./ssh-keys:/config/ssh/keys
+      - ./ssh-keys:/ssh-keys:ro
       - ./test-scripts:/test-scripts
-      - ./custom-ssh-config:/config/sshd/sshd_config
     ports:
-      - "2221:22"
+      - 2221:2222
+    restart: unless-stopped
     networks:
       - gorun-network
-    restart: unless-stopped
 
   ssh-server-2:
-    image: linuxserver/openssh-server
+    image: lscr.io/linuxserver/openssh-server:latest
     container_name: ssh-server-2
+    hostname: ssh-server-2
     environment:
       - PUID=1000
       - PGID=1000
+      - TZ=Etc/UTC
+      - PUBLIC_KEY_DIR=/ssh-keys
+      - SUDO_ACCESS=false
+      - PASSWORD_ACCESS=true
       - USER_NAME=testuser
       - USER_PASSWORD=testpassword
-      - PASSWORD_ACCESS=1
-      - PUBLIC_KEY_FILE=/config/ssh/keys/id_rsa.pub
     volumes:
-      - ./ssh-keys:/config/ssh/keys
+      - ./ssh-keys:/ssh-keys:ro
       - ./test-scripts:/test-scripts
-      - ./custom-ssh-config:/config/sshd/sshd_config
     ports:
-      - "2222:22"
+      - 2222:2222
+    restart: unless-stopped
     networks:
       - gorun-network
-    restart: unless-stopped
 
 networks:
   gorun-network:

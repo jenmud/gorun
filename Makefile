@@ -5,7 +5,7 @@ vendor:
 
 
 run:
-	go run . Gorunfile
+	go run . examples/Gorunfile
 
 
 test:

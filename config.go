@@ -155,7 +155,6 @@ func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
 func (c *Config) Run(ctx context.Context, server ...Server) error {
 	var wg sync.WaitGroup
 
-	var err error
 	pipeline := make(map[string]Server)
 
 	if len(server) > 0 {

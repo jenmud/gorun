@@ -8,12 +8,12 @@ services:
       - PGID=1000
       - TZ=Etc/UTC
       - PUBLIC_KEY_DIR=/ssh-keys
-      - SUDO_ACCESS=false
+      - SUDO_ACCESS=true
       - PASSWORD_ACCESS=true
       - USER_NAME=testuser
-      - USER_PASSWORD=testpassword
+      # you can not use USER_PASSWORD if you need sudo access setup
+      # - USER_PASSWORD=testpassword
     volumes:
-      - ./ssh-keys/testuser.conf:/etc/sudoers.d/testuser:ro
       - ./ssh-keys:/ssh-keys:ro
       - ./test-scripts:/test-scripts
     ports:
@@ -31,12 +31,12 @@ services:
       - PGID=1000
       - TZ=Etc/UTC
       - PUBLIC_KEY_DIR=/ssh-keys
-      - SUDO_ACCESS=false
+      - SUDO_ACCESS=true
       - PASSWORD_ACCESS=true
       - USER_NAME=testuser
-      - USER_PASSWORD=testpassword
+      # you can not use USER_PASSWORD if you need sudo access setup
+      # - USER_PASSWORD=testpassword
     volumes:
-      - ./ssh-keys/testuser.conf:/etc/sudoers.d/testuser:ro
       - ./ssh-keys:/ssh-keys:ro
       - ./test-scripts:/test-scripts
     ports:

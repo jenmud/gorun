@@ -97,7 +97,7 @@ This project includes a Docker Compose setup for testing and development. The en
 3. The development environment will expose two SSH servers on ports 2221 and 2222 with the following credentials:
    - Username: testuser
    - Password: testpassword
-   - SSH Key: ./ssh-keys/id_rsa
+   - SSH Key: ./ssh-keys/id_ecdsa
 
 ### Stopping the Development Environment
 
@@ -173,10 +173,10 @@ You can also SSH directly into one of the running test servers using the provide
 
 ```bash
 # SSH into the first test server
-ssh -i ./ssh-keys/id_rsa testuser@localhost -p 2221
+ssh -i ./ssh-keys/id_ecdsa testuser@localhost -p 2221
 
 # SSH into the second test server
-ssh -i ./ssh-keys/id_rsa testuser@localhost -p 2222
+ssh -i ./ssh-keys/id_ecdsa testuser@localhost -p 2222
 ```
 
 ## License

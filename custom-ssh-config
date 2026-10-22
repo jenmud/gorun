@@ -1,0 +1,5 @@
+# Custom SSH config for testing
+Port 22
+PasswordAuthentication yes
+PubkeyAuthentication yes
+PermitRootLogin no

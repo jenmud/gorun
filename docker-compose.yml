@@ -9,10 +9,12 @@ services:
       - PGID=1000
       - USER_NAME=testuser
       - USER_PASSWORD=testpassword
+      - PASSWORD_ACCESS=1
       - PUBLIC_KEY_FILE=/config/ssh/keys/id_rsa.pub
     volumes:
       - ./ssh-keys:/config/ssh/keys
       - ./test-scripts:/test-scripts
+      - ./custom-ssh-config:/config/sshd/sshd_config
     ports:
       - "2221:22"
     networks:
@@ -27,10 +29,12 @@ services:
       - PGID=1000
       - USER_NAME=testuser
       - USER_PASSWORD=testpassword
+      - PASSWORD_ACCESS=1
       - PUBLIC_KEY_FILE=/config/ssh/keys/id_rsa.pub
     volumes:
       - ./ssh-keys:/config/ssh/keys
       - ./test-scripts:/test-scripts
+      - ./custom-ssh-config:/config/sshd/sshd_config
     ports:
       - "2222:22"
     networks:

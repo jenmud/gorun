@@ -1,4 +1,4 @@
-!#/bin/bash
+#!/bin/bash
 set -e
 
 # create a new user called foobar

@@ -38,29 +38,28 @@ log_level = "debug"
 
     [[servers.tasks]]
     name = "apt-install"
-    #cmd = "sudo apt update"
     cmd_file = "./scripts/apt-install.sh"
 
 
-# [[servers]]
-# name = "server2"
-# hostname = "localhost"
-# log_level = "debug"
-#
-#     [servers.ssh]
-#         port = 2222
-#         username = "testuser"
-#         password = "testpassword"
-#         identityfile = "./ssh-keys/id_ecdsa"
-#
-#     [[servers.tasks]]
-#     name = "create-users"
-#     cmd = "./scripts/create-users.sh"
-#     shell = "/bin/bash"
-#     depends_on = ["install-docker"]
-#
-#     [[servers.tasks]]
-#     name = "install-docker"
-#     cmd = "./scripts/install-docker.sh"
-#     shell = "/bin/bash"
-#
+[[servers]]
+name = "server2"
+hostname = "localhost"
+log_level = "debug"
+
+    [servers.ssh]
+        port = 2222
+        username = "testuser"
+        password = "testpassword"
+        identityfile = "./ssh-keys/id_ecdsa"
+
+    [[servers.tasks]]
+    name = "create-users"
+    cmd = "./scripts/create-users.sh"
+    depends_on = ["install-docker"]
+
+    [[servers.tasks]]
+    name = "install-docker"
+
+    [[servers.tasks]]
+    name = "apt-install"
+    cmd_file = "./scripts/apt-install.sh"

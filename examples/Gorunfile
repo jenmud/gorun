@@ -38,6 +38,7 @@ log_level = "debug"
 
     [[servers.tasks]]
     name = "apt-install"
+    #cmd = "sudo apt update"
     cmd_file = "./scripts/apt-install.sh"
 
 

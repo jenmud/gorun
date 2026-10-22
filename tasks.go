@@ -79,7 +79,7 @@ func (t *TaskExec) Fail(ctx context.Context, err error) error {
 	if err != nil {
 		span.RecordError(err)
 
-		t.stderr = []byte(err.Error())
+		//t.stderr = []byte(err.Error())
 		t.exitCode = 2
 
 		t.logger.ErrorContext(
@@ -284,6 +284,11 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		var stdout bytes.Buffer
 		var stderr bytes.Buffer
 
+		defer func() {
+			t.stdout = stdout.Bytes()
+			t.stderr = stderr.Bytes()
+		}()
+
 		session.Stdout = &stdout
 		session.Stderr = &stderr
 
@@ -292,7 +297,14 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		}
 
 		t.startedAt = time.Now()
-		if err := session.Run(t.task.Cmd); err != nil {
+
+		command, err := t.task.Command()
+		if err != nil {
+			errChan <- fmt.Errorf("error running the task on the remote server: %w", err)
+			return
+		}
+
+		if err := session.Run(command); err != nil {
 			errChan <- fmt.Errorf("error running the task on the remote server: %w", err)
 			return
 		}

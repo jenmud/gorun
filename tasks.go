@@ -18,10 +18,44 @@ import (
 type Task struct {
 	LogLevel  string            `toml:"log_level"`
 	Name      string            `toml:"name"`
-	Cmd       string            `toml:"cmd"`
+	Cmd       string            `toml:"cmd,omitempty"`
+	CmdFile   string            `toml:"cmd_file,omitempty"`
 	EnvVars   map[string]string `toml:"envvars"`
 	DependsOn []string          `toml:"depends_on"`
 	Shell     string            `toml:"shell"`
+}
+
+// Command reads the command from either inline cmd or from a file
+func (t *Task) Command() (string, error) {
+	if t.Cmd != "" {
+		return t.Cmd, nil
+	}
+
+	if t.CmdFile != "" {
+		// Read command from file
+		content, err := os.ReadFile(t.CmdFile)
+		if err != nil {
+			return "", fmt.Errorf("failed to read command file %s: %w", t.CmdFile, err)
+		}
+		return string(content), nil
+	}
+
+	return "", fmt.Errorf("task %s has no command specified", t.Name)
+}
+
+// validate runs some validations against the task checking that it is valid for execution.
+func (t Task) validate() error {
+	if t.Cmd != "" && t.CmdFile != "" {
+		return fmt.Errorf("task %s cannot have both cmd and cmd_file specified", t.Name)
+	}
+
+	if t.CmdFile != "" {
+		if _, err := os.Stat(t.CmdFile); os.IsNotExist(err) {
+			return fmt.Errorf("command file %s does not exist", t.CmdFile)
+		}
+	}
+
+	return nil
 }
 
 // TaskExec is a execution task to be run on a server.
@@ -37,11 +71,59 @@ type TaskExec struct {
 	exitCode    int
 }
 
+// Fail will fail a task.
+func (t *TaskExec) Fail(ctx context.Context, err error) error {
+	ctx, span := tracer.Start(ctx, "Fail")
+	defer span.End()
+
+	if err != nil {
+		span.RecordError(err)
+		t.logger.ErrorContext(ctx, "task failed", slog.String("reason", err.Error()), slog.String("stderr", string(t.stderr)))
+		t.stderr = []byte(err.Error())
+		t.exitCode = 2
+		return err
+	}
+
+	t.exitCode = 0
+	return nil
+}
+
+// Terminates the task.
+func (t *TaskExec) Terminate(ctx context.Context, err error) error {
+	ctx, span := tracer.Start(ctx, "Terminate")
+	defer span.End()
+
+	if err != nil {
+		span.RecordError(err)
+		t.logger.InfoContext(ctx, "task terminated", slog.String("reason", err.Error()))
+		t.stderr = []byte(err.Error())
+		t.exitCode = 1
+		return err
+	}
+
+	t.exitCode = 0
+	return nil
+}
+
+// Completed marks the task as completed.
+func (t *TaskExec) Completed(ctx context.Context) error {
+	ctx, span := tracer.Start(ctx, "Completed")
+	defer span.End()
+
+	t.logger.DebugContext(ctx, "task completed", slog.String("stdout", string(t.stdout)))
+	t.exitCode = 0
+	return nil
+}
+
 // NewTaskExec creates and sets up a task to be executed on the remote session.
-func NewTaskExec(server *ssh.Client, task ...Task) []*TaskExec {
+func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 	tasks := make([]*TaskExec, len(task))
 
 	for i, t := range task {
+		if err := t.validate(); err != nil {
+			return nil, err
+		}
+
 		logger := NewLogger(t.LogLevel, os.Stdout, false)
 
 		envvars := []string{}
@@ -82,7 +164,7 @@ func NewTaskExec(server *ssh.Client, task ...Task) []*TaskExec {
 		}
 	}
 
-	return tasks
+	return tasks, nil
 }
 
 // LocalExecute executes the task as a local task.
@@ -97,18 +179,23 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 		t.completedAt = time.Now()
 	}()
 
-	cmd := exec.CommandContext(ctx, t.task.Cmd)
+	command, err := t.task.Command()
+	if err != nil {
+		return t.Fail(ctx, err)
+	}
+
+	cmd := exec.CommandContext(ctx, command)
 
 	if t.task.Shell != "" {
-		command := strings.Split(t.task.Shell, " ")
-		name := command[0]
+		scmd := strings.Split(t.task.Shell, " ")
+		name := scmd[0]
 
 		args := []string{}
-		if len(command) > 1 {
-			args = append(args, command[1:]...)
+		if len(scmd) > 1 {
+			args = append(args, scmd[1:]...)
 		}
 
-		args = append(args, t.task.Cmd)
+		args = append(args, command)
 		cmd = exec.CommandContext(ctx, name, args...)
 	}
 
@@ -124,22 +211,16 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 
 	t.startedAt = time.Now()
 
-	err := cmd.Run()
+	err = cmd.Run()
 
 	t.stderr = stderr.Bytes()
 	t.stdout = stdout.Bytes()
 
-	if err != nil {
-		span.RecordError(err)
-		t.logger.ErrorContext(ctx, "task failed", slog.String("reason", err.Error()), slog.String("stderr", string(t.stderr)))
-		t.stderr = []byte(err.Error())
-		t.exitCode = 2
+	if err := t.Fail(ctx, err); err != nil {
 		return err
 	}
 
-	t.logger.DebugContext(ctx, "task completed", slog.String("stdout", string(t.stdout)))
-	t.exitCode = 0
-	return nil
+	return t.Completed(ctx)
 }
 
 // Execute executes the task with the attached SSH client.
@@ -164,9 +245,9 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 	doneChan := make(chan bool, 1)
 
 	session, err := t.server.NewSession()
-	if err != nil {
+
+	if err := t.Fail(ctx, err); err != nil {
 		err = fmt.Errorf("error creating SSH session: %w", err)
-		span.RecordError(err)
 		return err
 	}
 
@@ -180,7 +261,7 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		session.Stderr = &stderr
 
 		for key, value := range t.task.EnvVars {
-			session.Setenv(key, value)
+			session.Setenv(strings.ToUpper(key), value)
 		}
 
 		t.startedAt = time.Now()
@@ -199,22 +280,11 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		err := ctx.Err()
-		span.RecordError(err)
 		session.Signal(ssh.SIGTERM)
-		t.logger.InfoContext(ctx, "task terminated", slog.String("reason", err.Error()))
-		t.stderr = []byte(err.Error())
-		t.exitCode = 1
-		return err
+		return t.Terminate(ctx, err)
 	case err := <-errChan:
-		span.RecordError(err)
-		t.logger.ErrorContext(ctx, "task failed", slog.String("reason", err.Error()), slog.String("stderr", string(t.stderr)))
-		t.stderr = []byte(err.Error())
-		t.exitCode = 2
-		return err
+		return t.Fail(ctx, err)
 	case <-doneChan:
-		t.logger.DebugContext(ctx, "task completed", slog.String("stdout", string(t.stdout)))
-		t.exitCode = 0
+		return t.Completed(ctx)
 	}
-
-	return nil
 }

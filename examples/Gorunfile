@@ -7,8 +7,8 @@ log_level = "info"
 # Global SSH details
 [ssh]
 username = "testuser"
-password = "testpassword"
-#identityfile = "../some/file"
+# password = "testpassword"
+identityfile = "../ssh-keys/id_ecdsa"
 
 # Global environment variables
 [envvars]
@@ -28,7 +28,6 @@ log_level = "debug"
     [[servers.tasks]]
     log_level = "debug"
     name = "create-users"
-    depends_on = ["install-docker"]
     [servers.tasks.envvars]
     KEY = "value"
 
@@ -45,4 +44,13 @@ log_level = "debug"
     [[servers.tasks]]
     log_level = "debug"
     name = "create-users"
-    depends_on = ["install-docker"]
+
+
+[[tasks]]
+name = "create-users"
+cmd_file = "../scripts/create-users.sh"
+depends_on = ["install-docker"]
+
+[[tasks]]
+name = "install-docker"
+cmd_file = "../scripts/isntall-docker.sh"

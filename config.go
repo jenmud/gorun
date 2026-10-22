@@ -220,7 +220,14 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 			var parent *TaskExec
 
-			for _, task := range NewTaskExec(sshClient, server.Tasks...) {
+			tasks, err := NewTaskExec(sshClient, server.Tasks...)
+			if err != nil {
+				err = fmt.Errorf("error loading tasks: %w", err)
+				logger.Error("error with running tasks", slog.String("reason", err.Error()))
+				return
+			}
+
+			for _, task := range tasks {
 				tlogger := logger.With(slog.String("task", task.task.Name))
 
 				if parent != nil && parent.exitCode != 0 {

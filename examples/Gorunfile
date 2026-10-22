@@ -1,0 +1,48 @@
+#
+# Gorunfile is a TOML formatted file.
+#
+title = "Deployment for example server"
+log_level = "info"
+
+# Global SSH details
+[ssh]
+username = "testuser"
+password = "testpassword"
+#identityfile = "../some/file"
+
+# Global environment variables
+[envvars]
+GORUN_ADDRESS = "localhost:8080"
+
+# List of servers in the inventory
+[[servers]]
+name = "server1"
+hostname = "localhost:2221"
+log_level = "debug"
+
+    # Optional server SSH details - if missing global details are used
+    # [servers.ssh]
+    # username = "testuser"
+    # password = "testpassword"
+
+    [[servers.tasks]]
+    log_level = "debug"
+    name = "create-users"
+    depends_on = ["install-docker"]
+    [servers.tasks.envvars]
+    KEY = "value"
+
+[[servers]]
+name = "server2"
+hostname = "localhost:2222"
+log_level = "debug"
+
+    # Optional server SSH details - if missing global details are used
+    # [servers.ssh]
+    # username = "testuser"
+    # password = "testpassword"
+
+    [[servers.tasks]]
+    log_level = "debug"
+    name = "create-users"
+    depends_on = ["install-docker"]

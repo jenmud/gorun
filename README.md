@@ -38,6 +38,7 @@ Configuration is done via environment variables. See `.env` for supported enviro
 
 ### Environment Variables
 
+- `GORUN_TASKS_LOCATION` - Path to the template script task files to load
 - `GORUN_CONFIG_PATH` - Path to the configuration file (default: ./gorun.yaml)
 - `GORUN_SSH_KEY_PATH` - Path to SSH private key (default: ~/.ssh/id_rsa)
 - `GORUN_SSH_USER` - SSH username (default: $USER)
@@ -131,30 +132,12 @@ To test gorun against the development environment, you'll need to configure it w
 
 ### Example Configuration
 
-An example configuration file is available in `examples/gorun-example.yaml`:
-
-```yaml
-version: '1'
-tasks:
-  - name: test-task-1
-    host: localhost
-    port: 2221
-    user: testuser
-    password: testpassword
-    command: "echo 'Hello from SSH server 1'"
-
-  - name: test-task-2
-    host: localhost
-    port: 2222
-    user: testuser
-    password: testpassword
-    command: "echo 'Hello from SSH server 2'"
-```
+An example configuration file is available in `examples/Gorunfile.yaml`:
 
 Then run:
 
 ```bash
-./gorun
+GORUN_CONFIG_PATH=$PWD/examples/Gorunfile ./gorun
 ```
 
 ### Environment Variables

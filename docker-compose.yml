@@ -13,6 +13,7 @@ services:
       - USER_NAME=testuser
       - USER_PASSWORD=testpassword
     volumes:
+      - ./ssh-keys/testuser.conf:/etc/sudoers.d/testuser:ro
       - ./ssh-keys:/ssh-keys:ro
       - ./test-scripts:/test-scripts
     ports:
@@ -35,6 +36,7 @@ services:
       - USER_NAME=testuser
       - USER_PASSWORD=testpassword
     volumes:
+      - ./ssh-keys/testuser.conf:/etc/sudoers.d/testuser:ro
       - ./ssh-keys:/ssh-keys:ro
       - ./test-scripts:/test-scripts
     ports:

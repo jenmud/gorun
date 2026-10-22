@@ -28,30 +28,38 @@ log_level = "debug"
 
     [[servers.tasks]]
     name = "create-users"
-    cmd = "./scripts/create-users.sh"
+    cmd_file = "./scripts/create-users.sh"
     depends_on = ["install-docker"]
 
     [[servers.tasks]]
     name = "install-docker"
-    cmd = "./scripts/install-docker.sh"
-
-
-[[servers]]
-name = "server2"
-hostname = "localhost"
-log_level = "debug"
-
-    [servers.ssh]
-        port = 2222
-        username = "testuser"
-        password = "testpassword"
-        identityfile = "./ssh-keys/id_ecdsa"
+    cmd_file = "./scripts/install-docker.sh"
+    depends_on = ["apt-install"]
 
     [[servers.tasks]]
-    name = "create-users"
-    cmd = "./scripts/create-users.sh"
-    depends_on = ["install-docker"]
+    name = "apt-install"
+    cmd_file = "./scripts/apt-install.sh"
 
-    [[servers.tasks]]
-    name = "install-docker"
-    cmd = "./scripts/install-docker.sh"
+
+# [[servers]]
+# name = "server2"
+# hostname = "localhost"
+# log_level = "debug"
+#
+#     [servers.ssh]
+#         port = 2222
+#         username = "testuser"
+#         password = "testpassword"
+#         identityfile = "./ssh-keys/id_ecdsa"
+#
+#     [[servers.tasks]]
+#     name = "create-users"
+#     cmd = "./scripts/create-users.sh"
+#     shell = "/bin/bash"
+#     depends_on = ["install-docker"]
+#
+#     [[servers.tasks]]
+#     name = "install-docker"
+#     cmd = "./scripts/install-docker.sh"
+#     shell = "/bin/bash"
+#

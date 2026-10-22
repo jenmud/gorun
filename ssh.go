@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -25,15 +26,34 @@ func NewSSHClient(ctx context.Context, server Server) (*ssh.Client, error) {
 	}
 
 	address := fmt.Sprintf("%s:%d", server.Hostname, port)
+	auth := []ssh.AuthMethod{}
 
-	//var hostkey ssh.PublicKey
+	// Create the Signer for this private key.
+	if server.SSH.Identifyfile != "" {
+		key, err := os.ReadFile(server.SSH.Identifyfile)
+		if err != nil {
+			err = fmt.Errorf("error reading SSH IdentityFile %q: %w", server.SSH.Identifyfile, err)
+			return nil, err
+		}
+
+		signer, err := ssh.ParsePrivateKey(key)
+		if err != nil {
+			err = fmt.Errorf("error parsing SSH IdentityFile %q: %w", server.SSH.Identifyfile, err)
+			return nil, err
+		}
+
+		auth = append(auth, ssh.PublicKeys(signer))
+	}
+
+	// if we have a SSH password, add it to the list of auths
+	if server.SSH.Password != "" {
+		auth = append(auth, ssh.Password(server.SSH.Password))
+	}
 
 	config := &ssh.ClientConfig{
-		Config: ssh.Config{},
-		User:   server.SSH.User,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(server.SSH.Password),
-		},
+		Config:          ssh.Config{},
+		User:            server.SSH.User,
+		Auth:            auth,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         30 * time.Second,
 	}

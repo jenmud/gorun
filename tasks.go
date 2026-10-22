@@ -78,9 +78,19 @@ func (t *TaskExec) Fail(ctx context.Context, err error) error {
 
 	if err != nil {
 		span.RecordError(err)
-		t.logger.ErrorContext(ctx, "task failed", slog.String("reason", err.Error()), slog.String("stderr", string(t.stderr)))
+
 		t.stderr = []byte(err.Error())
 		t.exitCode = 2
+
+		t.logger.ErrorContext(
+			ctx,
+			"task failed",
+			slog.Int("exitcode", t.exitCode),
+			slog.String("stderr", string(t.stderr)),
+			slog.String("stdout", string(t.stdout)),
+			slog.String("reason", err.Error()),
+		)
+
 		return err
 	}
 
@@ -95,9 +105,18 @@ func (t *TaskExec) Terminate(ctx context.Context, err error) error {
 
 	if err != nil {
 		span.RecordError(err)
-		t.logger.InfoContext(ctx, "task terminated", slog.String("reason", err.Error()))
 		t.stderr = []byte(err.Error())
 		t.exitCode = 1
+
+		t.logger.WarnContext(
+			ctx,
+			"task terminated",
+			slog.Int("exitcode", t.exitCode),
+			slog.String("stderr", string(t.stderr)),
+			slog.String("stdout", string(t.stdout)),
+			slog.String("reason", err.Error()),
+		)
+
 		return err
 	}
 
@@ -110,8 +129,16 @@ func (t *TaskExec) Completed(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "Completed")
 	defer span.End()
 
-	t.logger.DebugContext(ctx, "task completed", slog.String("stdout", string(t.stdout)))
 	t.exitCode = 0
+
+	t.logger.DebugContext(
+		ctx,
+		"task completed",
+		slog.Int("exitcode", t.exitCode),
+		slog.String("stderr", string(t.stderr)),
+		slog.String("stdout", string(t.stdout)),
+	)
+
 	return nil
 }
 

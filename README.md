@@ -167,6 +167,18 @@ export GORUN_SSH_USER=testuser
 export GORUN_SSH_PASSWORD=testpassword
 ```
 
+### SSH Access to Test Servers
+
+You can also SSH directly into one of the running test servers using the provided SSH keys:
+
+```bash
+# SSH into the first test server
+ssh -i ./ssh-keys/id_rsa testuser@localhost -p 2221
+
+# SSH into the second test server
+ssh -i ./ssh-keys/id_rsa testuser@localhost -p 2222
+```
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.

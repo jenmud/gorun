@@ -20,37 +20,19 @@ name = "server1"
 hostname = "localhost:2221"
 log_level = "debug"
 
-    # Optional server SSH details - if missing global details are used
-    # [servers.ssh]
-    # username = "testuser"
-    # password = "testpassword"
-
-    [[servers.tasks]]
-    log_level = "debug"
-    name = "create-users"
-    [servers.tasks.envvars]
-    KEY = "value"
 
 [[servers]]
 name = "server2"
 hostname = "localhost:2222"
 log_level = "debug"
 
-    # Optional server SSH details - if missing global details are used
-    # [servers.ssh]
-    # username = "testuser"
-    # password = "testpassword"
-
-    [[servers.tasks]]
-    log_level = "debug"
-    name = "create-users"
-
 
 [[tasks]]
 name = "create-users"
-cmd_file = "../scripts/create-users.sh"
+cmd_file = "./scripts/create-users.sh"
 depends_on = ["install-docker"]
+
 
 [[tasks]]
 name = "install-docker"
-cmd_file = "../scripts/isntall-docker.sh"
+cmd_file = "./scripts/install-docker.sh"

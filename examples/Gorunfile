@@ -8,7 +8,7 @@ log_level = "info"
 [ssh]
 username = "testuser"
 # password = "testpassword"
-identityfile = "../ssh-keys/id_ecdsa"
+identityfile = "./ssh-keys/id_ecdsa"
 
 # Global environment variables
 [envvars]
@@ -17,22 +17,41 @@ GORUN_ADDRESS = "localhost:8080"
 # List of servers in the inventory
 [[servers]]
 name = "server1"
-hostname = "localhost:2221"
+hostname = "localhost"
 log_level = "debug"
+
+    [servers.ssh]
+    port = 2221
+    username = "testuser"
+    password = "testpassword"
+    identityfile = "./ssh-keys/id_ecdsa"
+
+    [[servers.tasks]]
+    name = "create-users"
+    cmd = "./scripts/create-users.sh"
+    depends_on = ["install-docker"]
+
+    [[servers.tasks]]
+    name = "install-docker"
+    cmd = "./scripts/install-docker.sh"
 
 
 [[servers]]
 name = "server2"
-hostname = "localhost:2222"
+hostname = "localhost"
 log_level = "debug"
 
+    [servers.ssh]
+        port = 2222
+        username = "testuser"
+        password = "testpassword"
+        identityfile = "./ssh-keys/id_ecdsa"
 
-[[tasks]]
-name = "create-users"
-cmd_file = "./scripts/create-users.sh"
-depends_on = ["install-docker"]
+    [[servers.tasks]]
+    name = "create-users"
+    cmd = "./scripts/create-users.sh"
+    depends_on = ["install-docker"]
 
-
-[[tasks]]
-name = "install-docker"
-cmd_file = "./scripts/install-docker.sh"
+    [[servers.tasks]]
+    name = "install-docker"
+    cmd = "./scripts/install-docker.sh"

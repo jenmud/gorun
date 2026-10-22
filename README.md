@@ -38,7 +38,6 @@ Configuration is done via environment variables. See `.env` for supported enviro
 
 ### Environment Variables
 
-- `GORUN_TASKS_LOCATION` - Path to the template script task files to load
 - `GORUN_CONFIG_PATH` - Path to the configuration file (default: ./gorun.yaml)
 - `GORUN_SSH_KEY_PATH` - Path to SSH private key (default: ~/.ssh/id_rsa)
 - `GORUN_SSH_USER` - SSH username (default: $USER)

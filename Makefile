@@ -1,5 +1,6 @@
--include ./example/Makefile
 .PHONY: vendor test build-otel build-go build
+
+all: vendor build
 
 vendor:
 	go mod tidy && go mod vendor
@@ -23,3 +24,5 @@ build-go:
 
 
 build: build-go build-otel
+
+-include ./example/Makefile

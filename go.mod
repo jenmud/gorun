@@ -35,3 +35,25 @@ require (
 )
 
 tool go.opentelemetry.io/otelc/tool/cmd/otelc
+
+replace go.opentelemetry.io/otelc/instrumentation/net/http/client => /home/jenda/code/gorun/.otelc-build/instrumentation/net/http/client
+
+replace go.opentelemetry.io/otelc/instrumentation/net/http/server => /home/jenda/code/gorun/.otelc-build/instrumentation/net/http/server
+
+replace go.opentelemetry.io/otelc/instrumentation/go.opentelemetry.io/otel => /home/jenda/code/gorun/.otelc-build/instrumentation/go.opentelemetry.io/otel
+
+replace go.opentelemetry.io/otelc/instrumentation/go.opentelemetry.io/otel/init => /home/jenda/code/gorun/.otelc-build/instrumentation/go.opentelemetry.io/otel/init
+
+replace go.opentelemetry.io/otelc/instrumentation/log/slog => /home/jenda/code/gorun/.otelc-build/instrumentation/log/slog
+
+replace go.opentelemetry.io/otelc/instrumentation/runtime => /home/jenda/code/gorun/.otelc-build/instrumentation/runtime
+
+replace go.opentelemetry.io/otelc/instrumentation/log => /home/jenda/code/gorun/.otelc-build/instrumentation/log
+
+replace go.opentelemetry.io/otelc/instrumentation/go.opentelemetry.io/otel/trace => /home/jenda/code/gorun/.otelc-build/instrumentation/go.opentelemetry.io/otel/trace
+
+replace go.opentelemetry.io/otelc/pkg => /home/jenda/code/gorun/.otelc-build/pkg
+
+replace go.opentelemetry.io/otelc/pkg/runtime => /home/jenda/code/gorun/.otelc-build/pkg/runtime
+
+replace go.opentelemetry.io/otelc/instrumentation => /home/jenda/code/gorun/.otelc-build/instrumentation

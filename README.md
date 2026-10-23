@@ -58,9 +58,18 @@ make build
 ## Usage
 
 ```bash
-# Run the deployment
-./gorun
+# Run the deployment with the interactive TUI (progress bar per server)
+./gorun Gorunfile
+
+# Verbose: list every task; enter expands a task's output, v toggles views
+./gorun -v Gorunfile
+
+# Plain log output (automatic when stdout is not a terminal, e.g. in CI)
+./gorun -plain Gorunfile
 ```
+
+Failed tasks are always shown in a red box with the reason, exit code, the tail of stderr, and
+the tasks that were skipped because of it. gorun exits with status 1 if anything failed.
 
 ## Development
 

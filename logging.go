@@ -3,8 +3,12 @@ package main
 import (
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 )
+
+// logOutput is where task and server logs are written. The TUI discards them.
+var logOutput io.Writer = os.Stdout
 
 // NewLogger returns a new logger.
 func NewLogger(level string, w io.Writer, json bool) *slog.Logger {

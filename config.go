@@ -6,8 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"os"
+	"maps"
+	"slices"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"go.opentelemetry.io/otel"
@@ -24,6 +27,9 @@ type Config struct {
 	SSH      SSH               `toml:"ssh"`
 	Servers  []Server          `toml:"servers"`
 	Tasks    []Task            `toml:"tasks"`
+
+	// OnEvent, when set, receives the events in events.go as tasks run.
+	OnEvent func(event any) `toml:"-"`
 }
 
 // Load reads and updates the config.
@@ -175,6 +181,30 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		pipeline = pipelines
 	}
 
+	// announce every server's plan up front, in a stable order
+	names := slices.Sorted(maps.Keys(pipeline))
+	for _, name := range names {
+		server := pipeline[name]
+
+		tasks := []string{}
+		for _, task := range server.Tasks {
+			tasks = append(tasks, task.Name)
+		}
+
+		address := "local"
+		if server.SSH != (SSH{}) {
+			port := server.SSH.Port
+			if port == 0 {
+				port = 22
+			}
+			address = fmt.Sprintf("%s:%d", server.Hostname, port)
+		}
+
+		c.emit(PlanEvent{Server: server.Name, Address: address, Tasks: tasks})
+	}
+
+	var failed atomic.Bool
+
 	for _, server := range pipeline {
 
 		if server.LogLevel == "" {
@@ -191,7 +221,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		}
 
 		wg.Go(func() {
-			logger := NewLogger(server.LogLevel, os.Stdout, false)
+			logger := NewLogger(server.LogLevel, logOutput, false)
 			logger = logger.With(
 				slog.Group(
 					"server",
@@ -210,6 +240,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 					// TODO: need to catch this in a error group
 					err = fmt.Errorf("error creating SSH connection: %w", err)
 					logger.Error("error with running tasks", slog.String("reason", err.Error()))
+					failed.Store(true)
+					c.emit(ServerErrorEvent{Server: server.Name, Err: err})
 					return
 				}
 
@@ -224,6 +256,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			if err != nil {
 				err = fmt.Errorf("error loading tasks: %w", err)
 				logger.Error("error with running tasks", slog.String("reason", err.Error()))
+				failed.Store(true)
+				c.emit(ServerErrorEvent{Server: server.Name, Err: err})
 				return
 			}
 
@@ -233,15 +267,36 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				if parent != nil && parent.exitCode != 0 {
 					err = fmt.Errorf("dependent task (%s, exit code=%d) failed, aborting task (%s)", parent.task.Name, parent.exitCode, task.task.Name)
 					tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
+					c.emit(TaskEvent{Server: server.Name, Task: task.task.Name, State: TaskSkipped, Err: err})
 					continue
 				}
 
 				parent = task
-				task.Execute(ctx)
+
+				c.emit(TaskEvent{Server: server.Name, Task: task.task.Name, State: TaskRunning})
+				started := time.Now()
+
+				event := TaskEvent{Server: server.Name, Task: task.task.Name, State: TaskDone}
+				if err := task.Execute(ctx); err != nil {
+					failed.Store(true)
+					event.State = TaskFailed
+					event.Err = err
+				}
+
+				event.Stdout = string(task.stdout)
+				event.Stderr = string(task.stderr)
+				event.ExitCode = task.exitCode
+				event.Duration = time.Since(started)
+				c.emit(event)
 			}
 		})
 	}
 
 	wg.Wait()
+
+	if failed.Load() {
+		return errors.New("one or more tasks failed")
+	}
+
 	return nil
 }

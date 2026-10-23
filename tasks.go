@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -80,8 +81,18 @@ func (t *TaskExec) Fail(ctx context.Context, err error) error {
 	if err != nil {
 		span.RecordError(err)
 
-		//t.stderr = []byte(err.Error())
-		t.exitCode = 2
+		// report the command's real exit code when there is one
+		var sshErr *ssh.ExitError
+		var execErr *exec.ExitError
+
+		switch {
+		case errors.As(err, &sshErr):
+			t.exitCode = sshErr.ExitStatus()
+		case errors.As(err, &execErr):
+			t.exitCode = execErr.ExitCode()
+		default:
+			t.exitCode = 2
+		}
 
 		t.logger.ErrorContext(
 			ctx,
@@ -152,7 +163,7 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 			return nil, err
 		}
 
-		logger := NewLogger(t.LogLevel, os.Stdout, false)
+		logger := NewLogger(t.LogLevel, logOutput, false)
 
 		envvars := []string{}
 		for key, value := range t.EnvVars {

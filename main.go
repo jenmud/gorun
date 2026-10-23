@@ -10,16 +10,22 @@ import (
 	"strings"
 
 	_ "github.com/joho/godotenv/autoload"
+	"golang.org/x/term"
 )
 
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancel()
 
+	verbose := flag.Bool("v", false, "verbose: show every task and its output")
+	plain := flag.Bool("plain", false, "plain log output instead of the TUI (default when stdout is not a terminal)")
 	flag.Parse()
 	filename := flag.Arg(0)
 
-	slog.Info("parsing gorun file", slog.String("filename", filename))
+	useTUI := !*plain && term.IsTerminal(int(os.Stdout.Fd()))
+	if !useTUI {
+		slog.Info("parsing gorun file", slog.String("filename", filename))
+	}
 
 	cfg := Config{}
 
@@ -30,6 +36,13 @@ func main() {
 
 	if err := cfg.Load(r); err != nil {
 		panic(err)
+	}
+
+	if useTUI {
+		if err := runTUI(ctx, cancel, &cfg, *verbose); err != nil {
+			os.Exit(1)
+		}
+		return
 	}
 
 	slog.Info("parsed config file")
@@ -51,5 +64,6 @@ func main() {
 
 	if err := cfg.Run(ctx); err != nil {
 		slog.Error("error executing tasks", slog.String("reason", err.Error()))
+		os.Exit(1)
 	}
 }

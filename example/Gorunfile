@@ -33,6 +33,10 @@ log_level = "info"
 #   go-smoke-test, ssh-user-docker-access and compose-project are only used by some servers.
 #
 
+[tasks.apt-update]
+cmd = "apt update"
+sudo = true
+
 [tasks.packages]
 cmd_file = "./scripts/packages.sh"
 sudo = true
@@ -124,7 +128,7 @@ tasks = ["timezone", "monitoring-tools", "editor-setup", "jj-config", "go-worksp
 [servers.hosts.server1]
 hostname = "localhost"
 # build server: the usual setup, plus prove the Go toolchain works end to end
-tasks = ["verify", "go-smoke-test"]
+tasks = ["verify", "go-smoke-test", "apt-update"]
     [servers.hosts.server1.ssh]
     port = 2221
     username = "testuser"

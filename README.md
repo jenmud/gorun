@@ -27,10 +27,27 @@ go run . example/Gorunfile -v
 go run . example/Gorunfile --select -v
 ```
 
-Verbose mode (`-v`, or press `v` while running) lists every task per server; use ↑/↓ and enter to
-expand a task's output:
+Verbose mode (`-v`, or press `v` while running) lists every task per server:
 
 ![gorun verbose view listing each server's tasks](docs/screenshot-verbose.png)
+
+Select a task with ↑/↓ and press enter to expand its output (stdout and stderr) inline; press
+enter again to collapse it. Failed tasks open automatically so you can see why straight away.
+Once the run finishes, verbose mode stays open so you can browse the output before quitting with `q`:
+
+![gorun verbose view with task output expanded](docs/screenshot-output.png)
+
+### Failures
+
+When a task fails, gorun always shows it in a red box with the reason, the exit code and the
+tail of stderr (or stdout), even in the compact view. The rest of that server's tasks are
+skipped, the other servers carry on, and gorun exits with status 1:
+
+![gorun compact view showing a failed task](docs/screenshot-failure.png)
+
+In verbose mode the failed task is marked ✗ and its output opens automatically:
+
+![gorun verbose view with a failed task expanded](docs/screenshot-failure-verbose.png)
 
 ## Server Selection
 

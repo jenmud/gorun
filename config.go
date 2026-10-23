@@ -146,10 +146,14 @@ func resolveTasks(library map[string]Task, names ...string) ([]Task, error) {
 
 		task, ok := library[name]
 		if !ok {
+			err := fmt.Errorf("unknown task %q", name)
 			if len(path) > 1 {
-				return fmt.Errorf("task %q depends on unknown task %q", path[len(path)-2], name)
+				err = fmt.Errorf("task %q depends on unknown task %q", path[len(path)-2], name)
 			}
-			return fmt.Errorf("unknown task %q", name)
+			if suggestion := closestName(name, slices.Collect(maps.Keys(library))); suggestion != "" {
+				err = fmt.Errorf("%w (did you mean %q?)", err, suggestion)
+			}
+			return err
 		}
 
 		state[name] = visiting
@@ -171,6 +175,53 @@ func resolveTasks(library map[string]Task, names ...string) ([]Task, error) {
 	}
 
 	return result, nil
+}
+
+// closestName returns the candidate most likely to be a typo of name, or "" if none is close.
+func closestName(name string, candidates []string) string {
+	best, bestDistance := "", max(2, len(name)/3)+1
+
+	slices.Sort(candidates) // stable result on ties
+	for _, candidate := range candidates {
+		if d := editDistance(name, candidate); d < bestDistance {
+			best, bestDistance = candidate, d
+		}
+	}
+
+	return best
+}
+
+// editDistance is the Damerau-Levenshtein (optimal string alignment) distance between a
+// and b: the number of single character insertions, deletions, substitutions and adjacent
+// swaps needed to turn one into the other.
+func editDistance(a, b string) int {
+	s, t := []rune(a), []rune(b)
+
+	d := make([][]int, len(s)+1)
+	for i := range d {
+		d[i] = make([]int, len(t)+1)
+		d[i][0] = i
+	}
+	for j := range d[0] {
+		d[0][j] = j
+	}
+
+	for i := 1; i <= len(s); i++ {
+		for j := 1; j <= len(t); j++ {
+			cost := 1
+			if s[i-1] == t[j-1] {
+				cost = 0
+			}
+
+			d[i][j] = min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1]+cost)
+
+			if i > 1 && j > 1 && s[i-1] == t[j-2] && s[i-2] == t[j-1] {
+				d[i][j] = min(d[i][j], d[i-2][j-2]+1)
+			}
+		}
+	}
+
+	return d[len(s)][len(t)]
 }
 
 // ServersPipeline returns every server with its tasks resolved into run order.

@@ -14,6 +14,7 @@ func TestResolveTasks(t *testing.T) {
 		"c":       {Name: "c"},
 		"d":       {Name: "d", DependsOn: []string{"c", "b"}},
 		"e":       {Name: "e"},
+		"apt-up":  {Name: "apt-up"},
 		"loop-1":  {Name: "loop-1", DependsOn: []string{"loop-2"}},
 		"loop-2":  {Name: "loop-2", DependsOn: []string{"loop-1"}},
 		"missing": {Name: "missing", DependsOn: []string{"nope"}},
@@ -31,6 +32,7 @@ func TestResolveTasks(t *testing.T) {
 		{name: "shared dependencies run once", tasks: []string{"a", "d"}, want: []string{"c", "b", "a", "d"}},
 		{name: "listed dependency runs once", tasks: []string{"c", "a", "b"}, want: []string{"c", "b", "a"}},
 		{name: "unknown task", tasks: []string{"zzz"}, wantErr: `unknown task "zzz"`},
+		{name: "unknown task suggests a close name", tasks: []string{"atp-up"}, wantErr: `unknown task "atp-up" (did you mean "apt-up"?)`},
 		{name: "unknown dependency", tasks: []string{"missing"}, wantErr: `task "missing" depends on unknown task "nope"`},
 		{name: "cycle", tasks: []string{"loop-1"}, wantErr: "cyclic dependency detected: loop-1 -> loop-2 -> loop-1"},
 	}

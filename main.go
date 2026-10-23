@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -35,30 +36,39 @@ func main() {
 		slog.Info("parsing gorun file", slog.String("filename", filename))
 	}
 
+	if filename == "" {
+		fatal(errors.New("usage: gorun [-v] [-plain] [-select] <Gorunfile>"))
+	}
+
 	cfg := Config{}
 
 	r, err := os.Open(filename)
 	if err != nil {
-		panic(err)
+		fatal(err)
 	}
 
 	if err := cfg.Load(r); err != nil {
-		panic(err)
+		fatal(fmt.Errorf("%s: %w", filename, err))
 	}
 
 	// relative paths in the config are relative to the config file, not the working directory
 	cfg.ResolvePaths(filepath.Dir(filename))
 
+	// check every server's task list up front, so config mistakes such as an unknown task
+	// are reported before the TUI starts rather than lost inside it
+	servers, err := cfg.ServersPipeline()
+	if err != nil {
+		fatal(fmt.Errorf("%s: %w", filename, err))
+	}
+
 	if *selectServers {
 		if !useTUI {
-			fmt.Fprintln(os.Stderr, "--select needs an interactive terminal")
-			os.Exit(1)
+			fatal(errors.New("--select needs an interactive terminal"))
 		}
 
 		selected, err := runServerSelectionTUI(cfg.Title, cfg.Servers)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			fatal(err)
 		}
 		if len(selected) == 0 {
 			fmt.Println("no servers selected")
@@ -76,11 +86,6 @@ func main() {
 
 	slog.Info("parsed config file")
 
-	servers, err := cfg.ServersPipeline()
-	if err != nil {
-		panic(err)
-	}
-
 	for _, server := range servers {
 		names := []string{}
 
@@ -95,4 +100,10 @@ func main() {
 		slog.Error("error executing tasks", slog.String("reason", err.Error()))
 		os.Exit(1)
 	}
+}
+
+// fatal prints err and exits.
+func fatal(err error) {
+	fmt.Fprintf(os.Stderr, "gorun: %v\n", err)
+	os.Exit(1)
 }

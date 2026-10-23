@@ -87,6 +87,7 @@ type tuiModel struct {
 	failBar progress.Model
 	cancel  context.CancelFunc
 
+	runErr   error // the run failed before any server started
 	verbose  bool
 	cursor   int // index into the flattened task list (verbose view)
 	width    int
@@ -134,6 +135,9 @@ func (m tuiModel) flatTasks() []*taskView {
 }
 
 func (m tuiModel) failed() bool {
+	if m.runErr != nil {
+		return true
+	}
 	for _, s := range m.servers {
 		if s.err != nil || s.count(TaskFailed) > 0 {
 			return true
@@ -206,6 +210,10 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case RunDoneEvent:
 		m.done = true
+		// with no servers planned there is nothing else on screen to explain the failure
+		if msg.Err != nil && len(m.servers) == 0 {
+			m.runErr = msg.Err
+		}
 		m.elapsed = time.Since(m.started)
 		// stay open in verbose mode so the output can be browsed
 		if !m.verbose {
@@ -288,7 +296,10 @@ func (m tuiModel) compactView() string {
 	b := strings.Builder{}
 	b.WriteString(m.header() + "\n\n")
 
-	if len(m.servers) == 0 {
+	switch {
+	case m.runErr != nil:
+		b.WriteString(m.runErrorBox() + "\n")
+	case len(m.servers) == 0:
 		b.WriteString(m.spinner.View() + " building pipelines\n")
 	}
 
@@ -314,6 +325,9 @@ func (m tuiModel) compactView() string {
 
 func (m tuiModel) verboseView() string {
 	lines := []string{m.header(), ""}
+	if m.runErr != nil {
+		lines = append(lines, strings.Split(m.runErrorBox(), "\n")...)
+	}
 	cursorLine := 0
 	i := 0
 
@@ -442,6 +456,11 @@ func (m tuiModel) failureBox(s *serverView, t *taskView) string {
 	return failBoxStyle.Width(m.boxWidth()).Render(strings.Join(sections, "\n"))
 }
 
+func (m tuiModel) runErrorBox() string {
+	title := failStyle.Render("✗ could not start the run")
+	return failBoxStyle.Width(m.boxWidth()).Render(title + "\n" + failStyle.Render("reason: ") + m.runErr.Error())
+}
+
 func (m tuiModel) serverErrorBox(s *serverView) string {
 	title := failStyle.Render(fmt.Sprintf("✗ %s could not run tasks", s.name))
 	return failBoxStyle.Width(m.boxWidth()).Render(title + "\n" + failStyle.Render("reason: ") + s.err.Error())
@@ -463,6 +482,8 @@ func (m tuiModel) footer() string {
 
 		var summary string
 		switch {
+		case m.runErr != nil:
+			summary = failStyle.Render("✗ could not start the run") + mutedStyle.Render(" after "+formatDuration(elapsed))
 		case !m.done:
 			summary = skipStyle.Render("⊘ cancelled") + mutedStyle.Render(" after "+formatDuration(elapsed))
 		case m.failed():
@@ -510,20 +531,6 @@ func indent(s string, n int) string {
 	return pad + strings.ReplaceAll(s, "\n", "\n"+pad)
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%.1fs", d.Seconds())
@@ -551,6 +558,8 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *Config, verbose
 
 	m := final.(tuiModel)
 	switch {
+	case m.runErr != nil:
+		return m.runErr
 	case !m.done:
 		return errors.New("deployment cancelled")
 	case m.failed():

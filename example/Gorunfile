@@ -1,85 +1,71 @@
 #
-# Gorunfile is a TOML formatted file.
+# Gorunfile: provisions the app servers with Docker and a deploy user.
 #
-title = "Deployment for example server"
+# Usage (from this directory, so relative paths resolve):
+#   go run .. Gorunfile
+#
+# Every task and script is idempotent, so the whole file is safe to re-run.
+# To reproduce a failed task by hand on a server:
+#   cmd:      ssh -i ssh-keys/id_ecdsa -p 2221 testuser@localhost "sudo sh -c '<cmd>'"
+#   cmd_file: scp -i ssh-keys/id_ecdsa -P 2221 scripts/<file>.sh testuser@localhost:
+#             ssh -i ssh-keys/id_ecdsa -p 2221 testuser@localhost "sudo sh <file>.sh"
+#
+title = "Provision app servers"
 log_level = "info"
 
-# Global SSH details
-[ssh]
-username = "testuser"
-# password = "testpassword"
-identityfile = "./ssh-keys/id_ecdsa"
+#
+# Tasks in this section run on every server, in dependency order.
+# Servers can add their own tasks below; task names must be unique.
+#
 
-# Global environment variables
-[envvars]
-GORUN_ADDRESS = "localhost:8080"
+[[tasks]]
+name = "packages"
+cmd_file = "./scripts/packages.sh"
+sudo = true
 
-# List of servers in the inventory
+[[tasks]]
+name = "docker-install"
+cmd_file = "./scripts/docker-install.sh"
+sudo = true
+depends_on = ["packages"]
+
+[[tasks]]
+name = "deploy-user"
+cmd_file = "./scripts/deploy-user.sh"
+sudo = true
+depends_on = ["docker-install"]
+
+[[tasks]]
+name = "verify"
+cmd = "docker --version && docker compose version && id deploy"
+depends_on = ["deploy-user"]
+
+#
+# Inventory. SSH settings are per server (there is no global fallback).
+# Key-based auth only: no passwords in this file.
+#
+
 [[servers]]
 name = "server1"
 hostname = "localhost"
-log_level = "info"
 
     [servers.ssh]
     port = 2221
     username = "testuser"
-    password = "testpassword"
     identityfile = "./ssh-keys/id_ecdsa"
-
-    [[servers.tasks]]
-    name = "create-docker-group"
-    cmd = "getent group docker || groupadd docker"
-    sudo = true
-
-    [[servers.tasks]]
-    name = "create-users"
-    sudo = true
-    cmd = "id foobar || useradd -m -s /bin/bash -G docker foobar"
-    depends_on = ["create-docker-group", "docker-install"]
-
-    [[servers.tasks]]
-    name = "pkg-install"
-    cmd_file = "./scripts/pkg-install.sh"
-
-    [[servers.tasks]]
-    name = "docker-install"
-    cmd_file = "./scripts/install-docker.sh"
-    depends_on = ["pkg-install"]
-
 
 [[servers]]
 name = "server2"
 hostname = "localhost"
-log_level = "info"
 
     [servers.ssh]
-        port = 2222
-        username = "testuser"
-        password = "testpassword"
-        identityfile = "./ssh-keys/id_ecdsa"
+    port = 2222
+    username = "testuser"
+    identityfile = "./ssh-keys/id_ecdsa"
 
+    # server-specific: let the SSH user run docker without sudo
     [[servers.tasks]]
-    name = "create-docker-group"
-    cmd = "getent group docker || groupadd docker"
+    name = "ssh-user-docker-access"
+    cmd = "usermod -aG docker testuser"
     sudo = true
-
-    [[servers.tasks]]
-    name = "create-users"
-    sudo = true
-    cmd = "id foobar || useradd -m -s /bin/bash -G docker foobar"
-    depends_on = ["create-docker-group", "docker-install"]
-
-    [[servers.tasks]]
-    name = "update-testuser-groups"
-    sudo = true
-    cmd="usermod -aG docker testuser"
-    depends_on = ["create-docker-group", "docker-install"]
-
-    [[servers.tasks]]
-    name = "pkg-install"
-    cmd_file = "./scripts/pkg-install.sh"
-
-    [[servers.tasks]]
-    name = "docker-install"
-    cmd_file = "./scripts/install-docker.sh"
-    depends_on = ["pkg-install"]
+    depends_on = ["docker-install"]

@@ -14,7 +14,7 @@ type SSH struct {
 	User         string `toml:"username"`
 	Password     string `toml:"password"`
 	Port         int    `toml:"port"`
-	Identifyfile string `toml:"identityfile"`
+	Identityfile string `toml:"identityfile"`
 }
 
 // NewSSHClient creates a new SSH client connected to the provided server.
@@ -29,16 +29,16 @@ func NewSSHClient(ctx context.Context, server Server) (*ssh.Client, error) {
 	auth := []ssh.AuthMethod{}
 
 	// Create the Signer for this private key.
-	if server.SSH.Identifyfile != "" {
-		key, err := os.ReadFile(server.SSH.Identifyfile)
+	if server.SSH.Identityfile != "" {
+		key, err := os.ReadFile(server.SSH.Identityfile)
 		if err != nil {
-			err = fmt.Errorf("error reading SSH IdentityFile %q: %w", server.SSH.Identifyfile, err)
+			err = fmt.Errorf("error reading SSH IdentityFile %q: %w", server.SSH.Identityfile, err)
 			return nil, err
 		}
 
 		signer, err := ssh.ParsePrivateKey(key)
 		if err != nil {
-			err = fmt.Errorf("error parsing SSH IdentityFile %q: %w", server.SSH.Identifyfile, err)
+			err = fmt.Errorf("error parsing SSH IdentityFile %q: %w", server.SSH.Identityfile, err)
 			return nil, err
 		}
 

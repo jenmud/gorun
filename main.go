@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 
 	_ "github.com/joho/godotenv/autoload"
@@ -19,9 +20,15 @@ func main() {
 
 	verbose := flag.Bool("v", false, "verbose: show every task and its output")
 	plain := flag.Bool("plain", false, "plain log output instead of the TUI (default when stdout is not a terminal)")
-	selectServers := flag.Bool("select-servers", false, "select servers to deploy to using TUI")
+	selectServers := flag.Bool("select", false, "select servers to deploy to using TUI")
 	flag.Parse()
 	filename := flag.Arg(0)
+
+	// the flag package stops at the first positional argument, so parse again
+	// to allow flags after the filename, e.g. `gorun Gorunfile --select -v`
+	if flag.NArg() > 1 {
+		flag.CommandLine.Parse(flag.Args()[1:])
+	}
 
 	useTUI := !*plain && term.IsTerminal(int(os.Stdout.Fd()))
 	if !useTUI {
@@ -39,11 +46,25 @@ func main() {
 		panic(err)
 	}
 
+	// relative paths in the config are relative to the config file, not the working directory
+	cfg.ResolvePaths(filepath.Dir(filename))
+
 	if *selectServers {
-		if err := runServerSelectionTUI(ctx, cancel, &cfg); err != nil {
+		if !useTUI {
+			fmt.Fprintln(os.Stderr, "--select needs an interactive terminal")
 			os.Exit(1)
 		}
-		return
+
+		selected, err := runServerSelectionTUI(cfg.Title, cfg.Servers)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		if len(selected) == 0 {
+			fmt.Println("no servers selected")
+			return
+		}
+		cfg.Servers = selected
 	}
 
 	if useTUI {

@@ -112,18 +112,6 @@ depends_on = ["timezone", "monitoring-tools", "editor-setup", "jj-config", "go-w
 #
 
 [[servers]]
-name = "local-machine"
-
-    [[servers.tasks]]
-    name = "date"
-    cmd = "date"
-
-    [[servers.tasks]]
-    name = "list-dir"
-    cmd = "ls -la"
-
-
-[[servers]]
 name = "server1"
 hostname = "localhost"
 
@@ -138,6 +126,7 @@ hostname = "localhost"
     cmd_file = "./scripts/go-smoke-test.sh"
     sudo = true
     depends_on = ["go-workspace"]
+
 
 [[servers]]
 name = "server2"
@@ -161,3 +150,79 @@ hostname = "localhost"
     cmd_file = "./scripts/compose-project.sh"
     sudo = true
     depends_on = ["deploy-user"]
+
+#
+# Extra servers, mostly to exercise `--select` fuzzy search. They only run the shared tasks.
+#
+
+[[servers]]
+name = "web-prod-1"
+hostname = "localhost"
+
+    [servers.ssh]
+    port = 2223
+    username = "testuser"
+    identityfile = "./ssh-keys/id_ecdsa"
+
+[[servers]]
+name = "web-prod-2"
+hostname = "localhost"
+
+    [servers.ssh]
+    port = 2224
+    username = "testuser"
+    identityfile = "./ssh-keys/id_ecdsa"
+
+[[servers]]
+name = "db-primary"
+hostname = "localhost"
+
+    [servers.ssh]
+    port = 2225
+    username = "testuser"
+    identityfile = "./ssh-keys/id_ecdsa"
+
+[[servers]]
+name = "db-replica-eu"
+hostname = "localhost"
+
+    [servers.ssh]
+    port = 2226
+    username = "testuser"
+    identityfile = "./ssh-keys/id_ecdsa"
+
+[[servers]]
+name = "cache-redis"
+hostname = "localhost"
+
+    [servers.ssh]
+    port = 2227
+    username = "testuser"
+    identityfile = "./ssh-keys/id_ecdsa"
+
+[[servers]]
+name = "worker-eu-a"
+hostname = "localhost"
+
+    [servers.ssh]
+    port = 2228
+    username = "testuser"
+    identityfile = "./ssh-keys/id_ecdsa"
+
+[[servers]]
+name = "worker-eu-b"
+hostname = "localhost"
+
+    [servers.ssh]
+    port = 2229
+    username = "testuser"
+    identityfile = "./ssh-keys/id_ecdsa"
+
+[[servers]]
+name = "staging-api"
+hostname = "localhost"
+
+    [servers.ssh]
+    port = 2230
+    username = "testuser"
+    identityfile = "./ssh-keys/id_ecdsa"

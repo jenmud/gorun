@@ -1,3 +1,20 @@
+# shared settings for every test SSH server
+x-ssh-server: &ssh-server
+  image: lscr.io/linuxserver/openssh-server:latest
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=Etc/UTC
+    - PUBLIC_KEY_DIR=/ssh-keys
+    - SUDO_ACCESS=true
+    - PASSWORD_ACCESS=true
+    - USER_NAME=testuser
+  volumes:
+    - ./ssh-keys:/ssh-keys:ro
+  restart: unless-stopped
+  networks:
+    - gorun-network
+
 services:
   ssh-server-1:
     image: lscr.io/linuxserver/openssh-server:latest
@@ -42,6 +59,63 @@ services:
     restart: unless-stopped
     networks:
       - gorun-network
+
+  # extra servers, mostly to exercise the --select fuzzy search
+  web-prod-1:
+    <<: *ssh-server
+    container_name: gorun-web-prod-1
+    hostname: web-prod-1
+    ports:
+      - 2223:2222
+
+  web-prod-2:
+    <<: *ssh-server
+    container_name: gorun-web-prod-2
+    hostname: web-prod-2
+    ports:
+      - 2224:2222
+
+  db-primary:
+    <<: *ssh-server
+    container_name: gorun-db-primary
+    hostname: db-primary
+    ports:
+      - 2225:2222
+
+  db-replica-eu:
+    <<: *ssh-server
+    container_name: gorun-db-replica-eu
+    hostname: db-replica-eu
+    ports:
+      - 2226:2222
+
+  cache-redis:
+    <<: *ssh-server
+    container_name: gorun-cache-redis
+    hostname: cache-redis
+    ports:
+      - 2227:2222
+
+  worker-eu-a:
+    <<: *ssh-server
+    container_name: gorun-worker-eu-a
+    hostname: worker-eu-a
+    ports:
+      - 2228:2222
+
+  worker-eu-b:
+    <<: *ssh-server
+    container_name: gorun-worker-eu-b
+    hostname: worker-eu-b
+    ports:
+      - 2229:2222
+
+  staging-api:
+    <<: *ssh-server
+    container_name: gorun-staging-api
+    hostname: staging-api
+    ports:
+      - 2230:2222
 
 networks:
   gorun-network:

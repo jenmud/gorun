@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"path/filepath"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -41,6 +42,33 @@ func (c *Config) Load(r io.Reader) error {
 	}
 
 	return nil
+}
+
+// ResolvePaths makes the relative file paths in the config (SSH identity files and task
+// cmd_files) relative to dir, normally the directory holding the config file, so gorun
+// can be run from anywhere.
+func (c *Config) ResolvePaths(dir string) {
+	resolve := func(path string) string {
+		if path == "" || filepath.IsAbs(path) {
+			return path
+		}
+		return filepath.Join(dir, path)
+	}
+
+	c.SSH.Identityfile = resolve(c.SSH.Identityfile)
+
+	for i := range c.Tasks {
+		c.Tasks[i].CmdFile = resolve(c.Tasks[i].CmdFile)
+	}
+
+	for i := range c.Servers {
+		server := &c.Servers[i]
+		server.SSH.Identityfile = resolve(server.SSH.Identityfile)
+
+		for j := range server.Tasks {
+			server.Tasks[j].CmdFile = resolve(server.Tasks[j].CmdFile)
+		}
+	}
 }
 
 // TaskMap returns a map of all the loaded tasks for fast lookup.
@@ -170,7 +198,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				err = fmt.Errorf("error buiding servers task execution pipeline: %w", err)
 				return err
 			}
-			pipeline[s.Hostname] = s
+			pipeline[s.Name] = s
 		}
 	} else {
 		pipelines, err := c.ServersPipeline()
@@ -191,16 +219,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			tasks = append(tasks, task.Name)
 		}
 
-		address := "local"
-		if server.SSH != (SSH{}) {
-			port := server.SSH.Port
-			if port == 0 {
-				port = 22
-			}
-			address = fmt.Sprintf("%s:%d", server.Hostname, port)
-		}
-
-		c.emit(PlanEvent{Server: server.Name, Address: address, Tasks: tasks})
+		c.emit(PlanEvent{Server: server.Name, Address: serverAddress(server), Tasks: tasks})
 	}
 
 	var failed atomic.Bool

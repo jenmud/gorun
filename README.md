@@ -84,13 +84,13 @@ This project includes a example directory with a Docker Compose setup for testin
 1. Start the development environment:
 
    ```bash
-   docker compose up -d
+   $ make up
    ```
 
 2. Verify the containers are running:
 
    ```bash
-   docker compose ps
+   $ docker compose -f ./example/docker-compose.yml ps
    ```
 
 3. The development environment will expose two SSH servers on ports 2221 and 2222 with the following credentials:
@@ -104,8 +104,22 @@ To stop the development environment:
 
 ```bash
 # Stop the containers
+$ make down
+```
 
-docker compose down
+### Full setup and teardown with a run
+
+To do the example run from start to finish
+
+```bash
+$ make up run down
+```
+
+To stop the development environment:
+
+```bash
+# Stop the containers
+$ make down
 ```
 
 ### Running Tests
@@ -114,14 +128,14 @@ To run tests against the development environment:
 
 ```bash
 # Run the tests
-make test
+$ make test
 ```
 
 You can also run specific tests by specifying a package:
 
 ```bash
 # Run tests in a specific package
-make test PKG=./deploy
+$ make test PKG=./deploy
 ```
 
 ## Running Gorun Against the Development Environment
@@ -153,10 +167,10 @@ You can also SSH directly into one of the running test servers using the provide
 
 ```bash
 # SSH into the first test server
-ssh -i ./ssh-keys/id_ecdsa testuser@localhost -p 2221
+$ ssh -i ./example/ssh-keys/id_ecdsa testuser@localhost -p 2221
 
 # SSH into the second test server
-ssh -i ./ssh-keys/id_ecdsa testuser@localhost -p 2222
+$ ssh -i ./example/ssh-keys/id_ecdsa testuser@localhost -p 2222
 ```
 
 ## License

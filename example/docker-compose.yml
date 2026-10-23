@@ -15,7 +15,6 @@ services:
       # - USER_PASSWORD=testpassword
     volumes:
       - ./ssh-keys:/ssh-keys:ro
-      - ./test-scripts:/test-scripts
     ports:
       - 2221:2222
     restart: unless-stopped
@@ -38,7 +37,6 @@ services:
       # - USER_PASSWORD=testpassword
     volumes:
       - ./ssh-keys:/ssh-keys:ro
-      - ./test-scripts:/test-scripts
     ports:
       - 2222:2222
     restart: unless-stopped

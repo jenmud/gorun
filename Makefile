@@ -1,12 +1,13 @@
-.PHONY: vendor run test build-otel build-go build
+-include ./example/Makefile
+.PHONY: vendor test build-otel build-go build
 
 vendor:
 	go mod tidy && go mod vendor
 
 
-run:
-	go run . examples/Gorunfile
-
+# up:   is imported from the examples Makefile above
+# down: is imported from the examples Makefile above
+# run:  is imported from the examples Makefile above
 
 test:
 	go test -race ./...

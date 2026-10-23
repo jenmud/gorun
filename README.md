@@ -38,7 +38,6 @@ Configuration is done via environment variables. See `.env` for supported enviro
 
 ### Environment Variables
 
-- `GORUN_CONFIG_PATH` - Path to the configuration file (default: ./gorun.yaml)
 - `GORUN_SSH_KEY_PATH` - Path to SSH private key (default: ~/.ssh/id_rsa)
 - `GORUN_SSH_USER` - SSH username (default: $USER)
 - `GORUN_SSH_PORT` - SSH port (default: 22)
@@ -74,7 +73,7 @@ To contribute to this project:
 
 ## Development Environment Setup
 
-This project includes a Docker Compose setup for testing and development. The environment includes two SSH servers that can be used to test gorun's deployment capabilities.
+This project includes a example directory with a Docker Compose setup for testing and development. The environment includes two SSH servers that can be used to test gorun's deployment capabilities.
 
 ### Prerequisites
 
@@ -131,12 +130,12 @@ To test gorun against the development environment, you'll need to configure it w
 
 ### Example Configuration
 
-An example configuration file is available in `examples/Gorunfile.yaml`:
+An example configuration file is available in `./example/Gorunfile.yaml`:
 
 Then run:
 
 ```bash
-GORUN_CONFIG_PATH=$PWD/examples/Gorunfile ./gorun
+$ ./gorun $PWD/example/Gorunfile
 ```
 
 ### Environment Variables
@@ -144,7 +143,6 @@ GORUN_CONFIG_PATH=$PWD/examples/Gorunfile ./gorun
 Alternatively, you can use environment variables to configure gorun:
 
 ```bash
-export GORUN_CONFIG_PATH=./gorun.yaml
 export GORUN_SSH_USER=testuser
 export GORUN_SSH_PASSWORD=testpassword
 ```

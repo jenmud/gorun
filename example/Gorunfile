@@ -112,6 +112,18 @@ depends_on = ["timezone", "monitoring-tools", "editor-setup", "jj-config", "go-w
 #
 
 [[servers]]
+name = "local-machine"
+
+    [[servers.tasks]]
+    name = "date"
+    cmd = "date"
+
+    [[servers.tasks]]
+    name = "list-dir"
+    cmd = "ls -la"
+
+
+[[servers]]
 name = "server1"
 hostname = "localhost"
 

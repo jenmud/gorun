@@ -1,0 +1,12 @@
+log_level="debug"
+
+[[servers]]
+name = "local-machine"
+
+    [[servers.tasks]]
+    name = "date"
+    cmd = "date"
+
+    [[servers.tasks]]
+    name = "list-dir"
+    cmd = "ls -la"

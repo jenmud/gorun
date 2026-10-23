@@ -19,6 +19,7 @@ func main() {
 
 	verbose := flag.Bool("v", false, "verbose: show every task and its output")
 	plain := flag.Bool("plain", false, "plain log output instead of the TUI (default when stdout is not a terminal)")
+	selectServers := flag.Bool("select-servers", false, "select servers to deploy to using TUI")
 	flag.Parse()
 	filename := flag.Arg(0)
 
@@ -36,6 +37,13 @@ func main() {
 
 	if err := cfg.Load(r); err != nil {
 		panic(err)
+	}
+
+	if *selectServers {
+		if err := runServerSelectionTUI(ctx, cancel, &cfg); err != nil {
+			os.Exit(1)
+		}
+		return
 	}
 
 	if useTUI {

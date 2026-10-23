@@ -487,6 +487,126 @@ func (m tuiModel) footer() string {
 	return mutedStyle.Render("v verbose · q quit")
 }
 
+// serverSelectionModel is the bubbletea model for server selection.
+type serverSelectionModel struct {
+	servers   []Server
+	selected  map[string]bool
+	cursor    int
+	width     int
+	height    int
+	cancel    context.CancelFunc
+	quitting  bool
+	title     string
+}
+
+func newServerSelectionModel(servers []Server, title string, cancel context.CancelFunc) serverSelectionModel {
+	selected := make(map[string]bool)
+	for _, server := range servers {
+		selected[server.Name] = true // Select all by default
+	}
+	
+	return serverSelectionModel{
+		title:    title,
+		servers:  servers,
+		selected: selected,
+		cursor:   0,
+		cancel:   cancel,
+	}
+}
+
+func (m serverSelectionModel) Init() tea.Cmd {
+	return nil
+}
+
+func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+		return m, nil
+
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "ctrl+c", "q", "esc":
+			m.quitting = true
+			m.cancel()
+			return m, tea.Quit
+		case "enter", " ":
+			// Toggle selection
+			if len(m.servers) > 0 {
+				selectedServer := m.servers[m.cursor]
+				m.selected[selectedServer.Name] = !m.selected[selectedServer.Name]
+			}
+		case "up", "k":
+			if len(m.servers) > 0 {
+				m.cursor = max(m.cursor-1, 0)
+			}
+		case "down", "j":
+			if len(m.servers) > 0 {
+				m.cursor = min(m.cursor+1, len(m.servers)-1)
+			}
+		case "a", "A":
+			// Select all
+			for _, server := range m.servers {
+				m.selected[server.Name] = true
+			}
+		case "d", "D":
+			// Deselect all
+			for _, server := range m.servers {
+				m.selected[server.Name] = false
+			}
+		}
+		return m, nil
+	}
+
+	return m, nil
+}
+
+func (m serverSelectionModel) View() tea.View {
+	var v tea.View
+	
+	if m.quitting {
+		return v
+	}
+	
+	v.AltScreen = true
+	v.SetContent(m.viewContent())
+	return v
+}
+
+func (m serverSelectionModel) viewContent() string {
+	var b strings.Builder
+	
+	// Title
+	b.WriteString(titleStyle.Render("Select Servers"))
+	b.WriteString("\n\n")
+	
+	// Instructions
+	b.WriteString(mutedStyle.Render("Use ↑/↓ to navigate, SPACE to select/deselect, A to select all, D to deselect all, ENTER to confirm, Q to quit\n\n"))
+	
+	// Server list
+	for i, server := range m.servers {
+		check := "[ ]"
+		if m.selected[server.Name] {
+			check = "[x]"
+		}
+		
+		if i == m.cursor {
+			b.WriteString(cursorStyle.Render(fmt.Sprintf("%s %s (%s)", check, server.Name, server.Hostname)) + "\n")
+		} else {
+			b.WriteString(fmt.Sprintf("%s %s (%s)\n", check, server.Name, server.Hostname))
+		}
+	}
+	
+	b.WriteString("\n")
+	b.WriteString(mutedStyle.Render("Press ENTER to confirm selection"))
+	
+	return b.String()
+}
+
+func (m serverSelectionModel) footer() string {
+	return mutedStyle.Render("↑/↓ navigate · SPACE select/deselect · A select all · D deselect all · ENTER confirm · Q quit")
+}
+
 // tail returns the last n lines of s, noting how many were cut.
 func tail(s string, n int) string {
 	s = strings.ReplaceAll(s, "\r", "")
@@ -508,6 +628,20 @@ func tail(s string, n int) string {
 func indent(s string, n int) string {
 	pad := strings.Repeat(" ", n)
 	return pad + strings.ReplaceAll(s, "\n", "\n"+pad)
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func formatDuration(d time.Duration) string {
@@ -544,4 +678,36 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *Config, verbose
 	}
 
 	return nil
+}
+
+// runServerSelectionTUI runs the server selection TUI and returns the selected servers.
+func runServerSelectionTUI(ctx context.Context, cancel context.CancelFunc, cfg *Config) error {
+	// slog output would corrupt the TUI
+	logOutput = io.Discard
+
+	p := tea.NewProgram(newServerSelectionModel(cfg.Servers, cfg.Title, cancel))
+
+	final, err := p.Run()
+	if err != nil {
+		return fmt.Errorf("error running server selection TUI: %w", err)
+	}
+
+	m := final.(serverSelectionModel)
+	
+	// Filter selected servers
+	selectedServers := []Server{}
+	for _, server := range cfg.Servers {
+		if m.selected[server.Name] {
+			selectedServers = append(selectedServers, server)
+		}
+	}
+	
+	// Run the normal TUI with selected servers
+	if len(selectedServers) > 0 {
+		cfg.Servers = selectedServers
+		return runTUI(ctx, cancel, cfg, false)
+	} else {
+		fmt.Println("No servers selected")
+		return nil
+	}
 }

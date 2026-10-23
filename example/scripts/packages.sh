@@ -9,4 +9,4 @@ if ! command -v apk >/dev/null 2>&1; then
 fi
 
 apk update
-apk add --no-cache ca-certificates curl tzdata shadow bash vim
+apk add --no-cache ca-certificates curl tzdata shadow bash

@@ -1,5 +1,5 @@
 #
-# Gorunfile: provisions the app servers with Docker and a deploy user.
+# Gorunfile: provisions the app servers with Docker, dev tooling, and a deploy user.
 #
 # Usage (from this directory, so relative paths resolve):
 #   go run .. Gorunfile
@@ -17,11 +17,65 @@ log_level = "info"
 # Tasks in this section run on every server, in dependency order.
 # Servers can add their own tasks below; task names must be unique.
 #
+# Dependency graph:
+#
+#   packages ─┬─ timezone
+#             ├─ monitoring-tools (htop, btop)
+#             ├─ cli-tools ─┬─ jj-install ──────────────┐
+#             │             └─ golang-install ─┐        │
+#             ├─ neovim-install ─┬─ editor-setup        │
+#             │                  └──────────────────────┼─ jj-config
+#             └─ docker-install ── deploy-user ─┬───────┘
+#                                               └─ go-workspace
+#   verify depends on all the leaves above.
+#
 
 [[tasks]]
 name = "packages"
 cmd_file = "./scripts/packages.sh"
 sudo = true
+
+[[tasks]]
+name = "timezone"
+cmd = "cp /usr/share/zoneinfo/UTC /etc/localtime && echo UTC > /etc/timezone"
+sudo = true
+depends_on = ["packages"]
+
+[[tasks]]
+name = "monitoring-tools"
+cmd = "apk add --no-cache htop btop"
+sudo = true
+depends_on = ["packages"]
+
+[[tasks]]
+name = "cli-tools"
+cmd = "apk add --no-cache git jq ripgrep fd fzf tmux make"
+sudo = true
+depends_on = ["packages"]
+
+[[tasks]]
+name = "jj-install"
+cmd = "apk add --no-cache jujutsu"
+sudo = true
+depends_on = ["cli-tools"]
+
+[[tasks]]
+name = "golang-install"
+cmd_file = "./scripts/golang-install.sh"
+sudo = true
+depends_on = ["cli-tools"]
+
+[[tasks]]
+name = "neovim-install"
+cmd = "apk add --no-cache neovim"
+sudo = true
+depends_on = ["packages"]
+
+[[tasks]]
+name = "editor-setup"
+cmd_file = "./scripts/editor-setup.sh"
+sudo = true
+depends_on = ["neovim-install"]
 
 [[tasks]]
 name = "docker-install"
@@ -36,9 +90,21 @@ sudo = true
 depends_on = ["docker-install"]
 
 [[tasks]]
+name = "jj-config"
+cmd_file = "./scripts/jj-config.sh"
+sudo = true
+depends_on = ["jj-install", "neovim-install", "deploy-user"]
+
+[[tasks]]
+name = "go-workspace"
+cmd = "su - deploy -c 'mkdir -p ~/go/bin ~/src && go env GOPATH'"
+sudo = true
+depends_on = ["golang-install", "deploy-user"]
+
+[[tasks]]
 name = "verify"
-cmd = "docker --version && docker compose version && id deploy"
-depends_on = ["deploy-user"]
+cmd_file = "./scripts/verify.sh"
+depends_on = ["timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace"]
 
 #
 # Inventory. SSH settings are per server (there is no global fallback).
@@ -53,6 +119,13 @@ hostname = "localhost"
     port = 2221
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
+
+    # server-specific: build server, prove the Go toolchain works end to end
+    [[servers.tasks]]
+    name = "go-smoke-test"
+    cmd_file = "./scripts/go-smoke-test.sh"
+    sudo = true
+    depends_on = ["go-workspace"]
 
 [[servers]]
 name = "server2"
@@ -69,3 +142,10 @@ hostname = "localhost"
     cmd = "usermod -aG docker testuser"
     sudo = true
     depends_on = ["docker-install"]
+
+    # server-specific: docker host, lay down and validate the app's compose project
+    [[servers.tasks]]
+    name = "compose-project"
+    cmd_file = "./scripts/compose-project.sh"
+    sudo = true
+    depends_on = ["deploy-user"]

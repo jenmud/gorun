@@ -27,6 +27,11 @@ go run . example/Gorunfile -v
 go run . example/Gorunfile --select -v
 ```
 
+Verbose mode (`-v`, or press `v` while running) lists every task per server; use ↑/↓ and enter to
+expand a task's output:
+
+![gorun verbose view listing each server's tasks](docs/screenshot-verbose.png)
+
 ## Server Selection
 
 With `--select`, gorun shows a server picker before deploying. Type to fuzzy filter the

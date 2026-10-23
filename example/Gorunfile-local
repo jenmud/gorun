@@ -1,12 +1,13 @@
-log_level="debug"
+log_level = "debug"
 
-[[servers]]
-name = "local-machine"
+[tasks.date]
+cmd = "date"
 
-    [[servers.tasks]]
-    name = "date"
-    cmd = "date"
+[tasks.list-dir]
+cmd = "ls -la"
 
-    [[servers.tasks]]
-    name = "list-dir"
-    cmd = "ls -la"
+[servers]
+tasks = ["date", "list-dir"]
+
+# no hostname or ssh: tasks run on this machine
+[servers.hosts.local-machine]

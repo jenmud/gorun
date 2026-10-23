@@ -1,8 +1,9 @@
 #
 # Gorunfile: provisions the app servers with Docker, dev tooling, and a deploy user.
 #
-# Usage (from this directory, so relative paths resolve):
-#   go run .. Gorunfile
+# Usage (relative paths resolve from this file's directory, so run it from anywhere):
+#   go run . example/Gorunfile
+#   go run . example/Gorunfile --select
 #
 # Every task and script is idempotent, so the whole file is safe to re-run.
 # To reproduce a failed task by hand on a server:
@@ -14,8 +15,9 @@ title = "Provision app servers"
 log_level = "info"
 
 #
-# Tasks in this section run on every server, in dependency order.
-# Servers can add their own tasks below; task names must be unique.
+# Task library. Each [tasks.<name>] defines a task once; servers pick tasks by name.
+# A task's depends_on are always pulled in and run first, so a server only needs to
+# list the tasks it wants and gets everything they need.
 #
 # Dependency graph:
 #
@@ -28,201 +30,171 @@ log_level = "info"
 #             └─ docker-install ── deploy-user ─┬───────┘
 #                                               └─ go-workspace
 #   verify depends on all the leaves above.
+#   go-smoke-test, ssh-user-docker-access and compose-project are only used by some servers.
 #
 
-[[tasks]]
-name = "packages"
+[tasks.packages]
 cmd_file = "./scripts/packages.sh"
 sudo = true
 
-[[tasks]]
-name = "timezone"
+[tasks.timezone]
 cmd = "cp /usr/share/zoneinfo/UTC /etc/localtime && echo UTC > /etc/timezone"
 sudo = true
 depends_on = ["packages"]
 
-[[tasks]]
-name = "monitoring-tools"
+[tasks.monitoring-tools]
 cmd = "apk add --no-cache htop btop"
 sudo = true
 depends_on = ["packages"]
 
-[[tasks]]
-name = "cli-tools"
+[tasks.cli-tools]
 cmd = "apk add --no-cache git jq ripgrep fd fzf tmux make"
 sudo = true
 depends_on = ["packages"]
 
-[[tasks]]
-name = "jj-install"
+[tasks.jj-install]
 cmd = "apk add --no-cache jujutsu"
 sudo = true
 depends_on = ["cli-tools"]
 
-[[tasks]]
-name = "golang-install"
+[tasks.golang-install]
 cmd_file = "./scripts/golang-install.sh"
 sudo = true
 depends_on = ["cli-tools"]
 
-[[tasks]]
-name = "neovim-install"
+[tasks.neovim-install]
 cmd = "apk add --no-cache neovim"
 sudo = true
 depends_on = ["packages"]
 
-[[tasks]]
-name = "editor-setup"
+[tasks.editor-setup]
 cmd_file = "./scripts/editor-setup.sh"
 sudo = true
 depends_on = ["neovim-install"]
 
-[[tasks]]
-name = "docker-install"
+[tasks.docker-install]
 cmd_file = "./scripts/docker-install.sh"
 sudo = true
 depends_on = ["packages"]
 
-[[tasks]]
-name = "deploy-user"
+[tasks.deploy-user]
 cmd_file = "./scripts/deploy-user.sh"
 sudo = true
 depends_on = ["docker-install"]
 
-[[tasks]]
-name = "jj-config"
+[tasks.jj-config]
 cmd_file = "./scripts/jj-config.sh"
 sudo = true
 depends_on = ["jj-install", "neovim-install", "deploy-user"]
 
-[[tasks]]
-name = "go-workspace"
+[tasks.go-workspace]
 cmd = "su - deploy -c 'mkdir -p ~/go/bin ~/src && go env GOPATH'"
 sudo = true
 depends_on = ["golang-install", "deploy-user"]
 
-[[tasks]]
-name = "verify"
+[tasks.verify]
 cmd_file = "./scripts/verify.sh"
 depends_on = ["timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace"]
 
+[tasks.go-smoke-test]
+cmd_file = "./scripts/go-smoke-test.sh"
+sudo = true
+depends_on = ["go-workspace"]
+
+[tasks.ssh-user-docker-access]
+cmd = "usermod -aG docker testuser"
+sudo = true
+depends_on = ["docker-install"]
+
+[tasks.compose-project]
+cmd_file = "./scripts/compose-project.sh"
+sudo = true
+depends_on = ["deploy-user"]
+
 #
-# Inventory. SSH settings are per server (there is no global fallback).
+# Inventory. Every host runs servers.tasks unless it sets its own `tasks`, which
+# replaces the global list (dependencies are still pulled in).
+# SSH settings are per server (there is no global fallback).
 # Key-based auth only: no passwords in this file.
 #
 
-[[servers]]
-name = "server1"
-hostname = "localhost"
+[servers]
+tasks = ["timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace", "verify"]
 
-    [servers.ssh]
+[servers.hosts.server1]
+hostname = "localhost"
+# build server: the usual setup, plus prove the Go toolchain works end to end
+tasks = ["verify", "go-smoke-test"]
+    [servers.hosts.server1.ssh]
     port = 2221
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
 
-    # server-specific: build server, prove the Go toolchain works end to end
-    [[servers.tasks]]
-    name = "go-smoke-test"
-    cmd_file = "./scripts/go-smoke-test.sh"
-    sudo = true
-    depends_on = ["go-workspace"]
-
-
-[[servers]]
-name = "server2"
+[servers.hosts.server2]
 hostname = "localhost"
-
-    [servers.ssh]
+# docker host: the usual setup, plus docker without sudo and the app's compose project
+tasks = ["verify", "ssh-user-docker-access", "compose-project"]
+    [servers.hosts.server2.ssh]
     port = 2222
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
 
-    # server-specific: let the SSH user run docker without sudo
-    [[servers.tasks]]
-    name = "ssh-user-docker-access"
-    cmd = "usermod -aG docker testuser"
-    sudo = true
-    depends_on = ["docker-install"]
-
-    # server-specific: docker host, lay down and validate the app's compose project
-    [[servers.tasks]]
-    name = "compose-project"
-    cmd_file = "./scripts/compose-project.sh"
-    sudo = true
-    depends_on = ["deploy-user"]
-
-#
-# Extra servers, mostly to exercise `--select` fuzzy search. They only run the shared tasks.
-#
-
-[[servers]]
-name = "web-prod-1"
+[servers.hosts.web-prod-1]
 hostname = "localhost"
-
-    [servers.ssh]
+    [servers.hosts.web-prod-1.ssh]
     port = 2223
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
 
-[[servers]]
-name = "web-prod-2"
+[servers.hosts.web-prod-2]
 hostname = "localhost"
-
-    [servers.ssh]
+    [servers.hosts.web-prod-2.ssh]
     port = 2224
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
 
-[[servers]]
-name = "db-primary"
+[servers.hosts.db-primary]
 hostname = "localhost"
-
-    [servers.ssh]
+# database boxes stay minimal
+tasks = ["timezone", "monitoring-tools"]
+    [servers.hosts.db-primary.ssh]
     port = 2225
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
 
-[[servers]]
-name = "db-replica-eu"
+[servers.hosts.db-replica-eu]
 hostname = "localhost"
-
-    [servers.ssh]
+tasks = ["timezone", "monitoring-tools"]
+    [servers.hosts.db-replica-eu.ssh]
     port = 2226
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
 
-[[servers]]
-name = "cache-redis"
+[servers.hosts.cache-redis]
 hostname = "localhost"
-
-    [servers.ssh]
+    [servers.hosts.cache-redis.ssh]
     port = 2227
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
 
-[[servers]]
-name = "worker-eu-a"
+[servers.hosts.worker-eu-a]
 hostname = "localhost"
-
-    [servers.ssh]
+    [servers.hosts.worker-eu-a.ssh]
     port = 2228
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
 
-[[servers]]
-name = "worker-eu-b"
+[servers.hosts.worker-eu-b]
 hostname = "localhost"
-
-    [servers.ssh]
+    [servers.hosts.worker-eu-b.ssh]
     port = 2229
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
 
-[[servers]]
-name = "staging-api"
+[servers.hosts.staging-api]
 hostname = "localhost"
-
-    [servers.ssh]
+tasks = ["verify", "compose-project"]
+    [servers.hosts.staging-api.ssh]
     port = 2230
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"

@@ -18,7 +18,7 @@ import (
 // Task is a task to execute on one or more servers.
 type Task struct {
 	LogLevel  string            `toml:"log_level"`
-	Name      string            `toml:"name"`
+	Name      string            `toml:"-"` // the <name> in [tasks.<name>]
 	Sudo      bool              `toml:"sudo"`
 	Cmd       string            `toml:"cmd,omitempty"`
 	CmdFile   string            `toml:"cmd_file,omitempty"`

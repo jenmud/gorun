@@ -9,6 +9,7 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,19 +27,71 @@ type Config struct {
 	LogLevel string            `toml:"log_level"`
 	EnvVars  map[string]string `toml:"envvars"`
 	SSH      SSH               `toml:"ssh"`
-	Servers  []Server          `toml:"servers"`
-	Tasks    []Task            `toml:"tasks"`
+
+	// Tasks is the task library, keyed by task name. Servers pick tasks from it by name.
+	Tasks map[string]Task `toml:"tasks"`
+
+	// Servers are the [servers.hosts.<name>] tables, in the order they appear in the file.
+	Servers []Server `toml:"-"`
 
 	// OnEvent, when set, receives the events in events.go as tasks run.
 	OnEvent func(event any) `toml:"-"`
 }
 
+// configFile is the layout of a Gorunfile on disk. Load flattens the [servers] section
+// into Config.Servers.
+type configFile struct {
+	Config
+
+	Servers struct {
+		// Tasks run on every host that doesn't set its own task list.
+		Tasks []string          `toml:"tasks"`
+		Hosts map[string]Server `toml:"hosts"`
+	} `toml:"servers"`
+}
+
 // Load reads and updates the config.
 func (c *Config) Load(r io.Reader) error {
-	decoder := toml.NewDecoder(r)
+	f := configFile{Config: *c}
 
-	if _, err := decoder.Decode(c); err != nil {
+	md, err := toml.NewDecoder(r).Decode(&f)
+	if err != nil {
 		return fmt.Errorf("error with loading config: %w", err)
+	}
+
+	// catch typos, which would otherwise be silently ignored
+	if undecoded := md.Undecoded(); len(undecoded) > 0 {
+		keys := []string{}
+		for _, key := range undecoded {
+			keys = append(keys, key.String())
+		}
+		return fmt.Errorf("error with loading config: unknown keys: %s", strings.Join(keys, ", "))
+	}
+
+	*c = f.Config
+
+	// tasks and servers are named by their table keys
+	for name, task := range c.Tasks {
+		task.Name = name
+		c.Tasks[name] = task
+	}
+
+	// map iteration order is random, so walk the keys to keep the servers in file order
+	c.Servers = nil
+	for _, key := range md.Keys() {
+		if len(key) != 3 || key[0] != "servers" || key[1] != "hosts" {
+			continue
+		}
+
+		server := f.Servers.Hosts[key[2]]
+		server.Name = key[2]
+
+		// a server's own task list replaces the global one
+		if !md.IsDefined(append(key, "tasks")...) {
+			server.TaskNames = f.Servers.Tasks
+		}
+
+		c.Servers = append(c.Servers, server)
 	}
 
 	return nil
@@ -57,97 +110,70 @@ func (c *Config) ResolvePaths(dir string) {
 
 	c.SSH.Identityfile = resolve(c.SSH.Identityfile)
 
-	for i := range c.Tasks {
-		c.Tasks[i].CmdFile = resolve(c.Tasks[i].CmdFile)
+	for name, task := range c.Tasks {
+		task.CmdFile = resolve(task.CmdFile)
+		c.Tasks[name] = task
 	}
 
 	for i := range c.Servers {
-		server := &c.Servers[i]
-		server.SSH.Identityfile = resolve(server.SSH.Identityfile)
-
-		for j := range server.Tasks {
-			server.Tasks[j].CmdFile = resolve(server.Tasks[j].CmdFile)
-		}
+		c.Servers[i].SSH.Identityfile = resolve(c.Servers[i].SSH.Identityfile)
 	}
 }
 
-// TaskMap returns a map of all the loaded tasks for fast lookup.
-func (c *Config) TaskMap() map[string]Task {
-	m := make(map[string]Task)
-	for _, t := range c.Tasks {
-		m[t.Name] = t
-	}
-	return m
-}
+// resolveTasks looks up the named tasks in the library and returns them along with every
+// task they depend on, ordered so each task runs after its dependencies. Otherwise tasks
+// keep the order they are listed in.
+func resolveTasks(library map[string]Task, names ...string) ([]Task, error) {
+	const (
+		visiting = iota + 1
+		visited
+	)
 
-// topological returns all the tasks in a topological sort using the Kahn method.
-func topological(tasks ...Task) ([]Task, error) {
-	// keep track of tasks and the count of inbound edges.
-	inDegree := map[string]int{}
-
-	// fast lookup for pulling out task lists
-	adj := map[string][]Task{}
-
-	// fist build a unique lookup map of tasks
-	mappedTasks := map[string]Task{}
-	for _, task := range tasks {
-		mappedTasks[task.Name] = task
-		inDegree[task.Name] = 0
-	}
-
-	edges := [][2]Task{}
-	for _, task := range tasks {
-		for _, dep := range task.DependsOn {
-			d, ok := mappedTasks[dep]
-			if !ok {
-				return nil, fmt.Errorf("tasks %q not found", dep)
-			}
-			edges = append(edges, [2]Task{d, task})
-		}
-	}
-
-	// build the dependency graph
-	for _, edge := range edges {
-		u, v := edge[0], edge[1]
-		adj[u.Name] = append(adj[u.Name], v)
-		inDegree[v.Name]++
-	}
-
-	queue := []Task{}
-	for task, degree := range inDegree {
-		if degree == 0 {
-			queue = append(queue, mappedTasks[task])
-		}
-	}
-
+	state := map[string]int{}
 	result := []Task{}
 
-	for len(queue) > 0 {
-		task := queue[0]
-		queue = queue[1:]
-		result = append(result, task)
+	// depth first: add a task's dependencies, then the task itself
+	var visit func(name string, path []string) error
+	visit = func(name string, path []string) error {
+		path = append(path, name)
 
-		for _, d := range adj[task.Name] {
-			inDegree[d.Name]--
-			if inDegree[d.Name] == 0 {
-				queue = append(queue, d)
+		switch state[name] {
+		case visited:
+			return nil
+		case visiting:
+			return fmt.Errorf("cyclic dependency detected: %s", strings.Join(path, " -> "))
+		}
+
+		task, ok := library[name]
+		if !ok {
+			if len(path) > 1 {
+				return fmt.Errorf("task %q depends on unknown task %q", path[len(path)-2], name)
+			}
+			return fmt.Errorf("unknown task %q", name)
+		}
+
+		state[name] = visiting
+		for _, dep := range task.DependsOn {
+			if err := visit(dep, path); err != nil {
+				return err
 			}
 		}
+		state[name] = visited
+
+		result = append(result, task)
+		return nil
 	}
 
-	if len(result) != len(tasks) {
-		return nil, errors.New("cyclic dependency detected")
+	for _, name := range names {
+		if err := visit(name, nil); err != nil {
+			return nil, err
+		}
 	}
 
 	return result, nil
 }
 
-// Pipeline returns the tasks sorted using Kahn topological soring.
-func (c *Config) Pipeline() ([]Task, error) {
-	return topological(c.Tasks...)
-}
-
-// ServersPipeline returns all the servers tasks in topological sort.
+// ServersPipeline returns every server with its tasks resolved into run order.
 func (c *Config) ServersPipeline() (map[string]Server, error) {
 	sTasks := make(map[string]Server)
 
@@ -164,15 +190,11 @@ func (c *Config) ServersPipeline() (map[string]Server, error) {
 	return sTasks, nil
 }
 
-// ServerPipeline returns a server's tasks in topological sort.
+// ServerPipeline returns the server with its tasks, and their dependencies, resolved into run order.
 func (c *Config) ServerPipeline(server Server) (Server, error) {
-	tasks := append([]Task{}, c.Tasks...)
-
-	serverTasks := append(tasks, server.Tasks...)
-
-	pipeline, err := topological(serverTasks...)
+	pipeline, err := resolveTasks(c.Tasks, server.TaskNames...)
 	if err != nil {
-		err = fmt.Errorf("error building server task pipeline: %w", err)
+		err = fmt.Errorf("error building task pipeline for server %q: %w", server.Name, err)
 		return Server{}, err
 	}
 

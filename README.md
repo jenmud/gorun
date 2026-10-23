@@ -2,6 +2,8 @@
 
 Gorun is a tool for running tasks on multiple servers with an interactive TUI.
 
+![gorun provisioning ten servers in parallel](docs/screenshot.png)
+
 ## Features
 
 - Run tasks on multiple servers in parallel
@@ -43,25 +45,49 @@ list by server name (falling back to hostname): `wp2` finds `web-prod-2`, and `e
 
 Relative paths in the Gorunfile (`identityfile` and `cmd_file`) are resolved relative to the Gorunfile, not the current working directory.
 
-## Example
+## Configuration
+
+Tasks are defined once in a task library and servers pick them by name:
+
+- `[tasks.<name>]` defines a task: `cmd` or `cmd_file`, plus optional `sudo`, `depends_on`, `envvars`, `shell` and `log_level`.
+- `[servers]` `tasks` is the global list every server runs.
+- `[servers.hosts.<name>]` defines a server. If it sets its own `tasks`, that list **replaces** the global one.
+- A task's `depends_on` are always included and run first, so a list only needs the tasks you care about.
 
 ```toml
 # example/Gorunfile
 title = "Provision app servers"
 
-[[servers]]
-name = "server1"
+[tasks.packages]
+cmd_file = "./scripts/packages.sh"
+sudo = true
+
+[tasks.timezone]
+cmd = "cp /usr/share/zoneinfo/UTC /etc/localtime"
+sudo = true
+depends_on = ["packages"]
+
+[tasks.go-smoke-test]
+cmd_file = "./scripts/go-smoke-test.sh"
+depends_on = ["packages"]
+
+[servers]
+tasks = ["timezone"]                       # every server runs packages, then timezone
+
+[servers.hosts.server1]
 hostname = "localhost"
-    [servers.ssh]
+tasks = ["timezone", "go-smoke-test"]      # replaces the global list
+    [servers.hosts.server1.ssh]
     port = 2221
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
 
-[[servers]]
-name = "server2"
+[servers.hosts.server2]                    # inherits the global list
 hostname = "localhost"
-    [servers.ssh]
+    [servers.hosts.server2.ssh]
     port = 2222
     username = "testuser"
     identityfile = "./ssh-keys/id_ecdsa"
 ```
+
+Unknown keys (e.g. a typo like `cmd_flie`) are reported as errors rather than ignored.

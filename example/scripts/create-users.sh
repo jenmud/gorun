@@ -1,5 +1,0 @@
-#!/bin/bash
-set -e
-
-# create a new user called foobar
-sudo useradd -D -s /bin/bash -G docker foobar

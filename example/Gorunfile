@@ -18,7 +18,7 @@ GORUN_ADDRESS = "localhost:8080"
 [[servers]]
 name = "server1"
 hostname = "localhost"
-log_level = "debug"
+log_level = "info"
 
     [servers.ssh]
     port = 2221
@@ -27,24 +27,30 @@ log_level = "debug"
     identityfile = "./ssh-keys/id_ecdsa"
 
     [[servers.tasks]]
+    name = "create-docker-group"
+    cmd = "getent group docker || groupadd docker"
+    sudo = true
+
+    [[servers.tasks]]
     name = "create-users"
-    cmd_file = "./scripts/create-users.sh"
-    depends_on = ["install-docker"]
+    sudo = true
+    cmd = "id foobar || useradd -m -s /bin/bash -G docker foobar"
+    depends_on = ["create-docker-group", "docker-install"]
 
     [[servers.tasks]]
-    name = "install-docker"
+    name = "pkg-install"
+    cmd_file = "./scripts/pkg-install.sh"
+
+    [[servers.tasks]]
+    name = "docker-install"
     cmd_file = "./scripts/install-docker.sh"
-    depends_on = ["apt-install"]
-
-    [[servers.tasks]]
-    name = "apt-install"
-    cmd_file = "./scripts/apt-install.sh"
+    depends_on = ["pkg-install"]
 
 
 [[servers]]
 name = "server2"
 hostname = "localhost"
-log_level = "debug"
+log_level = "info"
 
     [servers.ssh]
         port = 2222
@@ -53,13 +59,27 @@ log_level = "debug"
         identityfile = "./ssh-keys/id_ecdsa"
 
     [[servers.tasks]]
+    name = "create-docker-group"
+    cmd = "getent group docker || groupadd docker"
+    sudo = true
+
+    [[servers.tasks]]
     name = "create-users"
-    cmd = "./scripts/create-users.sh"
-    depends_on = ["install-docker"]
+    sudo = true
+    cmd = "id foobar || useradd -m -s /bin/bash -G docker foobar"
+    depends_on = ["create-docker-group", "docker-install"]
 
     [[servers.tasks]]
-    name = "install-docker"
+    name = "update-testuser-groups"
+    sudo = true
+    cmd="usermod -aG docker testuser"
+    depends_on = ["create-docker-group", "docker-install"]
 
     [[servers.tasks]]
-    name = "apt-install"
-    cmd_file = "./scripts/apt-install.sh"
+    name = "pkg-install"
+    cmd_file = "./scripts/pkg-install.sh"
+
+    [[servers.tasks]]
+    name = "docker-install"
+    cmd_file = "./scripts/install-docker.sh"
+    depends_on = ["pkg-install"]

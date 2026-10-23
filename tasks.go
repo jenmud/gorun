@@ -18,6 +18,7 @@ import (
 type Task struct {
 	LogLevel  string            `toml:"log_level"`
 	Name      string            `toml:"name"`
+	Sudo      bool              `toml:"sudo"`
 	Cmd       string            `toml:"cmd,omitempty"`
 	CmdFile   string            `toml:"cmd_file,omitempty"`
 	EnvVars   map[string]string `toml:"envvars"`
@@ -161,6 +162,8 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 		logger = logger.With(
 			slog.String("name", t.Name),
 			slog.String("shell", t.Shell),
+			slog.Bool("sudo", t.Sudo),
+			slog.String("cmd_file", t.CmdFile),
 			slog.Any("depends_on", t.DependsOn),
 			slog.Any("envvars", envvars),
 		)
@@ -211,20 +214,24 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 		return t.Fail(ctx, err)
 	}
 
-	cmd := exec.CommandContext(ctx, command)
+	// default to running the command through sh so multi-word commands work
+	name, args := "sh", []string{"-c", command}
 
 	if t.task.Shell != "" {
 		scmd := strings.Split(t.task.Shell, " ")
-		name := scmd[0]
+		name = scmd[0]
 
-		args := []string{}
-		if len(scmd) > 1 {
-			args = append(args, scmd[1:]...)
-		}
-
+		args = append([]string{}, scmd[1:]...)
 		args = append(args, command)
-		cmd = exec.CommandContext(ctx, name, args...)
 	}
+
+	if t.task.Sudo {
+		// -n: fail instead of hanging on a password prompt
+		args = append([]string{"-n", name}, args...)
+		name = "sudo"
+	}
+
+	cmd := exec.CommandContext(ctx, name, args...)
 
 	for key, value := range t.task.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", strings.ToUpper(key), value))
@@ -302,6 +309,11 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		if err != nil {
 			errChan <- fmt.Errorf("error running the task on the remote server: %w", err)
 			return
+		}
+
+		if t.task.Sudo {
+			// wrap in single quotes, escaping any single quotes in the command
+			command = "sudo -n sh -c '" + strings.ReplaceAll(command, "'", `'\''`) + "'"
 		}
 
 		if err := session.Run(command); err != nil {

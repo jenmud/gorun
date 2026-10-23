@@ -6,10 +6,6 @@ vendor:
 	go mod tidy && go mod vendor
 
 
-# up:   is imported from the examples Makefile above
-# down: is imported from the examples Makefile above
-# run:  is imported from the examples Makefile above
-
 test:
 	go test -race ./...
 
@@ -25,4 +21,8 @@ build-go:
 
 build: build-go build-otel
 
+
 -include ./example/Makefile
+# up:   is imported from the examples Makefile above
+# down: is imported from the examples Makefile above
+# run:  is imported from the examples Makefile above

@@ -13,6 +13,8 @@ import (
 
 	_ "github.com/joho/godotenv/autoload"
 	"golang.org/x/term"
+
+	"gorun"
 )
 
 func main() {
@@ -40,8 +42,7 @@ func main() {
 		fatal(errors.New("usage: gorun [-v] [-plain] [-select] <Gorunfile>"))
 	}
 
-	cfg := Config{}
-
+	cfg := gorun.Config{}
 	r, err := os.Open(filename)
 	if err != nil {
 		fatal(err)

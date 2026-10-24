@@ -1,4 +1,4 @@
-package main
+package gorun
 
 import (
 	"io"
@@ -9,6 +9,12 @@ import (
 
 // logOutput is where task and server logs are written. The TUI discards them.
 var logOutput io.Writer = os.Stdout
+
+// SetLogOutput overrides the destination for task and server logs. The TUI uses
+// this to discard them so they don't corrupt the screen.
+func SetLogOutput(w io.Writer) {
+	logOutput = w
+}
 
 // NewLogger returns a new logger.
 func NewLogger(level string, w io.Writer, json bool) *slog.Logger {

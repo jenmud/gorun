@@ -15,16 +15,16 @@ Gorun is a tool for running tasks on multiple servers with an interactive TUI.
 
 ```bash
 # Run all tasks on all servers
-go run . example/Gorunfile
+go run ./cmd/gorun example/Gorunfile
 
 # Run tasks with interactive server selection
-go run . example/Gorunfile --select
+go run ./cmd/gorun example/Gorunfile --select
 
 # Run tasks with verbose output
-go run . example/Gorunfile -v
+go run ./cmd/gorun example/Gorunfile -v
 
 # Run tasks with verbose output and interactive server selection
-go run . example/Gorunfile --select -v
+go run ./cmd/gorun example/Gorunfile --select -v
 ```
 
 Verbose mode (`-v`, or press `v` while running) lists every task per server:
@@ -63,8 +63,22 @@ list by server name (falling back to hostname): `wp2` finds `web-prod-2`, and `e
 - click a server to select it, scroll to move
 - esc clears the filter, then quits; ctrl+c quits
 
-## SSH Keys
+## Using gorun as a library
 
+The command-line tool and TUI live under `cmd/gorun`. The rest of the repository is the
+`gorun` package, which you can import to drive deployments from your own code:
+
+```go
+import "gorun"
+
+cfg := gorun.Config{}
+// load, resolve paths, run ...
+```
+
+`gorun.Config` exposes `Load`, `ResolvePaths`, `ServersPipeline` and `Run`, plus the
+`OnEvent` callback for progress events (`PlanEvent`, `TaskEvent`, ...).
+
+## SSH Keys
 Relative paths in the Gorunfile (`identityfile` and `cmd_file`) are resolved relative to the Gorunfile, not the current working directory.
 
 ## Configuration

@@ -13,6 +13,8 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"gorun"
 )
 
 var (
@@ -42,9 +44,9 @@ const (
 
 type taskView struct {
 	name     string
-	state    TaskState
+	state    gorun.TaskState
 	started  time.Time
-	event    TaskEvent
+	event    gorun.TaskEvent
 	expanded bool
 }
 
@@ -64,7 +66,7 @@ func (s *serverView) task(name string) *taskView {
 	return nil
 }
 
-func (s *serverView) count(states ...TaskState) int {
+func (s *serverView) count(states ...gorun.TaskState) int {
 	n := 0
 	for _, t := range s.tasks {
 		if slices.Contains(states, t.state) {
@@ -75,7 +77,7 @@ func (s *serverView) count(states ...TaskState) int {
 }
 
 func (s *serverView) finished() bool {
-	return s.err != nil || s.count(TaskPending, TaskRunning) == 0
+	return s.err != nil || s.count(gorun.TaskPending, gorun.TaskRunning) == 0
 }
 
 // tuiModel is the bubbletea model for a gorun deployment.
@@ -139,7 +141,7 @@ func (m tuiModel) failed() bool {
 		return true
 	}
 	for _, s := range m.servers {
-		if s.err != nil || s.count(TaskFailed) > 0 {
+		if s.err != nil || s.count(gorun.TaskFailed) > 0 {
 			return true
 		}
 	}
@@ -178,7 +180,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case PlanEvent:
+	case gorun.PlanEvent:
 		s := &serverView{name: msg.Server, address: msg.Address}
 		for _, name := range msg.Tasks {
 			s.tasks = append(s.tasks, &taskView{name: name})
@@ -186,29 +188,29 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.servers = append(m.servers, s)
 		return m, nil
 
-	case TaskEvent:
+	case gorun.TaskEvent:
 		if s := m.server(msg.Server); s != nil {
 			if t := s.task(msg.Task); t != nil {
 				t.state = msg.State
 				t.event = msg
-				if msg.State == TaskRunning {
+				if msg.State == gorun.TaskRunning {
 					t.started = time.Now()
 				}
 				// failures always open so the reason is visible straight away
-				if msg.State == TaskFailed {
+				if msg.State == gorun.TaskFailed {
 					t.expanded = true
 				}
 			}
 		}
 		return m, nil
 
-	case ServerErrorEvent:
+	case gorun.ServerErrorEvent:
 		if s := m.server(msg.Server); s != nil {
 			s.err = msg.Err
 		}
 		return m, nil
 
-	case RunDoneEvent:
+	case gorun.RunDoneEvent:
 		m.done = true
 		// with no servers planned there is nothing else on screen to explain the failure
 		if msg.Err != nil && len(m.servers) == 0 {
@@ -246,7 +248,7 @@ func (m tuiModel) header() string {
 // serverSummary renders the server name, progress bar and current status.
 func (m tuiModel) serverSummary(s *serverView) string {
 	total := len(s.tasks)
-	finished := s.count(TaskDone, TaskFailed, TaskSkipped)
+	finished := s.count(gorun.TaskDone, gorun.TaskFailed, gorun.TaskSkipped)
 
 	percent := 0.0
 	if total > 0 {
@@ -254,7 +256,7 @@ func (m tuiModel) serverSummary(s *serverView) string {
 	}
 
 	bar := m.okBar
-	if s.err != nil || s.count(TaskFailed) > 0 {
+	if s.err != nil || s.count(gorun.TaskFailed) > 0 {
 		bar = m.failBar
 	}
 	bar.SetWidth(min(40, max(10, m.width-50)))
@@ -263,16 +265,16 @@ func (m tuiModel) serverSummary(s *serverView) string {
 	switch {
 	case s.err != nil:
 		status = failStyle.Render("✗ could not run tasks")
-	case s.count(TaskFailed) > 0 && s.finished():
-		status = failStyle.Render(fmt.Sprintf("✗ %d failed", s.count(TaskFailed)))
-		if n := s.count(TaskSkipped); n > 0 {
+	case s.count(gorun.TaskFailed) > 0 && s.finished():
+		status = failStyle.Render(fmt.Sprintf("✗ %d failed", s.count(gorun.TaskFailed)))
+		if n := s.count(gorun.TaskSkipped); n > 0 {
 			status += skipStyle.Render(fmt.Sprintf(", %d skipped", n))
 		}
 	case s.finished():
 		status = okStyle.Render("✓ done")
 	default:
 		for _, t := range s.tasks {
-			if t.state == TaskRunning {
+			if t.state == gorun.TaskRunning {
 				status = m.spinner.View() + " " + t.name + " " + mutedStyle.Render(formatDuration(time.Since(t.started)))
 				break
 			}
@@ -313,7 +315,7 @@ func (m tuiModel) compactView() string {
 			b.WriteString(m.serverErrorBox(s) + "\n")
 		}
 		for _, t := range s.tasks {
-			if t.state == TaskFailed {
+			if t.state == gorun.TaskFailed {
 				b.WriteString(m.failureBox(s, t) + "\n")
 			}
 		}
@@ -348,7 +350,7 @@ func (m tuiModel) verboseView() string {
 
 			if t.expanded {
 				box := m.outputBox(t)
-				if t.state == TaskFailed {
+				if t.state == gorun.TaskFailed {
 					box = m.failureBox(s, t)
 				}
 				if box != "" {
@@ -375,24 +377,24 @@ func (m tuiModel) taskRow(t *taskView) string {
 	var icon, detail string
 
 	switch t.state {
-	case TaskPending:
+	case gorun.TaskPending:
 		icon = mutedStyle.Render("○")
-	case TaskRunning:
+	case gorun.TaskRunning:
 		icon = m.spinner.View()
 		detail = mutedStyle.Render(formatDuration(time.Since(t.started)))
-	case TaskDone:
+	case gorun.TaskDone:
 		icon = okStyle.Render("✓")
 		detail = mutedStyle.Render(formatDuration(t.event.Duration))
-	case TaskFailed:
+	case gorun.TaskFailed:
 		icon = failStyle.Render("✗")
 		detail = failStyle.Render(fmt.Sprintf("exit %d", t.event.ExitCode)) + mutedStyle.Render(" · "+formatDuration(t.event.Duration))
-	case TaskSkipped:
+	case gorun.TaskSkipped:
 		icon = skipStyle.Render("⊘")
 		detail = skipStyle.Render("skipped")
 	}
 
 	toggle := ""
-	if t.state == TaskDone || t.state == TaskFailed || t.state == TaskSkipped {
+	if t.state == gorun.TaskDone || t.state == gorun.TaskFailed || t.state == gorun.TaskSkipped {
 		toggle = mutedStyle.Render(" ▸")
 		if t.expanded {
 			toggle = mutedStyle.Render(" ▾")
@@ -410,7 +412,7 @@ func (m tuiModel) boxWidth() int {
 func (m tuiModel) outputBox(t *taskView) string {
 	sections := []string{}
 
-	if t.state == TaskSkipped && t.event.Err != nil {
+	if t.state == gorun.TaskSkipped && t.event.Err != nil {
 		sections = append(sections, skipStyle.Render("skipped: ")+t.event.Err.Error())
 	}
 	if out := tail(t.event.Stdout, outputTailLines); out != "" {
@@ -445,7 +447,7 @@ func (m tuiModel) failureBox(s *serverView, t *taskView) string {
 	// a failure stops the rest of the server's pipeline, so name what didn't run
 	skipped := []string{}
 	for _, st := range s.tasks {
-		if st.state == TaskSkipped {
+		if st.state == gorun.TaskSkipped {
 			skipped = append(skipped, st.name)
 		}
 	}
@@ -471,8 +473,8 @@ func (m tuiModel) footer() string {
 		total, failed, skipped := 0, 0, 0
 		for _, s := range m.servers {
 			total += len(s.tasks)
-			failed += s.count(TaskFailed)
-			skipped += s.count(TaskSkipped)
+			failed += s.count(gorun.TaskFailed)
+			skipped += s.count(gorun.TaskSkipped)
 		}
 
 		elapsed := m.elapsed
@@ -539,16 +541,14 @@ func formatDuration(d time.Duration) string {
 }
 
 // runTUI runs the deployment with the interactive TUI and returns an error if anything failed.
-func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *Config, verbose bool) error {
-	// slog output would corrupt the TUI
-	logOutput = io.Discard
-
+func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, verbose bool) error { // slog output would corrupt the TUI
+	gorun.SetLogOutput(io.Discard)
 	p := tea.NewProgram(newTUIModel(cfg.Title, verbose, cancel))
 	cfg.OnEvent = func(event any) { p.Send(event) }
 
 	go func() {
 		err := cfg.Run(ctx)
-		p.Send(RunDoneEvent{Err: err})
+		p.Send(gorun.RunDoneEvent{Err: err})
 	}()
 
 	final, err := p.Run()

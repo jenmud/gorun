@@ -1,4 +1,4 @@
-package main
+package gorun
 
 import (
 	"context"
@@ -292,7 +292,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			tasks = append(tasks, task.Name)
 		}
 
-		c.emit(PlanEvent{Server: server.Name, Address: serverAddress(server), Tasks: tasks})
+		c.emit(PlanEvent{Server: server.Name, Address: ServerAddress(server), Tasks: tasks})
 	}
 
 	var failed atomic.Bool

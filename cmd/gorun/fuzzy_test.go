@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/google/go-cmp/cmp"
+	"gorun"
 )
 
 func TestFuzzyMatch(t *testing.T) {
@@ -66,7 +68,7 @@ func TestFuzzyMatch_Ranking(t *testing.T) {
 }
 
 func TestServerSelectionModel_Filter(t *testing.T) {
-	servers := []Server{
+	servers := []gorun.Server{
 		{Name: "worker-eu-b", Hostname: "localhost"},
 		{Name: "web-prod-1", Hostname: "localhost"},
 		{Name: "db-primary", Hostname: "db.internal"},
@@ -95,13 +97,13 @@ func TestServerSelectionModel_Filter(t *testing.T) {
 	}
 
 	// enter with nothing selected picks the server under the cursor
-	if diff := cmp.Diff([]Server{servers[2]}, m.chosen()); diff != "" {
+	if diff := cmp.Diff([]gorun.Server{servers[2]}, m.chosen()); diff != "" {
 		t.Errorf("chosen mismatch (-want +got):\n%s", diff)
 	}
 }
 
 func TestServerSelectionModel_Mouse(t *testing.T) {
-	servers := []Server{{Name: "server1"}, {Name: "server2"}, {Name: "server3"}}
+	servers := []gorun.Server{{Name: "server1"}, {Name: "server2"}, {Name: "server3"}}
 	m := newServerSelectionModel("test", servers)
 
 	// clicking the second server row moves the cursor to it and selects it
@@ -118,7 +120,7 @@ func TestServerSelectionModel_Mouse(t *testing.T) {
 	if !m.confirmed || cmd == nil {
 		t.Fatal("clicking the run button should confirm and quit")
 	}
-	if diff := cmp.Diff([]Server{servers[1]}, m.chosen()); diff != "" {
+	if diff := cmp.Diff([]gorun.Server{servers[1]}, m.chosen()); diff != "" {
 		t.Errorf("chosen mismatch (-want +got):\n%s", diff)
 	}
 }

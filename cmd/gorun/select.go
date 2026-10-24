@@ -10,6 +10,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"gorun"
 )
 
 var (
@@ -32,7 +34,7 @@ type serverMatch struct {
 // Typing filters the list with a fuzzy match on the server name (or hostname).
 type serverSelectionModel struct {
 	title    string
-	servers  []Server
+	servers  []gorun.Server
 	selected map[string]bool
 	query    string
 	matches  []serverMatch
@@ -44,7 +46,7 @@ type serverSelectionModel struct {
 	quitting  bool
 }
 
-func newServerSelectionModel(title string, servers []Server) serverSelectionModel {
+func newServerSelectionModel(title string, servers []gorun.Server) serverSelectionModel {
 	m := serverSelectionModel{
 		title:    title,
 		servers:  servers,
@@ -83,9 +85,9 @@ func (m *serverSelectionModel) filter() {
 	m.cursor = 0
 }
 
-func (m serverSelectionModel) current() (Server, bool) {
+func (m serverSelectionModel) current() (gorun.Server, bool) {
 	if m.cursor < 0 || m.cursor >= len(m.matches) {
-		return Server{}, false
+		return gorun.Server{}, false
 	}
 	return m.servers[m.matches[m.cursor].index], true
 }
@@ -102,8 +104,8 @@ func (m serverSelectionModel) countSelected() int {
 
 // chosen returns the servers to deploy to, in config order: the selected servers, or
 // the one under the cursor when nothing is selected.
-func (m serverSelectionModel) chosen() []Server {
-	servers := []Server{}
+func (m serverSelectionModel) chosen() []gorun.Server {
+	servers := []gorun.Server{}
 	for _, s := range m.servers {
 		if m.selected[s.Name] {
 			servers = append(servers, s)
@@ -331,10 +333,10 @@ func (m serverSelectionModel) viewContent() string {
 		var name, host string
 		if match.onName {
 			name = highlight(s.Name, match.positions, serverStyle)
-			host = mutedStyle.Render(serverAddress(s))
+			host = mutedStyle.Render(gorun.ServerAddress(s))
 		} else {
 			name = serverStyle.Render(s.Name)
-			host = highlight(serverAddress(s), match.positions, mutedStyle)
+			host = highlight(gorun.ServerAddress(s), match.positions, mutedStyle)
 		}
 		name += strings.Repeat(" ", nameWidth-len([]rune(s.Name)))
 
@@ -359,24 +361,11 @@ func highlight(s string, positions []int, style lipgloss.Style) string {
 	return b.String()
 }
 
-func serverAddress(s Server) string {
-	if s.SSH == (SSH{}) {
-		return "local"
-	}
-
-	port := s.SSH.Port
-	if port == 0 {
-		port = 22
-	}
-	return fmt.Sprintf("%s:%d", s.Hostname, port)
-}
-
 // runServerSelectionTUI lets the user pick servers to deploy to. It returns an error
 // if the selection was cancelled.
-func runServerSelectionTUI(title string, servers []Server) ([]Server, error) {
+func runServerSelectionTUI(title string, servers []gorun.Server) ([]gorun.Server, error) {
 	// slog output would corrupt the TUI
-	logOutput = io.Discard
-
+	gorun.SetLogOutput(io.Discard)
 	final, err := tea.NewProgram(newServerSelectionModel(title, servers)).Run()
 	if err != nil {
 		return nil, fmt.Errorf("error running server selection TUI: %w", err)

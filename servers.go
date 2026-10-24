@@ -1,4 +1,6 @@
-package main
+package gorun
+
+import "fmt"
 
 // Server is a server to connect to and execute tasks.
 type Server struct {
@@ -13,4 +15,17 @@ type Server struct {
 
 	// Tasks is the resolved pipeline, including dependencies, set by ServerPipeline.
 	Tasks []Task `toml:"-"`
+}
+
+// ServerAddress formats a server's connection address for display ("local" when no SSH is configured).
+func ServerAddress(s Server) string {
+	if s.SSH == (SSH{}) {
+		return "local"
+	}
+
+	port := s.SSH.Port
+	if port == 0 {
+		port = 22
+	}
+	return fmt.Sprintf("%s:%d", s.Hostname, port)
 }

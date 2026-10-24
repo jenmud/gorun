@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -13,9 +14,40 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"golang.org/x/sys/unix"
+	"golang.org/x/term"
 
 	"gorun"
 )
+
+// drainTerminalInput swallows terminal capability-query replies (e.g. the DECRQM
+// responses for synchronized output / unicode core) that can be delivered after
+// the TUI has exited and would otherwise be read by the shell as keystrokes.
+//
+// SetReadDeadline is not honoured by TTYs, so we poll the descriptor instead.
+func drainTerminalInput() {
+	f := os.Stdin
+	if !term.IsTerminal(int(f.Fd())) {
+		return
+	}
+	fd := int(f.Fd())
+	buf := make([]byte, 4096)
+	timeout := 200
+	for {
+		pfds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLIN}}
+		n, err := unix.Poll(pfds, timeout)
+		if err != nil || n == 0 {
+			break
+		}
+		if pfds[0].Revents&unix.POLLIN == 0 {
+			break
+		}
+		if _, err := f.Read(buf); err != nil {
+			break
+		}
+		timeout = 0
+	}
+}
 
 var (
 	colorAccent = lipgloss.Color("#7C3AED")
@@ -543,7 +575,8 @@ func formatDuration(d time.Duration) string {
 // runTUI runs the deployment with the interactive TUI and returns an error if anything failed.
 func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, verbose bool) error { // slog output would corrupt the TUI
 	gorun.SetLogOutput(io.Discard)
-	p := tea.NewProgram(newTUIModel(cfg.Title, verbose, cancel))
+	defer drainTerminalInput()
+	p := tea.NewProgram(newTUIModel(cfg.Title, verbose, cancel), tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1")))
 	cfg.OnEvent = func(event any) { p.Send(event) }
 
 	go func() {

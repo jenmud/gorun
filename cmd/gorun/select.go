@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"slices"
 	"strings"
 	"unicode"
@@ -366,7 +367,8 @@ func highlight(s string, positions []int, style lipgloss.Style) string {
 func runServerSelectionTUI(title string, servers []gorun.Server) ([]gorun.Server, error) {
 	// slog output would corrupt the TUI
 	gorun.SetLogOutput(io.Discard)
-	final, err := tea.NewProgram(newServerSelectionModel(title, servers)).Run()
+	defer drainTerminalInput()
+	final, err := tea.NewProgram(newServerSelectionModel(title, servers), tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1"))).Run()
 	if err != nil {
 		return nil, fmt.Errorf("error running server selection TUI: %w", err)
 	}

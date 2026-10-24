@@ -292,7 +292,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			tasks = append(tasks, task.Name)
 		}
 
-		c.emit(PlanEvent{Server: server.Name, Address: ServerAddress(server), Tasks: tasks})
+		c.emit(PlanEvent{Server: server.Name, Address: server.Address(), Tasks: tasks})
 	}
 
 	var failed atomic.Bool

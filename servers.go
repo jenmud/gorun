@@ -17,8 +17,8 @@ type Server struct {
 	Tasks []Task `toml:"-"`
 }
 
-// ServerAddress formats a server's connection address for display ("local" when no SSH is configured).
-func ServerAddress(s Server) string {
+// Address formats a server's connection address for display ("local" when no SSH is configured).
+func (s Server) Address() string {
 	if s.SSH == (SSH{}) {
 		return "local"
 	}
@@ -27,5 +27,6 @@ func ServerAddress(s Server) string {
 	if port == 0 {
 		port = 22
 	}
+
 	return fmt.Sprintf("%s:%d", s.Hostname, port)
 }

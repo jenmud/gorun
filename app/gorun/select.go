@@ -334,10 +334,10 @@ func (m serverSelectionModel) viewContent() string {
 		var name, host string
 		if match.onName {
 			name = highlight(s.Name, match.positions, serverStyle)
-			host = mutedStyle.Render(gorun.ServerAddress(s))
+			host = mutedStyle.Render(s.Address())
 		} else {
 			name = serverStyle.Render(s.Name)
-			host = highlight(gorun.ServerAddress(s), match.positions, mutedStyle)
+			host = highlight(s.Address(), match.positions, mutedStyle)
 		}
 		name += strings.Repeat(" ", nameWidth-len([]rune(s.Name)))
 

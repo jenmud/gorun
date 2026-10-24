@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -20,7 +21,21 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/crypto/ssh"
+
+	"gorun/internal/envvars"
 )
+
+func init() {
+	// Default the OTEL service name to GORUN_NAME when OTEL_SERVICE_NAME is
+	// not explicitly provided, so traces/metrics are attributed correctly.
+	if _, ok := os.LookupEnv("OTEL_SERVICE_NAME"); !ok {
+		if name := envvars.Get("GORUN_NAME"); name != "" {
+			os.Setenv("OTEL_SERVICE_NAME", name)
+		} else {
+			os.Setenv("OTEL_SERVICE_NAME", "gorun")
+		}
+	}
+}
 
 var tracer = otel.Tracer("gorun")
 var meter = otel.Meter("gorun")

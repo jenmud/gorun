@@ -7,27 +7,30 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestGet__found(t *testing.T) {
-	t.Setenv("GORUN_NAME", "testing-gorun")
-	t.Setenv("GORUN_DEBUG", "1")
-
-	actual := envvars.Get("GORUN_NAME")
-	expected := "testing-gorun"
-
-	if diff := cmp.Diff(expected, actual); diff != "" {
-		t.Errorf("%s mismatch (-want +got):\n%s", t.Name(), diff)
+func TestGet(t *testing.T) {
+	tests := []struct {
+		name     string
+		key      string
+		value    string
+		set      bool
+		expected string
+	}{
+		{name: "found", key: "GORUN_NAME", value: "testing-gorun", set: true, expected: "testing-gorun"},
+		{name: "not_found", key: "GORUN_NOT_FOUND", expected: ""},
 	}
-}
 
-func TestGet__not_found(t *testing.T) {
-	t.Setenv("GORUN_NAME", "testing-gorun")
-	t.Setenv("GORUN_DEBUG", "1")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.set {
+				t.Setenv(tt.key, tt.value)
+			}
 
-	actual := envvars.Get("GORUN_NOT_FOUND")
-	expected := ""
+			actual := envvars.Get(tt.key)
 
-	if diff := cmp.Diff(expected, actual); diff != "" {
-		t.Errorf("%s: mismatch (-want +got):\n%s", t.Name(), diff)
+			if diff := cmp.Diff(tt.expected, actual); diff != "" {
+				t.Errorf("Get(%q) mismatch (-want +got):\n%s", tt.key, diff)
+			}
+		})
 	}
 }
 

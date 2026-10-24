@@ -16,6 +16,8 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/crypto/ssh"
+
+	"gorun/internal/envvars"
 )
 
 // Task is a task to execute on one or more servers.
@@ -192,9 +194,9 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 
 		logger := NewLogger(t.LogLevel, logOutput, false)
 
-		envvars := []string{}
+		envVarList := []string{}
 		for key, value := range t.EnvVars {
-			envvars = append(envvars, fmt.Sprintf("%s=%s", key, value))
+			envVarList = append(envVarList, fmt.Sprintf("%s=%s", key, value))
 		}
 
 		logger = logger.With(
@@ -203,7 +205,7 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 			slog.Bool("sudo", t.Sudo),
 			slog.String("cmd_file", t.CmdFile),
 			slog.Any("depends_on", t.DependsOn),
-			slog.Any("envvars", envvars),
+			slog.Any("envvars", envVarList),
 		)
 
 		if server != nil {
@@ -218,7 +220,7 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 			logger = logger.With(
 				slog.Group(
 					"server",
-					slog.String("user", os.Getenv("USER")),
+					slog.String("user", envvars.Get("USER")),
 					slog.String("session", "localhost"),
 				),
 			)

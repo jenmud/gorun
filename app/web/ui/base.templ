@@ -1,0 +1,35 @@
+package ui
+
+templ Base(title string) {
+	<!DOCTYPE html>
+	<html lang="en" class="dark">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title }</title>
+			<script src="https://cdn.tailwindcss.com"></script>
+			<script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.8/bundles/datastar.js"></script>
+			<script>
+				tailwind.config = {
+					darkMode: 'class',
+					theme: {
+						extend: {
+							colors: {
+								accent: '#7C3AED',
+							},
+							fontFamily: {
+								sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+							},
+						},
+					},
+				}
+			</script>
+			<link rel="preconnect" href="https://fonts.googleapis.com"/>
+			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+			<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+		</head>
+		<body class="min-h-screen bg-zinc-950 text-zinc-100 antialiased selection:bg-accent/30">
+			{ children... }
+		</body>
+	</html>
+}

@@ -10,4 +10,4 @@ down:
 	docker compose -f $(EXAMPLE_DIR)docker-compose.yml down
 
 run:
-	@cd $(EXAMPLE_DIR) && go run ../cmd/gorun Gorunfile
+	@cd $(EXAMPLE_DIR) && go run ../app/gorun Gorunfile

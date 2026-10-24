@@ -392,3 +392,10 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 	return nil
 }
+
+// emit sends an event to the OnEvent callback, if one is set.
+func (c *Config) emit(event any) {
+	if c.OnEvent != nil {
+		c.OnEvent(event)
+	}
+}

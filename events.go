@@ -43,9 +43,3 @@ type RunDoneEvent struct {
 	Err error
 }
 
-// emit sends an event to the OnEvent callback, if one is set.
-func (c *Config) emit(event any) {
-	if c.OnEvent != nil {
-		c.OnEvent(event)
-	}
-}

@@ -42,4 +42,3 @@ type ServerErrorEvent struct {
 type RunDoneEvent struct {
 	Err error
 }
-

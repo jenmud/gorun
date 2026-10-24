@@ -12,6 +12,9 @@ import (
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -65,6 +68,7 @@ type TaskExec struct {
 	task        Task
 	logger      *slog.Logger
 	server      *ssh.Client
+	serverName  string
 	createdAt   time.Time
 	startedAt   time.Time
 	completedAt time.Time
@@ -78,8 +82,14 @@ func (t *TaskExec) Fail(ctx context.Context, err error) error {
 	ctx, span := tracer.Start(ctx, "Fail")
 	defer span.End()
 
+	span.SetAttributes(
+		attribute.String("task.name", t.task.Name),
+		attribute.Bool("task.sudo", t.task.Sudo),
+	)
+
 	if err != nil {
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 
 		// report the command's real exit code when there is one
 		var sshErr *ssh.ExitError
@@ -103,10 +113,14 @@ func (t *TaskExec) Fail(ctx context.Context, err error) error {
 			slog.String("reason", err.Error()),
 		)
 
+		span.SetAttributes(attribute.Int("task.exit_code", t.exitCode))
+
 		return err
 	}
 
 	t.exitCode = 0
+	span.SetAttributes(attribute.Int("task.exit_code", t.exitCode))
+	span.SetStatus(codes.Ok, "")
 	return nil
 }
 
@@ -115,8 +129,11 @@ func (t *TaskExec) Terminate(ctx context.Context, err error) error {
 	ctx, span := tracer.Start(ctx, "Terminate")
 	defer span.End()
 
+	span.SetAttributes(attribute.String("task.name", t.task.Name))
+
 	if err != nil {
 		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		t.stderr = []byte(err.Error())
 		t.exitCode = 1
 
@@ -129,10 +146,14 @@ func (t *TaskExec) Terminate(ctx context.Context, err error) error {
 			slog.String("reason", err.Error()),
 		)
 
+		span.SetAttributes(attribute.Int("task.exit_code", t.exitCode))
+
 		return err
 	}
 
 	t.exitCode = 0
+	span.SetAttributes(attribute.Int("task.exit_code", t.exitCode))
+	span.SetStatus(codes.Ok, "")
 	return nil
 }
 
@@ -140,6 +161,12 @@ func (t *TaskExec) Terminate(ctx context.Context, err error) error {
 func (t *TaskExec) Completed(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "Completed")
 	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("task.name", t.task.Name),
+		attribute.Int("task.exit_code", 0),
+	)
+	span.SetStatus(codes.Ok, "")
 
 	t.exitCode = 0
 
@@ -213,11 +240,36 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "TaskExec.LocalExecute")
 	defer span.End()
 
+	span.SetAttributes(
+		attribute.String("task.name", t.task.Name),
+		attribute.Bool("task.sudo", t.task.Sudo),
+	)
+
 	t.logger.InfoContext(ctx, "running local task")
+
+	if t.serverName == "" {
+		t.serverName = "localhost"
+	}
 
 	defer func() {
 		// make sure that the completed at always is set at the end
 		t.completedAt = time.Now()
+	}()
+
+	defer func() {
+		status := "ok"
+		if t.exitCode != 0 {
+			status = "error"
+		}
+		attrs := metric.WithAttributes(
+			attribute.String("task.name", t.task.Name),
+			attribute.String("server.name", t.serverName),
+			attribute.String("task.status", status),
+		)
+		taskExecutions.Add(ctx, 1, attrs)
+		if !t.startedAt.IsZero() {
+			taskDuration.Record(ctx, time.Since(t.startedAt).Seconds(), attrs)
+		}
 	}()
 
 	command, err := t.task.Command()
@@ -273,9 +325,35 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "TaskExec.Execute")
 	defer span.End()
 
+	if t.serverName == "" {
+		t.serverName = "localhost"
+	}
+
+	span.SetAttributes(
+		attribute.String("task.name", t.task.Name),
+		attribute.String("server.name", t.serverName),
+		attribute.Bool("task.sudo", t.task.Sudo),
+	)
+
 	if t.server == nil {
 		return t.LocalExecute(ctx)
 	}
+
+	defer func() {
+		status := "ok"
+		if t.exitCode != 0 {
+			status = "error"
+		}
+		attrs := metric.WithAttributes(
+			attribute.String("task.name", t.task.Name),
+			attribute.String("server.name", t.serverName),
+			attribute.String("task.status", status),
+		)
+		taskExecutions.Add(ctx, 1, attrs)
+		if !t.startedAt.IsZero() {
+			taskDuration.Record(ctx, time.Since(t.startedAt).Seconds(), attrs)
+		}
+	}()
 
 	t.logger.InfoContext(ctx, "running task")
 

@@ -16,10 +16,33 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/crypto/ssh"
 )
 
 var tracer = otel.Tracer("gorun")
+var meter = otel.Meter("gorun")
+
+// task metrics
+var (
+	taskExecutions, _ = meter.Int64Counter(
+		"gorun.task.executions",
+		metric.WithDescription("Number of task executions"),
+		metric.WithUnit("{execution}"),
+	)
+	taskDuration, _ = meter.Float64Histogram(
+		"gorun.task.duration",
+		metric.WithDescription("Task execution duration"),
+		metric.WithUnit("s"),
+	)
+	taskSkipped, _ = meter.Int64Counter(
+		"gorun.task.skipped",
+		metric.WithDescription("Number of tasks skipped due to a failed dependency"),
+		metric.WithUnit("{task}"),
+	)
+)
 
 // Config represents a config file.
 type Config struct {
@@ -313,6 +336,13 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		}
 
 		wg.Go(func() {
+			ctx, span := tracer.Start(ctx, "server.run")
+			defer span.End()
+			span.SetAttributes(
+				attribute.String("server.name", server.Name),
+				attribute.String("server.address", server.Hostname),
+			)
+
 			logger := NewLogger(server.LogLevel, logOutput, false)
 			logger = logger.With(
 				slog.Group(
@@ -331,6 +361,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				if err != nil {
 					// TODO: need to catch this in a error group
 					err = fmt.Errorf("error creating SSH connection: %w", err)
+					span.RecordError(err)
+					span.SetStatus(codes.Error, err.Error())
 					logger.Error("error with running tasks", slog.String("reason", err.Error()))
 					failed.Store(true)
 					c.emit(ServerErrorEvent{Server: server.Name, Err: err})
@@ -347,6 +379,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			tasks, err := NewTaskExec(sshClient, server.Tasks...)
 			if err != nil {
 				err = fmt.Errorf("error loading tasks: %w", err)
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				logger.Error("error with running tasks", slog.String("reason", err.Error()))
 				failed.Store(true)
 				c.emit(ServerErrorEvent{Server: server.Name, Err: err})
@@ -354,12 +388,17 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			}
 
 			for _, task := range tasks {
+				task.serverName = server.Name
 				tlogger := logger.With(slog.String("task", task.task.Name))
 
 				if parent != nil && parent.exitCode != 0 {
 					err = fmt.Errorf("dependent task (%s, exit code=%d) failed, aborting task (%s)", parent.task.Name, parent.exitCode, task.task.Name)
 					tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
 					c.emit(TaskEvent{Server: server.Name, Task: task.task.Name, State: TaskSkipped, Err: err})
+					taskSkipped.Add(ctx, 1, metric.WithAttributes(
+						attribute.String("task.name", task.task.Name),
+						attribute.String("server.name", server.Name),
+					))
 					continue
 				}
 

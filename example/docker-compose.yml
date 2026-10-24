@@ -117,6 +117,24 @@ services:
     ports:
       - 2230:2222
 
+  nats:
+    image: nats:2.10-alpine
+    container_name: gorun-nats
+    hostname: nats
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"   # client
+      - "8222:8222"   # monitoring
+      - "6222:6222"   # cluster
+    restart: unless-stopped
+    networks:
+      - gorun-network
+    volumes:
+      - nats-data:/data
+
+volumes:
+  nats-data:
+
 networks:
   gorun-network:
     driver: bridge

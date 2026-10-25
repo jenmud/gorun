@@ -12,11 +12,11 @@ test:
 
 build-otel:
 	# CTI - compile time instrumentation
-	go tool otelc go build -o builds/gorun-otel-CTI ./app/gorun && chmod +x builds/gorun-otel-CTI
+	go tool otelc go build -o builds/gorun-otel-CTI ./app/tui && chmod +x builds/gorun-otel-CTI
 
 
 build-go:
-	go build -o builds/gorun ./app/gorun && chmod +x builds/gorun
+	go build -o builds/gorun ./app/tui && chmod +x builds/gorun
 
 
 build: build-go build-otel

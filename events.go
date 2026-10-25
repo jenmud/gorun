@@ -2,6 +2,7 @@ package gorun
 
 import (
 	"gorun/internal/nats"
+	"log"
 	"sync"
 	"time"
 
@@ -21,10 +22,12 @@ func init() {
 		conn, err := nats.NewClient()
 		if err != nil {
 			// NATS is optional: keep running without a publisher.
+			log.Printf("gorun: NATS publisher disabled: %v", err)
 			return
 		}
 
 		publisher = conn
+		log.Printf("gorun: NATS publisher connected")
 	})
 }
 

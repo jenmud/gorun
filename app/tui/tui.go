@@ -189,8 +189,12 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
-			if !m.done {
+			if !m.done && !m.quitting {
 				m.cancel()
+				m.quitting = true
+				// Don't quit immediately: wait for cfg.Run to finish so that
+				// the ProcessFinishedEvent is published (and flushed) first.
+				return m, nil
 			}
 			m.quitting = true
 			return m, tea.Quit
@@ -249,8 +253,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.runErr = msg.Err
 		}
 		m.elapsed = time.Since(m.started)
-		// stay open in verbose mode so the output can be browsed
-		if !m.verbose {
+		// stay open in verbose mode so the output can be browsed, unless the
+		// run was cancelled, in which case quit now that it has finished
+		if m.quitting || !m.verbose {
 			m.quitting = true
 			return m, tea.Quit
 		}
@@ -579,8 +584,10 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 	p := tea.NewProgram(newTUIModel(cfg.Title, verbose, cancel), tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1")))
 	cfg.OnEvent = func(event any) { p.Send(event) }
 
+	done := make(chan error, 1)
 	go func() {
 		err := cfg.Run(ctx)
+		done <- err
 		p.Send(gorun.RunDoneEvent{GorunUUID: cfg.GorunUUID, Err: err})
 	}()
 

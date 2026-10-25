@@ -1,0 +1,23 @@
+package ui
+
+templ EventRow(e Event) {
+	<div class="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-sm">
+		<div class="flex items-center justify-between gap-2">
+			<span class="font-mono text-xs text-zinc-500">{ e.GorunUUID }</span>
+			<span class="rounded px-2 py-0.5 text-xs font-medium bg-zinc-800 text-zinc-200">{ e.Type }</span>
+		</div>
+		if e.Type == "process_started" {
+			<div class="mt-2 text-zinc-300">started on { e.Hostname } (pid { e.PID }) — { len(e.Servers) } server(s)</div>
+		} else if e.Type == "process_finished" {
+			<div class="mt-2 text-zinc-300">
+				finished: success={ e.Success } tasks={ e.TotalTasks } failed={ e.Failed } skipped={ e.Skipped }
+			</div>
+		} else if e.Type == "plan" {
+			<div class="mt-2 text-zinc-300">{ e.Server } ({ e.Address }): { len(e.Tasks) } task(s)</div>
+		} else if e.Type == "task" {
+			<div class="mt-2 text-zinc-300">{ e.Server } › { e.Task } — state { e.State } exit { e.ExitCode }</div>
+		} else if e.Type == "server_error" {
+			<div class="mt-2 text-red-400">{ e.Server }: error</div>
+		}
+	</div>
+}

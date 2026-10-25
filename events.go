@@ -44,6 +44,7 @@ const (
 
 // ProcessStartedEvent is published when a gorun process starts running.
 type ProcessStartedEvent struct {
+	Type      string    `json:"type"`
 	GorunUUID string    `json:"gorun_uuid"`
 	Title     string    `json:"title"`
 	Servers   []string  `json:"servers"`
@@ -54,6 +55,7 @@ type ProcessStartedEvent struct {
 
 // ProcessFinishedEvent is published when a gorun process finishes running.
 type ProcessFinishedEvent struct {
+	Type       string        `json:"type"`
 	GorunUUID  string        `json:"gorun_uuid"`
 	Success    bool          `json:"success"`
 	Duration   time.Duration `json:"duration"`
@@ -65,6 +67,7 @@ type ProcessFinishedEvent struct {
 
 // PlanEvent is sent once per server, before any task runs, with the tasks in execution order.
 type PlanEvent struct {
+	Type      string   `json:"type"`
 	GorunUUID string   `json:"gorun_uuid"`
 	Server    string   `json:"server"`
 	Address   string   `json:"address"`
@@ -73,6 +76,7 @@ type PlanEvent struct {
 
 // TaskEvent is sent when a task changes state.
 type TaskEvent struct {
+	Type      string        `json:"type"`
 	GorunUUID string        `json:"gorun_uuid"`
 	Server    string        `json:"server"`
 	Task      string        `json:"task"`
@@ -86,6 +90,7 @@ type TaskEvent struct {
 
 // ServerErrorEvent is sent when a server can't run its tasks at all (e.g. SSH connection failed).
 type ServerErrorEvent struct {
+	Type      string `json:"type"`
 	GorunUUID string `json:"gorun_uuid"`
 	Server    string `json:"server"`
 	Err       error  `json:"error"`
@@ -93,6 +98,7 @@ type ServerErrorEvent struct {
 
 // RunDoneEvent is sent when every server has finished.
 type RunDoneEvent struct {
+	Type      string `json:"type"`
 	GorunUUID string `json:"gorun_uuid"`
 	Err       error  `json:"error,omitempty"`
 }

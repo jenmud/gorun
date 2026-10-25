@@ -339,6 +339,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 	var failedCount, skippedCount atomic.Int64
 
 	c.emit(ProcessStartedEvent{
+		Type:      "process_started",
 		GorunUUID: c.GorunUUID,
 		Title:     c.Title,
 		Servers:   serverNames,
@@ -357,7 +358,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			tasks = append(tasks, task.Name)
 		}
 
-		c.emit(PlanEvent{GorunUUID: c.GorunUUID, Server: server.Name, Address: server.Address(), Tasks: tasks})
+		c.emit(PlanEvent{Type: "plan", GorunUUID: c.GorunUUID, Server: server.Name, Address: server.Address(), Tasks: tasks})
 	}
 
 	var failed atomic.Bool
@@ -409,7 +410,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 					logger.Error("error with running tasks", slog.String("reason", err.Error()))
 					failed.Store(true)
 					failedCount.Add(int64(len(server.Tasks)))
-					c.emit(ServerErrorEvent{GorunUUID: c.GorunUUID, Server: server.Name, Err: err})
+					c.emit(ServerErrorEvent{Type: "server_error", GorunUUID: c.GorunUUID, Server: server.Name, Err: err})
 					return
 				}
 
@@ -428,7 +429,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				logger.Error("error with running tasks", slog.String("reason", err.Error()))
 				failed.Store(true)
 				failedCount.Add(int64(len(server.Tasks)))
-				c.emit(ServerErrorEvent{GorunUUID: c.GorunUUID, Server: server.Name, Err: err})
+				c.emit(ServerErrorEvent{Type: "server_error", GorunUUID: c.GorunUUID, Server: server.Name, Err: err})
 				return
 			}
 
@@ -441,7 +442,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				if parent != nil && parent.exitCode != 0 {
 					err = fmt.Errorf("dependent task (%s, exit code=%d) failed, aborting task (%s)", parent.task.Name, parent.exitCode, task.task.Name)
 					tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
-					c.emit(TaskEvent{GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskSkipped, Err: err})
+					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskSkipped, Err: err})
 					skippedCount.Add(1)
 					taskSkipped.Add(ctx, 1, metric.WithAttributes(
 						attribute.String("task.name", task.task.Name),
@@ -452,10 +453,10 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 				parent = task
 
-				c.emit(TaskEvent{GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskRunning})
+				c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskRunning})
 				started := time.Now()
 
-				event := TaskEvent{GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskDone}
+				event := TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskDone}
 				if err := task.Execute(ctx); err != nil {
 					failed.Store(true)
 					failedCount.Add(1)
@@ -477,6 +478,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 	success := !failed.Load()
 
 	c.emit(ProcessFinishedEvent{
+		Type:       "process_finished",
 		GorunUUID:  c.GorunUUID,
 		Success:    success,
 		Duration:   time.Since(started),

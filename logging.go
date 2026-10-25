@@ -1,6 +1,7 @@
 package gorun
 
 import (
+	"gorun/internal/envvars"
 	"io"
 	"log/slog"
 	"os"
@@ -39,5 +40,10 @@ func NewLogger(level string, w io.Writer, json bool) *slog.Logger {
 	}
 
 	handler := slog.NewTextHandler(w, &slog.HandlerOptions{Level: l})
-	return slog.New(handler)
+	logger := slog.New(handler)
+	return logger.With(
+		"gorun",
+		slog.String("name", envvars.Get("GORUN_NAME")),
+		slog.Int("PID", os.Getpid()),
+	)
 }

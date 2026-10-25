@@ -94,7 +94,63 @@ make web
 make web-dev
 ```
 
-## SSH KeysRelative paths in the Gorunfile (`identityfile` and `cmd_file`) are resolved relative to the Gorunfile, not the current working directory.
+## Events (NATS)
+
+Gorun publishes lifecycle events to [NATS](https://nats.io) so external tools (the web UI,
+dashboards, other gorun instances) can observe runs. Events are published only when a NATS
+server is reachable; otherwise gorun runs normally and events are only delivered to the
+in-process `OnEvent` callback.
+
+### Connection
+
+Start the bundled NATS server (JetStream enabled):
+
+```bash
+make up   # or: docker compose -f example/docker-compose.yml up -d nats
+```
+
+Connection settings are read from environment variables (see `internal/nats`):
+
+| Variable | Default | Description |
+|---|---|---|
+| `GORUN_NATS_CLIENT_URL` | `nats://127.0.0.1:4222` | NATS server URL |
+| `GORUN_NATS_CLIENT_NAME` | `GORUN_NAME` (or `gorun`) | Client name |
+| `GORUN_NATS_CLIENT_ALLOW_RECONNECT` | `false` | Allow automatic reconnects |
+| `GORUN_NATS_CLIENT_RECONNECT_WAIT` | (nats default) | Reconnect wait duration (e.g. `2s`) |
+| `GORUN_NATS_CLIENT_TIMEOUT` | (nats default) | Connection timeout (e.g. `5s`) |
+
+### Topic
+
+Events are published to `gorun.events` by default. Override with:
+
+```bash
+GORUN_EVENT_TOPIC=gorun.events ./gorun ...
+```
+
+### Event types
+
+Every event is JSON and carries a `gorun_uuid` so events from concurrent gorun processes
+can be correlated. Published events:
+
+- `ProcessStartedEvent` — process started: `gorun_uuid`, `title`, `servers`, `started_at`, `hostname`, `pid`.
+- `ProcessFinishedEvent` — process finished: `gorun_uuid`, `success`, `duration`, `total_tasks`, `failed`, `skipped`, `finished_at`.
+- `PlanEvent` — per-server plan: `gorun_uuid`, `server`, `address`, `tasks`.
+- `TaskEvent` — task state change: `gorun_uuid`, `server`, `task`, `state`, `stdout`, `stderr`, `exit_code`, `error`, `duration`.
+- `ServerErrorEvent` — server could not run tasks: `gorun_uuid`, `server`, `error`.
+- `RunDoneEvent` — run completed: `gorun_uuid`, `error`.
+
+### Notes
+
+- Publishing is synchronous and flushed before `Run` returns, so events are delivered even
+  for short-lived runs.
+- If NATS is unavailable, `publisher` is `nil` and events are only delivered via `OnEvent`
+  (the TUI); gorun itself keeps running.
+- `GORUN_NAME` (default `gorun`) is used as the OTEL service name and as a fallback
+  client name.
+
+## SSH Keys
+
+Relative paths in the Gorunfile (`identityfile` and `cmd_file`) are resolved relative to the Gorunfile, not the current working directory.
 
 ## Configuration
 

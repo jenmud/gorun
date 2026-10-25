@@ -1,13 +1,10 @@
 log_level = "debug"
 
-[tasks.date]
-cmd = "date"
-
-[tasks.list-dir]
-cmd = "ls -la"
+[tasks.install-nats]
+cmd_file = "./scripts/install-nats-cli.sh"
 
 [servers]
-tasks = ["date", "list-dir"]
+tasks = ["install-nats"]
 
 # no hostname or ssh: tasks run on this machine
 [servers.hosts.local-machine]

@@ -581,7 +581,7 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 
 	go func() {
 		err := cfg.Run(ctx)
-		p.Send(gorun.RunDoneEvent{Err: err})
+		p.Send(gorun.RunDoneEvent{GorunUUID: cfg.GorunUUID, Err: err})
 	}()
 
 	final, err := p.Run()

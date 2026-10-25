@@ -71,6 +71,7 @@ type TaskExec struct {
 	logger      *slog.Logger
 	server      *ssh.Client
 	serverName  string
+	gorunUUID   string
 	createdAt   time.Time
 	startedAt   time.Time
 	completedAt time.Time

@@ -39,32 +39,57 @@ const (
 	TaskSkipped
 )
 
+// ProcessStartedEvent is published when a gorun process starts running.
+type ProcessStartedEvent struct {
+	GorunUUID string    `json:"gorun_uuid"`
+	Title     string    `json:"title"`
+	Servers   []string  `json:"servers"`
+	StartedAt time.Time `json:"started_at"`
+	Hostname  string    `json:"hostname"`
+	PID       int       `json:"pid"`
+}
+
+// ProcessFinishedEvent is published when a gorun process finishes running.
+type ProcessFinishedEvent struct {
+	GorunUUID  string        `json:"gorun_uuid"`
+	Success    bool          `json:"success"`
+	Duration   time.Duration `json:"duration"`
+	TotalTasks int           `json:"total_tasks"`
+	Failed     int           `json:"failed"`
+	Skipped    int           `json:"skipped"`
+	FinishedAt time.Time     `json:"finished_at"`
+}
+
 // PlanEvent is sent once per server, before any task runs, with the tasks in execution order.
 type PlanEvent struct {
-	Server  string
-	Address string
-	Tasks   []string
+	GorunUUID string   `json:"gorun_uuid"`
+	Server    string   `json:"server"`
+	Address   string   `json:"address"`
+	Tasks     []string `json:"tasks"`
 }
 
 // TaskEvent is sent when a task changes state.
 type TaskEvent struct {
-	Server   string
-	Task     string
-	State    TaskState
-	Stdout   string
-	Stderr   string
-	ExitCode int
-	Err      error
-	Duration time.Duration
+	GorunUUID string        `json:"gorun_uuid"`
+	Server    string        `json:"server"`
+	Task      string        `json:"task"`
+	State     TaskState     `json:"state"`
+	Stdout    string        `json:"stdout,omitempty"`
+	Stderr    string        `json:"stderr,omitempty"`
+	ExitCode  int           `json:"exit_code"`
+	Err       error         `json:"error,omitempty"`
+	Duration  time.Duration `json:"duration"`
 }
 
 // ServerErrorEvent is sent when a server can't run its tasks at all (e.g. SSH connection failed).
 type ServerErrorEvent struct {
-	Server string
-	Err    error
+	GorunUUID string `json:"gorun_uuid"`
+	Server    string `json:"server"`
+	Err       error  `json:"error"`
 }
 
 // RunDoneEvent is sent when every server has finished.
 type RunDoneEvent struct {
-	Err error
+	GorunUUID string `json:"gorun_uuid"`
+	Err       error  `json:"error,omitempty"`
 }

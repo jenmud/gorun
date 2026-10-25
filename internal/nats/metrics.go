@@ -6,8 +6,8 @@ import (
 )
 
 var (
-	tracer         = otel.Tracer("gorun/nats")
-	meter          = otel.Meter("gorun")
+	tracer                  = otel.Tracer("gorun/nats")
+	meter                   = otel.Meter("gorun")
 	subscriptionDuration, _ = meter.Float64Histogram("gorun.nats.subscription.duration",
 		metric.WithDescription("NATS subscription duration"),
 		metric.WithUnit("s"),

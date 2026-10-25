@@ -13,6 +13,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"gorun/app/web/ui"
 	"gorun/internal/envvars"
+	"gorun/internal/store"
 )
 
 type hub struct {
@@ -77,6 +78,19 @@ func (h *hub) broadcast(html string) {
 
 func main() {
 	h := newHub()
+
+	dbPath := envvars.Get("GORUN_DB_PATH")
+	if dbPath == "" {
+		dbPath = "gorun.db"
+	}
+	st, err := store.Open(dbPath)
+	if err != nil {
+		log.Printf("gorun web: store disabled: %v", err)
+		st = nil
+	} else {
+		defer func() { _ = st.Close() }()
+		log.Printf("gorun web: store opened at %s", dbPath)
+	}
 
 	url := envvars.Get("GORUN_NATS_CLIENT_URL")
 	if url == "" {
@@ -172,6 +186,38 @@ func main() {
 			case <-r.Context().Done():
 				return
 			}
+		}
+	})
+
+	mux.HandleFunc("/runs", func(w http.ResponseWriter, r *http.Request) {
+		if st == nil {
+			http.Error(w, "store disabled", http.StatusServiceUnavailable)
+			return
+		}
+		runs, err := st.ListRuns(r.Context())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := ui.RunsList(runs).Render(r.Context(), w); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	})
+	mux.HandleFunc("/runs/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if st == nil {
+			http.Error(w, "store disabled", http.StatusServiceUnavailable)
+			return
+		}
+		id := r.PathValue("id")
+		run, err := st.GetRun(r.Context(), id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if err := ui.RunDetail(*run).Render(r.Context(), w); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	})
 

@@ -46,10 +46,10 @@ type Vector struct {
 // Gravity is a utility vector that represents gravity in 2D and 3D contexts,
 // assuming that your coordinate plane looks like in 2D or 3D:
 //
-//	y             y ±z
-//	│             │ /
-//	│             │/
-//	└───── ±x     └───── ±x
+//   y             y ±z
+//   │             │ /
+//   │             │/
+//   └───── ±x     └───── ±x
 //
 // (i.e. origin is located in the bottom-left corner)
 var Gravity = Vector{0, -9.81, 0}

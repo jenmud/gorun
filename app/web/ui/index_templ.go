@@ -41,7 +41,7 @@ func Index() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"min-h-screen bg-zinc-950 text-zinc-100\"><div class=\"border-b border-zinc-800 bg-zinc-900/80 px-6 py-3 backdrop-blur\"><div class=\"mx-auto flex max-w-5xl items-center gap-3\"><span class=\"rounded bg-accent px-2 py-0.5 text-sm font-bold text-white\">gorun</span> <span class=\"text-sm text-zinc-400\">live dashboard</span></div></div><main class=\"mx-auto max-w-5xl px-6 py-6\"><div id=\"dashboard\" data-signals=\"{expanded:{}}\" data-init=\"@get('/events')\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"min-h-screen bg-zinc-950 text-zinc-100\"><div class=\"border-b border-zinc-800 bg-zinc-900/80 px-6 py-3 backdrop-blur\"><div class=\"mx-auto flex max-w-5xl items-center gap-3\"><span class=\"rounded bg-accent px-2 py-0.5 text-sm font-bold text-white\">gorun</span> <span class=\"text-sm text-zinc-400\">live dashboard</span> <a href=\"/runs\" class=\"ml-auto text-sm text-zinc-400 hover:text-zinc-200\">history</a></div></div><main class=\"mx-auto max-w-5xl px-6 py-6\"><div id=\"dashboard\" data-signals=\"{expanded:{}}\" data-init=\"@get('/events')\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

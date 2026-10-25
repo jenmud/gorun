@@ -24,7 +24,6 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"gorun/internal/envvars"
-	"gorun/internal/store"
 )
 
 func init() {
@@ -308,17 +307,6 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 	started := time.Now()
 
-	// optional persistence
-	dbPath := envvars.Get("GORUN_DB_PATH")
-	if dbPath == "" {
-		dbPath = "gorun.db"
-	}
-	st, _ := store.Open(dbPath)
-	if st != nil {
-		defer func() { _ = st.Close() }()
-		_ = st.CreateRun(ctx, c.GorunUUID, c.Title, hostname, os.Getpid(), started)
-	}
-
 	var wg sync.WaitGroup
 
 	pipeline := make(map[string]Server)
@@ -368,10 +356,6 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		tasks := []string{}
 		for _, task := range server.Tasks {
 			tasks = append(tasks, task.Name)
-		}
-
-		if st != nil {
-			_ = st.AddServer(ctx, c.GorunUUID, server.Name, server.Address())
 		}
 
 		c.emit(PlanEvent{Type: "plan", GorunUUID: c.GorunUUID, Server: server.Name, Address: server.Address(), Tasks: tasks})
@@ -458,11 +442,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				if parent != nil && parent.exitCode != 0 {
 					err = fmt.Errorf("dependent task (%s, exit code=%d) failed, aborting task (%s)", parent.task.Name, parent.exitCode, task.task.Name)
 					tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
-					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskSkipped, Err: err})
+					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskSkipped, Stderr: err.Error(), Err: err})
 					skippedCount.Add(1)
-					if st != nil {
-						_ = st.UpsertTask(ctx, c.GorunUUID, server.Name, task.task.Name, int(TaskSkipped), "", err.Error(), 0, 0)
-					}
 					taskSkipped.Add(ctx, 1, metric.WithAttributes(
 						attribute.String("task.name", task.task.Name),
 						attribute.String("server.name", server.Name),
@@ -487,9 +468,6 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				event.Stderr = string(task.stderr)
 				event.ExitCode = task.exitCode
 				event.Duration = time.Since(started)
-				if st != nil {
-					_ = st.UpsertTask(ctx, c.GorunUUID, server.Name, task.task.Name, int(event.State), string(task.stdout), string(task.stderr), task.exitCode, event.Duration)
-				}
 				c.emit(event)
 			}
 		})
@@ -498,10 +476,6 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 	wg.Wait()
 
 	success := !failed.Load()
-
-	if st != nil {
-		_ = st.FinishRun(ctx, c.GorunUUID, success, totalTasks, int(failedCount.Load()), int(skippedCount.Load()), time.Since(started), time.Now())
-	}
 
 	c.emit(ProcessFinishedEvent{
 		Type:       "process_finished",

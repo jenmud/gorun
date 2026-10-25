@@ -41,4 +41,4 @@ Gorun-local-only
 
 # nats cli binary installed by example/scripts/install-nats-cli.sh
 example/nats
-nats
+/nats

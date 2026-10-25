@@ -112,7 +112,9 @@ The dashboard mirrors the TUI. Each running gorun process is a collapsible card:
 
 ## Database Store
 
-Gorun stores historical run data in SQLite for persistence and analysis. By default, runs are saved to `gorun.db` in the current directory.
+Historical run data is stored in SQLite by the web app, which listens for NATS
+events published by gorun instances (possibly running on different machines). By
+default, runs are saved to `gorun.db` in the current directory.
 
 ### Configuration
 
@@ -122,7 +124,7 @@ Set `GORUN_DB_PATH` in your `.env` file (or environment) to specify the database
 GORUN_DB_PATH=/path/to/your/runs.db
 ```
 
-When enabled, gorun automatically:
+When the web app is running, it automatically:
 - Creates a run record with UUID, title, hostname, and PID
 - Records each server's name and SSH address
 - Stores every task execution (stdout, stderr, exit code, duration)

@@ -15,16 +15,16 @@ Gorun is a tool for running tasks on multiple servers with an interactive TUI.
 
 ```bash
 # Run all tasks on all servers
-go run ./app/gorun example/Gorunfile
+go run ./app/tui example/Gorunfile
 
 # Run tasks with interactive server selection
-go run ./app/gorun example/Gorunfile --select
+go run ./app/tui example/Gorunfile --select
 
 # Run tasks with verbose output
-go run ./app/gorun example/Gorunfile -v
+go run ./app/tui example/Gorunfile -v
 
 # Run tasks with verbose output and interactive server selection
-go run ./app/gorun example/Gorunfile --select -v
+go run ./app/tui example/Gorunfile --select -v
 ```
 
 Verbose mode (`-v`, or press `v` while running) lists every task per server:
@@ -65,7 +65,7 @@ list by server name (falling back to hostname): `wp2` finds `web-prod-2`, and `e
 
 ## Using gorun as a library
 
-The command-line tool and TUI live under `app/gorun`. The rest of the repository is the
+The command-line tool and TUI live under `app/tui`. The rest of the repository is the
 `gorun` package, which you can import to drive deployments from your own code:
 
 ```go

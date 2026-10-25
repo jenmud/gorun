@@ -30,7 +30,7 @@ func main() {
 	// the flag package stops at the first positional argument, so parse again
 	// to allow flags after the filename, e.g. `gorun Gorunfile --select -v`
 	if flag.NArg() > 1 {
-		flag.CommandLine.Parse(flag.Args()[1:])
+		_ = flag.CommandLine.Parse(flag.Args()[1:])
 	}
 
 	useTUI := !*plain && term.IsTerminal(int(os.Stdout.Fd()))

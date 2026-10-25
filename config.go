@@ -2,6 +2,7 @@ package gorun
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -30,9 +31,9 @@ func init() {
 	// not explicitly provided, so traces/metrics are attributed correctly.
 	if _, ok := os.LookupEnv("OTEL_SERVICE_NAME"); !ok {
 		if name := envvars.Get("GORUN_NAME"); name != "" {
-			os.Setenv("OTEL_SERVICE_NAME", name)
+			_ = os.Setenv("OTEL_SERVICE_NAME", name)
 		} else {
-			os.Setenv("OTEL_SERVICE_NAME", "gorun")
+			_ = os.Setenv("OTEL_SERVICE_NAME", "gorun")
 		}
 	}
 }
@@ -385,7 +386,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				}
 
 				logger.Debug("connected to server via SSH")
-				defer client.Close()
+				defer func() { _ = client.Close() }()
 				sshClient = client
 			}
 
@@ -447,9 +448,16 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 	return nil
 }
 
-// emit sends an event to the OnEvent callback, if one is set.
+// emit sends an event to the OnEvent callback, if one is set, and publishes it
+// to NATS when a publisher is available.
 func (c *Config) emit(event any) {
 	if c.OnEvent != nil {
 		c.OnEvent(event)
+	}
+
+	if publisher != nil {
+		if data, err := json.Marshal(event); err == nil {
+			_ = publisher.Publish("gorun.events", data)
+		}
 	}
 }

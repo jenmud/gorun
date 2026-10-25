@@ -20,7 +20,8 @@ func init() {
 
 		conn, err := nats.NewClient()
 		if err != nil {
-			panic(err)
+			// NATS is optional: keep running without a publisher.
+			return
 		}
 
 		publisher = conn

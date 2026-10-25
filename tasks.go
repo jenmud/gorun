@@ -376,7 +376,7 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		return err
 	}
 
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	wg.Go(func() {
 		var stdout bytes.Buffer
@@ -391,7 +391,7 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		session.Stderr = &stderr
 
 		for key, value := range t.task.EnvVars {
-			session.Setenv(strings.ToUpper(key), value)
+			_ = session.Setenv(strings.ToUpper(key), value)
 		}
 
 		t.startedAt = time.Now()
@@ -422,7 +422,7 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 		err := ctx.Err()
-		session.Signal(ssh.SIGTERM)
+		_ = session.Signal(ssh.SIGTERM)
 		return t.Terminate(ctx, err)
 	case err := <-errChan:
 		return t.Fail(ctx, err)

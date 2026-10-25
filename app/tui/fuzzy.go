@@ -29,7 +29,7 @@ func fuzzyMatch(pattern, text string) (score int, positions []int, ok bool) {
 
 	// forward pass: find the earliest index where the whole pattern has matched
 	pi, end := 0, -1
-	for ti := 0; ti < len(t); ti++ {
+	for ti := range t {
 		if fold(t[ti]) == fold(p[pi]) {
 			pi++
 			if pi == len(p) {

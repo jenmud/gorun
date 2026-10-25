@@ -21,7 +21,9 @@ func NewClient() (*nats.Conn, error) {
 	}
 
 	options.Name = name
-	options.AllowReconnect = envvars.Bool("GORUN_NATS_CLIENT_ALLOW_RECONNECT")
+	if v := envvars.Get("GORUN_NATS_CLIENT_ALLOW_RECONNECT"); v != "" {
+		options.AllowReconnect = envvars.Bool("GORUN_NATS_CLIENT_ALLOW_RECONNECT")
+	}
 
 	url := envvars.Get("GORUN_NATS_CLIENT_URL")
 	if url == "" {

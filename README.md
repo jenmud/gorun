@@ -115,7 +115,7 @@ Connection settings are read from environment variables (see `internal/nats`):
 |---|---|---|
 | `GORUN_NATS_CLIENT_URL` | `nats://127.0.0.1:4222` | NATS server URL |
 | `GORUN_NATS_CLIENT_NAME` | `GORUN_NAME` (or `gorun`) | Client name |
-| `GORUN_NATS_CLIENT_ALLOW_RECONNECT` | `false` | Allow automatic reconnects |
+| `GORUN_NATS_CLIENT_ALLOW_RECONNECT` | `true` (nats default) | Allow automatic reconnects |
 | `GORUN_NATS_CLIENT_RECONNECT_WAIT` | (nats default) | Reconnect wait duration (e.g. `2s`) |
 | `GORUN_NATS_CLIENT_TIMEOUT` | (nats default) | Connection timeout (e.g. `5s`) |
 

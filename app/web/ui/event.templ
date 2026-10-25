@@ -1,23 +1,61 @@
 package ui
 
 templ EventRow(e Event) {
-	<div class="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 text-sm">
-		<div class="flex items-center justify-between gap-2">
-			<span class="font-mono text-xs text-zinc-500">{ e.GorunUUID }</span>
-			<span class="rounded px-2 py-0.5 text-xs font-medium bg-zinc-800 text-zinc-200">{ e.Type }</span>
-		</div>
+	<div class="font-mono text-sm">
 		if e.Type == "process_started" {
-			<div class="mt-2 text-zinc-300">started on { e.Hostname } (pid { e.PID }) — { len(e.Servers) } server(s)</div>
+			<div class="mb-2 flex items-center gap-2">
+				<span class="rounded bg-accent px-2 py-0.5 text-xs font-bold text-white">gorun</span>
+				<span class="text-zinc-300">{ e.Title }</span>
+				<span class="text-xs text-zinc-500">pid { e.PID }</span>
+			</div>
 		} else if e.Type == "process_finished" {
-			<div class="mt-2 text-zinc-300">
-				finished: success={ e.Success } tasks={ e.TotalTasks } failed={ e.Failed } skipped={ e.Skipped }
+			<div class="mt-2 border-t border-zinc-800 pt-2">
+				if e.Success {
+					<span class="text-green-400">✓ all tasks completed</span>
+				} else {
+					<span class="text-red-400">✗ { e.Failed } of { e.TotalTasks } tasks failed</span>
+					if e.Skipped > 0 {
+						<span class="text-amber-400">, { e.Skipped } skipped</span>
+					}
+				}
+				<span class="text-zinc-500"> in { (e.Duration / 1000000000) }s</span>
 			</div>
 		} else if e.Type == "plan" {
-			<div class="mt-2 text-zinc-300">{ e.Server } ({ e.Address }): { len(e.Tasks) } task(s)</div>
+			<div class="mt-3">
+				<div class="flex items-baseline gap-2">
+					<span class="font-bold text-zinc-100">{ e.Server }</span>
+					<span class="text-xs text-zinc-500">{ e.Address }</span>
+				</div>
+			</div>
 		} else if e.Type == "task" {
-			<div class="mt-2 text-zinc-300">{ e.Server } › { e.Task } — state { e.State } exit { e.ExitCode }</div>
+			<div class="flex items-center gap-2 pl-2">
+				if e.State == 0 {
+					<span class="text-zinc-500">○</span>
+				} else if e.State == 1 {
+					<span class="animate-pulse text-accent">●</span>
+				} else if e.State == 2 {
+					<span class="text-green-400">✓</span>
+				} else if e.State == 3 {
+					<span class="font-bold text-red-400">✗</span>
+				} else if e.State == 4 {
+					<span class="text-amber-400">⊘</span>
+				} else {
+					<span class="text-zinc-500">?</span>
+				}
+				<span class="w-40 truncate text-zinc-200">{ e.Task }</span>
+				if e.State == 3 {
+					<span class="text-red-400">exit { e.ExitCode }</span>
+				} else if e.State == 2 {
+					<span class="text-zinc-500">{ (e.Duration / 1000000000) }s</span>
+				} else if e.State == 4 {
+					<span class="text-amber-400">skipped</span>
+				}
+			</div>
+			if e.State == 3 && e.Stderr != "" {
+				<div class="ml-6 mt-1 rounded border border-red-900/50 bg-red-950/30 p-2 text-xs text-red-300">{ e.Stderr }</div>
+			}
 		} else if e.Type == "server_error" {
-			<div class="mt-2 text-red-400">{ e.Server }: error</div>
+			<div class="mt-2 text-red-400">✗ { e.Server } could not run tasks</div>
 		}
 	</div>
 }

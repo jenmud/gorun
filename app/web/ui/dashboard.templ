@@ -1,0 +1,110 @@
+package ui
+
+templ Dashboard(s DashboardState) {
+	<div class="space-y-3">
+		if hasFinished(s) {
+			<div class="flex justify-end">
+				<button
+					data-on:click="@post('/clear')"
+					class="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-700"
+				>
+					Clear finished
+				</button>
+			</div>
+		}
+		for _, uuid := range s.ProcessOrder {
+			{{ p := s.Processes[uuid] }}
+			{{ total := processTotal(p) }}
+			{{ done := processDone(p) }}
+			<div class="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+				<div
+					class="flex cursor-pointer select-none items-center justify-between gap-3 p-4"
+					data-on:click={ "$expanded['" + uuid + "'] = !$expanded['" + uuid + "']" }
+				>
+					<div class="flex items-center gap-2">
+						<span class="rounded bg-accent px-2 py-0.5 text-xs font-bold text-white">gorun</span>
+						<span class="text-zinc-300">{ p.Title }</span>
+						<span class="font-mono text-xs text-zinc-500">{ uuid }</span>
+					</div>
+					<div class="flex items-center gap-3 text-xs">
+						if !p.Finished {
+							<span class="text-zinc-400">{ done }/{ total }</span>
+							if processHasFailed(p) {
+								<span class="font-bold text-red-400">✗ running</span>
+							} else {
+								<span class="text-accent">● running</span>
+							}
+						} else {
+							if p.Success {
+								<span class="text-green-400">✓ all { p.TotalTasks } done</span>
+							} else {
+								<span class="text-red-400">✗ { p.Failed } of { p.TotalTasks } failed</span>
+								if p.Skipped > 0 {
+									<span class="text-amber-400">, { p.Skipped } skipped</span>
+								}
+							}
+							<span class="text-zinc-500"> { (p.Duration / 1000000000) }s</span>
+						}
+						<span class="text-zinc-600" data-text={ "$expanded['" + uuid + "'] ? '▾' : '▸'" }></span>
+					</div>
+					<div class="mt-2 h-1.5 w-full overflow-hidden rounded bg-zinc-800">
+						if processHasFailed(p) {
+							<div class="h-1.5 rounded bg-red-500" style={ "width: " + itoa(processProgress(p)) + "%" }></div>
+						} else {
+							<div class="h-1.5 rounded bg-accent" style={ "width: " + itoa(processProgress(p)) + "%" }></div>
+						}
+					</div>
+				</div>
+
+				<!-- verbose detail, collapsed by default -->
+				<div class="space-y-3 border-t border-zinc-800 p-4" data-show={ "$expanded['" + uuid + "']" }>
+					for _, sname := range p.ServerOrder {
+						{{ srv := p.Servers[sname] }}
+						<div class="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+							<div class="mb-1 flex items-baseline gap-2">
+								<span class="font-bold text-zinc-100">{ srv.Name }</span>
+								<span class="text-xs text-zinc-500">{ srv.Address }</span>
+							</div>
+							<div class="mb-2 h-1 w-full overflow-hidden rounded bg-zinc-800">
+								if serverHasFailed(srv) {
+									<div class="h-1 rounded bg-red-500" style={ "width: " + itoa(serverProgress(srv)) + "%" }></div>
+								} else {
+									<div class="h-1 rounded bg-accent" style={ "width: " + itoa(serverProgress(srv)) + "%" }></div>
+								}
+							</div>
+							<div class="space-y-0.5 pl-2">
+								for _, tname := range srv.Order {
+									{{ t := srv.Tasks[tname] }}
+									<div class="flex items-center gap-2 text-sm">
+										if t.State == 0 {
+											<span class="text-zinc-500">○</span>
+										} else if t.State == 1 {
+											<span class="animate-pulse text-accent">●</span>
+										} else if t.State == 2 {
+											<span class="text-green-400">✓</span>
+										} else if t.State == 3 {
+											<span class="font-bold text-red-400">✗</span>
+										} else if t.State == 4 {
+											<span class="text-amber-400">⊘</span>
+										}
+										<span class="w-40 truncate text-zinc-200">{ t.Name }</span>
+										if t.State == 2 {
+											<span class="text-zinc-500">{ (t.Duration / 1000000000) }s</span>
+										} else if t.State == 3 {
+											<span class="text-red-400">exit { t.ExitCode }</span>
+										} else if t.State == 4 {
+											<span class="text-amber-400">skipped</span>
+										}
+									</div>
+									if t.State == 3 && t.Stderr != "" {
+										<div class="ml-6 mt-1 rounded border border-red-900/50 bg-red-950/30 p-2 text-xs text-red-300 whitespace-pre-wrap">{ t.Stderr }</div>
+									}
+								}
+							</div>
+						</div>
+					}
+				</div>
+			</div>
+		}
+	</div>
+}

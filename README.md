@@ -81,7 +81,8 @@ cfg := gorun.Config{}
 ## Web UI
 
 A web frontend lives under `app/web` and is built with [a-h/templ](https://templ.guide),
-[Datastar](https://data-star.dev) and Tailwind CSS (via CDN).
+[Datastar](https://data-star.dev) and Tailwind CSS (via CDN). It subscribes to the
+`gorun.events` NATS topic and renders a realtime dashboard grouped by `gorun_uuid`.
 
 ```bash
 # generate templ code
@@ -93,6 +94,21 @@ make web
 # develop with live reload (templ watch + proxy)
 make web-dev
 ```
+
+### Dashboard
+
+The dashboard mirrors the TUI. Each running gorun process is a collapsible card:
+
+![gorun web dashboard showing a failed run](docs/screenshot-dashboard.png)
+
+- Collapsed: process badge, title, `gorun_uuid`, `done/total`, status, and a progress bar.
+  Failed runs show their failure box (compact TUI view).
+- Click a card to expand the verbose detail (per-server progress and task rows):
+
+![gorun web dashboard expanded with verbose task detail](docs/screenshot-dashboard-verbose.png)
+
+- Successful runs are removed automatically; use **Clear finished** to drop failed runs.
+- Multiple concurrent gorun processes each get their own group.
 
 ## Events (NATS)
 

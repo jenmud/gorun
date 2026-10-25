@@ -10,6 +10,8 @@ require (
 	github.com/a-h/templ v0.3.1070
 	github.com/google/go-cmp v0.7.0
 	github.com/joho/godotenv v1.5.1
+	github.com/nats-io/nats.go v1.55.0
+	go.opentelemetry.io/otel/metric v1.44.0
 	golang.org/x/term v0.47.0
 )
 
@@ -30,13 +32,11 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-runewidth v0.0.30 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/nats-io/nats.go v1.55.0 // indirect
 	github.com/nats-io/nkeys v0.4.16 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v1.0.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/otel/metric v1.44.0 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 )
 

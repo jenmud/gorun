@@ -1,26 +1,31 @@
 package gorun
 
 import (
-	// "sync"
+	"gorun/internal/nats"
+	"sync"
 	"time"
 
 	_ "github.com/joho/godotenv/autoload"
-	// "github.com/nats-io/nats.go"
+	natsCore "github.com/nats-io/nats.go"
 )
 
-// var mux sync.Mutex
-// var once sync.Once
-// var publisher *nats.Conn
-//
-// func init() {
-// 	once.Do(func() {
-// 		mux.Lock()
-// 		defer mux.Unlock()
-//
-// 		options := nats.GetDefaultOptions()
-// 		options.US
-// 	})
-// }
+var mux sync.Mutex
+var once sync.Once
+var publisher *natsCore.Conn
+
+func init() {
+	once.Do(func() {
+		mux.Lock()
+		defer mux.Unlock()
+
+		conn, err := nats.NewClient()
+		if err != nil {
+			panic(err)
+		}
+
+		publisher = conn
+	})
+}
 
 // TaskState is the lifecycle state of a task on a server.
 type TaskState int

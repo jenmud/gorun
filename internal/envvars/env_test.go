@@ -45,6 +45,7 @@ func TestBool(t *testing.T) {
 		{name: "yes", value: "yes", expected: true},
 		{name: "TRUE", value: "TRUE", expected: true},
 		{name: "Yes", value: "Yes", expected: true},
+		{name: "on", value: "on", expected: true},
 		{name: "0", value: "0", expected: false},
 		{name: "false", value: "false", expected: false},
 		{name: "no", value: "no", expected: false},

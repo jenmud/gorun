@@ -110,7 +110,39 @@ The dashboard mirrors the TUI. Each running gorun process is a collapsible card:
 - Successful runs are removed automatically; use **Clear finished** to drop failed runs.
 - Multiple concurrent gorun processes each get their own group.
 
-## Events (NATS)
+## Database Store
+
+Gorun stores historical run data in SQLite for persistence and analysis. By default, runs are saved to `gorun.db` in the current directory.
+
+### Configuration
+
+Set `GORUN_DB_PATH` in your `.env` file (or environment) to specify the database location:
+
+```bash
+GORUN_DB_PATH=/path/to/your/runs.db
+```
+
+When enabled, gorun automatically:
+- Creates a run record with UUID, title, hostname, and PID
+- Records each server's name and SSH address
+- Stores every task execution (stdout, stderr, exit code, duration)
+- Marks runs as successful or failed
+
+### Viewing Historical Runs
+
+The web UI provides a dashboard to browse past runs. Start it separately:
+
+```bash
+go run ./app/web
+```
+
+Then open http://localhost:8080/runs to see all historical runs, including:
+- Run summary (title, hostname, duration, success/failure)
+- Task details per server (commands, output, exit codes)
+
+The `/runs` endpoint queries the database directly; if the store is unavailable, it returns a 503 error.
+
+### Events (NATS)
 
 Gorun publishes lifecycle events to [NATS](https://nats.io) so external tools (the web UI,
 dashboards, other gorun instances) can observe runs. Events are published only when a NATS

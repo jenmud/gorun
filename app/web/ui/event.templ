@@ -18,7 +18,7 @@ templ EventRow(e Event) {
 						<span class="text-amber-400">, { e.Skipped } skipped</span>
 					}
 				}
-				<span class="text-zinc-500"> in { (e.Duration / 1000000000) }s</span>
+				<span class="text-zinc-500"> in { int(e.Duration / 1000000000) }s</span>
 			</div>
 		} else if e.Type == "plan" {
 			<div class="mt-3">
@@ -46,7 +46,7 @@ templ EventRow(e Event) {
 				if e.State == 3 {
 					<span class="text-red-400">exit { e.ExitCode }</span>
 				} else if e.State == 2 {
-					<span class="text-zinc-500">{ (e.Duration / 1000000000) }s</span>
+					<span class="text-zinc-500">{ int(e.Duration / 1000000000) }s</span>
 				} else if e.State == 4 {
 					<span class="text-amber-400">skipped</span>
 				}

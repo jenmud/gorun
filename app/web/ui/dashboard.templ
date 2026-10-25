@@ -43,7 +43,7 @@ templ Dashboard(s DashboardState) {
 									<span class="text-amber-400">, { p.Skipped } skipped</span>
 								}
 							}
-							<span class="text-zinc-500"> { (p.Duration / 1000000000) }s</span>
+							<span class="text-zinc-500"> { int(p.Duration / 1000000000) }s</span>
 						}
 						<span class="text-zinc-600" data-text={ "$expanded['" + uuid + "'] ? '▾' : '▸'" }></span>
 					</div>
@@ -89,7 +89,7 @@ templ Dashboard(s DashboardState) {
 										}
 										<span class="w-40 truncate text-zinc-200">{ t.Name }</span>
 										if t.State == 2 {
-											<span class="text-zinc-500">{ (t.Duration / 1000000000) }s</span>
+											<span class="text-zinc-500">{ int(t.Duration / 1000000000) }s</span>
 										} else if t.State == 3 {
 											<span class="text-red-400">exit { t.ExitCode }</span>
 										} else if t.State == 4 {

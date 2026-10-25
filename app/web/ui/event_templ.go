@@ -130,9 +130,9 @@ func EventRow(e Event) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var7 string
-			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs((e.Duration / 1000000000))
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(int(e.Duration / 1000000000))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/web/ui/event.templ`, Line: 21, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/web/ui/event.templ`, Line: 21, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -250,9 +250,9 @@ func EventRow(e Event) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var12 string
-				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs((e.Duration / 1000000000))
+				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(int(e.Duration / 1000000000))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/web/ui/event.templ`, Line: 49, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/web/ui/event.templ`, Line: 49, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 				if templ_7745c5c3_Err != nil {

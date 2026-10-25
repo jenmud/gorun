@@ -62,10 +62,11 @@ var (
 
 // Config represents a config file.
 type Config struct {
-	Title    string            `toml:"title"`
-	LogLevel string            `toml:"log_level"`
-	EnvVars  map[string]string `toml:"envvars"`
-	SSH      SSH               `toml:"ssh"`
+	Title     string            `toml:"title"`
+	GorunUUID string            `toml:"-"`
+	LogLevel  string            `toml:"log_level"`
+	EnvVars   map[string]string `toml:"envvars"`
+	SSH       SSH               `toml:"ssh"`
 
 	// Tasks is the task library, keyed by task name. Servers pick tasks from it by name.
 	Tasks map[string]Task `toml:"tasks"`
@@ -299,6 +300,13 @@ func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
 
 // Run runs all the tasks as returned by `Pipeline` on one or more servers.
 func (c *Config) Run(ctx context.Context, server ...Server) error {
+	if c.GorunUUID == "" {
+		hostname, _ := os.Hostname()
+		c.GorunUUID = fmt.Sprintf("%s-%d-%d", hostname, os.Getpid(), time.Now().UnixNano())
+	}
+
+	started := time.Now()
+
 	var wg sync.WaitGroup
 
 	pipeline := make(map[string]Server)
@@ -321,6 +329,24 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		pipeline = pipelines
 	}
 
+	serverNames := slices.Sorted(maps.Keys(pipeline))
+
+	totalTasks := 0
+	for _, s := range pipeline {
+		totalTasks += len(s.Tasks)
+	}
+
+	var failedCount, skippedCount atomic.Int64
+
+	c.emit(ProcessStartedEvent{
+		GorunUUID: c.GorunUUID,
+		Title:     c.Title,
+		Servers:   serverNames,
+		StartedAt: started,
+		Hostname:  func() string { h, _ := os.Hostname(); return h }(),
+		PID:       os.Getpid(),
+	})
+
 	// announce every server's plan up front, in a stable order
 	names := slices.Sorted(maps.Keys(pipeline))
 	for _, name := range names {
@@ -331,7 +357,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			tasks = append(tasks, task.Name)
 		}
 
-		c.emit(PlanEvent{Server: server.Name, Address: server.Address(), Tasks: tasks})
+		c.emit(PlanEvent{GorunUUID: c.GorunUUID, Server: server.Name, Address: server.Address(), Tasks: tasks})
 	}
 
 	var failed atomic.Bool
@@ -361,6 +387,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 			logger := NewLogger(server.LogLevel, logOutput, false)
 			logger = logger.With(
+				slog.String("gorun_uuid", c.GorunUUID),
 				slog.Group(
 					"server",
 					slog.String("name", server.Name),
@@ -381,7 +408,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 					span.SetStatus(codes.Error, err.Error())
 					logger.Error("error with running tasks", slog.String("reason", err.Error()))
 					failed.Store(true)
-					c.emit(ServerErrorEvent{Server: server.Name, Err: err})
+					failedCount.Add(int64(len(server.Tasks)))
+					c.emit(ServerErrorEvent{GorunUUID: c.GorunUUID, Server: server.Name, Err: err})
 					return
 				}
 
@@ -399,18 +427,22 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				span.SetStatus(codes.Error, err.Error())
 				logger.Error("error with running tasks", slog.String("reason", err.Error()))
 				failed.Store(true)
-				c.emit(ServerErrorEvent{Server: server.Name, Err: err})
+				failedCount.Add(int64(len(server.Tasks)))
+				c.emit(ServerErrorEvent{GorunUUID: c.GorunUUID, Server: server.Name, Err: err})
 				return
 			}
 
 			for _, task := range tasks {
 				task.serverName = server.Name
+				task.gorunUUID = c.GorunUUID
+				task.logger = task.logger.With(slog.String("gorun_uuid", c.GorunUUID))
 				tlogger := logger.With(slog.String("task", task.task.Name))
 
 				if parent != nil && parent.exitCode != 0 {
 					err = fmt.Errorf("dependent task (%s, exit code=%d) failed, aborting task (%s)", parent.task.Name, parent.exitCode, task.task.Name)
 					tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
-					c.emit(TaskEvent{Server: server.Name, Task: task.task.Name, State: TaskSkipped, Err: err})
+					c.emit(TaskEvent{GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskSkipped, Err: err})
+					skippedCount.Add(1)
 					taskSkipped.Add(ctx, 1, metric.WithAttributes(
 						attribute.String("task.name", task.task.Name),
 						attribute.String("server.name", server.Name),
@@ -420,12 +452,13 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 				parent = task
 
-				c.emit(TaskEvent{Server: server.Name, Task: task.task.Name, State: TaskRunning})
+				c.emit(TaskEvent{GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskRunning})
 				started := time.Now()
 
-				event := TaskEvent{Server: server.Name, Task: task.task.Name, State: TaskDone}
+				event := TaskEvent{GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskDone}
 				if err := task.Execute(ctx); err != nil {
 					failed.Store(true)
+					failedCount.Add(1)
 					event.State = TaskFailed
 					event.Err = err
 				}
@@ -440,6 +473,18 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 	}
 
 	wg.Wait()
+
+	success := !failed.Load()
+
+	c.emit(ProcessFinishedEvent{
+		GorunUUID:  c.GorunUUID,
+		Success:    success,
+		Duration:   time.Since(started),
+		TotalTasks: totalTasks,
+		Failed:     int(failedCount.Load()),
+		Skipped:    int(skippedCount.Load()),
+		FinishedAt: time.Now(),
+	})
 
 	if failed.Load() {
 		return errors.New("one or more tasks failed")
@@ -456,8 +501,13 @@ func (c *Config) emit(event any) {
 	}
 
 	if publisher != nil {
+		topic := envvars.Get("GORUN_EVENT_TOPIC")
+		if topic == "" {
+			topic = "gorun.events"
+		}
 		if data, err := json.Marshal(event); err == nil {
-			_ = publisher.Publish("gorun.events", data)
+			_ = publisher.Publish(topic, data)
+			_ = publisher.Flush()
 		}
 	}
 }

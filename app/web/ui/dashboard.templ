@@ -16,7 +16,7 @@ templ Dashboard(s DashboardState) {
 			{{ p := s.Processes[uuid] }}
 			{{ total := processTotal(p) }}
 			{{ done := processDone(p) }}
-			<div class="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+			<div class={ serverCardClass(processHasFailed(p)) }>
 				<div
 					class="flex cursor-pointer select-none items-center justify-between gap-3 p-4"
 					data-on:click={ "$expanded['" + uuid + "'] = !$expanded['" + uuid + "']" }
@@ -60,7 +60,7 @@ templ Dashboard(s DashboardState) {
 				<div class="space-y-3 border-t border-zinc-800 p-4" data-show={ "$expanded['" + uuid + "']" }>
 					for _, sname := range p.ServerOrder {
 						{{ srv := p.Servers[sname] }}
-						<div class="rounded-xl border border-zinc-800 bg-zinc-950/40 p-3">
+						<div class={ serverBoxClass(serverHasFailed(srv)) }>
 							<div class="mb-1 flex items-baseline gap-2">
 								<span class="font-bold text-zinc-100">{ srv.Name }</span>
 								<span class="text-xs text-zinc-500">{ srv.Address }</span>

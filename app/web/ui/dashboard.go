@@ -191,6 +191,13 @@ func itoa(n int) string {
 	return strconv.Itoa(n)
 }
 
+func serverBoxClass(failed bool) string {
+	if failed {
+		return "rounded-xl border border-red-900/50 bg-red-950/20 p-3"
+	}
+	return "rounded-xl border border-zinc-800 bg-zinc-950/40 p-3"
+}
+
 func serverHasFailed(srv *ServerInfo) bool {
 	for _, t := range srv.Tasks {
 		if t.State == 3 {

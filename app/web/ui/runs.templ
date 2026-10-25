@@ -69,9 +69,9 @@ templ RunDetail(run store.RunDetail) {
 				</div>
 				<div class="space-y-4">
 					for _, srv := range run.Servers {
-						<details class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+						<details class={ serverCardClass(runServerHasFailed(run, srv)) }>
 							<summary class="flex cursor-pointer list-none items-center justify-between gap-2">
-								<span class="font-bold text-zinc-100">{ srv }</span>
+								<span class={ serverNameClass(runServerHasFailed(run, srv)) }>{ srv }</span>
 								{{ total, d, o, f, dur := serverStats(run, srv) }}
 								<span class="text-xs text-zinc-500">{ d }/{ total } done · { o } ok · { f } failed · { int(dur / 1000000000) }s</span>
 								<span class="text-xs text-zinc-500">expand for tasks</span>

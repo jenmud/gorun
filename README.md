@@ -200,13 +200,15 @@ can be correlated. Published events:
 
 ## SSH Keys
 
-Relative paths in the Gorunfile (`identityfile` and `cmd_file`) are resolved relative to the Gorunfile, not the current working directory.
+Relative paths in the Gorunfile (`identityfile`, `cmd_file` and `cmd_template_file`) are resolved relative to the Gorunfile, not the current working directory.
 
 ## Configuration
 
 Tasks are defined once in a task library and servers pick them by name:
 
-- `[tasks.<name>]` defines a task: `cmd` or `cmd_file`, plus optional `sudo`, `depends_on`, `envvars`, `shell` and `log_level`.
+- `[tasks.<name>]` defines a task: `cmd`, `cmd_file`, `cmd_template` or `cmd_template_file`, plus optional `sudo`, `depends_on`, `envvars`, `shell` and `log_level`.
+- Exactly one of `cmd`, `cmd_file`, `cmd_template` or `cmd_template_file` must be specified.
+- `cmd_template` and `cmd_template_file` are compiled as Go text templates at task execution time with a `Server{}` passed in (so you can use `.Name`, `.Hostname`, etc.). The compiled result is the command that gets broadcast/sent to the server (NATS/web UI events show the compiled command).
 - `[servers]` `tasks` is the global list every server runs.
 - `[servers.hosts.<name>]` defines a server. If it sets its own `tasks`, that list **replaces** the global one.
 - A task's `depends_on` are always included and run first, so a list only needs the tasks you care about.
@@ -227,6 +229,12 @@ depends_on = ["packages"]
 [tasks.go-smoke-test]
 cmd_file = "./scripts/go-smoke-test.sh"
 depends_on = ["packages"]
+
+[tasks.greet]
+cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}'"
+
+[tasks.greet-from-file]
+cmd_template_file = "./templates/greet.sh.tmpl"
 
 [servers]
 tasks = ["timezone"]                       # every server runs packages, then timezone

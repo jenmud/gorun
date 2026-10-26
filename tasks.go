@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
@@ -22,18 +23,54 @@ import (
 
 // Task is a task to execute on one or more servers.
 type Task struct {
-	LogLevel  string            `toml:"log_level"`
-	Name      string            `toml:"-"` // the <name> in [tasks.<name>]
-	Sudo      bool              `toml:"sudo"`
-	Cmd       string            `toml:"cmd,omitempty"`
-	CmdFile   string            `toml:"cmd_file,omitempty"`
-	EnvVars   map[string]string `toml:"envvars"`
-	DependsOn []string          `toml:"depends_on"`
-	Shell     string            `toml:"shell"`
+	LogLevel         string            `toml:"log_level"`
+	Name             string            `toml:"-"` // the <name> in [tasks.<name>]
+	Sudo             bool              `toml:"sudo"`
+	Cmd              string            `toml:"cmd,omitempty"`
+	CmdFile          string            `toml:"cmd_file,omitempty"`
+	CmdTemplate      string            `toml:"cmd_template,omitempty"`
+	CmdTemplateFile  string            `toml:"cmd_template_file,omitempty"`
+	EnvVars          map[string]string `toml:"envvars"`
+	DependsOn        []string          `toml:"depends_on"`
+	Shell            string            `toml:"shell"`
 }
 
 // Command reads the command from either inline cmd or from a file
 func (t *Task) Command() (string, error) {
+	return t.CommandFor(nil)
+}
+
+// CommandFor reads the command from either inline cmd or from a file,
+// and compiles templates with the provided server.
+func (t *Task) CommandFor(server any) (string, error) {
+	if t.CmdTemplate != "" {
+		tmpl, err := template.New(t.Name).Parse(t.CmdTemplate)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse command template for task %s: %w", t.Name, err)
+		}
+		var buf bytes.Buffer
+		if err := tmpl.Execute(&buf, server); err != nil {
+			return "", fmt.Errorf("failed to execute command template for task %s: %w", t.Name, err)
+		}
+		return buf.String(), nil
+	}
+
+	if t.CmdTemplateFile != "" {
+		content, err := os.ReadFile(t.CmdTemplateFile)
+		if err != nil {
+			return "", fmt.Errorf("failed to read command template file %s: %w", t.CmdTemplateFile, err)
+		}
+		tmpl, err := template.New(t.Name).Parse(string(content))
+		if err != nil {
+			return "", fmt.Errorf("failed to parse command template file %s: %w", t.CmdTemplateFile, err)
+		}
+		var buf bytes.Buffer
+		if err := tmpl.Execute(&buf, server); err != nil {
+			return "", fmt.Errorf("failed to execute command template file %s: %w", t.CmdTemplateFile, err)
+		}
+		return buf.String(), nil
+	}
+
 	if t.Cmd != "" {
 		return t.Cmd, nil
 	}
@@ -52,13 +89,32 @@ func (t *Task) Command() (string, error) {
 
 // validate runs some validations against the task checking that it is valid for execution.
 func (t Task) validate() error {
-	if t.Cmd != "" && t.CmdFile != "" {
-		return fmt.Errorf("task %s cannot have both cmd and cmd_file specified", t.Name)
+	count := 0
+	if t.Cmd != "" {
+		count++
+	}
+	if t.CmdFile != "" {
+		count++
+	}
+	if t.CmdTemplate != "" {
+		count++
+	}
+	if t.CmdTemplateFile != "" {
+		count++
+	}
+	if count > 1 {
+		return fmt.Errorf("task %s cannot have more than one of cmd, cmd_file, cmd_template, cmd_template_file specified", t.Name)
 	}
 
 	if t.CmdFile != "" {
 		if _, err := os.Stat(t.CmdFile); os.IsNotExist(err) {
 			return fmt.Errorf("command file %s does not exist", t.CmdFile)
+		}
+	}
+
+	if t.CmdTemplateFile != "" {
+		if _, err := os.Stat(t.CmdTemplateFile); os.IsNotExist(err) {
+			return fmt.Errorf("command template file %s does not exist", t.CmdTemplateFile)
 		}
 	}
 
@@ -72,6 +128,7 @@ type TaskExec struct {
 	logger      *slog.Logger
 	server      *ssh.Client
 	serverName  string
+	gorunServer *Server
 	gorunUUID   string
 	createdAt   time.Time
 	startedAt   time.Time
@@ -206,6 +263,8 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 			slog.String("shell", t.Shell),
 			slog.Bool("sudo", t.Sudo),
 			slog.String("cmd_file", t.CmdFile),
+			slog.String("cmd_template_file", t.CmdTemplateFile),
+			slog.String("cmd_template", t.CmdTemplate),
 			slog.Any("depends_on", t.DependsOn),
 			slog.Any("envvars", envVarList),
 		)
@@ -276,7 +335,14 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 		}
 	}()
 
-	command, err := t.task.Command()
+	var serverArg any
+	if t.gorunServer != nil {
+		serverArg = t.gorunServer
+	} else if t.serverName != "" {
+		serverArg = Server{Name: t.serverName}
+	}
+
+	command, err := t.task.CommandFor(serverArg)
 	if err != nil {
 		return t.Fail(ctx, err)
 	}
@@ -400,7 +466,14 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 
 		t.startedAt = time.Now()
 
-		command, err := t.task.Command()
+		var serverArg any
+		if t.gorunServer != nil {
+			serverArg = t.gorunServer
+		} else if t.serverName != "" {
+			serverArg = Server{Name: t.serverName}
+		}
+
+		command, err := t.task.CommandFor(serverArg)
 		if err != nil {
 			errChan <- fmt.Errorf("error running the task on the remote server: %w", err)
 			return

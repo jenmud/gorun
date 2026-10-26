@@ -152,6 +152,7 @@ func (c *Config) ResolvePaths(dir string) {
 
 	for name, task := range c.Tasks {
 		task.CmdFile = resolve(task.CmdFile)
+		task.CmdTemplateFile = resolve(task.CmdTemplateFile)
 		c.Tasks[name] = task
 	}
 
@@ -435,6 +436,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 			for _, task := range tasks {
 				task.serverName = server.Name
+				task.gorunServer = &server
 				task.gorunUUID = c.GorunUUID
 				task.logger = task.logger.With(slog.String("gorun_uuid", c.GorunUUID))
 				tlogger := logger.With(slog.String("task", task.task.Name))
@@ -442,7 +444,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				if parent != nil && parent.exitCode != 0 {
 					err = fmt.Errorf("dependent task (%s, exit code=%d) failed, aborting task (%s)", parent.task.Name, parent.exitCode, task.task.Name)
 					tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
-					skippedCmd, _ := task.task.Command()
+					skippedCmd, _ := task.task.CommandFor(&server)
 					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err})
 					skippedCount.Add(1)
 					taskSkipped.Add(ctx, 1, metric.WithAttributes(
@@ -454,7 +456,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 				parent = task
 
-				runningCmd, _ := task.task.Command()
+				runningCmd, _ := task.task.CommandFor(&server)
 				c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskRunning, Command: runningCmd})
 				started := time.Now()
 
@@ -468,8 +470,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 				event.Command = task.command
 				if event.Command == "" {
-					if c, err := task.task.Command(); err == nil {
-						event.Command = c
+					if ccmd, err := task.task.CommandFor(&server); err == nil {
+						event.Command = ccmd
 					}
 				}
 				event.Stdout = string(task.stdout)

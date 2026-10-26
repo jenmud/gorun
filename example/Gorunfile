@@ -115,16 +115,9 @@ cmd_file = "./scripts/compose-project.sh"
 sudo = true
 depends_on = ["deploy-user"]
 
-[tasks.iptables-setup]
-cmd_template = "sh /etc/iptables-rules.sh"
-sudo = true
-depends_on = ["packages"]
-[[tasks.iptables-setup.copy]]
-src_template = "./templates/iptables-rules.sh.tmpl"
-dst = "/etc/iptables-rules.sh"
 
 [tasks.greet]
-cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}'"
+cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}:{{.SSH.Port}} ({{.SSH.User}}) -> {{.SSH.Identityfile}}'"
 
 #
 # Inventory. Every host runs servers.tasks unless it sets its own `tasks`, which
@@ -134,7 +127,7 @@ cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}'"
 #
 
 [servers]
-tasks = ["iptables-setup", "greet", "timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace", "verify"]
+tasks = ["greet", "timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace", "verify"]
 
 [servers.hosts.server1]
 hostname = "localhost"

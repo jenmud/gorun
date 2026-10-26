@@ -116,12 +116,12 @@ sudo = true
 depends_on = ["deploy-user"]
 
 [tasks.iptables-setup]
-[[tasks.iptables-setup.copy]]
-src_template = "./templates/iptables-rules.sh.tmpl"
-dst = "/etc/iptables-rules.sh"
 cmd_template = "sh /etc/iptables-rules.sh"
 sudo = true
 depends_on = ["packages"]
+[[tasks.iptables-setup.copy]]
+src_template = "./templates/iptables-rules.sh.tmpl"
+dst = "/etc/iptables-rules.sh"
 
 [tasks.greet]
 cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}'"

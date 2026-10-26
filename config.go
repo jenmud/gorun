@@ -163,14 +163,20 @@ func (c *Config) ResolvePaths(dir string) {
 			if c.Dest != "" && c.Dst == "" {
 				c.Dst = c.Dest
 			}
+			if c.Template != "" && c.SrcTpl == "" {
+				c.SrcTpl = c.Template
+			}
+			if c.SrcTmpl != "" && c.SrcTpl == "" {
+				c.SrcTpl = c.SrcTmpl
+			}
 			if c.Dir != "" && c.Dst == "" && c.Src != "" {
 				// leave for runtime resolution
 			}
 			if c.Src != "" {
 				c.Src = resolve(c.Src)
 			}
-			if c.Template != "" && c.SrcTpl == "" {
-				c.SrcTpl = c.Template
+			if c.SrcTpl != "" {
+				c.SrcTpl = resolve(c.SrcTpl)
 			}
 		}
 		for i := range task.Copy {

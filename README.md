@@ -210,6 +210,7 @@ Tasks are defined once in a task library and servers pick them by name:
 - Tasks can specify a command source OR copies (or both). If both are specified, copies run first, then the command.
 - `cmd_template` and `cmd_template_file` are compiled as Go text templates at task execution time with a `Server{}` passed in (so you can use `.Name`, `.Hostname`, etc.). The compiled result is the command that gets broadcast/sent to the server (NATS/web UI events show the compiled command).
 - Copy files to remote servers with `[[tasks.<name>.copy]]` (or `copy = [...]`): set `src` (local path, resolved relative to Gorunfile) and `dst` (remote path) or `dir` (remote directory). Also works for local execution.
+- Copy as a template: set `src_template`/`template` to a local template file (resolved relative to Gorunfile) or `content` inline; it will be compiled as a Go text template with `Server{}` before being pushed to `dst`/`dir`.
 - `[servers]` `tasks` is the global list every server runs.
 - `[servers.hosts.<name>]` defines a server. If it sets its own `tasks`, that list **replaces** the global one.
 - A task's `depends_on` are always included and run first, so a list only needs the tasks you care about.

@@ -153,25 +153,37 @@ func (c *Config) ResolvePaths(dir string) {
 	for name, task := range c.Tasks {
 		task.CmdFile = resolve(task.CmdFile)
 		task.CmdTemplateFile = resolve(task.CmdTemplateFile)
-		for i := range task.Copy {
-			if task.Copy[i].Src != "" {
-				task.Copy[i].Src = resolve(task.Copy[i].Src)
+		resolveCopy := func(c *Copy) {
+			if c.SrcFile != "" && c.Src == "" {
+				c.Src = c.SrcFile
 			}
+			if c.DstPath != "" && c.Dst == "" {
+				c.Dst = c.DstPath
+			}
+			if c.Dest != "" && c.Dst == "" {
+				c.Dst = c.Dest
+			}
+			if c.Dir != "" && c.Dst == "" && c.Src != "" {
+				// leave for runtime resolution
+			}
+			if c.Src != "" {
+				c.Src = resolve(c.Src)
+			}
+			if c.Template != "" && c.SrcTpl == "" {
+				c.SrcTpl = c.Template
+			}
+		}
+		for i := range task.Copy {
+			resolveCopy(&task.Copy[i])
 		}
 		for i := range task.Copies {
-			if task.Copies[i].Src != "" {
-				task.Copies[i].Src = resolve(task.Copies[i].Src)
-			}
+			resolveCopy(&task.Copies[i])
 		}
 		for i := range task.Upload {
-			if task.Upload[i].Src != "" {
-				task.Upload[i].Src = resolve(task.Upload[i].Src)
-			}
+			resolveCopy(&task.Upload[i])
 		}
 		for i := range task.Files {
-			if task.Files[i].Src != "" {
-				task.Files[i].Src = resolve(task.Files[i].Src)
-			}
+			resolveCopy(&task.Files[i])
 		}
 		c.Tasks[name] = task
 	}

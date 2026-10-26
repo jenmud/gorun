@@ -23,10 +23,18 @@ import (
 
 // Copy represents a file copy operation.
 type Copy struct {
-	Src  string `toml:"src"`
-	Dst  string `toml:"dst"`
-	Dir  string `toml:"dir,omitempty"`
-	Mode string `toml:"mode,omitempty"`
+	Src      string `toml:"src"`
+	SrcFile  string `toml:"src_file,omitempty"`
+	SrcTpl   string `toml:"src_template,omitempty"`
+	SrcTmpl  string `toml:"src_tmpl,omitempty"`
+	Template string `toml:"template,omitempty"`
+	Content  string `toml:"content,omitempty"`
+	Dst      string `toml:"dst"`
+	DstPath  string `toml:"dst_path,omitempty"`
+	Dir      string `toml:"dir,omitempty"`
+	Dest     string `toml:"dest,omitempty"`
+	Mode     string `toml:"mode,omitempty"`
+	Perm     string `toml:"perm,omitempty"`
 }
 
 // Task is a task to execute on one or more servers.
@@ -137,14 +145,31 @@ func (t Task) validate() error {
 	}
 
 	for _, c := range copies {
-		if c.Src == "" {
+		src := c.Src
+		if c.SrcFile != "" && src == "" {
+			src = c.SrcFile
+		}
+		if c.Template != "" && c.SrcTpl == "" {
+			c.SrcTpl = c.Template
+		}
+		if c.SrcTmpl != "" && c.SrcTpl == "" {
+			c.SrcTpl = c.SrcTmpl
+		}
+		if c.Content != "" {
+			// content is fine
+		} else if c.SrcTpl != "" {
+			if _, err := os.Stat(c.SrcTpl); os.IsNotExist(err) {
+				return fmt.Errorf("copy template %s does not exist", c.SrcTpl)
+			}
+		} else if src == "" {
 			return fmt.Errorf("task %s copy requires src", t.Name)
+		} else {
+			if _, err := os.Stat(src); os.IsNotExist(err) {
+				return fmt.Errorf("copy source %s does not exist", src)
+			}
 		}
-		if c.Dst == "" && c.Dir == "" {
+		if c.Dst == "" && c.DstPath == "" && c.Dest == "" && c.Dir == "" {
 			return fmt.Errorf("task %s copy requires dst or dir", t.Name)
-		}
-		if _, err := os.Stat(c.Src); os.IsNotExist(err) {
-			return fmt.Errorf("copy source %s does not exist", c.Src)
 		}
 	}
 

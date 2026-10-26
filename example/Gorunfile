@@ -118,9 +118,6 @@ depends_on = ["deploy-user"]
 [tasks.iptables-setup]
 [[tasks.iptables-setup.copy]]
 src_template = "./templates/iptables-rules.sh.tmpl"
-dst = "/tmp/iptables-rules.sh"
-[[tasks.iptables-setup.copy]]
-src_template = "./templates/iptables-rules.sh.tmpl"
 dst = "/etc/iptables-rules.sh"
 cmd_template = "sh /etc/iptables-rules.sh"
 sudo = true

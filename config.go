@@ -153,6 +153,26 @@ func (c *Config) ResolvePaths(dir string) {
 	for name, task := range c.Tasks {
 		task.CmdFile = resolve(task.CmdFile)
 		task.CmdTemplateFile = resolve(task.CmdTemplateFile)
+		for i := range task.Copy {
+			if task.Copy[i].Src != "" {
+				task.Copy[i].Src = resolve(task.Copy[i].Src)
+			}
+		}
+		for i := range task.Copies {
+			if task.Copies[i].Src != "" {
+				task.Copies[i].Src = resolve(task.Copies[i].Src)
+			}
+		}
+		for i := range task.Upload {
+			if task.Upload[i].Src != "" {
+				task.Upload[i].Src = resolve(task.Upload[i].Src)
+			}
+		}
+		for i := range task.Files {
+			if task.Files[i].Src != "" {
+				task.Files[i].Src = resolve(task.Files[i].Src)
+			}
+		}
 		c.Tasks[name] = task
 	}
 

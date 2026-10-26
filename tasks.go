@@ -21,6 +21,14 @@ import (
 	"gorun/internal/envvars"
 )
 
+// Copy represents a file copy operation.
+type Copy struct {
+	Src  string `toml:"src"`
+	Dst  string `toml:"dst"`
+	Dir  string `toml:"dir,omitempty"`
+	Mode string `toml:"mode,omitempty"`
+}
+
 // Task is a task to execute on one or more servers.
 type Task struct {
 	LogLevel         string            `toml:"log_level"`
@@ -30,6 +38,10 @@ type Task struct {
 	CmdFile          string            `toml:"cmd_file,omitempty"`
 	CmdTemplate      string            `toml:"cmd_template,omitempty"`
 	CmdTemplateFile  string            `toml:"cmd_template_file,omitempty"`
+	Copy             []Copy            `toml:"copy,omitempty"`
+	Copies           []Copy            `toml:"copies,omitempty"`
+	Upload           []Copy            `toml:"upload,omitempty"`
+	Files            []Copy            `toml:"files,omitempty"`
 	EnvVars          map[string]string `toml:"envvars"`
 	DependsOn        []string          `toml:"depends_on"`
 	Shell            string            `toml:"shell"`
@@ -106,6 +118,12 @@ func (t Task) validate() error {
 		return fmt.Errorf("task %s cannot have more than one of cmd, cmd_file, cmd_template, cmd_template_file specified", t.Name)
 	}
 
+	copies := t.getCopies()
+	hasAction := count > 0 || len(copies) > 0
+	if !hasAction {
+		return fmt.Errorf("task %s has no command specified", t.Name)
+	}
+
 	if t.CmdFile != "" {
 		if _, err := os.Stat(t.CmdFile); os.IsNotExist(err) {
 			return fmt.Errorf("command file %s does not exist", t.CmdFile)
@@ -118,7 +136,28 @@ func (t Task) validate() error {
 		}
 	}
 
+	for _, c := range copies {
+		if c.Src == "" {
+			return fmt.Errorf("task %s copy requires src", t.Name)
+		}
+		if c.Dst == "" && c.Dir == "" {
+			return fmt.Errorf("task %s copy requires dst or dir", t.Name)
+		}
+		if _, err := os.Stat(c.Src); os.IsNotExist(err) {
+			return fmt.Errorf("copy source %s does not exist", c.Src)
+		}
+	}
+
 	return nil
+}
+
+func (t *Task) getCopies() []Copy {
+	var out []Copy
+	out = append(out, t.Copy...)
+	out = append(out, t.Copies...)
+	out = append(out, t.Upload...)
+	out = append(out, t.Files...)
+	return out
 }
 
 // TaskExec is a execution task to be run on a server.
@@ -342,6 +381,10 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 		serverArg = Server{Name: t.serverName}
 	}
 
+	if err := CopyFiles(t.server, t.serverName, &t.task); err != nil {
+		return t.Fail(ctx, err)
+	}
+
 	command, err := t.task.CommandFor(serverArg)
 	if err != nil {
 		return t.Fail(ctx, err)
@@ -471,6 +514,11 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 			serverArg = t.gorunServer
 		} else if t.serverName != "" {
 			serverArg = Server{Name: t.serverName}
+		}
+
+		if err := CopyFiles(t.server, t.serverName, &t.task); err != nil {
+			errChan <- fmt.Errorf("error running the task on the remote server: %w", err)
+			return
 		}
 
 		command, err := t.task.CommandFor(serverArg)

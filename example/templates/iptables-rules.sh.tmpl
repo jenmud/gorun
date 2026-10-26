@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+iptables -F
+iptables -X
+iptables -P INPUT DROP
+iptables -P FORWARD DROP
+iptables -P OUTPUT ACCEPT
+iptables -A INPUT -i lo -j ACCEPT
+iptables -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+{{ range $i, $port := (list 22 80 8080 443) -}}
+iptables -A INPUT -p tcp --dport {{ $port }} -j ACCEPT
+{{ end -}}
+iptables-save > /etc/iptables/rules.v4 2>/dev/null || iptables-save > /etc/iptables.rules 2>/dev/null || true

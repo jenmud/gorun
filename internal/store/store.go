@@ -15,6 +15,7 @@ type RunSummary struct {
 	PID        int
 	StartedAt  time.Time
 	FinishedAt time.Time
+	Finished   bool
 	Success    bool
 	TotalTasks int
 	Failed     int
@@ -183,8 +184,13 @@ func (s *Store) ListRuns(ctx context.Context) ([]RunSummary, error) {
 		}
 		if finished.Valid {
 			r.FinishedAt, _ = time.Parse(time.RFC3339Nano, finished.String)
+			r.Finished = true
 		}
-		r.Success = succ.Int64 == 1
+		if succ.Valid {
+			r.Success = succ.Int64 == 1
+		} else if r.Finished {
+			r.Success = r.Failed == 0 && r.Skipped == 0
+		}
 		r.TotalTasks = int(total.Int64)
 		r.Failed = int(failed.Int64)
 		r.Skipped = int(skipped.Int64)
@@ -215,8 +221,13 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	}
 	if finished.Valid {
 		r.FinishedAt, _ = time.Parse(time.RFC3339Nano, finished.String)
+		r.Finished = true
 	}
-	r.Success = succ.Int64 == 1
+	if succ.Valid {
+		r.Success = succ.Int64 == 1
+	} else if r.Finished {
+		r.Success = r.Failed == 0 && r.Skipped == 0
+	}
 	r.Duration = time.Duration(dur.Int64)
 
 	// servers

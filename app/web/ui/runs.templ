@@ -25,16 +25,24 @@ templ RunsList(runs []store.RunSummary) {
 										<span class="ml-2 text-xs text-zinc-500">{ r.Title }</span>
 									</div>
 									<div class="text-xs">
-										if r.Success {
+										if !r.Finished {
+											<span class="text-accent">● running</span>
+											<span class="ml-2 text-zinc-500">in progress</span>
+										} else if r.Success {
 											<span class="text-green-400">✓ success</span>
+											<span class="ml-2 text-zinc-500">{ int(r.Duration / 1000000000) }s</span>
 										} else {
 											<span class="text-red-400">✗ failed</span>
+											<span class="ml-2 text-zinc-500">{ int(r.Duration / 1000000000) }s</span>
 										}
-										<span class="ml-2 text-zinc-500">{ int(r.Duration / 1000000000) }s</span>
 									</div>
 								</div>
 								<div class="mt-1 text-xs text-zinc-500">
-									{ r.TotalTasks } tasks, { r.Failed } failed, { r.Skipped } skipped — { r.StartedAt.Format("2006-01-02 15:04:05") }
+									if !r.Finished {
+										{ r.Failed } failed · in progress — { r.StartedAt.Format("2006-01-02 15:04:05") }
+									} else {
+										{ r.TotalTasks } tasks, { r.Failed } failed, { r.Skipped } skipped — { r.StartedAt.Format("2006-01-02 15:04:05") }
+									}
 								</div>
 							</a>
 						}
@@ -59,19 +67,24 @@ templ RunDetail(run store.RunDetail) {
 			<main class="mx-auto max-w-5xl px-6 py-6">
 				<h1 class="mb-2 text-2xl font-bold">{ run.Title }</h1>
 				<div class="mb-4 text-sm text-zinc-400">
-					if run.Success {
+					if !run.Finished {
+						<span class="text-accent">● running</span>
+						<span class="ml-2">{ run.Failed } failed · in progress</span>
+					} else if run.Success {
 						<span class="text-green-400">✓ success</span>
+						<span class="ml-2">{ run.TotalTasks } tasks, { run.Failed } failed, { run.Skipped } skipped</span>
+						<span class="ml-2 text-zinc-500">{ int(run.Duration / 1000000000) }s</span>
 					} else {
 						<span class="text-red-400">✗ failed</span>
+						<span class="ml-2">{ run.TotalTasks } tasks, { run.Failed } failed, { run.Skipped } skipped</span>
+						<span class="ml-2 text-zinc-500">{ int(run.Duration / 1000000000) }s</span>
 					}
-					<span class="ml-2">{ run.TotalTasks } tasks, { run.Failed } failed, { run.Skipped } skipped</span>
-					<span class="ml-2 text-zinc-500">{ int(run.Duration / 1000000000) }s</span>
 				</div>
 				<div class="space-y-4">
 					for _, srv := range run.Servers {
-						<details class={ serverCardClass(runServerHasFailed(run, srv)) }>
+						<details class={ serverCardClass(runServerHasFailed(run, srv) && run.Finished) }>
 							<summary class="flex cursor-pointer list-none items-center justify-between gap-2">
-								<span class={ serverNameClass(runServerHasFailed(run, srv)) }>{ srv }</span>
+								<span class={ serverNameClass(runServerHasFailed(run, srv) && run.Finished) }>{ srv }</span>
 								{{ total, d, o, f, dur := serverStats(run, srv) }}
 								<span class="text-xs text-zinc-500">{ d }/{ total } done · { o } ok · { f } failed · { int(dur / 1000000000) }s</span>
 								<span class="text-xs text-zinc-500">expand for tasks</span>
@@ -87,11 +100,15 @@ templ RunDetail(run store.RunDetail) {
 													<span class="font-bold text-red-400">✗</span>
 												} else if t.State == 4 {
 													<span class="text-amber-400">⊘</span>
+												} else if t.State == 1 {
+													<span class="animate-pulse text-accent">●</span>
 												} else {
 													<span class="text-zinc-500">○</span>
 												}
 												<span class="text-zinc-200">{ t.Name }</span>
-												<span class="text-zinc-500">{ int(t.Duration / 1000000000) }s</span>
+												if t.Duration > 0 {
+													<span class="text-zinc-500">{ int(t.Duration / 1000000000) }s</span>
+												}
 												if t.ExitCode != 0 {
 													<span class="text-red-400">exit { t.ExitCode }</span>
 												}

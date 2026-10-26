@@ -1,10 +1,14 @@
 log_level = "debug"
 
+[tasks.install-netstat]
+cmd = "pacman -S --noconfirm --needed net-tools"
+sudo = true
+
 [tasks.install-nats]
 cmd_file = "./scripts/install-nats-cli.sh"
 
 [servers]
-tasks = ["install-nats"]
+tasks = ["install-netstat", "install-nats"]
 
 # no hostname or ssh: tasks run on this machine
 [servers.hosts.local-machine]

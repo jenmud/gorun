@@ -115,6 +115,9 @@ cmd_file = "./scripts/compose-project.sh"
 sudo = true
 depends_on = ["deploy-user"]
 
+[tasks.greet]
+cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}'"
+
 #
 # Inventory. Every host runs servers.tasks unless it sets its own `tasks`, which
 # replaces the global list (dependencies are still pulled in).
@@ -123,7 +126,7 @@ depends_on = ["deploy-user"]
 #
 
 [servers]
-tasks = ["timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace", "verify"]
+tasks = ["greet", "timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace", "verify"]
 
 [servers.hosts.server1]
 hostname = "localhost"

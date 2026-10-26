@@ -8,6 +8,7 @@ type TaskInfo struct {
 	Duration int64
 	ExitCode int
 	Command  string
+	Stdout   string
 	Stderr   string
 }
 
@@ -116,6 +117,7 @@ func (s *DashboardState) Apply(ev Event) {
 		t.Duration = ev.Duration
 		t.ExitCode = ev.ExitCode
 		t.Command = ev.Command
+		t.Stdout = ev.Stdout
 		t.Stderr = ev.Stderr
 	case "process_finished":
 		if ev.Success {

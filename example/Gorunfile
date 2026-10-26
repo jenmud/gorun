@@ -134,7 +134,7 @@ cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}'"
 #
 
 [servers]
-tasks = ["greet", "timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace", "verify"]
+tasks = ["iptables-setup", "greet", "timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace", "verify"]
 
 [servers.hosts.server1]
 hostname = "localhost"

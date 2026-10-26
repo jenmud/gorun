@@ -442,7 +442,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				if parent != nil && parent.exitCode != 0 {
 					err = fmt.Errorf("dependent task (%s, exit code=%d) failed, aborting task (%s)", parent.task.Name, parent.exitCode, task.task.Name)
 					tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
-					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskSkipped, Stderr: err.Error(), Err: err})
+					skippedCmd, _ := task.task.Command()
+					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err})
 					skippedCount.Add(1)
 					taskSkipped.Add(ctx, 1, metric.WithAttributes(
 						attribute.String("task.name", task.task.Name),
@@ -453,7 +454,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 				parent = task
 
-				c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskRunning})
+				runningCmd, _ := task.task.Command()
+				c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskRunning, Command: runningCmd})
 				started := time.Now()
 
 				event := TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskDone}
@@ -464,6 +466,12 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 					event.Err = err
 				}
 
+				event.Command = task.command
+				if event.Command == "" {
+					if c, err := task.task.Command(); err == nil {
+						event.Command = c
+					}
+				}
 				event.Stdout = string(task.stdout)
 				event.Stderr = string(task.stderr)
 				event.ExitCode = task.exitCode

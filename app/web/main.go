@@ -133,6 +133,7 @@ func main() {
 				State:      ev.State,
 				Stdout:     ev.Stdout,
 				Stderr:     ev.Stderr,
+				Command:    ev.Command,
 				ExitCode:   ev.ExitCode,
 			})
 			if st != nil {

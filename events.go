@@ -83,6 +83,7 @@ type TaskEvent struct {
 	State     TaskState     `json:"state"`
 	Stdout    string        `json:"stdout,omitempty"`
 	Stderr    string        `json:"stderr,omitempty"`
+	Command   string        `json:"command,omitempty"`
 	ExitCode  int           `json:"exit_code"`
 	Err       error         `json:"error,omitempty"`
 	Duration  time.Duration `json:"duration"`

@@ -215,6 +215,7 @@ func (h *eventHandler) Apply(event Event) {
 		State:      event.State,
 		Stdout:     event.Stdout,
 		Stderr:     event.Stderr,
+		Command:    event.Command,
 		ExitCode:   event.ExitCode,
 	})
 	hubApplyDuration.Record(context.Background(), float64(time.Since(startTime)), metric.WithAttributes(
@@ -308,7 +309,7 @@ func UpdateDatabase(ctx context.Context, st *store.Store, ev *Event) {
 			return
 		}
 		duration := time.Duration(ev.Duration)
-		if err := st.UpsertTask(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.State, ev.Stdout, ev.Stderr, ev.ExitCode, duration); err != nil {
+		if err := st.UpsertTask(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.State, ev.Command, ev.Stdout, ev.Stderr, ev.ExitCode, duration); err != nil {
 			slog.Error("gorun nats: failed to upsert task", "error", err)
 		}
 	case "process_finished":
@@ -377,7 +378,7 @@ func (h *eventHandler) updateTask(ctx context.Context, ev *Event) {
 		return
 	}
 	duration := time.Duration(ev.Duration)
-	if err := h.store.UpsertTask(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.State, ev.Stdout, ev.Stderr, ev.ExitCode, duration); err != nil {
+	if err := h.store.UpsertTask(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.State, ev.Command, ev.Stdout, ev.Stderr, ev.ExitCode, duration); err != nil {
 		slog.Error("gorun nats: failed to upsert task", "error", err)
 	}
 }

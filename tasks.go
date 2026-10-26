@@ -68,6 +68,7 @@ func (t Task) validate() error {
 // TaskExec is a execution task to be run on a server.
 type TaskExec struct {
 	task        Task
+	command     string
 	logger      *slog.Logger
 	server      *ssh.Client
 	serverName  string
@@ -299,6 +300,8 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 
 	cmd := exec.CommandContext(ctx, name, args...)
 
+	t.command = cmd.String()
+
 	for key, value := range t.task.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", strings.ToUpper(key), value))
 	}
@@ -407,6 +410,8 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 			// wrap in single quotes, escaping any single quotes in the command
 			command = "sudo -n sh -c '" + strings.ReplaceAll(command, "'", `'\''`) + "'"
 		}
+
+		t.command = command
 
 		if err := session.Run(command); err != nil {
 			errChan <- fmt.Errorf("error running the task on the remote server: %w", err)

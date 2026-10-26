@@ -26,6 +26,7 @@ type TaskDetail struct {
 	Server   string
 	Name     string
 	State    int
+	Command  string
 	Stdout   string
 	Stderr   string
 	ExitCode int
@@ -84,6 +85,7 @@ func (s *Store) migrate() error {
 			server TEXT,
 			name TEXT,
 			state INTEGER,
+			command TEXT,
 			stdout TEXT,
 			stderr TEXT,
 			exit_code INTEGER,
@@ -96,6 +98,26 @@ func (s *Store) migrate() error {
 			return err
 		}
 	}
+
+	// Ensure the command column exists on databases created before it was added.
+	rows, err := s.db.Query("PRAGMA table_info(tasks)")
+	if err == nil {
+		defer func() { _ = rows.Close() }()
+		hasCommand := false
+		for rows.Next() {
+			var cid int
+			var name, ctype string
+			var notnull, pk int
+			var dflt sql.NullString
+			if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err == nil && name == "command" {
+				hasCommand = true
+			}
+		}
+		if !hasCommand {
+			_, _ = s.db.Exec("ALTER TABLE tasks ADD COLUMN command TEXT")
+		}
+	}
+
 	return nil
 }
 
@@ -115,14 +137,14 @@ func (s *Store) AddServer(ctx context.Context, runID, name, address string) erro
 	return err
 }
 
-func (s *Store) UpsertTask(ctx context.Context, runID, server, name string, state int, stdout, stderr string, exitCode int, duration time.Duration) error {
+func (s *Store) UpsertTask(ctx context.Context, runID, server, name string, state int, command, stdout, stderr string, exitCode int, duration time.Duration) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO tasks (run_id,server,name,state,stdout,stderr,exit_code,duration_ns)
-		 VALUES (?,?,?,?,?,?,?,?)
+		`INSERT INTO tasks (run_id,server,name,state,command,stdout,stderr,exit_code,duration_ns)
+		 VALUES (?,?,?,?,?,?,?,?,?)
 		 ON CONFLICT(run_id,server,name) DO UPDATE SET
-		   state=excluded.state, stdout=excluded.stdout, stderr=excluded.stderr,
+		   state=excluded.state, command=excluded.command, stdout=excluded.stdout, stderr=excluded.stderr,
 		   exit_code=excluded.exit_code, duration_ns=excluded.duration_ns`,
-		runID, server, name, state, stdout, stderr, exitCode, int64(duration))
+		runID, server, name, state, command, stdout, stderr, exitCode, int64(duration))
 	return err
 }
 
@@ -215,7 +237,7 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	}
 
 	// tasks
-	trows, err := s.db.QueryContext(ctx, `SELECT server,name,state,stdout,stderr,exit_code,duration_ns FROM tasks WHERE run_id=?`, id)
+	trows, err := s.db.QueryContext(ctx, `SELECT server,name,state,command,stdout,stderr,exit_code,duration_ns FROM tasks WHERE run_id=?`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +245,7 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	for trows.Next() {
 		var td TaskDetail
 		var dur sql.NullInt64
-		if err := trows.Scan(&td.Server, &td.Name, &td.State, &td.Stdout, &td.Stderr, &td.ExitCode, &dur); err != nil {
+		if err := trows.Scan(&td.Server, &td.Name, &td.State, &td.Command, &td.Stdout, &td.Stderr, &td.ExitCode, &dur); err != nil {
 			return nil, err
 		}
 		td.Duration = time.Duration(dur.Int64)

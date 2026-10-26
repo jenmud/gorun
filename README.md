@@ -185,7 +185,7 @@ can be correlated. Published events:
 - `ProcessStartedEvent` — process started: `gorun_uuid`, `title`, `servers`, `started_at`, `hostname`, `pid`.
 - `ProcessFinishedEvent` — process finished: `gorun_uuid`, `success`, `duration`, `total_tasks`, `failed`, `skipped`, `finished_at`.
 - `PlanEvent` — per-server plan: `gorun_uuid`, `server`, `address`, `tasks`.
-- `TaskEvent` — task state change: `gorun_uuid`, `server`, `task`, `state`, `stdout`, `stderr`, `exit_code`, `error`, `duration`.
+- `TaskEvent` — task state change: `gorun_uuid`, `server`, `task`, `state`, `command`, `stdout`, `stderr`, `exit_code`, `error`, `duration`.
 - `ServerErrorEvent` — server could not run tasks: `gorun_uuid`, `server`, `error`.
 - `RunDoneEvent` — run completed: `gorun_uuid`, `error`.
 

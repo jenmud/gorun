@@ -539,15 +539,15 @@ func RunDetail(run store.RunDetail) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						if t.Stdout != "" {
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<details class=\"mt-2\"><summary class=\"cursor-pointer text-xs text-zinc-500 hover:text-zinc-300\">stdout</summary><pre class=\"mt-1 max-h-48 overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-300\">")
+						if t.Command != "" {
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<details class=\"mt-2\"><summary class=\"cursor-pointer text-xs text-zinc-400 hover:text-zinc-200\">command</summary><pre class=\"mt-1 max-h-48 overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-300\">")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							var templ_7745c5c3_Var32 string
-							templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(t.Stdout)
+							templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(t.Command)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/web/ui/runs.templ`, Line: 102, Col: 110}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/web/ui/runs.templ`, Line: 102, Col: 111}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 							if templ_7745c5c3_Err != nil {
@@ -558,37 +558,56 @@ func RunDetail(run store.RunDetail) templ.Component {
 								return templ_7745c5c3_Err
 							}
 						}
-						if t.Stderr != "" {
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<details class=\"mt-2\"><summary class=\"cursor-pointer text-xs text-red-400 hover:text-red-300\">stderr</summary><pre class=\"mt-1 max-h-48 overflow-auto rounded bg-red-950/30 p-2 text-xs text-red-300\">")
+						if t.Stdout != "" {
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "<details class=\"mt-2\"><summary class=\"cursor-pointer text-xs text-zinc-500 hover:text-zinc-300\">stdout</summary><pre class=\"mt-1 max-h-48 overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-300\">")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 							var templ_7745c5c3_Var33 string
-							templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(t.Stderr)
+							templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(t.Stdout)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/web/ui/runs.templ`, Line: 108, Col: 111}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/web/ui/runs.templ`, Line: 108, Col: 110}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
-							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</pre></details>")
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</pre></details> ")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
 							}
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</div>")
+						if t.Stderr != "" {
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "<details class=\"mt-2\"><summary class=\"cursor-pointer text-xs text-red-400 hover:text-red-300\">stderr</summary><pre class=\"mt-1 max-h-48 overflow-auto rounded bg-red-950/30 p-2 text-xs text-red-300\">")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							var templ_7745c5c3_Var34 string
+							templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(t.Stderr)
+							if templ_7745c5c3_Err != nil {
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `app/web/ui/runs.templ`, Line: 114, Col: 111}
+							}
+							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</pre></details>")
+							if templ_7745c5c3_Err != nil {
+								return templ_7745c5c3_Err
+							}
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</div>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "</div></details>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</div></details>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</div><div class=\"mt-6\"><a href=\"/runs\" class=\"text-sm text-zinc-400 hover:text-zinc-200\">← back to runs</a></div></main></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</div><div class=\"mt-6\"><a href=\"/runs\" class=\"text-sm text-zinc-400 hover:text-zinc-200\">← back to runs</a></div></main></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

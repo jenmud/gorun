@@ -31,6 +31,7 @@ type Event struct {
 	State      int      `json:"state"`
 	Stdout     string   `json:"stdout"`
 	Stderr     string   `json:"stderr"`
+	Command    string   `json:"command"`
 	ExitCode   int      `json:"exit_code"`
 }
 

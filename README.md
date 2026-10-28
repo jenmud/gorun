@@ -21,7 +21,7 @@ curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/install.sh | sh
 
 ### Manual install
 
-Download a prebuilt binary from the [releases](https://github.com/jenda/gorun/releases), or build from source:
+Download a prebuilt binary from the [releases](https://github.com/jenmud/gorun/releases), or build from source:
 
 ```bash
 go build -o gorun ./app/tui

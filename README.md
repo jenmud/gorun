@@ -11,6 +11,23 @@ Gorun is a tool for running tasks on multiple servers with an interactive TUI.
 - Task dependency management
 - SSH key support
 
+## Installation
+
+### Quick install (curl | sh)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jenda/gorun/main/install.sh | sh
+```
+
+### Manual install
+
+Download a prebuilt binary from the [releases](https://github.com/jenda/gorun/releases), or build from source:
+
+```bash
+go build -o gorun ./app/tui
+mv gorun /usr/local/bin/
+```
+
 ## Usage
 
 ```bash

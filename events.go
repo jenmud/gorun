@@ -3,6 +3,7 @@ package gorun
 import (
 	"gorun/internal/nats"
 	"log"
+	"os"
 	"sync"
 	"time"
 
@@ -14,7 +15,10 @@ var mux sync.Mutex
 var once sync.Once
 var publisher *natsCore.Conn
 
-func init() {
+func StartNATS() {
+	if os.Getenv("GORUN_SKIP_NATS") != "" {
+		return
+	}
 	once.Do(func() {
 		mux.Lock()
 		defer mux.Unlock()
@@ -29,6 +33,10 @@ func init() {
 		publisher = conn
 		log.Printf("gorun: NATS publisher connected")
 	})
+}
+
+func init() {
+	// Don't auto-connect; let caller decide
 }
 
 // TaskState is the lifecycle state of a task on a server.

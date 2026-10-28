@@ -15,6 +15,7 @@ import (
 	"golang.org/x/term"
 
 	"gorun"
+	web "gorun/app/websrv"
 )
 
 func main() {
@@ -25,12 +26,22 @@ func main() {
 	plain := flag.Bool("plain", false, "plain log output instead of the TUI (default when stdout is not a terminal)")
 	selectServers := flag.Bool("select", false, "select servers to deploy to using TUI")
 	dump := flag.Bool("dump", false, "dump an empty Gorunfile template to stdout")
+	webFlag := flag.Bool("web", false, "start the web server")
 	flag.Parse()
 
+	if *webFlag {
+		os.Setenv("GORUN_SKIP_NATS", "1")
+		web.Run()
+		return
+	}
+
 	if *dump {
+		os.Setenv("GORUN_SKIP_NATS", "1")
 		fmt.Print(emptyGorunfile())
 		return
 	}
+
+	gorun.StartNATS()
 
 	filename := flag.Arg(0)
 
@@ -46,7 +57,7 @@ func main() {
 	}
 
 	if filename == "" {
-		fatal(errors.New("usage: gorun [-v] [-plain] [-select] <Gorunfile>"))
+		fatal(errors.New("usage: gorun [-v] [-plain] [-select] [-web] <Gorunfile>"))
 	}
 
 	cfg := gorun.Config{}

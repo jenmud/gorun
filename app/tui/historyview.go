@@ -370,7 +370,28 @@ func (m historyModel) View() tea.View {
 			if it.expanded {
 				arrow = "▼"
 			}
-			lines = append(lines, cursor+arrow+" "+lipgloss.NewStyle().Bold(true).Render(it.server))
+			// compute done/total and runtime
+			total := 0
+			done := 0
+			var dur time.Duration
+			for _, ii := range m.items {
+				if ii.isServer || ii.task == nil || ii.server != it.server {
+					continue
+				}
+				total++
+				if ii.task.State >= 2 {
+					done++
+				}
+				dur += ii.task.Duration
+			}
+			srvLine := cursor + arrow + " " + lipgloss.NewStyle().Bold(true).Render(it.server)
+			if total > 0 {
+				srvLine += mutedStyle.Render(fmt.Sprintf(" %d/%d", done, total))
+			}
+			if dur > 0 {
+				srvLine += mutedStyle.Render(fmt.Sprintf(" %ds", int(dur.Seconds())))
+			}
+			lines = append(lines, srvLine)
 			continue
 		}
 		vis := false
@@ -396,24 +417,9 @@ func (m historyModel) View() tea.View {
 				break
 			}
 		}
-		var mark string
-		if t.State == 2 {
-			mark = okStyle.Render("  ✓")
-		} else if t.State == 3 {
-			mark = failStyle.Render("  ✗")
-		} else if t.State == 4 {
-			mark = skipStyle.Render("  ⊘")
-		} else if t.State == 1 {
-			mark = skipStyle.Render("  ●")
-		} else {
-			mark = mutedStyle.Render("  ○")
-		}
-		line := cursor + mark + " " + t.Name
+		line := cursor + t.Name
 		if t.Duration > 0 {
 			line += mutedStyle.Render(fmt.Sprintf(" %ds", int(t.Duration.Seconds())))
-		}
-		if t.ExitCode != 0 {
-			line += failStyle.Render(fmt.Sprintf(" (exit %d)", t.ExitCode))
 		}
 		if !it.expanded {
 			line += mutedStyle.Render(" [expand]")

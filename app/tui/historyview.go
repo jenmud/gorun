@@ -417,7 +417,19 @@ func (m historyModel) View() tea.View {
 				break
 			}
 		}
-		line := cursor + t.Name
+		var mark string
+		if t.State == 2 {
+			mark = okStyle.Render("✓")
+		} else if t.State == 3 {
+			mark = failStyle.Render("✗")
+		} else if t.State == 4 {
+			mark = skipStyle.Render("⊘")
+		} else if t.State == 1 {
+			mark = skipStyle.Render("●")
+		} else {
+			mark = mutedStyle.Render("○")
+		}
+		line := cursor + mark + " " + t.Name
 		if t.Duration > 0 {
 			line += mutedStyle.Render(fmt.Sprintf(" %ds", int(t.Duration.Seconds())))
 		}

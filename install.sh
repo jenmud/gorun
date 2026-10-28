@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-REPO="jenda/gorun"
+REPO="jenmud/gorun"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 BINARY_NAME="gorun"
 
@@ -9,33 +9,44 @@ BINARY_NAME="gorun"
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
 case "$ARCH" in
-  x86_64) ARCH="amd64" ;;
+  x86_64|amd64) ARCH="amd64" ;;
   aarch64|arm64) ARCH="arm64" ;;
-  armv7l) ARCH="arm" ;;
+  armv7l|armhf) ARCH="arm" ;;
   *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 
-# Get latest release tag
-if command -v curl >/dev/null 2>&1; then
-  TAG="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')"
+if [ "$OS" = "darwin" ]; then
+  OS="darwin"
 else
-  echo "curl is required"; exit 1
+  OS="linux"
 fi
 
-if [ -z "$TAG" ]; then
-  echo "Could not determine latest release tag"; exit 1
+if command -v curl >/dev/null 2>&1; then
+  :
+else
+  echo "curl is required"
+  exit 1
 fi
 
-# Construct download URL (assumes release assets named as gorun-$OS-$ARCH)
-ASSET="${BINARY_NAME}-${OS}-${ARCH}"
-URL="https://github.com/${REPO}/releases/download/${TAG}/${ASSET}"
-
-echo "Downloading ${URL}..."
+echo "Downloading latest release..."
 TMP="$(mktemp)"
-curl -fsSL "$URL" -o "$TMP"
+# Try to download from releases - look for common naming
+ASSET="${BINARY_NAME}_${OS}_${ARCH}"
+URL="https://github.com/${REPO}/releases/latest/download/${ASSET}"
+
+if ! curl -fsSL "$URL" -o "$TMP" 2>/dev/null; then
+  # try without underscore style
+  ASSET2="${BINARY_NAME}-${OS}-${ARCH}"
+  URL2="https://github.com/${REPO}/releases/latest/download/${ASSET2}"
+  if ! curl -fsSL "$URL2" -o "$TMP" 2>/dev/null; then
+    echo "Could not download binary from latest release."
+    echo "Please download from https://github.com/${REPO}/releases/latest"
+    exit 1
+  fi
+fi
+
 chmod +x "$TMP"
 
-# Install
 if [ -w "$INSTALL_DIR" ]; then
   mv "$TMP" "${INSTALL_DIR}/${BINARY_NAME}"
 else

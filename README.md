@@ -16,7 +16,7 @@ Gorun is a tool for running tasks on multiple servers with an interactive TUI.
 ### Quick install (curl | sh)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jenda/gorun/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/install.sh | sh
 ```
 
 ### Manual install
@@ -32,22 +32,25 @@ mv gorun /usr/local/bin/
 
 ```bash
 # Run all tasks on all servers
-go run ./app/tui example/Gorunfile
+gorun example/Gorunfile
 
 # Run tasks with interactive server selection
-go run ./app/tui example/Gorunfile --select
+gorun example/Gorunfile --select
 
 # Run tasks with verbose output
-go run ./app/tui example/Gorunfile -v
+gorun example/Gorunfile -v
 
 # Run tasks with verbose output and interactive server selection
-go run ./app/tui example/Gorunfile --select -v
+gorun example/Gorunfile --select -v
+
+# Start the web UI
+gorun -web
 ```
 
 ### Generate a starting Gorunfile
 
 ```bash
-go run ./app/tui -dump > Gorunfile
+gorun -dump > Gorunfile
 ```
 
 Verbose mode (`-v`, or press `v` while running) lists every task per server:
@@ -108,14 +111,11 @@ A web frontend lives under `app/web` and is built with [a-h/templ](https://templ
 `gorun.events` NATS topic and renders a realtime dashboard grouped by `gorun_uuid`.
 
 ```bash
-# generate templ code
-make templ-gen
+# start the web server (single binary)
+gorun -web
 
-# run the web server
-make web
-
-# develop with live reload (templ watch + proxy)
-make web-dev
+# or run directly
+go run ./app/web
 ```
 
 ### Dashboard

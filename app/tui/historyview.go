@@ -135,7 +135,16 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.cursor < 0 {
 			m.cursor = 0
 		}
-		m.offset = 0
+		// set offset so cursor is visible
+		visible := m.height - 14
+		if visible < 3 {
+			visible = 3
+		}
+		if m.cursor >= visible {
+			m.offset = m.cursor - visible + 1
+		} else {
+			m.offset = 0
+		}
 		return m, nil
 	case historyRunMsg:
 		m.run = msg.run
@@ -282,11 +291,9 @@ func (m historyModel) View() tea.View {
 			}
 			if m.cursor < start {
 				start = m.cursor
-				m.offset = start
 			}
 			if m.cursor >= start+visible {
 				start = m.cursor - visible + 1
-				m.offset = start
 			}
 			end := start + visible
 			if end > len(m.runs) {

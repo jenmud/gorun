@@ -352,17 +352,25 @@ func (m historyModel) View() tea.View {
 		b.WriteString(failStyle.Render("✗ failed") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, %d failed, %d skipped (%ds)", run.TotalTasks, run.Failed, run.Skipped, int(run.Duration.Seconds()))) + "\n\n")
 	}
 
-	for i, it := range m.items {
+	// build visible lines
+	var lines []string
+	for _, it := range m.items {
 		if it.isServer {
 			cursor := "  "
-			if i == m.cursor {
-				cursor = "> "
+			// find index
+			for i, ii := range m.items {
+				if ii == it {
+					if i == m.cursor {
+						cursor = "> "
+					}
+					break
+				}
 			}
 			arrow := "▶"
 			if it.expanded {
 				arrow = "▼"
 			}
-			b.WriteString(cursor + arrow + " " + lipgloss.NewStyle().Bold(true).Render(it.server) + "\n")
+			lines = append(lines, cursor+arrow+" "+lipgloss.NewStyle().Bold(true).Render(it.server))
 			continue
 		}
 		vis := false
@@ -375,11 +383,96 @@ func (m historyModel) View() tea.View {
 		if !vis {
 			continue
 		}
-		_ = it
+		if it.task == nil {
+			continue
+		}
+		t := it.task
+		cursor := "  "
+		for i, ii := range m.items {
+			if ii == it {
+				if i == m.cursor {
+					cursor = "> "
+				}
+				break
+			}
+		}
+		var mark string
+		if t.State == 2 {
+			mark = okStyle.Render("  ✓")
+		} else if t.State == 3 {
+			mark = failStyle.Render("  ✗")
+		} else if t.State == 4 {
+			mark = skipStyle.Render("  ⊘")
+		} else if t.State == 1 {
+			mark = skipStyle.Render("  ●")
+		} else {
+			mark = mutedStyle.Render("  ○")
+		}
+		line := cursor + mark + " " + t.Name
+		if t.ExitCode != 0 {
+			line += failStyle.Render(fmt.Sprintf(" (exit %d)", t.ExitCode))
+		}
+		if t.Duration > 0 {
+			line += mutedStyle.Render(fmt.Sprintf(" %ds", int(t.Duration.Seconds())))
+		}
+		if !it.expanded {
+			line += mutedStyle.Render(" [expand]")
+		}
+		lines = append(lines, line)
+		if it.expanded {
+			if t.Command != "" {
+				lines = append(lines, mutedStyle.Render("      command"))
+				lines = append(lines, "        $ "+strings.ReplaceAll(t.Command, "\n", " "))
+			}
+			if t.Stdout != "" {
+				lines = append(lines, mutedStyle.Render("      stdout"))
+				for _, l := range strings.Split(strings.TrimRight(t.Stdout, "\r\n"), "\n") {
+					lines = append(lines, "        "+l)
+				}
+			}
+			if t.Stderr != "" {
+				lines = append(lines, failStyle.Render("      stderr"))
+				for _, l := range strings.Split(strings.TrimRight(t.Stderr, "\r\n"), "\n") {
+					lines = append(lines, "        "+l)
+				}
+			}
+			if t.State == 3 && t.Stderr == "" {
+				lines = append(lines, failStyle.Render("      stderr"))
+				lines = append(lines, "        ")
+			}
+		}
 	}
 
-	teaView := tea.NewView(b.String())
-	return teaView
+	visible := m.height - 12
+	if visible < 3 {
+		visible = 3
+	}
+	cursorLine := 0
+	for idx, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), ">") {
+			cursorLine = idx
+		}
+	}
+	start := 0
+	if len(lines) > visible {
+		start = cursorLine - visible/2
+		if start < 0 {
+			start = 0
+		}
+		if start+visible > len(lines) {
+			start = len(lines) - visible
+		}
+	}
+	for i := start; i < start+visible && i < len(lines); i++ {
+		b.WriteString(lines[i] + "\n")
+	}
+	if len(lines) > visible {
+		b.WriteString(mutedStyle.Render(fmt.Sprintf("    [%d/%d lines]", cursorLine+1, len(lines))) + "\n")
+	}
+	b.WriteString("\n")
+	b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter expand task · esc back · q quit"))
+	v := tea.NewView(b.String())
+	return v
 }
 
 func getHistoryDBPath() string {

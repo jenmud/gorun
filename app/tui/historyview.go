@@ -24,7 +24,7 @@ const (
 type historyItem struct {
 	isServer bool
 	server   string
-	task     *store.TaskDetail
+	taskIdx  int
 	expanded bool
 }
 
@@ -111,8 +111,7 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 		items = append(items, historyItem{isServer: true, server: srv, expanded: false})
 		for i := range run.Tasks {
 			if run.Tasks[i].Server == srv {
-				t := run.Tasks[i]
-				items = append(items, historyItem{isServer: false, server: srv, task: &t, expanded: false})
+				items = append(items, historyItem{isServer: false, server: srv, taskIdx: i, expanded: false})
 			}
 		}
 	}
@@ -382,14 +381,14 @@ func (m historyModel) View() tea.View {
 			done := 0
 			var dur time.Duration
 			for _, ii := range m.items {
-				if ii.isServer || ii.task == nil || ii.server != it.server {
+				if ii.isServer || ii.taskIdx < 0 || ii.taskIdx >= len(run.Tasks) || ii.server != it.server {
 					continue
 				}
 				total++
-				if ii.task.State >= 2 {
+				if run.Tasks[ii.taskIdx].State >= 2 {
 					done++
 				}
-				dur += ii.task.Duration
+				dur += run.Tasks[ii.taskIdx].Duration
 			}
 			srvLine := cursor + arrow + " " + lipgloss.NewStyle().Bold(true).Render(it.server)
 			if total > 0 {
@@ -411,10 +410,10 @@ func (m historyModel) View() tea.View {
 		if !vis {
 			continue
 		}
-		if it.task == nil {
+		if it.taskIdx < 0 || it.taskIdx >= len(run.Tasks) {
 			continue
 		}
-		t := it.task
+		t := run.Tasks[it.taskIdx]
 		cursor := "  "
 		for i, ii := range m.items {
 			if ii == it {

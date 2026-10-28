@@ -16,7 +16,7 @@ Gorun is a tool for running tasks on multiple servers with an interactive TUI.
 ### Quick install (curl | sh)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install.sh | sh
 ```
 
 ### Manual install

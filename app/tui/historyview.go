@@ -375,64 +375,11 @@ func (m historyModel) View() tea.View {
 		if !vis {
 			continue
 		}
-		if it.task == nil {
-			continue
-		}
-		t := it.task
-		cursor := "  "
-		if i == m.cursor {
-			cursor = "> "
-		}
-		var mark string
-		if t.State == 2 {
-			mark = okStyle.Render("  ✓")
-		} else if t.State == 3 {
-			mark = failStyle.Render("  ✗")
-		} else if t.State == 4 {
-			mark = skipStyle.Render("  ⊘")
-		} else if t.State == 1 {
-			mark = skipStyle.Render("  ●")
-		} else {
-			mark = mutedStyle.Render("  ○")
-		}
-		line := cursor + mark + " " + t.Name
-		if t.ExitCode != 0 {
-			line += failStyle.Render(fmt.Sprintf(" (exit %d)", t.ExitCode))
-		}
-		if t.Duration > 0 {
-			line += mutedStyle.Render(fmt.Sprintf(" %ds", int(t.Duration.Seconds())))
-		}
-		if !it.expanded {
-			line += mutedStyle.Render(" [expand]")
-		}
-		b.WriteString(line + "\n")
-		if it.expanded {
-			if t.Command != "" {
-				b.WriteString(mutedStyle.Render("      command") + "\n")
-				b.WriteString("        $ " + strings.ReplaceAll(t.Command, "\n", " ") + "\n")
-			}
-			if t.Stdout != "" {
-				b.WriteString(mutedStyle.Render("      stdout") + "\n")
-				for _, l := range strings.Split(strings.TrimRight(t.Stdout, "\r\n"), "\n") {
-					b.WriteString("        " + l + "\n")
-				}
-			}
-			if t.Stderr != "" {
-				b.WriteString(failStyle.Render("      stderr") + "\n")
-				for _, l := range strings.Split(strings.TrimRight(t.Stderr, "\r\n"), "\n") {
-					b.WriteString("        " + l + "\n")
-				}
-			}
-			if t.State == 3 && t.Stderr == "" {
-				b.WriteString(failStyle.Render("      stderr") + "\n")
-				b.WriteString("        \n")
-			}
-		}
-		b.WriteString("\n")
+		_ = it
 	}
-	b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter expand task · esc back · q quit"))
-	v := tea.NewView(b.String())
-	return v
+
+	teaView := tea.NewView(b.String())
+	return teaView
 }
 
 func getHistoryDBPath() string {

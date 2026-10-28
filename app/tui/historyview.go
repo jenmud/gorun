@@ -259,17 +259,16 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					it.expanded = !it.expanded
 					return m, nil
 				}
+				// toggle task expansion to show details
 				if !it.expanded {
 					it.expanded = true
 					it.showCmd = true
-					it.showOut = it.task != nil && it.task.Stdout != ""
-					it.showErr = it.task != nil && it.task.Stderr != ""
-					if !it.showErr && it.task != nil && it.task.Stderr == "" && it.task.State == 3 {
-						it.showErr = true
-					}
+					it.showOut = false
+					it.showErr = false
 					return m, nil
 				}
-				if it.showCmd {
+				// cycle through cmd, stdout, stderr
+				if it.showCmd && !it.showOut && !it.showErr {
 					it.showCmd = false
 					if it.task != nil && it.task.Stdout != "" {
 						it.showOut = true
@@ -282,7 +281,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					it.expanded = false
 					return m, nil
 				}
-				if it.showOut {
+				if it.showOut && !it.showCmd && !it.showErr {
 					it.showOut = false
 					if it.task != nil && it.task.Stderr != "" {
 						it.showErr = true
@@ -291,7 +290,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					it.expanded = false
 					return m, nil
 				}
-				if it.showErr {
+				if it.showErr && !it.showCmd && !it.showOut {
 					it.showErr = false
 					it.expanded = false
 					return m, nil
@@ -448,23 +447,29 @@ func (m historyModel) View() tea.View {
 		}
 		if !it.expanded {
 			line += mutedStyle.Render("  [expand]")
-		} else {
-			line += mutedStyle.Render("  [details]")
+		} else if it.showCmd {
+			line += mutedStyle.Render("  [cmd]")
+		} else if it.showOut {
+			line += mutedStyle.Render("  [stdout]")
+		} else if it.showErr {
+			line += mutedStyle.Render("  [stderr]")
 		}
 		b.WriteString(line + "\n")
 		if it.expanded && it.showCmd && t.Command != "" {
-			b.WriteString(mutedStyle.Render("      $ ") + strings.ReplaceAll(t.Command, "\n", " ") + "\n")
+			b.WriteString(mutedStyle.Render("      $ ") + t.Command + "\n")
 		}
 		if it.expanded && it.showOut && t.Stdout != "" {
 			b.WriteString(mutedStyle.Render("      stdout:") + "\n")
-			for _, l := range strings.Split(strings.TrimRight(t.Stdout, "\n"), "\n") {
-				b.WriteString(mutedStyle.Render("        ") + l + "\n")
+			b.WriteString(t.Stdout)
+			if !strings.HasSuffix(t.Stdout, "\n") {
+				b.WriteString("\n")
 			}
 		}
 		if it.expanded && it.showErr && t.Stderr != "" {
 			b.WriteString(failStyle.Render("      stderr:") + "\n")
-			for _, l := range strings.Split(strings.TrimRight(t.Stderr, "\n"), "\n") {
-				b.WriteString(failStyle.Render("        ") + l + "\n")
+			b.WriteString(t.Stderr)
+			if !strings.HasSuffix(t.Stderr, "\n") {
+				b.WriteString("\n")
 			}
 		}
 		b.WriteString("\n")

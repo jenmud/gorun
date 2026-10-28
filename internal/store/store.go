@@ -162,7 +162,7 @@ func (s *Store) FinishRun(ctx context.Context, runID string, success bool, total
 
 func (s *Store) ListRuns(ctx context.Context) ([]RunSummary, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns FROM runs ORDER BY started_at DESC`)
+		`SELECT id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns FROM runs ORDER BY started_at ASC`)
 	if err != nil {
 		return nil, err
 	}

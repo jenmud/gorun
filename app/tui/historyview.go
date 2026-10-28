@@ -129,7 +129,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case historyRunsMsg:
 		m.runs = msg.runs
 		m.err = msg.err
-		if len(m.runs) > 0 && m.cursor >= len(m.runs) {
+		if len(m.runs) > 0 {
 			m.cursor = len(m.runs) - 1
 		}
 		if m.cursor < 0 {

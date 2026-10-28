@@ -14,6 +14,17 @@ import (
 	"gorun/internal/store"
 )
 
+func isLocalHost(h string) bool {
+	if h == "" {
+		return true
+	}
+	nh, err := os.Hostname()
+	if err != nil {
+		return true
+	}
+	return h == nh
+}
+
 type historyState int
 
 const (
@@ -304,6 +315,11 @@ func (m historyModel) View() tea.View {
 				} else {
 					line += mutedStyle.Render(fmt.Sprintf(" (%d failed)", r.Failed))
 				}
+				if isLocalHost(r.Hostname) {
+					line += mutedStyle.Render("  [local]")
+				} else if r.Hostname != "" {
+					line += skipStyle.Render(fmt.Sprintf("  [%s]", r.Hostname))
+				}
 				b.WriteString(line + "\n")
 				b.WriteString("    " + mutedStyle.Render(r.StartedAt.Format("2006-01-02 15:04:05")) + "\n\n")
 			}
@@ -324,7 +340,13 @@ func (m historyModel) View() tea.View {
 	}
 	run := m.run
 	b.WriteString(titleStyle.Render("gorun history") + "\n\n")
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render(run.Title) + " " + mutedStyle.Render(run.ID) + "\n")
+	b.WriteString(lipgloss.NewStyle().Bold(true).Render(run.Title) + " " + mutedStyle.Render(run.ID))
+	if isLocalHost(run.Hostname) {
+		b.WriteString(mutedStyle.Render("  [local]"))
+	} else if run.Hostname != "" {
+		b.WriteString(skipStyle.Render(fmt.Sprintf("  [%s]", run.Hostname)))
+	}
+	b.WriteString("\n")
 	if !run.Finished {
 		b.WriteString(skipStyle.Render("● running") + mutedStyle.Render(fmt.Sprintf(" · %d failed", run.Failed)) + "\n\n")
 	} else if run.Success {

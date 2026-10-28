@@ -1,6 +1,31 @@
 package ui
 
-import "gorun/internal/store"
+import (
+	"os"
+	"gorun/internal/store"
+)
+
+func isLocal(r store.RunSummary) bool {
+	h, err := os.Hostname()
+	if err != nil {
+		return true
+	}
+	if r.Hostname == "" {
+		return true
+	}
+	return r.Hostname == h
+}
+
+func isLocalRun(r store.RunDetail) bool {
+	h, err := os.Hostname()
+	if err != nil {
+		return true
+	}
+	if r.Hostname == "" {
+		return true
+	}
+	return r.Hostname == h
+}
 
 templ RunsList(runs []store.RunSummary) {
 	@Base("Gorun - Runs") {
@@ -23,6 +48,11 @@ templ RunsList(runs []store.RunSummary) {
 									<div>
 										<span class="font-mono text-sm text-zinc-200">{ r.ID }</span>
 										<span class="ml-2 text-xs text-zinc-500">{ r.Title }</span>
+										if isLocal(r) {
+											<span class="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-300">local</span>
+										} else {
+											<span class="ml-2 rounded bg-amber-900/40 px-1.5 py-0.5 text-xs text-amber-300">{ r.Hostname }</span>
+										}
 									</div>
 									<div class="text-xs">
 										if !r.Finished {
@@ -62,6 +92,11 @@ templ RunDetail(run store.RunDetail) {
 					<a href="/runs" class="text-sm text-zinc-400 hover:text-zinc-200">runs</a>
 					<span class="text-sm text-zinc-500">/</span>
 					<span class="font-mono text-sm text-zinc-300">{ run.ID }</span>
+					if isLocalRun(run) {
+						<span class="ml-2 rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-300">local</span>
+					} else {
+						<span class="ml-2 rounded bg-amber-900/40 px-1.5 py-0.5 text-xs text-amber-300">{ run.Hostname }</span>
+					}
 				</div>
 			</div>
 			<main class="mx-auto max-w-5xl px-6 py-6">

@@ -2,7 +2,7 @@
 set -e
 
 REPO="jenmud/gorun"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 BINARY_NAME="gorun"
 
 if command -v curl >/dev/null 2>&1; then
@@ -12,6 +12,7 @@ else
   exit 1
 fi
 
+mkdir -p "$INSTALL_DIR"
 echo "Installing gorun from source (no GitHub releases found)..."
 TMPDIR="$(mktemp -d)"
 cd "$TMPDIR"
@@ -36,12 +37,7 @@ fi
 go build -o "$BINARY_NAME" ./app/tui
 chmod +x "$BINARY_NAME"
 
-if [ -w "$INSTALL_DIR" ]; then
-  mv "$BINARY_NAME" "${INSTALL_DIR}/${BINARY_NAME}"
-else
-  echo "Installing to ${INSTALL_DIR} (requires sudo)..."
-  sudo mv "$BINARY_NAME" "${INSTALL_DIR}/${BINARY_NAME}"
-fi
+mv "$BINARY_NAME" "${INSTALL_DIR}/${BINARY_NAME}"
 
 echo "gorun installed to ${INSTALL_DIR}/${BINARY_NAME}"
 rm -rf "$TMPDIR"

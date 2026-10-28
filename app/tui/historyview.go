@@ -390,6 +390,7 @@ func (m historyModel) View() tea.View {
 				}
 				dur += run.Tasks[ii.taskIdx].Duration
 			}
+
 			srvLine := cursor + arrow + " " + lipgloss.NewStyle().Bold(true).Render(it.server)
 			if total > 0 {
 				srvLine += mutedStyle.Render(fmt.Sprintf(" %d/%d", done, total))

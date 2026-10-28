@@ -256,6 +256,16 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
+			if m.state == historyDetail && m.cursor < len(m.items) {
+				it := &m.items[m.cursor]
+				if it.isServer {
+					it.expanded = !it.expanded
+					return m, nil
+				}
+				it.expanded = !it.expanded
+				return m, nil
+			}
+			return m, nil
 		case "d":
 			if m.state == historyList && m.cursor < len(m.runs) {
 				id := m.runs[m.cursor].ID

@@ -5,39 +5,66 @@ REPO="jenmud/gorun"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 BINARY_NAME="gorun"
 
-if command -v curl >/dev/null 2>&1; then
-  :
-else
-  echo "curl is required"
+OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+case "$OS" in
+  linux) OS=linux ;;
+  darwin) OS=darwin ;;
+  *) echo "unsupported OS: $OS"; exit 1 ;;
+esac
+
+ARCH="$(uname -m)"
+case "$ARCH" in
+  x86_64|amd64) ARCH=amd64 ;;
+  aarch64|arm64) ARCH=arm64 ;;
+  *) echo "unsupported arch: $ARCH"; exit 1 ;;
+esac
+
+mkdir -p "$INSTALL_DIR"
+
+VERSION="${VERSION:-}"
+if [ -z "$VERSION" ]; then
+  VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+fi
+if [ -z "$VERSION" ]; then
+  VERSION="v0.0.1-beta.1"
+fi
+
+ASSET="gorun-${OS}-${ARCH}"
+URL="https://github.com/${REPO}/releases/download/${VERSION}/${ASSET}"
+
+TMPDIR="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR"' EXIT
+
+if curl -fsSL "$URL" -o "${TMPDIR}/${BINARY_NAME}" 2>/dev/null; then
+  chmod +x "${TMPDIR}/${BINARY_NAME}"
+  mv "${TMPDIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+  echo "Installed ${BINARY_NAME} ${VERSION} to ${INSTALL_DIR}/${BINARY_NAME}"
+  exit 0
+fi
+
+echo "No prebuilt binary found for ${OS}/${ARCH} (${VERSION}); building from source..."
+if ! command -v go >/dev/null 2>&1; then
+  echo "Go is required to build from source. Please install Go or download a prebuilt binary from https://github.com/${REPO}/releases"
   exit 1
 fi
 
-mkdir -p "$INSTALL_DIR"
-echo "Installing gorun from source (no GitHub releases found)..."
-TMPDIR="$(mktemp -d)"
-cd "$TMPDIR"
+SRC_TMPDIR="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR" "$SRC_TMPDIR"' EXIT
+cd "$SRC_TMPDIR"
 if command -v git >/dev/null 2>&1; then
   git clone --depth 1 "https://github.com/${REPO}.git" repo 2>/dev/null || true
 fi
 if [ -d repo ]; then
   cd repo
 else
-  # try to download tarball
   curl -fsSL "https://github.com/${REPO}/archive/refs/heads/master.tar.gz" -o src.tar.gz 2>/dev/null || \
   curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.tar.gz" -o src.tar.gz 2>/dev/null
   tar xzf src.tar.gz
   cd gorun-* 2>/dev/null || cd */ 2>/dev/null
 fi
 
-if ! command -v go >/dev/null 2>&1; then
-  echo "Go is required to build from source. Please install Go or download a prebuilt binary from https://github.com/${REPO}/releases"
-  exit 1
-fi
-
 go build -o "$BINARY_NAME" ./app/tui
 chmod +x "$BINARY_NAME"
-
 mv "$BINARY_NAME" "${INSTALL_DIR}/${BINARY_NAME}"
 
 echo "gorun installed to ${INSTALL_DIR}/${BINARY_NAME}"
-rm -rf "$TMPDIR"

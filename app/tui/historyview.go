@@ -342,6 +342,7 @@ func (m historyModel) View() tea.View {
 		return v
 	}
 	run := m.run
+
 	b.WriteString(titleStyle.Render("gorun history") + "\n\n")
 	b.WriteString(lipgloss.NewStyle().Bold(true).Render(run.Title) + " " + mutedStyle.Render(run.ID))
 	if isLocalHost(run.Hostname) {
@@ -390,6 +391,7 @@ func (m historyModel) View() tea.View {
 				}
 				dur += run.Tasks[ii.taskIdx].Duration
 			}
+
 
 			srvLine := cursor + arrow + " " + lipgloss.NewStyle().Bold(true).Render(it.server)
 			if total > 0 {

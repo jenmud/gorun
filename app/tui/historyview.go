@@ -36,6 +36,7 @@ type historyModel struct {
 	st       *store.Store
 	runs     []store.RunSummary
 	cursor   int
+	offset   int
 	width    int
 	height   int
 	run      *store.RunDetail
@@ -112,6 +113,7 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 	}
 	m.items = items
 	m.cursor = 0
+	m.offset = 0
 }
 
 func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -122,6 +124,13 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case historyRunsMsg:
 		m.runs = msg.runs
 		m.err = msg.err
+		if len(m.runs) > 0 && m.cursor >= len(m.runs) {
+			m.cursor = len(m.runs) - 1
+		}
+		if m.cursor < 0 {
+			m.cursor = 0
+		}
+		m.offset = 0
 		return m, nil
 	case historyRunMsg:
 		m.run = msg.run
@@ -153,6 +162,13 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state == historyList {
 				if m.cursor > 0 {
 					m.cursor--
+					visible := m.height - 10
+					if visible < 5 {
+						visible = 5
+					}
+					if m.cursor < m.offset {
+						m.offset = m.cursor
+					}
 				}
 				return m, nil
 			}
@@ -164,6 +180,13 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state == historyList {
 				if m.cursor < len(m.runs)-1 {
 					m.cursor++
+					visible := m.height - 10
+					if visible < 5 {
+						visible = 5
+					}
+					if m.cursor >= m.offset+visible {
+						m.offset = m.cursor - visible + 1
+					}
 				}
 				return m, nil
 			}
@@ -249,7 +272,20 @@ func (m historyModel) View() tea.View {
 		} else if len(m.runs) == 0 {
 			b.WriteString(mutedStyle.Render("No runs recorded yet.") + "\n")
 		} else {
-			for i, r := range m.runs {
+			visible := m.height - 12
+			if visible < 3 {
+				visible = 3
+			}
+			start := m.offset
+			if start < 0 {
+				start = 0
+			}
+			end := start + visible
+			if end > len(m.runs) {
+				end = len(m.runs)
+			}
+			for i := start; i < end; i++ {
+				r := m.runs[i]
 				cursor := "  "
 				if i == m.cursor {
 					cursor = "> "
@@ -270,6 +306,9 @@ func (m historyModel) View() tea.View {
 				}
 				b.WriteString(line + "\n")
 				b.WriteString("    " + mutedStyle.Render(r.StartedAt.Format("2006-01-02 15:04:05")) + "\n\n")
+			}
+			if len(m.runs) > visible {
+				b.WriteString(mutedStyle.Render(fmt.Sprintf("    [%d/%d]", m.cursor+1, len(m.runs))) + "\n")
 			}
 		}
 		b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter view · q quit"))
@@ -307,7 +346,6 @@ func (m historyModel) View() tea.View {
 			b.WriteString(cursor + arrow + " " + lipgloss.NewStyle().Bold(true).Render(it.server) + "\n")
 			continue
 		}
-		// only show tasks if their server is expanded
 		serverExpanded := false
 		for _, si := range m.items {
 			if si.isServer && si.server == it.server && si.expanded {

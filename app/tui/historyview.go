@@ -29,16 +29,18 @@ type historyItem struct {
 }
 
 type historyModel struct {
-	state    historyState
-	st       *store.Store
-	runs     []store.RunSummary
-	cursor   int
-	offset   int
-	width    int
-	height   int
-	run      *store.RunDetail
-	items    []historyItem
-	err      error
+	state     historyState
+	st        *store.Store
+	runs      []store.RunSummary
+	cursor    int
+	offset    int
+	width     int
+	height    int
+	run       *store.RunDetail
+	items     []historyItem
+	err       error
+	askKeep   bool
+	keepInput string
 }
 
 func newHistoryModel(st *store.Store) historyModel {
@@ -161,6 +163,37 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyPressMsg:
+		if m.askKeep {
+			switch msg.String() {
+			case "enter":
+				n := 10
+				fmt.Sscanf(m.keepInput, "%d", &n)
+				if n < 0 {
+					n = 0
+				}
+				m.askKeep = false
+				return m, func() tea.Msg {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					_ = m.st.TruncateRuns(ctx, n)
+					return m.loadRuns()
+				}
+			case "esc":
+				m.askKeep = false
+				m.keepInput = ""
+				return m, nil
+			case "backspace":
+				if len(m.keepInput) > 0 {
+					m.keepInput = m.keepInput[:len(m.keepInput)-1]
+				}
+				return m, nil
+			default:
+				if len(msg.String()) == 1 && msg.String()[0] >= '0' && msg.String()[0] <= '9' {
+					m.keepInput += msg.String()
+				}
+				return m, nil
+			}
+		}
 		switch msg.String() {
 		case "ctrl+c", "q":
 			if m.state == historyDetail {
@@ -291,12 +324,9 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "t":
 			if m.state == historyList {
-				return m, func() tea.Msg {
-					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-					defer cancel()
-					_ = m.st.TruncateRuns(ctx, 10)
-					return m.loadRuns()
-				}
+				m.askKeep = true
+				m.keepInput = "10"
+				return m, nil
 			}
 			if m.state == historyDetail && m.cursor < len(m.items) {
 				it := &m.items[m.cursor]
@@ -379,7 +409,11 @@ func (m historyModel) View() tea.View {
 				b.WriteString(mutedStyle.Render(fmt.Sprintf("    [%d/%d]", m.cursor+1, len(m.runs))) + "\n")
 			}
 		}
-		b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter view · d delete · t keep 10 · q quit"))
+		if m.askKeep {
+		b.WriteString("\n" + mutedStyle.Render("Keep how many recent runs? ") + m.keepInput + mutedStyle.Render("_ (enter confirm, esc cancel)"))
+	} else {
+		b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter view · d delete · t keep N · q quit"))
+	}
 		v := tea.NewView(b.String())
 		return v
 	}

@@ -14,17 +14,6 @@ import (
 	"gorun/internal/store"
 )
 
-func isLocalHost(h string) bool {
-	if h == "" {
-		return true
-	}
-	nh, err := os.Hostname()
-	if err != nil {
-		return true
-	}
-	return h == nh
-}
-
 type historyState int
 
 const (
@@ -36,7 +25,7 @@ type historyItem struct {
 	isServer bool
 	server   string
 	task     *store.TaskDetail
-	expanded bool
+	expanded bool // task expanded to show sections
 	showCmd  bool
 	showOut  bool
 	showErr  bool
@@ -73,6 +62,17 @@ type historyRunMsg struct {
 	err error
 }
 
+func isLocalHost(h string) bool {
+	if h == "" {
+		return true
+	}
+	nh, err := os.Hostname()
+	if err != nil {
+		return true
+	}
+	return h == nh
+}
+
 func (m historyModel) loadRuns() tea.Msg {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -87,8 +87,7 @@ func (m historyModel) loadRun(id string) tea.Msg {
 	if err != nil {
 		return historyRunMsg{run: nil, err: err}
 	}
-	m2 := &historyModel{}
-	m2.run = run
+	m2 := &historyModel{run: run}
 	m2.buildItemsForRun(run)
 	return historyRunMsg{run: run, err: nil}
 }
@@ -101,6 +100,8 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 	items := []historyItem{}
 	if run == nil {
 		m.items = items
+		m.cursor = 0
+		m.offset = 0
 		return
 	}
 	servers := run.Servers
@@ -118,7 +119,7 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 		for i := range run.Tasks {
 			if run.Tasks[i].Server == srv {
 				t := run.Tasks[i]
-				items = append(items, historyItem{isServer: false, server: srv, task: &t, expanded: false, showCmd: false, showOut: false, showErr: false})
+				items = append(items, historyItem{isServer: false, server: srv, task: &t})
 			}
 		}
 	}
@@ -193,14 +194,15 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if it.isServer {
 						break
 					}
-					serverExpanded := false
+					// check visible
+					vis := false
 					for _, si := range m.items {
 						if si.isServer && si.server == it.server && si.expanded {
-							serverExpanded = true
+							vis = true
 							break
 						}
 					}
-					if serverExpanded {
+					if vis {
 						break
 					}
 				}
@@ -221,28 +223,22 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.state == historyDetail {
-				// skip non-visible items (tasks under collapsed servers)
 				for m.cursor < len(m.items)-1 {
 					m.cursor++
-					if m.cursor >= len(m.items) {
-						break
-					}
 					it := m.items[m.cursor]
 					if it.isServer {
 						break
 					}
-					// check if server expanded
-					serverExpanded := false
+					vis := false
 					for _, si := range m.items {
 						if si.isServer && si.server == it.server && si.expanded {
-							serverExpanded = true
+							vis = true
 							break
 						}
 					}
-					if serverExpanded {
+					if vis {
 						break
 					}
-					// else skip
 				}
 			}
 			return m, nil
@@ -259,7 +255,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					it.expanded = !it.expanded
 					return m, nil
 				}
-				// toggle task expansion to show details
+				// task: cycle through command, stdout, stderr
 				if !it.expanded {
 					it.expanded = true
 					it.showCmd = true
@@ -267,8 +263,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					it.showErr = false
 					return m, nil
 				}
-				// cycle through cmd, stdout, stderr
-				if it.showCmd && !it.showOut && !it.showErr {
+				if it.showCmd {
 					it.showCmd = false
 					if it.task != nil && it.task.Stdout != "" {
 						it.showOut = true
@@ -281,7 +276,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					it.expanded = false
 					return m, nil
 				}
-				if it.showOut && !it.showCmd && !it.showErr {
+				if it.showOut {
 					it.showOut = false
 					if it.task != nil && it.task.Stderr != "" {
 						it.showErr = true
@@ -290,7 +285,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					it.expanded = false
 					return m, nil
 				}
-				if it.showErr && !it.showCmd && !it.showOut {
+				if it.showErr {
 					it.showErr = false
 					it.expanded = false
 					return m, nil
@@ -323,13 +318,21 @@ func (m historyModel) View() tea.View {
 		} else if len(m.runs) == 0 {
 			b.WriteString(mutedStyle.Render("No runs recorded yet.") + "\n")
 		} else {
-			visible := m.height - 12
+			visible := m.height - 14
 			if visible < 3 {
 				visible = 3
 			}
 			start := m.offset
 			if start < 0 {
 				start = 0
+			}
+			if m.cursor < start {
+				start = m.cursor
+				m.offset = start
+			}
+			if m.cursor >= start+visible {
+				start = m.cursor - visible + 1
+				m.offset = start
 			}
 			end := start + visible
 			if end > len(m.runs) {
@@ -408,14 +411,15 @@ func (m historyModel) View() tea.View {
 			b.WriteString(cursor + arrow + " " + lipgloss.NewStyle().Bold(true).Render(it.server) + "\n")
 			continue
 		}
-		serverExpanded := false
+		// check if visible
+		vis := false
 		for _, si := range m.items {
 			if si.isServer && si.server == it.server && si.expanded {
-				serverExpanded = true
+				vis = true
 				break
 			}
 		}
-		if !serverExpanded {
+		if !vis {
 			continue
 		}
 		if it.task == nil {
@@ -445,31 +449,37 @@ func (m historyModel) View() tea.View {
 		if t.Duration > 0 {
 			line += mutedStyle.Render(fmt.Sprintf(" %ds", int(t.Duration.Seconds())))
 		}
-		if !it.expanded {
-			line += mutedStyle.Render("  [expand]")
-		} else if it.showCmd {
-			line += mutedStyle.Render("  [cmd]")
-		} else if it.showOut {
-			line += mutedStyle.Render("  [stdout]")
-		} else if it.showErr {
-			line += mutedStyle.Render("  [stderr]")
-		}
 		b.WriteString(line + "\n")
-		if it.expanded && it.showCmd && t.Command != "" {
-			b.WriteString(mutedStyle.Render("      $ ") + t.Command + "\n")
-		}
-		if it.expanded && it.showOut && t.Stdout != "" {
-			b.WriteString(mutedStyle.Render("      stdout:") + "\n")
-			b.WriteString(t.Stdout)
-			if !strings.HasSuffix(t.Stdout, "\n") {
-				b.WriteString("\n")
+		if !it.expanded {
+			if t.Command != "" {
+				b.WriteString(mutedStyle.Render("    command") + "\n")
 			}
-		}
-		if it.expanded && it.showErr && t.Stderr != "" {
-			b.WriteString(failStyle.Render("      stderr:") + "\n")
-			b.WriteString(t.Stderr)
-			if !strings.HasSuffix(t.Stderr, "\n") {
-				b.WriteString("\n")
+			if t.Stderr != "" {
+				b.WriteString(failStyle.Render("    stderr") + mutedStyle.Render(" [expand]") + "\n")
+			} else if t.State == 3 {
+				b.WriteString(failStyle.Render("    stderr") + mutedStyle.Render(" [expand]") + "\n")
+			}
+			if t.Stdout != "" {
+				b.WriteString(mutedStyle.Render("    stdout") + mutedStyle.Render(" [expand]") + "\n")
+			}
+		} else if it.showCmd {
+			if t.Command != "" {
+				b.WriteString(mutedStyle.Render("    command") + "\n")
+				b.WriteString("      $ " + strings.ReplaceAll(t.Command, "\n", " ") + "\n")
+			}
+		} else if it.showOut {
+			if t.Stdout != "" {
+				b.WriteString(mutedStyle.Render("    stdout") + "\n")
+				for _, l := range strings.Split(strings.TrimRight(t.Stdout, "\r\n"), "\n") {
+					b.WriteString("      " + l + "\n")
+				}
+			}
+		} else if it.showErr {
+			if t.Stderr != "" {
+				b.WriteString(failStyle.Render("    stderr") + "\n")
+				for _, l := range strings.Split(strings.TrimRight(t.Stderr, "\r\n"), "\n") {
+					b.WriteString("      " + l + "\n")
+				}
 			}
 		}
 		b.WriteString("\n")
@@ -490,7 +500,6 @@ func getHistoryDBPath() string {
 			return p
 		}
 	}
-	// try common locations
 	if _, err := os.Stat("gorun.db"); err == nil {
 		return "gorun.db"
 	}

@@ -386,7 +386,7 @@ func (m historyModel) View() tea.View {
 					continue
 				}
 				total++
-				if run.Tasks[ii.taskIdx].State >= 2 {
+				if run.Tasks[ii.taskIdx].State == 2 {
 					done++
 				}
 				dur += run.Tasks[ii.taskIdx].Duration

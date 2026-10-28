@@ -45,6 +45,9 @@ gorun example/Gorunfile --select -v
 
 # Start the web UI
 gorun -web
+
+# View historical runs in the TUI
+gorun -history
 ```
 
 ### Generate a starting Gorunfile
@@ -135,9 +138,9 @@ The dashboard mirrors the TUI. Each running gorun process is a collapsible card:
 
 ## Database Store
 
-Historical run data is stored in SQLite by the web app, which listens for NATS
-events published by gorun instances (possibly running on different machines). By
-default, runs are saved to `gorun.db` in the current directory.
+Historical run data is stored in SQLite. Runs are recorded automatically
+by gorun instances and can be viewed in the TUI or the web UI. By default,
+runs are saved to `~/.gorun/gorun.sqlite`.
 
 ### Configuration
 
@@ -147,7 +150,7 @@ Set `GORUN_DB_PATH` in your `.env` file (or environment) to specify the database
 GORUN_DB_PATH=/path/to/your/runs.db
 ```
 
-When the web app is running, it automatically:
+When a run occurs, gorun automatically:
 - Creates a run record with UUID, title, hostname, and PID
 - Records each server's name and SSH address
 - Stores every task execution (stdout, stderr, exit code, duration)
@@ -155,15 +158,8 @@ When the web app is running, it automatically:
 
 ### Viewing Historical Runs
 
-The web UI provides a dashboard to browse past runs. Start it separately:
-
-```bash
-go run ./app/web
-```
-
-Then open http://localhost:8080/runs to see all historical runs, including:
-- Run summary (title, hostname, duration, success/failure)
-- Task details per server (commands, output, exit codes)
+- **TUI:** `gorun -history` shows a navigable history with expandable servers, tasks, commands, stdout, and stderr.
+- **Web UI:** Start it with `gorun -web` (or `go run ./app/web`) and open http://localhost:8080/runs to see all historical runs.
 
 The `/runs` endpoint queries the database directly; if the store is unavailable, it returns a 503 error.
 

@@ -183,8 +183,27 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			if m.state == historyDetail && m.cursor > 0 {
-				m.cursor--
+			if m.state == historyDetail {
+				for m.cursor > 0 {
+					m.cursor--
+					if m.cursor < 0 {
+						break
+					}
+					it := m.items[m.cursor]
+					if it.isServer {
+						break
+					}
+					serverExpanded := false
+					for _, si := range m.items {
+						if si.isServer && si.server == it.server && si.expanded {
+							serverExpanded = true
+							break
+						}
+					}
+					if serverExpanded {
+						break
+					}
+				}
 			}
 			return m, nil
 		case "down", "j":
@@ -201,8 +220,30 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			if m.state == historyDetail && m.cursor < len(m.items)-1 {
-				m.cursor++
+			if m.state == historyDetail {
+				// skip non-visible items (tasks under collapsed servers)
+				for m.cursor < len(m.items)-1 {
+					m.cursor++
+					if m.cursor >= len(m.items) {
+						break
+					}
+					it := m.items[m.cursor]
+					if it.isServer {
+						break
+					}
+					// check if server expanded
+					serverExpanded := false
+					for _, si := range m.items {
+						if si.isServer && si.server == it.server && si.expanded {
+							serverExpanded = true
+							break
+						}
+					}
+					if serverExpanded {
+						break
+					}
+					// else skip
+				}
 			}
 			return m, nil
 		case "enter", " ":
@@ -466,7 +507,7 @@ func runHistoryTUI() error {
 		return err
 	}
 	defer st.Close()
-	p := tea.NewProgram(newHistoryModel(st))
+	p := tea.NewProgram(newHistoryModel(st), tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1")))
 	_, err = p.Run()
 	return err
 }

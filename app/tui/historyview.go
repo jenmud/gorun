@@ -25,10 +25,7 @@ type historyItem struct {
 	isServer bool
 	server   string
 	task     *store.TaskDetail
-	expanded bool // task expanded to show sections
-	showCmd  bool
-	showOut  bool
-	showErr  bool
+	expanded bool
 }
 
 type historyModel struct {
@@ -87,13 +84,9 @@ func (m historyModel) loadRun(id string) tea.Msg {
 	if err != nil {
 		return historyRunMsg{run: nil, err: err}
 	}
-	m2 := &historyModel{run: run}
-	m2.buildItemsForRun(run)
+	m.run = run
+	m.buildItemsForRun(run)
 	return historyRunMsg{run: run, err: nil}
-}
-
-func (m *historyModel) buildItems() {
-	m.buildItemsForRun(m.run)
 }
 
 func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
@@ -119,7 +112,7 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 		for i := range run.Tasks {
 			if run.Tasks[i].Server == srv {
 				t := run.Tasks[i]
-				items = append(items, historyItem{isServer: false, server: srv, task: &t})
+				items = append(items, historyItem{isServer: false, server: srv, task: &t, expanded: true})
 			}
 		}
 	}
@@ -194,7 +187,6 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if it.isServer {
 						break
 					}
-					// check visible
 					vis := false
 					for _, si := range m.items {
 						if si.isServer && si.server == it.server && si.expanded {
@@ -255,46 +247,6 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					it.expanded = !it.expanded
 					return m, nil
 				}
-				// task: cycle through command, stdout, stderr
-				if !it.expanded {
-					it.expanded = true
-					it.showCmd = true
-					it.showOut = false
-					it.showErr = false
-					return m, nil
-				}
-				if it.showCmd {
-					it.showCmd = false
-					if it.task != nil && it.task.Stdout != "" {
-						it.showOut = true
-						return m, nil
-					}
-					if it.task != nil && it.task.Stderr != "" {
-						it.showErr = true
-						return m, nil
-					}
-					it.expanded = false
-					return m, nil
-				}
-				if it.showOut {
-					it.showOut = false
-					if it.task != nil && it.task.Stderr != "" {
-						it.showErr = true
-						return m, nil
-					}
-					it.expanded = false
-					return m, nil
-				}
-				if it.showErr {
-					it.showErr = false
-					it.expanded = false
-					return m, nil
-				}
-				it.expanded = false
-				it.showCmd = false
-				it.showOut = false
-				it.showErr = false
-				return m, nil
 			}
 			return m, nil
 		}
@@ -411,7 +363,6 @@ func (m historyModel) View() tea.View {
 			b.WriteString(cursor + arrow + " " + lipgloss.NewStyle().Bold(true).Render(it.server) + "\n")
 			continue
 		}
-		// check if visible
 		vis := false
 		for _, si := range m.items {
 			if si.isServer && si.server == it.server && si.expanded {
@@ -450,41 +401,28 @@ func (m historyModel) View() tea.View {
 			line += mutedStyle.Render(fmt.Sprintf(" %ds", int(t.Duration.Seconds())))
 		}
 		b.WriteString(line + "\n")
-		if !it.expanded {
-			if t.Command != "" {
-				b.WriteString(mutedStyle.Render("    command") + "\n")
+		if t.Command != "" {
+			b.WriteString(mutedStyle.Render("    command") + "\n")
+			b.WriteString("      $ " + strings.ReplaceAll(t.Command, "\n", " ") + "\n")
+		}
+		if t.Stderr != "" {
+			b.WriteString(failStyle.Render("    stderr") + "\n")
+			for _, l := range strings.Split(strings.TrimRight(t.Stderr, "\r\n"), "\n") {
+				b.WriteString("      " + l + "\n")
 			}
-			if t.Stderr != "" {
-				b.WriteString(failStyle.Render("    stderr") + mutedStyle.Render(" [expand]") + "\n")
-			} else if t.State == 3 {
-				b.WriteString(failStyle.Render("    stderr") + mutedStyle.Render(" [expand]") + "\n")
-			}
-			if t.Stdout != "" {
-				b.WriteString(mutedStyle.Render("    stdout") + mutedStyle.Render(" [expand]") + "\n")
-			}
-		} else if it.showCmd {
-			if t.Command != "" {
-				b.WriteString(mutedStyle.Render("    command") + "\n")
-				b.WriteString("      $ " + strings.ReplaceAll(t.Command, "\n", " ") + "\n")
-			}
-		} else if it.showOut {
-			if t.Stdout != "" {
-				b.WriteString(mutedStyle.Render("    stdout") + "\n")
-				for _, l := range strings.Split(strings.TrimRight(t.Stdout, "\r\n"), "\n") {
-					b.WriteString("      " + l + "\n")
-				}
-			}
-		} else if it.showErr {
-			if t.Stderr != "" {
-				b.WriteString(failStyle.Render("    stderr") + "\n")
-				for _, l := range strings.Split(strings.TrimRight(t.Stderr, "\r\n"), "\n") {
-					b.WriteString("      " + l + "\n")
-				}
+		} else if t.State == 3 && t.Stderr == "" {
+			b.WriteString(failStyle.Render("    stderr") + "\n")
+			b.WriteString("      \n")
+		}
+		if t.Stdout != "" {
+			b.WriteString(mutedStyle.Render("    stdout") + "\n")
+			for _, l := range strings.Split(strings.TrimRight(t.Stdout, "\r\n"), "\n") {
+				b.WriteString("      " + l + "\n")
 			}
 		}
 		b.WriteString("\n")
 	}
-	b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter expand/cycle · esc back · q quit"))
+	b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter expand server · esc back · q quit"))
 	v := tea.NewView(b.String())
 	return v
 }

@@ -314,7 +314,7 @@ func (m historyModel) View() tea.View {
 				}
 				line := fmt.Sprintf("%s%s %s %s", cursor, status, r.ID[:8], r.Title)
 				if r.Finished {
-					line += mutedStyle.Render(fmt.Sprintf(" (%ds, %d failed)", int(r.Duration.Seconds()), r.Failed))
+					line += mutedStyle.Render(fmt.Sprintf(" (%.1fs, %d failed)", r.Duration.Seconds(), r.Failed))
 				} else {
 					line += mutedStyle.Render(fmt.Sprintf(" (%d failed)", r.Failed))
 				}
@@ -354,9 +354,9 @@ func (m historyModel) View() tea.View {
 	if !run.Finished {
 		b.WriteString(skipStyle.Render("● running") + mutedStyle.Render(fmt.Sprintf(" · %d failed", run.Failed)) + "\n\n")
 	} else if run.Success {
-		b.WriteString(okStyle.Render("✓ success") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, %d failed, %d skipped (%ds)", run.TotalTasks, run.Failed, run.Skipped, int(run.Duration.Seconds()))) + "\n\n")
+		b.WriteString(okStyle.Render("✓ success") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, %d failed, %d skipped (%.1fs)", run.TotalTasks, run.Failed, run.Skipped, run.Duration.Seconds())) + "\n\n")
 	} else {
-		b.WriteString(failStyle.Render("✗ failed") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, %d failed, %d skipped (%ds)", run.TotalTasks, run.Failed, run.Skipped, int(run.Duration.Seconds()))) + "\n\n")
+		b.WriteString(failStyle.Render("✗ failed") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, %d failed, %d skipped (%.1fs)", run.TotalTasks, run.Failed, run.Skipped, run.Duration.Seconds())) + "\n\n")
 	}
 
 	// build visible lines
@@ -398,7 +398,7 @@ func (m historyModel) View() tea.View {
 				srvLine += mutedStyle.Render(fmt.Sprintf(" %d/%d", done, total))
 			}
 			if dur > 0 {
-				srvLine += mutedStyle.Render(fmt.Sprintf(" %ds", int(dur.Seconds())))
+				srvLine += mutedStyle.Render(fmt.Sprintf(" %.1fs", dur.Seconds()))
 			}
 			lines = append(lines, srvLine)
 			continue
@@ -440,7 +440,7 @@ func (m historyModel) View() tea.View {
 		}
 		line := cursor + mark + " " + t.Name
 		if t.Duration > 0 {
-			line += mutedStyle.Render(fmt.Sprintf(" %ds", int(t.Duration.Seconds())))
+			line += mutedStyle.Render(fmt.Sprintf(" %.1fs", t.Duration.Seconds()))
 		}
 		if !it.expanded {
 			line += mutedStyle.Render(" [expand]")

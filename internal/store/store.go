@@ -267,3 +267,42 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	}
 	return &r, nil
 }
+
+// DeleteRun removes a run and its associated servers and tasks.
+func (s *Store) DeleteRun(ctx context.Context, id string) error {
+	_, _ = s.db.ExecContext(ctx, `DELETE FROM tasks WHERE run_id=?`, id)
+	_, _ = s.db.ExecContext(ctx, `DELETE FROM servers WHERE run_id=?`, id)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM runs WHERE id=?`, id)
+	return err
+}
+
+// TruncateRuns keeps only the most recent N runs (by started_at), deleting the rest.
+func (s *Store) TruncateRuns(ctx context.Context, keep int) error {
+	if keep < 0 {
+		keep = 0
+	}
+	// find ids to delete
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id FROM runs ORDER BY started_at DESC LIMIT -1 OFFSET ?`, keep)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err := s.DeleteRun(ctx, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}

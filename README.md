@@ -159,7 +159,9 @@ When a run occurs, gorun automatically:
 ### Viewing Historical Runs
 
 - **TUI:** `gorun -history` shows a navigable history with expandable servers, tasks, commands, stdout, and stderr.
+  - Press `d` to delete the selected run, `t` to keep only the 10 most recent runs.
 - **Web UI:** Start it with `gorun -web` (or `go run ./app/web`) and open http://localhost:8080/runs to see all historical runs.
+  - Use the "Keep 10 most recent" button or the delete button on a run's detail page.
 
 The `/runs` endpoint queries the database directly; if the store is unavailable, it returns a 503 error.
 

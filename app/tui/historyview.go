@@ -249,6 +249,37 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
+		case "d":
+			if m.state == historyList && m.cursor < len(m.runs) {
+				id := m.runs[m.cursor].ID
+				return m, func() tea.Msg {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					_ = m.st.DeleteRun(ctx, id)
+					return m.loadRuns()
+				}
+			}
+			if m.state == historyDetail && m.run != nil {
+				id := m.run.ID
+				return m, func() tea.Msg {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					_ = m.st.DeleteRun(ctx, id)
+					m.state = historyList
+					m.run = nil
+					m.items = nil
+					return m.loadRuns()
+				}
+			}
+		case "t":
+			if m.state == historyList {
+				return m, func() tea.Msg {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					_ = m.st.TruncateRuns(ctx, 10)
+					return m.loadRuns()
+				}
+			}
 			if m.state == historyDetail && m.cursor < len(m.items) {
 				it := &m.items[m.cursor]
 				if it.isServer {
@@ -330,7 +361,7 @@ func (m historyModel) View() tea.View {
 				b.WriteString(mutedStyle.Render(fmt.Sprintf("    [%d/%d]", m.cursor+1, len(m.runs))) + "\n")
 			}
 		}
-		b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter view · q quit"))
+		b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter view · d delete · t keep 10 · q quit"))
 		v := tea.NewView(b.String())
 		return v
 	}
@@ -497,7 +528,7 @@ func (m historyModel) View() tea.View {
 		b.WriteString(mutedStyle.Render(fmt.Sprintf("    [%d/%d lines]", cursorLine+1, len(lines))) + "\n")
 	}
 	b.WriteString("\n")
-	b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter expand task · esc back · q quit"))
+	b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter expand task · d delete run · esc back · q quit"))
 	v := tea.NewView(b.String())
 	return v
 }

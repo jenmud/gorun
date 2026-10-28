@@ -259,6 +259,38 @@ func Run() {
 		}
 	})
 
+	mux.HandleFunc("/runs/{id}/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if st == nil {
+			http.Error(w, "store disabled", http.StatusServiceUnavailable)
+			return
+		}
+		id := r.PathValue("id")
+		if err := st.DeleteRun(r.Context(), id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/runs", http.StatusSeeOther)
+	})
+	mux.HandleFunc("/runs/truncate", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if st == nil {
+			http.Error(w, "store disabled", http.StatusServiceUnavailable)
+			return
+		}
+		if err := st.TruncateRuns(r.Context(), 10); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		http.Redirect(w, r, "/runs", http.StatusSeeOther)
+	})
+
 	addr := ":8080"
 	if v := envvars.Get("GORUN_ADDRESS"); v != "" {
 		addr = v

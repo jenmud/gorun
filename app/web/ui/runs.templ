@@ -37,7 +37,12 @@ templ RunsList(runs []store.RunSummary) {
 				</div>
 			</div>
 			<main class="mx-auto max-w-5xl px-6 py-6">
-				<h1 class="mb-4 text-2xl font-bold">Runs</h1>
+				<div class="mb-4 flex items-center justify-between">
+					<h1 class="text-2xl font-bold">Runs</h1>
+					<form method="post" action="/runs/truncate">
+						<button type="submit" class="rounded bg-red-600 px-3 py-1 text-xs text-white hover:bg-red-500">Keep 10 most recent</button>
+					</form>
+				</div>
 				if len(runs) == 0 {
 					<p class="text-zinc-500">No runs recorded yet.</p>
 				} else {
@@ -173,8 +178,11 @@ templ RunDetail(run store.RunDetail) {
 						</details>
 					}
 				</div>
-				<div class="mt-6">
+				<div class="mt-6 flex items-center gap-4">
 					<a href="/runs" class="text-sm text-zinc-400 hover:text-zinc-200">← back to runs</a>
+					<form method="post" action={ "/runs/" + run.ID + "/delete" }>
+						<button type="submit" class="rounded bg-red-600 px-3 py-1 text-xs text-white hover:bg-red-500">delete run</button>
+					</form>
 				</div>
 			</main>
 		</div>

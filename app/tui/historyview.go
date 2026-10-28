@@ -128,13 +128,14 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 	case historyRunsMsg:
+		wasEmpty := len(m.runs) == 0
 		m.runs = msg.runs
 		m.err = msg.err
 		m.run = nil
 		m.items = nil
 		m.state = historyList
 		if len(m.runs) > 0 {
-			if m.cursor >= len(m.runs) {
+			if wasEmpty || m.cursor >= len(m.runs) {
 				m.cursor = len(m.runs) - 1
 			}
 		} else {

@@ -409,11 +409,11 @@ func (m historyModel) View() tea.View {
 			mark = mutedStyle.Render("  ○")
 		}
 		line := cursor + mark + " " + t.Name
-		if t.ExitCode != 0 {
-			line += failStyle.Render(fmt.Sprintf(" (exit %d)", t.ExitCode))
-		}
 		if t.Duration > 0 {
 			line += mutedStyle.Render(fmt.Sprintf(" %ds", int(t.Duration.Seconds())))
+		}
+		if t.ExitCode != 0 {
+			line += failStyle.Render(fmt.Sprintf(" (exit %d)", t.ExitCode))
 		}
 		if !it.expanded {
 			line += mutedStyle.Render(" [expand]")

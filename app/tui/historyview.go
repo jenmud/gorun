@@ -415,15 +415,25 @@ func getHistoryDBPath() string {
 	if p := os.Getenv("GORUN_DB_PATH"); p != "" {
 		if len(p) > 0 && p[0] == '~' {
 			if home, err := os.UserHomeDir(); err == nil {
-				return filepath.Join(home, p[1:])
+				p = filepath.Join(home, p[1:])
 			}
 		}
-		return p
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	// try common locations
+	if _, err := os.Stat("gorun.db"); err == nil {
+		return "gorun.db"
 	}
 	if home, err := os.UserHomeDir(); err == nil {
+		p := filepath.Join(home, ".gorun", "gorun.sqlite")
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
 		dir := filepath.Join(home, ".gorun")
 		_ = os.MkdirAll(dir, 0755)
-		return filepath.Join(dir, "gorun.sqlite")
+		return p
 	}
 	return "gorun.db"
 }

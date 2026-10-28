@@ -24,7 +24,14 @@ func main() {
 	verbose := flag.Bool("v", false, "verbose: show every task and its output")
 	plain := flag.Bool("plain", false, "plain log output instead of the TUI (default when stdout is not a terminal)")
 	selectServers := flag.Bool("select", false, "select servers to deploy to using TUI")
+	dump := flag.Bool("dump", false, "dump an empty Gorunfile template to stdout")
 	flag.Parse()
+
+	if *dump {
+		fmt.Print(emptyGorunfile())
+		return
+	}
+
 	filename := flag.Arg(0)
 
 	// the flag package stops at the first positional argument, so parse again
@@ -107,4 +114,31 @@ func main() {
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "gorun: %v\n", err)
 	os.Exit(1)
+}
+
+
+func emptyGorunfile() string {
+	return `# Gorunfile
+
+title = "My deployment"
+
+# Global tasks applied to all hosts unless a host overrides
+[servers]
+tasks = []
+
+# Task library
+# [tasks.example]
+# cmd = "echo hello"
+# sudo = false
+# depends_on = []
+
+# Server inventory
+# [servers.hosts.myserver]
+# hostname = "example.com"
+# tasks = ["example"]
+#   [servers.hosts.myserver.ssh]
+#   port = 22
+#   username = "root"
+#   identityfile = "~/.ssh/id_rsa"
+`
 }

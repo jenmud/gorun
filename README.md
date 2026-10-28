@@ -27,6 +27,12 @@ go run ./app/tui example/Gorunfile -v
 go run ./app/tui example/Gorunfile --select -v
 ```
 
+### Generate a starting Gorunfile
+
+```bash
+go run ./app/tui -dump > Gorunfile
+```
+
 Verbose mode (`-v`, or press `v` while running) lists every task per server:
 
 ![gorun verbose view listing each server's tasks](docs/screenshot-verbose.png)

@@ -18,6 +18,8 @@ import (
 	web "gorun/app/websrv"
 )
 
+var version = "dev"
+
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancel()
@@ -26,9 +28,15 @@ func main() {
 	plain := flag.Bool("plain", false, "plain log output instead of the TUI (default when stdout is not a terminal)")
 	selectServers := flag.Bool("select", false, "select servers to deploy to using TUI")
 	dump := flag.Bool("dump", false, "dump an empty Gorunfile template to stdout")
+	versionFlag := flag.Bool("version", false, "print version and exit")
 	webFlag := flag.Bool("web", false, "start the web server")
 	historyFlag := flag.Bool("history", false, "view historical runs")
 	flag.Parse()
+
+	if *versionFlag {
+		fmt.Println(version)
+		return
+	}
 
 	if *historyFlag {
 		if err := runHistoryTUI(); err != nil {

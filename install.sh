@@ -7,15 +7,15 @@ BINARY_NAME="gorun"
 
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$OS" in
-  linux) OS=linux ;;
-  darwin) OS=darwin ;;
+  linux) OS=linux; OS_TITLE=Linux ;;
+  darwin) OS=darwin; OS_TITLE=Darwin ;;
   *) echo "unsupported OS: $OS"; exit 1 ;;
 esac
 
 ARCH="$(uname -m)"
 case "$ARCH" in
-  x86_64|amd64) ARCH=amd64 ;;
-  aarch64|arm64) ARCH=arm64 ;;
+  x86_64|amd64) ARCH=amd64; ARCH_NAME=x86_64 ;;
+  aarch64|arm64) ARCH=arm64; ARCH_NAME=arm64 ;;
   *) echo "unsupported arch: $ARCH"; exit 1 ;;
 esac
 
@@ -29,15 +29,22 @@ if [ -z "$VERSION" ]; then
   VERSION="v0.0.1-beta.1"
 fi
 
-ASSET="gorun-${OS}-${ARCH}"
+VERSION_NO_V="${VERSION#v}"
+ASSET="gorun_${VERSION_NO_V}_${OS_TITLE}_${ARCH_NAME}.tar.gz"
 URL="https://github.com/${REPO}/releases/download/${VERSION}/${ASSET}"
 
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
-if curl -fsSL "$URL" -o "${TMPDIR}/${BINARY_NAME}" 2>/dev/null; then
-  chmod +x "${TMPDIR}/${BINARY_NAME}"
-  mv "${TMPDIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}"
+if curl -fsSL "$URL" -o "${TMPDIR}/${ASSET}" 2>/dev/null; then
+  tar -xzf "${TMPDIR}/${ASSET}" -C "$TMPDIR"
+  BIN_PATH="$(find "$TMPDIR" -type f -name "$BINARY_NAME" | head -n 1)"
+  if [ -z "$BIN_PATH" ]; then
+    echo "binary not found in archive"
+    exit 1
+  fi
+  chmod +x "$BIN_PATH"
+  mv "$BIN_PATH" "${INSTALL_DIR}/${BINARY_NAME}"
   echo "Installed ${BINARY_NAME} ${VERSION} to ${INSTALL_DIR}/${BINARY_NAME}"
   exit 0
 fi

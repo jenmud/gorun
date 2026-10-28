@@ -75,7 +75,9 @@ func (m historyModel) loadRun(id string) tea.Msg {
 	if err != nil {
 		return historyRunMsg{run: nil, err: err}
 	}
-	m.buildItemsForRun(run)
+	m2 := &historyModel{}
+	m2.run = run
+	m2.buildItemsForRun(run)
 	return historyRunMsg{run: run, err: nil}
 }
 
@@ -100,7 +102,7 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 		}
 	}
 	for _, srv := range servers {
-		items = append(items, historyItem{isServer: true, server: srv})
+		items = append(items, historyItem{isServer: true, server: srv, expanded: false})
 		for i := range run.Tasks {
 			if run.Tasks[i].Server == srv {
 				t := run.Tasks[i]
@@ -125,7 +127,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.run = msg.run
 		m.err = msg.err
 		if m.run != nil {
-			m.buildItems()
+			m.buildItemsForRun(m.run)
 			m.state = historyDetail
 		}
 		return m, nil
@@ -179,6 +181,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state == historyDetail && m.cursor < len(m.items) {
 				it := &m.items[m.cursor]
 				if it.isServer {
+					it.expanded = !it.expanded
 					return m, nil
 				}
 				if !it.expanded {
@@ -191,20 +194,18 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					return m, nil
 				}
-				// cycle: show cmd -> stdout -> stderr -> collapse
-				if it.showCmd && (!it.showOut && it.showErr) {
-					it.showCmd = false
-					it.showOut = false
-					it.showErr = false
-					it.expanded = false
-					return m, nil
-				}
 				if it.showCmd {
 					it.showCmd = false
 					if it.task != nil && it.task.Stdout != "" {
 						it.showOut = true
 						return m, nil
 					}
+					if it.task != nil && it.task.Stderr != "" {
+						it.showErr = true
+						return m, nil
+					}
+					it.expanded = false
+					return m, nil
 				}
 				if it.showOut {
 					it.showOut = false
@@ -212,6 +213,8 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						it.showErr = true
 						return m, nil
 					}
+					it.expanded = false
+					return m, nil
 				}
 				if it.showErr {
 					it.showErr = false
@@ -219,7 +222,9 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				it.expanded = false
-				it.showCmd = false; it.showOut = false; it.showErr = false
+				it.showCmd = false
+				it.showOut = false
+				it.showErr = false
 				return m, nil
 			}
 			return m, nil
@@ -295,7 +300,22 @@ func (m historyModel) View() tea.View {
 			if i == m.cursor {
 				cursor = "> "
 			}
-			b.WriteString(cursor + lipgloss.NewStyle().Bold(true).Render(it.server) + "\n")
+			arrow := "▶"
+			if it.expanded {
+				arrow = "▼"
+			}
+			b.WriteString(cursor + arrow + " " + lipgloss.NewStyle().Bold(true).Render(it.server) + "\n")
+			continue
+		}
+		// only show tasks if their server is expanded
+		serverExpanded := false
+		for _, si := range m.items {
+			if si.isServer && si.server == it.server && si.expanded {
+				serverExpanded = true
+				break
+			}
+		}
+		if !serverExpanded {
 			continue
 		}
 		if it.task == nil {

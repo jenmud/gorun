@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -82,7 +84,17 @@ func Run() {
 
 	dbPath := envvars.Get("GORUN_DB_PATH")
 	if dbPath == "" {
-		dbPath = "gorun.db"
+		if home, err := os.UserHomeDir(); err == nil {
+			dir := filepath.Join(home, ".gorun")
+			_ = os.MkdirAll(dir, 0755)
+			dbPath = filepath.Join(dir, "gorun.sqlite")
+		} else {
+			dbPath = "gorun.db"
+		}
+	} else if len(dbPath) > 0 && dbPath[0] == '~' {
+		if home, err := os.UserHomeDir(); err == nil {
+			dbPath = filepath.Join(home, dbPath[1:])
+		}
 	}
 	st, err := store.Open(dbPath)
 	if err != nil {

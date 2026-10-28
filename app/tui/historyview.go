@@ -1,0 +1,259 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+
+	"gorun/internal/store"
+)
+
+type historyState int
+
+const (
+	historyList historyState = iota
+	historyDetail
+)
+
+type historyModel struct {
+	state    historyState
+	st       *store.Store
+	runs     []store.RunSummary
+	cursor   int
+	width    int
+	height   int
+	run      *store.RunDetail
+	err      error
+}
+
+func newHistoryModel(st *store.Store) historyModel {
+	return historyModel{state: historyList, st: st, width: 80, height: 24}
+}
+
+func (m historyModel) Init() tea.Cmd {
+	return func() tea.Msg { return m.loadRuns() }
+}
+
+type historyRunsMsg struct {
+	runs []store.RunSummary
+	err  error
+}
+
+type historyRunMsg struct {
+	run *store.RunDetail
+	err error
+}
+
+func (m historyModel) loadRuns() tea.Msg {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	runs, err := m.st.ListRuns(ctx)
+	return historyRunsMsg{runs: runs, err: err}
+}
+
+func (m historyModel) loadRun(id string) tea.Msg {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	run, err := m.st.GetRun(ctx, id)
+	return historyRunMsg{run: run, err: err}
+}
+
+func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width, m.height = msg.Width, msg.Height
+		return m, nil
+	case historyRunsMsg:
+		m.runs = msg.runs
+		m.err = msg.err
+		return m, nil
+	case historyRunMsg:
+		m.run = msg.run
+		m.err = msg.err
+		if m.run != nil {
+			m.state = historyDetail
+		}
+		return m, nil
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "ctrl+c", "q", "esc":
+			if m.state == historyDetail {
+				m.state = historyList
+				m.run = nil
+				return m, nil
+			}
+			return m, tea.Quit
+		case "up", "k":
+			if m.state == historyList && m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.state == historyList && m.cursor < len(m.runs)-1 {
+				m.cursor++
+			}
+		case "enter":
+			if m.state == historyList && m.cursor < len(m.runs) {
+				return m, func() tea.Msg { return m.loadRun(m.runs[m.cursor].ID) }
+			}
+		}
+		return m, nil
+	}
+	return m, nil
+}
+
+func (m historyModel) View() tea.View {
+	var b strings.Builder
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#7C3AED")).Padding(0, 1)
+	mutedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
+	okStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#22C55E"))
+	failStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444"))
+	skipStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#F59E0B"))
+
+	if m.state == historyList {
+		b.WriteString(titleStyle.Render("gorun history") + "\n\n")
+		if m.err != nil {
+			b.WriteString(failStyle.Render("error: ") + m.err.Error() + "\n")
+		} else if len(m.runs) == 0 {
+			b.WriteString(mutedStyle.Render("No runs recorded yet.") + "\n")
+		} else {
+			for i, r := range m.runs {
+				cursor := "  "
+				if i == m.cursor {
+					cursor = "> "
+				}
+				status := mutedStyle.Render("● running")
+				if r.Finished {
+					if r.Success {
+						status = okStyle.Render("✓ success")
+					} else {
+						status = failStyle.Render("✗ failed")
+					}
+				}
+				line := fmt.Sprintf("%s%s %s %s", cursor, status, r.ID[:8], r.Title)
+				if r.Finished {
+					line += mutedStyle.Render(fmt.Sprintf(" (%ds, %d failed)", int(r.Duration.Seconds()), r.Failed))
+				} else {
+					line += mutedStyle.Render(fmt.Sprintf(" (%d failed)", r.Failed))
+				}
+				b.WriteString(line + "\n")
+				b.WriteString("    " + mutedStyle.Render(r.StartedAt.Format("2006-01-02 15:04:05")) + "\n\n")
+			}
+		}
+		b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter view · q quit"))
+		v := tea.NewView(b.String())
+		return v
+	}
+
+	// detail view
+	if m.run == nil {
+		b.WriteString(titleStyle.Render("gorun history") + "\n\n")
+		b.WriteString(mutedStyle.Render("loading...") + "\n")
+		v := tea.NewView(b.String())
+		return v
+	}
+	run := m.run
+	b.WriteString(titleStyle.Render("gorun history") + "\n\n")
+	b.WriteString(lipgloss.NewStyle().Bold(true).Render(run.Title) + " " + mutedStyle.Render(run.ID) + "\n")
+	if !run.Finished {
+		b.WriteString(skipStyle.Render("● running") + mutedStyle.Render(fmt.Sprintf(" · %d failed", run.Failed)) + "\n\n")
+	} else if run.Success {
+		b.WriteString(okStyle.Render("✓ success") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, %d failed, %d skipped (%ds)", run.TotalTasks, run.Failed, run.Skipped, int(run.Duration.Seconds()))) + "\n\n")
+	} else {
+		b.WriteString(failStyle.Render("✗ failed") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, %d failed, %d skipped (%ds)", run.TotalTasks, run.Failed, run.Skipped, int(run.Duration.Seconds()))) + "\n\n")
+	}
+
+	// group by server
+	servers := run.Servers
+	if len(servers) == 0 {
+		// infer from tasks
+		seen := map[string]bool{}
+		for _, t := range run.Tasks {
+			if !seen[t.Server] {
+				servers = append(servers, t.Server)
+				seen[t.Server] = true
+			}
+		}
+	}
+	for _, srv := range servers {
+		b.WriteString(lipgloss.NewStyle().Bold(true).Render(srv) + "\n")
+		for _, t := range run.Tasks {
+			if t.Server != srv {
+				continue
+			}
+			var mark string
+			if t.State == 2 {
+				mark = okStyle.Render("  ✓")
+			} else if t.State == 3 {
+				mark = failStyle.Render("  ✗")
+			} else if t.State == 4 {
+				mark = skipStyle.Render("  ⊘")
+			} else if t.State == 1 {
+				mark = skipStyle.Render("  ●")
+			} else {
+				mark = mutedStyle.Render("  ○")
+			}
+			line := mark + " " + t.Name
+			if t.ExitCode != 0 {
+				line += failStyle.Render(fmt.Sprintf(" (exit %d)", t.ExitCode))
+			}
+			if t.Duration > 0 {
+				line += mutedStyle.Render(fmt.Sprintf(" %ds", int(t.Duration.Seconds())))
+			}
+			b.WriteString(line + "\n")
+			if t.Command != "" {
+				b.WriteString(mutedStyle.Render("    $ ") + strings.ReplaceAll(t.Command, "\n", " ") + "\n")
+			}
+			if t.Stdout != "" {
+				b.WriteString(mutedStyle.Render("    stdout:") + "\n")
+				for _, l := range strings.Split(strings.TrimRight(t.Stdout, "\n"), "\n") {
+					b.WriteString(mutedStyle.Render("      ") + l + "\n")
+				}
+			}
+			if t.Stderr != "" {
+				b.WriteString(failStyle.Render("    stderr:") + "\n")
+				for _, l := range strings.Split(strings.TrimRight(t.Stderr, "\n"), "\n") {
+					b.WriteString(failStyle.Render("      ") + l + "\n")
+				}
+			}
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\n" + mutedStyle.Render("esc back · q quit"))
+	v := tea.NewView(b.String())
+	return v
+}
+
+func getHistoryDBPath() string {
+	if p := os.Getenv("GORUN_DB_PATH"); p != "" {
+		if p[0] == '~' {
+			if home, err := os.UserHomeDir(); err == nil {
+				return filepath.Join(home, p[1:])
+			}
+		}
+		return p
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		dir := filepath.Join(home, ".gorun")
+		_ = os.MkdirAll(dir, 0755)
+		return filepath.Join(dir, "gorun.sqlite")
+	}
+	return "gorun.db"
+}
+
+func runHistoryTUI() error {
+	st, err := store.Open(getHistoryDBPath())
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	p := tea.NewProgram(newHistoryModel(st))
+	_, err = p.Run()
+	return err
+}

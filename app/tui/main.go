@@ -27,7 +27,15 @@ func main() {
 	selectServers := flag.Bool("select", false, "select servers to deploy to using TUI")
 	dump := flag.Bool("dump", false, "dump an empty Gorunfile template to stdout")
 	webFlag := flag.Bool("web", false, "start the web server")
+	historyFlag := flag.Bool("history", false, "view historical runs")
 	flag.Parse()
+
+	if *historyFlag {
+		if err := runHistoryTUI(); err != nil {
+			fatal(err)
+		}
+		return
+	}
 
 	if *webFlag {
 		os.Setenv("GORUN_SKIP_NATS", "1")
@@ -57,7 +65,7 @@ func main() {
 	}
 
 	if filename == "" {
-		fatal(errors.New("usage: gorun [-v] [-plain] [-select] [-web] <Gorunfile>"))
+		fatal(errors.New("usage: gorun [-v] [-plain] [-select] [-web] [-history] <Gorunfile>"))
 	}
 
 	cfg := gorun.Config{}

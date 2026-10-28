@@ -7,12 +7,13 @@ before:
     - go mod tidy
 
 builds:
-  - env:
-      - CGO_ENABLED=0
+  - id: gorun
     main: ./app/tui
     binary: gorun
     ldflags:
       - -s -w -X main.version={{.Tag}}
+    env:
+      - CGO_ENABLED=0
     goos:
       - linux
       - darwin
@@ -20,10 +21,37 @@ builds:
       - amd64
       - arm64
 
+  - id: gorun-otel
+    main: ./app/tui
+    binary: gorun-otel
+    tool: ./scripts/go-otel.sh
+    ldflags:
+      - -s -w -X main.version={{.Tag}}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
 archives:
-  - formats: [tar.gz]
+  - id: gorun
+    ids:
+      - gorun
+    formats: [tar.gz]
     name_template: >-
       {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+  - id: gorun-otel
+    ids:
+      - gorun-otel
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}-otel_
       {{- .Version }}_
       {{- title .Os }}_
       {{- if eq .Arch "amd64" }}x86_64

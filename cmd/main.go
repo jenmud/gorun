@@ -228,6 +228,14 @@ log_level = "info"   # debug|info|warn|error (inherited by servers/tasks)
 
 # envvars = { FOO = "bar" }   # exported to every task (keys upper-cased)
 
+# Global SSH defaults (per-server values win; config_file is inherited).
+# [ssh]
+# username = "root"
+# port = 22
+# identityfile = "~/.ssh/id_rsa"
+# password = ""               # prefer identityfile
+# config_file = "~/.ssh/config"  # fills gaps; defaults to ~/.ssh/config
+
 # Task library: define once, reference by name.
 # [tasks.example]
 # cmd = "echo hello"            # or cmd_file / cmd_template / cmd_template_file (pick one)

@@ -69,7 +69,7 @@ if curl -fsSL "$URL" -o "${TMPDIR}/${ASSET}" 2>/dev/null; then
 DIR="$(cd "$(dirname "$0")" && pwd)"
 for a in "$@"; do
   case "$a" in
-    -version|--version) export OTEL_LOG_LEVEL=error ;;
+    -version|--version|-help|--help|-h|-dump|--dump) export OTEL_LOG_LEVEL=error ;;
   esac
 done
 exec "$DIR/gorun-real" "$@"
@@ -121,7 +121,7 @@ cat > "${INSTALL_DIR}/gorun" <<'EOF'
 DIR="$(cd "$(dirname "$0")" && pwd)"
 for a in "$@"; do
   case "$a" in
-    -version|--version) export OTEL_LOG_LEVEL=error ;;
+    -version|--version|-help|--help|-h|-dump|--dump) export OTEL_LOG_LEVEL=error ;;
   esac
 done
 exec "$DIR/gorun-real" "$@"

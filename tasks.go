@@ -406,7 +406,7 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 		serverArg = Server{Name: t.serverName}
 	}
 
-	if err := CopyFiles(t.server, t.serverName, &t.task); err != nil {
+	if err := CopyFiles(t.server, serverArg, &t.task); err != nil {
 		return t.Fail(ctx, err)
 	}
 
@@ -541,7 +541,7 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 			serverArg = Server{Name: t.serverName}
 		}
 
-		if err := CopyFiles(t.server, t.serverName, &t.task); err != nil {
+		if err := CopyFiles(t.server, serverArg, &t.task); err != nil {
 			errChan <- fmt.Errorf("error running the task on the remote server: %w", err)
 			return
 		}

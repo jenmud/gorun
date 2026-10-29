@@ -171,8 +171,9 @@ func scpCopy(client *ssh.Client, data []byte, remotePath string, mode os.FileMod
 	return nil
 }
 
-// CopyFiles copies files for a task to a server
-func CopyFiles(client *ssh.Client, serverName string, task *Task) error {
+// CopyFiles copies files for a task to a server. Templates are executed with
+// server as their data, the same as cmd_template.
+func CopyFiles(client *ssh.Client, server any, task *Task) error {
 	copies := task.getCopies()
 	for _, c := range copies {
 		cc := c
@@ -211,10 +212,7 @@ func CopyFiles(client *ssh.Client, serverName string, task *Task) error {
 				return err
 			}
 			var buf bytes.Buffer
-			var srv any
-			// try to find server
-			srv = Server{Name: serverName}
-			if err := tmpl.Execute(&buf, srv); err != nil {
+			if err := tmpl.Execute(&buf, server); err != nil {
 				return err
 			}
 			data = buf.Bytes()

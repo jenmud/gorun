@@ -62,7 +62,19 @@ if curl -fsSL "$URL" -o "${TMPDIR}/${ASSET}" 2>/dev/null; then
     exit 1
   fi
   chmod +x "$BIN_PATH"
-  mv "$BIN_PATH" "${INSTALL_DIR}/${BINARY_NAME}"
+  mv "$BIN_PATH" "${INSTALL_DIR}/gorun-real"
+  # Wrapper so `gorun -version` stays clean even for the OTELC build.
+  cat > "${INSTALL_DIR}/gorun" <<'EOF'
+#!/bin/sh
+DIR="$(cd "$(dirname "$0")" && pwd)"
+for a in "$@"; do
+  case "$a" in
+    -version|--version) export OTEL_LOG_LEVEL=error ;;
+  esac
+done
+exec "$DIR/gorun-real" "$@"
+EOF
+  chmod +x "${INSTALL_DIR}/gorun"
   echo "Installed ${BINARY_NAME} (${VARIANT}) ${VERSION} to ${INSTALL_DIR}/${BINARY_NAME}"
   exit 0
 fi
@@ -99,6 +111,19 @@ else
   go build -o "$BINARY_NAME" ./cmd
 fi
 chmod +x "$BINARY_NAME"
-mv "$BINARY_NAME" "${INSTALL_DIR}/${BINARY_NAME}"
+mv "$BINARY_NAME" "${INSTALL_DIR}/gorun-real"
 
 echo "gorun (${VARIANT}) installed to ${INSTALL_DIR}/${BINARY_NAME}"
+
+# Wrapper so `gorun -version` stays clean even for the OTELC build.
+cat > "${INSTALL_DIR}/gorun" <<'EOF'
+#!/bin/sh
+DIR="$(cd "$(dirname "$0")" && pwd)"
+for a in "$@"; do
+  case "$a" in
+    -version|--version) export OTEL_LOG_LEVEL=error ;;
+  esac
+done
+exec "$DIR/gorun-real" "$@"
+EOF
+chmod +x "${INSTALL_DIR}/gorun"

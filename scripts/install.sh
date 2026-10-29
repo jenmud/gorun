@@ -35,7 +35,17 @@ VERSION_NO_V="${VERSION#v}"
 # By default the OpenTelemetry-instrumented (otel) build is used.
 # Setting INSTALL_VARIANTS enables an interactive prompt.
 VARIANT="otel"
-if [ -n "${INSTALL_VARIANTS:-}" ]; then
+PROMPT=0
+case "${INSTALL_VARIANTS:-}" in
+  normal|otel)
+    VARIANT="${INSTALL_VARIANTS}"
+    ;;
+  1|prompt|true|yes)
+    PROMPT=1
+    ;;
+esac
+
+if [ "$PROMPT" = "1" ]; then
   if [ -r /dev/tty ]; then
     printf "Install which variant? [otel/normal] (default: otel): " > /dev/tty
     read -r answer < /dev/tty

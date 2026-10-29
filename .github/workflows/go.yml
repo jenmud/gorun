@@ -22,7 +22,7 @@ jobs:
         go-version: '1.27.3'
 
     - name: Build
-      run: go tool otelc go build -v ./cmd
+      run: go tool otelc go build -v -o gorun ./cmd
 
     - name: Test
       run: go test -race -v ./...

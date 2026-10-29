@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
+	sshconfig "github.com/kevinburke/ssh_config"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -18,17 +21,81 @@ type SSH struct {
 	Password     string `toml:"password"`
 	Port         int    `toml:"port"`
 	Identityfile string `toml:"identityfile"`
+	ConfigFile   string `toml:"config_file,omitempty"`
+	Config       string `toml:"config,omitempty"`
 }
 
 // NewSSHClient creates a new SSH client connected to the provided server.
 func NewSSHClient(ctx context.Context, server Server) (*ssh.Client, error) {
-	port := 22
+	// Resolve an SSH config file: use the one given, otherwise fall back to the
+	// default ~/.ssh/config when it exists.
+	configPath := server.SSH.ConfigFile
+	if configPath == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			candidate := filepath.Join(home, ".ssh", "config")
+			if _, err := os.Stat(candidate); err == nil {
+				configPath = candidate
+			}
+		}
+	} else {
+		if strings.HasPrefix(configPath, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				configPath = filepath.Join(home, configPath[2:])
+			}
+		}
+	}
 
+	// Apply settings from the SSH config, filling in any gaps (explicit values in
+	// the Gorunfile always take precedence).
+	host := server.Hostname
+	if host == "" {
+		host = server.Name
+	}
+	alias := host
+	resolvedHost := host
+	if configPath != "" {
+		if f, err := os.Open(configPath); err == nil {
+			if cfg, err := sshconfig.Decode(f); err == nil {
+				_ = f.Close()
+				if v, err := cfg.Get(alias, "HostName"); err == nil && v != "" && v != alias {
+					resolvedHost = v
+				}
+				if server.SSH.User == "" {
+					if v, err := cfg.Get(alias, "User"); err == nil && v != "" {
+						server.SSH.User = v
+					}
+				}
+				if server.SSH.Port == 0 {
+					if v, err := cfg.Get(alias, "Port"); err == nil && v != "" {
+						if p, err := strconv.Atoi(v); err == nil {
+							server.SSH.Port = p
+						}
+					}
+				}
+				if server.SSH.Identityfile == "" {
+					if v, err := cfg.Get(alias, "IdentityFile"); err == nil && v != "" {
+						// ssh_config may return a path with a leading ~
+						if strings.HasPrefix(v, "~/") {
+							if home, err := os.UserHomeDir(); err == nil {
+								v = filepath.Join(home, v[2:])
+							}
+						}
+						server.SSH.Identityfile = v
+					}
+				}
+			} else {
+				_ = f.Close()
+			}
+		}
+	}
+	host = resolvedHost
+
+	port := 22
 	if server.SSH.Port != 0 {
 		port = server.SSH.Port
 	}
 
-	address := fmt.Sprintf("%s:%d", server.Hostname, port)
+	address := fmt.Sprintf("%s:%d", host, port)
 	auth := []ssh.AuthMethod{}
 
 	// Create the Signer for this private key.
@@ -166,4 +233,3 @@ func CopyFiles(client *ssh.Client, serverName string, task *Task) error {
 	}
 	return nil
 }
-

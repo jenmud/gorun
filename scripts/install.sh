@@ -26,7 +26,7 @@ if [ -z "$VERSION" ]; then
   VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
 fi
 if [ -z "$VERSION" ]; then
-  VERSION="v0.0.1-beta.1"
+  VERSION="v0.0.1-beta.2"
 fi
 
 VERSION_NO_V="${VERSION#v}"

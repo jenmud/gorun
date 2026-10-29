@@ -149,6 +149,10 @@ func (c *Config) ResolvePaths(dir string) {
 	}
 
 	c.SSH.Identityfile = resolve(c.SSH.Identityfile)
+	if c.SSH.ConfigFile == "" && c.SSH.Config != "" {
+		c.SSH.ConfigFile = c.SSH.Config
+	}
+	c.SSH.ConfigFile = resolve(c.SSH.ConfigFile)
 
 	for name, task := range c.Tasks {
 		task.CmdFile = resolve(task.CmdFile)
@@ -196,6 +200,14 @@ func (c *Config) ResolvePaths(dir string) {
 
 	for i := range c.Servers {
 		c.Servers[i].SSH.Identityfile = resolve(c.Servers[i].SSH.Identityfile)
+		if c.Servers[i].SSH.ConfigFile == "" && c.Servers[i].SSH.Config != "" {
+			c.Servers[i].SSH.ConfigFile = c.Servers[i].SSH.Config
+		}
+		c.Servers[i].SSH.ConfigFile = resolve(c.Servers[i].SSH.ConfigFile)
+		// inherit global ssh config file when the server doesn't specify one
+		if c.Servers[i].SSH.ConfigFile == "" && c.SSH.ConfigFile != "" {
+			c.Servers[i].SSH.ConfigFile = c.SSH.ConfigFile
+		}
 	}
 }
 
@@ -368,6 +380,21 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		pipeline = pipelines
 	}
 
+	// merge global envvars into each task (task-level values take precedence)
+	for name, server := range pipeline {
+		for i := range server.Tasks {
+			if server.Tasks[i].EnvVars == nil {
+				server.Tasks[i].EnvVars = map[string]string{}
+			}
+			for k, v := range c.EnvVars {
+				if _, ok := server.Tasks[i].EnvVars[k]; !ok {
+					server.Tasks[i].EnvVars[k] = v
+				}
+			}
+		}
+		pipeline[name] = server
+	}
+
 	serverNames := slices.Sorted(maps.Keys(pipeline))
 
 	totalTasks := 0
@@ -416,7 +443,6 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 			server.Tasks[i] = task
 		}
-
 		wg.Go(func() {
 			ctx, span := tracer.Start(ctx, "server.run")
 			defer span.End()

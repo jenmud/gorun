@@ -18,9 +18,9 @@ import (
 	"golang.org/x/term"
 
 	"gorun"
+	web "gorun/cmd/websrv"
 	inats "gorun/internal/nats"
 	"gorun/internal/store"
-	web "gorun/cmd/websrv"
 )
 
 var version = "dev"
@@ -146,7 +146,11 @@ func main() {
 	}
 
 	st, _ := store.Open(getHistoryDBPath())
-	defer func() { if st != nil { _ = st.Close() } }()
+	defer func() {
+		if st != nil {
+			_ = st.Close()
+		}
+	}()
 
 	cfg.OnEvent = func(event any) {
 		if st != nil {
@@ -206,26 +210,216 @@ OpenTelemetry SDK variables (OTEL_*) are also honoured by the instrumented build
 
 func emptyGorunfile() string {
 	return `# Gorunfile
+#
+# This is a template produced by ` + "`gorun -dump`" + `. Every key is shown with its
+# type, allowed values and default. Uncomment the lines you need and edit the values.
+# Relative paths (identityfile, cmd_file, cmd_template_file, copy src/src_template)
+# are resolved relative to THIS file, not your working directory, so gorun can be
+# run from anywhere.
+#
+# Quick start:
+#   gorun -dump > Gorunfile        # create this file
+#   # edit it, then:
+#   gorun Gorunfile                # run on every server
+#   gorun Gorunfile --select       # pick servers interactively first
+#   gorun Gorunfile -v             # verbose: list every task per server
 
+# ---------------------------------------------------------------------------
+# Top-level settings
+# ---------------------------------------------------------------------------
+
+# title: human-readable name for this run (shown in the TUI/web dashboard).
+# Type: string. Default: "".
 title = "My deployment"
 
-# Global tasks applied to all hosts unless a host overrides
+# log_level: how chatty gorun's own logs are.
+# Type: string. Allowed: "debug", "info", "warn"/"warning", "error". Default: "info".
+# Inherited by servers and tasks unless they override it.
+log_level = "info"
+
+# envvars: environment variables exported to every task's process.
+# Type: table of string -> string. Default: {} (none).
+# Keys are upper-cased automatically when injected. Values are used verbatim
+# (no ${VAR} expansion).
+# [envvars]
+# FOO = "bar"
+# PATH_EXTRA = "/opt/bin:${PATH}"
+
+# ssh: RESERVED global SSH block. SSH settings are per-server only
+# ([servers.hosts.<name>.ssh]); these global values are NOT applied automatically
+# except for config_file, which is inherited by servers that don't set their own.
+# Prefer configuring SSH on each server. Shown for completeness only.
+# [ssh]
+# username = "root"
+# port = 22
+# identityfile = "~/.ssh/id_rsa"
+# password = ""   # avoid committing passwords; prefer identityfile
+# # config_file: path to an SSH config file to consult for host settings
+# # (User, Port, IdentityFile, HostName). Empty/unset falls back to ~/.ssh/config
+# # when that file exists. Alias: config.
+# config_file = "~/.ssh/config"
+
+# ---------------------------------------------------------------------------
+# Task library: define each task once as [tasks.<name>], then reference by name.
+# ---------------------------------------------------------------------------
+
+# Minimal task: run an inline command.
+# [tasks.hello]
+# cmd = "echo 'hello world'"
+
+# Task that reads its command from a local file (resolved relative to this file).
+# [tasks.packages]
+# cmd_file = "./scripts/packages.sh"
+# sudo = true
+
+# Task whose command is a Go text/template. Compiled at run time with a Server{}
+# passed in, so you can use {{.Name}}, {{.Hostname}}, {{.SSH.Port}}, {{.SSH.User}}.
+# [tasks.greet]
+# cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}'"
+
+# Task reading a template from a file.
+# [tasks.greet-from-file]
+# cmd_template_file = "./templates/greet.sh.tmpl"
+
+# Full task showing every available field:
+# [tasks.example]
+# # log_level: override the global level for this task only.
+# # Type: string. Allowed: "debug"/"info"/"warn"/"warning"/"error". Default: inherited.
+# log_level = "info"
+#
+# # sudo: wrap the command in 'sudo -n' (fails instead of prompting for a password).
+# # Type: bool. Default: false.
+# sudo = false
+#
+# # Command source: pick EXACTLY ONE of cmd / cmd_file / cmd_template / cmd_template_file.
+# # (A task may also have no command if it only performs file copies.)
+# cmd = "echo hello"
+# # cmd_file = "./scripts/example.sh"
+# # cmd_template = "echo 'hi {{.Name}}'"
+# # cmd_template_file = "./templates/example.sh.tmpl"
+#
+# # shell: run the command through a different shell/interpreter.
+# # Type: string. Default: "sh -c" (i.e. multi-word commands work out of the box).
+# # Format: "<binary> [arg ...]" (space separated). The command is appended as the
+# # last argument.
+# shell = "bash -c"
+#
+# # envvars: per-task environment variables (merged with the global ones).
+# # Type: table of string -> string. Keys are upper-cased automatically.
+# [tasks.example.envvars]
+# FOO = "bar"
+#
+# # depends_on: tasks that must run (and succeed) before this one.
+# # Their dependencies are pulled in transitively, so list only what you care about.
+# # Type: array of task names. Default: [].
+# depends_on = ["packages"]
+#
+# # copy / copies / upload / files: file copy operations (all four are equivalent
+# # aliases and are merged). Each entry is a [[tasks.<name>.copy]] array-of-tables.
+# [[tasks.example.copy]]
+# # src: local file to copy (resolved relative to this file). Mutually exclusive
+# #      with src_template/template/content.
+# src = "./config/app.conf"
+# # dst: remote (or local) destination path. Required unless 'dir' is set.
+# dst = "/etc/app/app.conf"
+# # dir: destination directory; the file keeps its base name. Used instead of dst.
+# # dir = "/etc/app/"
+# # mode / perm: file mode for the copy. Type: string (octal like "0644"). Default: "0644".
+# mode = "0644"
+#
+# # Template copy: compile a local template file as a Go text/template with a
+# # Server{} and push the result. Use src_template (aliases: template, src_tmpl).
+# # [[tasks.example.copy]]
+# # src_template = "./templates/nginx.conf.tmpl"
+# # dst = "/etc/nginx/nginx.conf"
+#
+# # Inline content copy (no source file).
+# # [[tasks.example.copy]]
+# # content = "hello {{.Name}}"
+# # dst = "/tmp/greeting.txt"
+
+# ---------------------------------------------------------------------------
+# Servers
+# ---------------------------------------------------------------------------
+
+# [servers]: global task list applied to every host that does NOT set its own
+# 'tasks'. A host's own list REPLACES (does not merge with) the global one.
+# Dependencies are still pulled in either way.
 [servers]
 tasks = []
 
-# Task library
-# [tasks.example]
-# cmd = "echo hello"
-# sudo = false
-# depends_on = []
-
-# Server inventory
+# [servers.hosts.<name>]: one entry per target server. <name> is a short label.
 # [servers.hosts.myserver]
+# # hostname: host to connect to. Default: "" (treated as localhost / local run).
 # hostname = "example.com"
+#
+# # tasks: override the global list for this host. Omit to inherit [servers].tasks.
 # tasks = ["example"]
-#   [servers.hosts.myserver.ssh]
-#   port = 22
-#   username = "root"
-#   identityfile = "~/.ssh/id_rsa"
+#
+# # log_level: override for this server. Default: inherited from top level.
+# log_level = "info"
+#
+# # ssh: connection details. Omit entirely to run tasks LOCALLY on this machine
+# # (no SSH). See example/Gorunfile-local for a local-only setup.
+# [servers.hosts.myserver.ssh]
+# # username: SSH user. Default: "" (uses the current OS user for local runs).
+# username = "root"
+# # port: SSH port. Type: int. Default: 22.
+# port = 22
+# # identityfile: path to a private key (resolved relative to this file).
+# # Default: "" (no key auth; password or agent may still apply).
+# identityfile = "~/.ssh/id_rsa"
+# # password: SSH password. Default: "". Prefer identityfile; never commit secrets.
+# password = ""
+# # config_file: path to an SSH config file to consult for this host (User, Port,
+# # IdentityFile, HostName). Empty/unset falls back to ~/.ssh/config when present.
+# # Explicit fields above always take precedence over the config.
+# config_file = "~/.ssh/config"
+
+# ---------------------------------------------------------------------------
+# Examples
+# ---------------------------------------------------------------------------
+
+# Example 1: a single local task (no SSH).
+# [tasks.say-hi]
+# cmd = "echo 'hi from local'"
+#
+# [servers]
+# tasks = ["say-hi"]
+#
+# [servers.hosts.local]
+# # no hostname/ssh => runs locally
+
+# Example 2: two remote servers sharing a global task list.
+# [tasks.uptime]
+# cmd = "uptime"
+#
+# [servers]
+# tasks = ["uptime"]
+#
+# [servers.hosts.web1]
+# hostname = "web1.example.com"
+#     [servers.hosts.web1.ssh]
+#     username = "deploy"
+#     identityfile = "~/.ssh/id_ed25519"
+#
+# [servers.hosts.web2]
+# hostname = "web2.example.com"
+#     [servers.hosts.web2.ssh]
+#     username = "deploy"
+#     identityfile = "~/.ssh/id_ed25519"
+
+# Example 3: dependency chain.
+# [tasks.packages]
+# cmd_file = "./scripts/packages.sh"
+# sudo = true
+#
+# [tasks.timezone]
+# cmd = "cp /usr/share/zoneinfo/UTC /etc/localtime"
+# sudo = true
+# depends_on = ["packages"]   # packages runs first
+#
+# [servers]
+# tasks = ["timezone"]        # pulls in packages automatically
 `
 }

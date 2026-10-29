@@ -230,6 +230,12 @@ can be correlated. Published events:
 
 Relative paths in the Gorunfile (`identityfile`, `cmd_file` and `cmd_template_file`) are resolved relative to the Gorunfile, not the current working directory.
 
+SSH connection settings can also be pulled from an SSH config file. Set `config_file`
+(or `config`) under `[ssh]` or `[servers.hosts.<name>.ssh]` to a path; when unset,
+gorun falls back to `~/.ssh/config` if it exists. Values in the config file fill in
+missing `username`, `port`, `identityfile` and `hostname` (explicit Gorunfile values
+always win). A server with no SSH block still runs locally.
+
 ## Configuration
 
 Tasks are defined once in a task library and servers pick them by name:

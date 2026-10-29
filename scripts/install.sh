@@ -22,12 +22,15 @@ esac
 mkdir -p "$INSTALL_DIR"
 
 VERSION="${VERSION:-}"
+# Allow "latest" to resolve to the newest published release.
+case "$VERSION" in
+  ""|latest|Latest|LATEST) VERSION="" ;;
+esac
 if [ -z "$VERSION" ]; then
   VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
 fi
-if [ -z "$VERSION" ]; then
-  VERSION="v0.0.1-beta.5"
-fi
+# No hardcoded fallback: if the version cannot be resolved, skip the prebuilt
+# download and build from the latest source instead.
 
 VERSION_NO_V="${VERSION#v}"
 
@@ -89,13 +92,22 @@ SRC_TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR" "$SRC_TMPDIR"' EXIT
 cd "$SRC_TMPDIR"
 if command -v git >/dev/null 2>&1; then
-  git clone --depth 1 "https://github.com/${REPO}.git" repo 2>/dev/null || true
+  if [ -n "$VERSION" ]; then
+    git clone --depth 1 --branch "$VERSION" "https://github.com/${REPO}.git" repo 2>/dev/null || true
+  else
+    git clone --depth 1 "https://github.com/${REPO}.git" repo 2>/dev/null || true
+  fi
 fi
 if [ -d repo ]; then
   cd repo
 else
-  curl -fsSL "https://github.com/${REPO}/archive/refs/heads/master.tar.gz" -o src.tar.gz 2>/dev/null || \
-  curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.tar.gz" -o src.tar.gz 2>/dev/null
+  if [ -n "$VERSION" ]; then
+    curl -fsSL "https://github.com/${REPO}/archive/refs/tags/${VERSION}.tar.gz" -o src.tar.gz 2>/dev/null || \
+    curl -fsSL "https://github.com/${REPO}/archive/refs/tags/${VERSION#v}.tar.gz" -o src.tar.gz 2>/dev/null
+  else
+    curl -fsSL "https://github.com/${REPO}/archive/refs/heads/master.tar.gz" -o src.tar.gz 2>/dev/null || \
+    curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.tar.gz" -o src.tar.gz 2>/dev/null
+  fi
   tar xzf src.tar.gz
   cd gorun-* 2>/dev/null || cd */ 2>/dev/null
 fi

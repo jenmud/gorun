@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -76,6 +77,10 @@ type Config struct {
 
 	// OnEvent, when set, receives the events in events.go as tasks run.
 	OnEvent func(event any) `toml:"-"`
+
+	// SelectedTasks, when non-empty, limits execution to these tasks (and their
+	// dependencies). Used by the --task CLI flag.
+	SelectedTasks []string `toml:"-"`
 }
 
 // configFile is the layout of a Gorunfile on disk. Load flattens the [servers] section
@@ -349,6 +354,50 @@ func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
 	return errors.New("not implemented")
 }
 
+// TaskNames returns the task names in dependency order (dependencies first).
+func (c *Config) TaskNames() []string {
+	names := make([]string, 0, len(c.Tasks))
+	for name := range c.Tasks {
+		names = append(names, name)
+	}
+	ordered, err := resolveTasks(c.Tasks, names...)
+	if err != nil {
+		// Fall back to alphabetical order if the dependency graph cannot be resolved.
+		sort.Strings(names)
+		return names
+	}
+	out := make([]string, 0, len(ordered))
+	for _, t := range ordered {
+		out = append(out, t.Name)
+	}
+	return out
+}
+
+// selectedTaskSet returns the set of task names that should run when a task filter
+// is active, including transitive dependencies. Returns nil when no filter.
+func (c *Config) selectedTaskSet() map[string]bool {
+	if len(c.SelectedTasks) == 0 {
+		return nil
+	}
+	allowed := map[string]bool{}
+	var visit func(string)
+	visit = func(name string) {
+		if allowed[name] {
+			return
+		}
+		allowed[name] = true
+		if t, ok := c.Tasks[name]; ok {
+			for _, dep := range t.DependsOn {
+				visit(dep)
+			}
+		}
+	}
+	for _, name := range c.SelectedTasks {
+		visit(name)
+	}
+	return allowed
+}
+
 // Run runs all the tasks as returned by `Pipeline` on one or more servers.
 func (c *Config) Run(ctx context.Context, server ...Server) error {
 	hostname, _ := os.Hostname()
@@ -393,6 +442,20 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			}
 		}
 		pipeline[name] = server
+	}
+
+	// apply --task filter (plus dependencies) if requested
+	if allowed := c.selectedTaskSet(); allowed != nil {
+		for name, server := range pipeline {
+			filtered := make([]Task, 0, len(server.Tasks))
+			for _, t := range server.Tasks {
+				if allowed[t.Name] {
+					filtered = append(filtered, t)
+				}
+			}
+			server.Tasks = filtered
+			pipeline[name] = server
+		}
 	}
 
 	serverNames := slices.Sorted(maps.Keys(pipeline))

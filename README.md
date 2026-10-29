@@ -85,6 +85,19 @@ In verbose mode the failed task is marked ✗ and its output opens automatically
 
 ![gorun verbose view with a failed task expanded](docs/screenshot-failure-verbose.png)
 
+## Task selection and inspection
+
+```bash
+# List available tasks as a dependency tree
+gorun example/Gorunfile --list-tasks
+
+# List servers and their resolved task pipelines
+gorun example/Gorunfile --list-servers
+
+# Run only the named tasks (their dependencies are included automatically)
+gorun example/Gorunfile --task greet --task verify
+```
+
 ## Server Selection
 
 With `--select`, gorun shows a server picker before deploying. Type to fuzzy filter the

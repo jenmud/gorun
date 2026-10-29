@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	_ "github.com/joho/godotenv/autoload"
@@ -37,6 +38,14 @@ func init() {
 	}
 }
 
+type stringSlice []string
+
+func (s *stringSlice) String() string { return strings.Join(*s, ",") }
+func (s *stringSlice) Set(v string) error {
+	*s = append(*s, v)
+	return nil
+}
+
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancel()
@@ -48,6 +57,10 @@ func main() {
 	versionFlag := flag.Bool("version", false, "print version and exit")
 	webFlag := flag.Bool("web", false, "start the web server")
 	historyFlag := flag.Bool("history", false, "view historical runs")
+	taskFlags := stringSlice{}
+	flag.Var(&taskFlags, "task", "run only the named task (repeatable); dependencies are included")
+	listTasks := flag.Bool("list-tasks", false, "list available tasks and exit")
+	listServers := flag.Bool("list-servers", false, "list servers and their task pipelines and exit")
 
 	flag.Usage = printUsage
 	flag.Parse()
@@ -100,6 +113,9 @@ func main() {
 		log.SetOutput(io.Discard)
 		gorun.SetLogOutput(io.Discard)
 	}
+	if *listTasks || *listServers {
+		os.Setenv("GORUN_SKIP_NATS", "1")
+	}
 	gorun.StartNATS()
 
 	cfg := gorun.Config{}
@@ -115,11 +131,98 @@ func main() {
 	// relative paths in the config are relative to the config file, not the working directory
 	cfg.ResolvePaths(filepath.Dir(filename))
 
+	if *listTasks {
+		// Build a reverse dependency tree: a task's children are the tasks that
+		// depend on it, so dependencies appear above their dependents.
+		children := map[string][]string{}
+		roots := []string{}
+		for name := range cfg.Tasks {
+			if len(cfg.Tasks[name].DependsOn) == 0 {
+				roots = append(roots, name)
+			}
+			for _, dep := range cfg.Tasks[name].DependsOn {
+				children[dep] = append(children[dep], name)
+			}
+		}
+		sort.Strings(roots)
+		for _, kids := range children {
+			sort.Strings(kids)
+		}
+
+		visited := map[string]bool{}
+		var printNode func(name, prefix string, last, root bool)
+		printNode = func(name, prefix string, last, root bool) {
+			connector := "├── "
+			if last {
+				connector = "└── "
+			}
+			if visited[name] {
+				if root {
+					fmt.Printf("%s (already shown)\n", name)
+				} else {
+					fmt.Printf("%s%s%s (already shown)\n", prefix, connector, name)
+				}
+				return
+			}
+			if root {
+				fmt.Println(name)
+			} else {
+				fmt.Printf("%s%s%s\n", prefix, connector, name)
+			}
+			visited[name] = true
+			kids := children[name]
+			childPrefix := prefix
+			if last {
+				childPrefix += "    "
+			} else {
+				childPrefix += "│   "
+			}
+			for i, child := range kids {
+				printNode(child, childPrefix, i == len(kids)-1, false)
+			}
+		}
+
+		for i, root := range roots {
+			_ = i
+			printNode(root, "", true, true)
+		}
+		return
+	}
+
+	// validate and apply --task filter
+	for _, t := range taskFlags {
+		if _, ok := cfg.Tasks[t]; !ok {
+			fatal(fmt.Errorf("unknown task %q", t))
+		}
+	}
+	cfg.SelectedTasks = []string(taskFlags)
+
 	// check every server's task list up front, so config mistakes such as an unknown task
 	// are reported before the TUI starts rather than lost inside it
 	servers, err := cfg.ServersPipeline()
 	if err != nil {
 		fatal(fmt.Errorf("%s: %w", filename, err))
+	}
+
+	if *listServers {
+		names := make([]string, 0, len(servers))
+		for name := range servers {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			server := servers[name]
+			fmt.Printf("%s (%s)\n", server.Name, server.Address())
+			for i, t := range server.Tasks {
+				connector := "├── "
+				if i == len(server.Tasks)-1 {
+					connector = "└── "
+				}
+				fmt.Printf("    %s%s\n", connector, t.Name)
+			}
+			fmt.Println()
+		}
+		return
 	}
 
 	if *selectServers {
@@ -196,6 +299,9 @@ Options:
   -v        verbose: show every task and its output
   -plain    plain log output instead of the TUI (default when stdout is not a terminal)
   -select   select servers to deploy to using the TUI
+  -task     run only the named task (repeatable; dependencies included)
+  -list-tasks  list available tasks and exit
+  -list-servers  list servers and their task pipelines and exit
   -dump     dump an empty Gorunfile template to stdout
   -version  print version and exit
   -web      start the web server

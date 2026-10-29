@@ -27,7 +27,7 @@ case "$VERSION" in
   ""|latest|Latest|LATEST) VERSION="" ;;
 esac
 if [ -z "$VERSION" ]; then
-  VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases" 2>/dev/null | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sort -V | tail -n 1)"
 fi
 # No hardcoded fallback: if the version cannot be resolved, skip the prebuilt
 # download and build from the latest source instead.

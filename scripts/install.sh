@@ -4,7 +4,6 @@ set -e
 REPO="jenmud/gorun"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 BINARY_NAME="gorun"
-OTEL_BINARY_NAME="gorun-otel"
 
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 case "$OS" in
@@ -32,108 +31,80 @@ fi
 
 VERSION_NO_V="${VERSION#v}"
 
-# Which variants to install (both, normal, otel). Prompt when interactive.
-INSTALL_VARIANTS="${INSTALL_VARIANTS:-}"
-if [ -z "$INSTALL_VARIANTS" ]; then
+# Choose which variant to install as "gorun".
+# By default the OpenTelemetry-instrumented (otel) build is used.
+# Setting INSTALL_VARIANTS enables an interactive prompt.
+VARIANT="otel"
+if [ -n "${INSTALL_VARIANTS:-}" ]; then
   if [ -t 0 ]; then
-    printf "Install which binaries? [both/normal/otel] (default: both): "
+    printf "Install which variant? [otel/normal] (default: otel): "
     read -r answer
     case "$answer" in
-      normal|otel|both) INSTALL_VARIANTS="$answer" ;;
-      "") INSTALL_VARIANTS="both" ;;
-      *) INSTALL_VARIANTS="both" ;;
+      normal|otel) VARIANT="$answer" ;;
+      "") VARIANT="otel" ;;
+      *) VARIANT="otel" ;;
     esac
-  else
-    INSTALL_VARIANTS="both"
   fi
 fi
 
-case "$INSTALL_VARIANTS" in
-  normal) INSTALL_NORMAL=1 ;;
-  otel) INSTALL_OTEL=1 ;;
-  *) INSTALL_NORMAL=1; INSTALL_OTEL=1 ;;
-esac
+# Map variant to release asset name.
+if [ "$VARIANT" = "otel" ]; then
+  ASSET_BASE="gorun-otel"
+else
+  ASSET_BASE="gorun"
+fi
 
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
-install_asset() {
-  name="$1"
-  asset="$2"
-  url="https://github.com/${REPO}/releases/download/${VERSION}/${asset}"
-  if curl -fsSL "$url" -o "${TMPDIR}/${asset}" 2>/dev/null; then
-    tar -xzf "${TMPDIR}/${asset}" -C "$TMPDIR"
-    BIN_PATH="$(find "$TMPDIR" -type f -name "$name" | head -n 1)"
-    if [ -z "$BIN_PATH" ]; then
-      echo "binary ${name} not found in archive"
-      return 1
-    fi
-    chmod +x "$BIN_PATH"
-    mv "$BIN_PATH" "${INSTALL_DIR}/${name}"
-    echo "Installed ${name} ${VERSION} to ${INSTALL_DIR}/${name}"
-    return 0
-  fi
-  return 1
-}
+ASSET="${ASSET_BASE}_${VERSION_NO_V}_${OS_TITLE}_${ARCH_NAME}.tar.gz"
+URL="https://github.com/${REPO}/releases/download/${VERSION}/${ASSET}"
 
-# Normal build (all platforms).
-if [ -n "$INSTALL_NORMAL" ]; then
-ASSET="gorun_${VERSION_NO_V}_${OS_TITLE}_${ARCH_NAME}.tar.gz"
-if ! install_asset "$BINARY_NAME" "$ASSET"; then
-  echo "No prebuilt binary found for ${OS}/${ARCH} (${VERSION}); building from source..."
-  BUILD_FROM_SOURCE=1
-fi
-
-fi
-
-# OpenTelemetry-instrumented build (Linux x86_64 only in releases).
-if [ -n "$INSTALL_OTEL" ]; then
-OTEL_ASSET="gorun-otel_${VERSION_NO_V}_${OS_TITLE}_${ARCH_NAME}.tar.gz"
-if install_asset "$OTEL_BINARY_NAME" "$OTEL_ASSET"; then
-  :
-else
-  if [ "$OS" = "linux" ] && [ "$ARCH" = "amd64" ]; then
-    BUILD_OTEL_FROM_SOURCE=1
-  fi
-fi
-fi
-
-if [ -n "$BUILD_FROM_SOURCE" ] || [ -n "$BUILD_OTEL_FROM_SOURCE" ]; then
-  if ! command -v go >/dev/null 2>&1; then
-    echo "Go is required to build from source. Please install Go or download a prebuilt binary from https://github.com/${REPO}/releases"
+if curl -fsSL "$URL" -o "${TMPDIR}/${ASSET}" 2>/dev/null; then
+  tar -xzf "${TMPDIR}/${ASSET}" -C "$TMPDIR"
+  BIN_PATH="$(find "$TMPDIR" -type f \( -name "gorun" -o -name "gorun-otel" \) | head -n 1)"
+  if [ -z "$BIN_PATH" ]; then
+    echo "binary not found in archive"
     exit 1
   fi
-
-  SRC_TMPDIR="$(mktemp -d)"
-  trap 'rm -rf "$TMPDIR" "$SRC_TMPDIR"' EXIT
-  cd "$SRC_TMPDIR"
-  if command -v git >/dev/null 2>&1; then
-    git clone --depth 1 "https://github.com/${REPO}.git" repo 2>/dev/null || true
-  fi
-  if [ -d repo ]; then
-    cd repo
-  else
-    curl -fsSL "https://github.com/${REPO}/archive/refs/heads/master.tar.gz" -o src.tar.gz 2>/dev/null || \
-    curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.tar.gz" -o src.tar.gz 2>/dev/null
-    tar xzf src.tar.gz
-    cd gorun-* 2>/dev/null || cd */ 2>/dev/null
-  fi
-
-  if [ -n "$BUILD_FROM_SOURCE" ] && [ -n "$INSTALL_NORMAL" ]; then
-    go build -o "$BINARY_NAME" ./cmd
-    chmod +x "$BINARY_NAME"
-    mv "$BINARY_NAME" "${INSTALL_DIR}/${BINARY_NAME}"
-    echo "gorun installed to ${INSTALL_DIR}/${BINARY_NAME}"
-  fi
-
-  if [ -n "$BUILD_OTEL_FROM_SOURCE" ] && [ -n "$INSTALL_OTEL" ]; then
-    if command -v go >/dev/null 2>&1 && go tool otelc 2>/dev/null; then
-      go tool otelc go build -o "$OTEL_BINARY_NAME" ./cmd
-      chmod +x "$OTEL_BINARY_NAME"
-      mv "$OTEL_BINARY_NAME" "${INSTALL_DIR}/${OTEL_BINARY_NAME}"
-      echo "gorun-otel installed to ${INSTALL_DIR}/${OTEL_BINARY_NAME}"
-    else
-      echo "OpenTelemetry tool (otelc) not available; skipping gorun-otel build"
-    fi
-  fi
+  chmod +x "$BIN_PATH"
+  mv "$BIN_PATH" "${INSTALL_DIR}/${BINARY_NAME}"
+  echo "Installed ${BINARY_NAME} (${VARIANT}) ${VERSION} to ${INSTALL_DIR}/${BINARY_NAME}"
+  exit 0
 fi
+
+echo "No prebuilt binary found for ${OS}/${ARCH} (${VERSION}); building from source..."
+if ! command -v go >/dev/null 2>&1; then
+  echo "Go is required to build from source. Please install Go or download a prebuilt binary from https://github.com/${REPO}/releases"
+  exit 1
+fi
+
+SRC_TMPDIR="$(mktemp -d)"
+trap 'rm -rf "$TMPDIR" "$SRC_TMPDIR"' EXIT
+cd "$SRC_TMPDIR"
+if command -v git >/dev/null 2>&1; then
+  git clone --depth 1 "https://github.com/${REPO}.git" repo 2>/dev/null || true
+fi
+if [ -d repo ]; then
+  cd repo
+else
+  curl -fsSL "https://github.com/${REPO}/archive/refs/heads/master.tar.gz" -o src.tar.gz 2>/dev/null || \
+  curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.tar.gz" -o src.tar.gz 2>/dev/null
+  tar xzf src.tar.gz
+  cd gorun-* 2>/dev/null || cd */ 2>/dev/null
+fi
+
+if [ "$VARIANT" = "otel" ]; then
+  if command -v go >/dev/null 2>&1 && (go tool otelc >/dev/null 2>&1 || go help tool 2>/dev/null | grep -q otelc); then
+    go tool otelc go build -o "$BINARY_NAME" ./cmd
+  else
+    echo "otelc tool not available; building standard version instead"
+    go build -o "$BINARY_NAME" ./cmd
+  fi
+else
+  go build -o "$BINARY_NAME" ./cmd
+fi
+chmod +x "$BINARY_NAME"
+mv "$BINARY_NAME" "${INSTALL_DIR}/${BINARY_NAME}"
+
+echo "gorun (${VARIANT}) installed to ${INSTALL_DIR}/${BINARY_NAME}"

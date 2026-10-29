@@ -19,6 +19,13 @@ Gorun is a tool for running tasks on multiple servers with an interactive TUI.
 curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install.sh | sh
 ```
 
+By default the script installs the OpenTelemetry-instrumented build as `gorun`.
+Set `INSTALL_VARIANTS=1` to be prompted for `otel` or `normal`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install.sh | INSTALL_VARIANTS=1 sh
+```
+
 ### Manual install
 
 Download a prebuilt binary from the [releases](https://github.com/jenmud/gorun/releases), or build from source:

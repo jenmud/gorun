@@ -35,12 +35,11 @@ VERSION_NO_V="${VERSION#v}"
 # By default the OpenTelemetry-instrumented (otel) build is used.
 # Setting INSTALL_VARIANTS enables an interactive prompt.
 # Default to the OpenTelemetry-instrumented build.
-# Setting INSTALL_VARIANTS (e.g. to 1) selects the standard (non-OTELC) build.
-if [ -n "${INSTALL_VARIANTS:-}" ]; then
-  VARIANT="normal"
-else
-  VARIANT="otel"
-fi
+# INSTALL_VARIANTS=1 selects the standard (non-OTELC) build.
+case "${INSTALL_VARIANTS:-}" in
+  1|true|yes) VARIANT="normal" ;;
+  *) VARIANT="otel" ;;
+esac
 
 # Map variant to release asset name.
 if [ "$VARIANT" = "otel" ]; then

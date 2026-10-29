@@ -85,6 +85,14 @@ In verbose mode the failed task is marked ✗ and its output opens automatically
 
 ![gorun verbose view with a failed task expanded](docs/screenshot-failure-verbose.png)
 
+### Logs
+
+gorun's own log messages go to a log file instead of the terminal: `~/.gorun/gorun.log`,
+or `GORUN_LOG_FILE` if it's set. The file is appended to on every run, and each line carries
+the run's `gorun_uuid`. In `-plain` mode the terminal shows one line per task, and failed
+tasks also show the tail of their stderr (add `-v` to print every task's output). When a run
+fails, the error message includes the path to the log file.
+
 ## Task selection and inspection
 
 ```bash

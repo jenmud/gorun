@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"slices"
 	"strings"
@@ -556,8 +555,8 @@ func formatDuration(d time.Duration) string {
 }
 
 // runTUI runs the deployment with the interactive TUI and returns an error if anything failed.
-func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, verbose bool) error { // slog output would corrupt the TUI
-	gorun.SetLogOutput(io.Discard)
+// main sends the logs to the log file (or discards them) first, as they would corrupt the TUI.
+func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, verbose bool) error {
 	defer drainTerminalInput()
 	p := tea.NewProgram(newTUIModel(cfg.Title, verbose, cancel), tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1")))
 

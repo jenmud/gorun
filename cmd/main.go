@@ -106,15 +106,24 @@ func main() {
 		os.Exit(1)
 	}
 
-	if !useTUI {
-		slog.Info("parsing gorun file", slog.String("filename", filename))
+	// logs go to the log file so they don't clutter the terminal or corrupt the TUI
+	logPath := gorun.LogFilePath()
+	if logFile, err := gorun.OpenLogFile(logPath); err == nil {
+		defer func() { _ = logFile.Close() }()
+		log.SetOutput(logFile)
+		gorun.SetLogOutput(logFile)
+	} else {
+		logPath = ""
+		if useTUI {
+			log.SetOutput(io.Discard)
+			gorun.SetLogOutput(io.Discard)
+		} else {
+			fmt.Fprintf(os.Stderr, "gorun: can't open log file, logging to stderr: %v\n", err)
+			gorun.SetLogOutput(os.Stderr)
+		}
 	}
 
-	// hide all log output unless running in plain mode
-	if useTUI {
-		log.SetOutput(io.Discard)
-		gorun.SetLogOutput(io.Discard)
-	}
+	slog.Info("parsing gorun file", slog.String("filename", filename))
 	if *listTasks || *listServers {
 		os.Setenv("GORUN_SKIP_NATS", "1")
 	}
@@ -293,7 +302,11 @@ func main() {
 		}
 	}()
 
+	printer := &plainPrinter{w: os.Stdout, verbose: *verbose}
+
 	cfg.OnEvent = func(event any) {
+		printer.event(event)
+
 		if st != nil {
 			if data, err := json.Marshal(event); err == nil {
 				var ev inats.Event
@@ -306,7 +319,10 @@ func main() {
 
 	if err := cfg.Run(ctx); err != nil {
 		slog.Error("error executing tasks", slog.String("reason", err.Error()))
-		os.Exit(1)
+		if logPath != "" {
+			err = fmt.Errorf("%w (logs: %s)", err, logPath)
+		}
+		fatal(err)
 	}
 }
 
@@ -341,6 +357,7 @@ in the environment):
   GORUN_NAME                          default: gorun
   GORUN_ADDRESS                       default: :8080 (web server listen address)
   GORUN_DB_PATH                       default: ~/.gorun/gorun.db (falls back to gorun.db)
+  GORUN_LOG_FILE                      default: ~/.gorun/gorun.log (appended to on every run)
   GORUN_EVENT_TOPIC                   default: gorun.events
   GORUN_SKIP_NATS                     default: unset (set to skip NATS publishing)
   GORUN_NATS_CLIENT_URL               default: nats://127.0.0.1:4222

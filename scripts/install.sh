@@ -66,10 +66,12 @@ if curl -fsSL "$URL" -o "${TMPDIR}/${ASSET}" 2>/dev/null; then
   fi
   chmod +x "$BIN_PATH"
   mv "$BIN_PATH" "${INSTALL_DIR}/gorun-real"
-  # Wrapper so `gorun -version` stays clean even for the OTELC build.
+  # Wrapper that keeps the OTELC build's startup logs off the terminal. They are
+  # written to stdout before main runs, so only the environment can quiet them.
   cat > "${INSTALL_DIR}/gorun" <<'EOF'
 #!/bin/sh
 DIR="$(cd "$(dirname "$0")" && pwd)"
+export OTEL_LOG_LEVEL="${OTEL_LOG_LEVEL:-warn}"
 for a in "$@"; do
   case "$a" in
     -version|--version|-help|--help|-h|-dump|--dump) export OTEL_LOG_LEVEL=error ;;

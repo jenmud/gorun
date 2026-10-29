@@ -25,6 +25,18 @@ import (
 
 var version = "dev"
 
+func init() {
+	// Keep -dump/-help/-version output clean for the OTELC-instrumented build
+	// even when the binary is invoked directly (no wrapper script).
+	for _, a := range os.Args {
+		switch a {
+		case "-dump", "--dump", "-help", "--help", "-h", "-version", "--version":
+			_ = os.Setenv("OTEL_LOG_LEVEL", "error")
+			_ = os.Setenv("OTEL_SDK_DISABLED", "true")
+		}
+	}
+}
+
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancel()

@@ -102,6 +102,30 @@ go build -o gorun ./cmd
 mv gorun /usr/local/bin/
 ```
 
+## OpenTelemetry
+
+The instrumented build only exports telemetry when you configure it. If none of the OTLP
+endpoint or exporter variables are set, traces, metrics and logs are disabled, so a run
+without a collector never tries to connect to `localhost:4318` (and never logs connection
+errors into the TUI).
+
+Enable a signal by pointing it at a collector, or by selecting an exporter explicitly:
+
+```bash
+# Export all signals to an OTLP collector
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 gorun Gorunfile
+
+# Export only traces, to a signal-specific endpoint
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://collector:4318/v1/traces gorun Gorunfile
+
+# Print spans to stdout instead of exporting them (best with -plain)
+OTEL_TRACES_EXPORTER=console gorun Gorunfile -plain
+```
+
+Signals are configured independently: setting only a traces variable leaves metrics and logs
+disabled. `GORUN_NAME` is used as the OTEL service name unless `OTEL_SERVICE_NAME` is set. The
+standard (non-OTELC) build has no OpenTelemetry instrumentation.
+
 ## Usage
 
 ```bash

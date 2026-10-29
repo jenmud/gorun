@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	_ "github.com/joho/godotenv/autoload"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/term"
 
 	"gorun"
@@ -25,6 +26,13 @@ import (
 var version = "dev"
 
 func init() {
+	// The OTELC build enables an OTLP exporter for every signal by default,
+	// pointed at localhost:4318. Most gorun runs have no collector there, which
+	// used to fill the TUI with "traces export: connection refused" errors.
+	// This init runs before the generated SDK initializer in the same package,
+	// so the environment below takes effect.
+	configureOTELDefaults()
+
 	// Keep -dump/-help/-version output clean for the OTELC-instrumented build
 	// even when the binary is invoked directly (no wrapper script).
 	for _, a := range os.Args {
@@ -34,6 +42,39 @@ func init() {
 			_ = os.Setenv("OTEL_SDK_DISABLED", "true")
 		}
 	}
+}
+
+// configureOTELDefaults disables a signal's exporter unless the user asked for
+// one, so the instrumented build stays quiet when no collector is configured.
+func configureOTELDefaults() {
+	if strings.EqualFold(os.Getenv("OTEL_SDK_DISABLED"), "true") {
+		return
+	}
+
+	for _, signal := range []string{"TRACES", "METRICS", "LOGS"} {
+		if otelSignalConfigured(os.Getenv, signal) {
+			continue
+		}
+		_ = os.Setenv("OTEL_"+signal+"_EXPORTER", "none")
+	}
+}
+
+// otelSignalConfigured reports whether the environment configures an exporter
+// for one signal (traces, metrics or logs), either through its own variables or
+// the shared OTLP endpoint/protocol.
+func otelSignalConfigured(getenv func(string) string, signal string) bool {
+	for _, key := range []string{
+		"OTEL_" + signal + "_EXPORTER",
+		"OTEL_EXPORTER_OTLP_" + signal + "_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_" + signal + "_PROTOCOL",
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_PROTOCOL",
+	} {
+		if getenv(key) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 type stringSlice []string
@@ -71,19 +112,6 @@ func main() {
 		return
 	}
 
-	if *historyFlag {
-		if err := runHistoryTUI(); err != nil {
-			fatal(err)
-		}
-		return
-	}
-
-	if *webFlag {
-		os.Setenv("GORUN_SKIP_NATS", "1")
-		web.Run()
-		return
-	}
-
 	if *dump {
 		os.Setenv("GORUN_SKIP_NATS", "1")
 		fmt.Print(emptyGorunfile())
@@ -100,26 +128,34 @@ func main() {
 
 	useTUI := !*plain && term.IsTerminal(int(os.Stdout.Fd()))
 
+	// Set up logging before anything interactive starts, so the TUI, the
+	// history view and the web server all keep library logs (including OTEL
+	// export errors) out of the terminal.
+	logPath, logFile := setupLogging(useTUI)
+	if logFile != nil {
+		defer func() { _ = logFile.Close() }()
+	}
+
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		log.Printf("opentelemetry: %v", err)
+	}))
+
+	if *historyFlag {
+		if err := runHistoryTUI(); err != nil {
+			fatal(err)
+		}
+		return
+	}
+
+	if *webFlag {
+		os.Setenv("GORUN_SKIP_NATS", "1")
+		web.Run()
+		return
+	}
+
 	if filename == "" {
 		printUsage()
 		os.Exit(1)
-	}
-
-	// logs go to the log file so they don't clutter the terminal or corrupt the TUI
-	logPath := gorun.LogFilePath()
-	if logFile, err := gorun.OpenLogFile(logPath); err == nil {
-		defer func() { _ = logFile.Close() }()
-		log.SetOutput(logFile)
-		gorun.SetLogOutput(logFile)
-	} else {
-		logPath = ""
-		if useTUI {
-			log.SetOutput(io.Discard)
-			gorun.SetLogOutput(io.Discard)
-		} else {
-			fmt.Fprintf(os.Stderr, "gorun: can't open log file, logging to stderr: %v\n", err)
-			gorun.SetLogOutput(os.Stderr)
-		}
 	}
 
 	slog.Info("parsing gorun file", slog.String("filename", filename))
@@ -330,6 +366,29 @@ func main() {
 	}
 }
 
+// setupLogging sends logs to the log file so they don't clutter the terminal or
+// corrupt a TUI. It returns the log path (empty when the file couldn't be
+// opened) and the open file, if any.
+func setupLogging(useTUI bool) (string, *os.File) {
+	logPath := gorun.LogFilePath()
+	logFile, err := gorun.OpenLogFile(logPath)
+	if err == nil {
+		log.SetOutput(logFile)
+		gorun.SetLogOutput(logFile)
+		return logPath, logFile
+	}
+
+	if useTUI {
+		log.SetOutput(io.Discard)
+		gorun.SetLogOutput(io.Discard)
+	} else {
+		fmt.Fprintf(os.Stderr, "gorun: can't open log file, logging to stderr: %v\n", err)
+		gorun.SetLogOutput(os.Stderr)
+	}
+
+	return "", nil
+}
+
 // fatal prints err and exits.
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "gorun: %v\n", err)
@@ -372,6 +431,7 @@ in the environment):
   GORUN_NATS_CLIENT_TIMEOUT           default: nats default (e.g. 5s)
 
 OpenTelemetry SDK variables (OTEL_*) are also honoured by the instrumented build.
+Exporters are disabled unless an OTLP endpoint or exporter is configured.
 `)
 }
 

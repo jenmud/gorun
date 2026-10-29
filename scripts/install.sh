@@ -71,6 +71,11 @@ if curl -fsSL "$URL" -o "${TMPDIR}/${ASSET}" 2>/dev/null; then
   cat > "${INSTALL_DIR}/gorun" <<'EOF'
 #!/bin/sh
 DIR="$(cd "$(dirname "$0")" && pwd)"
+# Telemetry export is opt-in. Without an endpoint or exporter, disable OTLP so
+# an instrumented build does not try localhost:4318 and log connection errors.
+case "${OTEL_EXPORTER_OTLP_ENDPOINT:-}${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-}${OTEL_EXPORTER_OTLP_LOGS_ENDPOINT:-}${OTEL_TRACES_EXPORTER:-}${OTEL_METRICS_EXPORTER:-}${OTEL_LOGS_EXPORTER:-}" in
+  "") export OTEL_TRACES_EXPORTER=none OTEL_METRICS_EXPORTER=none OTEL_LOGS_EXPORTER=none ;;
+esac
 export OTEL_LOG_LEVEL="${OTEL_LOG_LEVEL:-warn}"
 for a in "$@"; do
   case "$a" in
@@ -133,6 +138,11 @@ echo "gorun (${VARIANT}) installed to ${INSTALL_DIR}/${BINARY_NAME}"
 cat > "${INSTALL_DIR}/gorun" <<'EOF'
 #!/bin/sh
 DIR="$(cd "$(dirname "$0")" && pwd)"
+# Telemetry export is opt-in. Without an endpoint or exporter, disable OTLP so
+# an instrumented build does not try localhost:4318 and log connection errors.
+case "${OTEL_EXPORTER_OTLP_ENDPOINT:-}${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-}${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-}${OTEL_EXPORTER_OTLP_LOGS_ENDPOINT:-}${OTEL_TRACES_EXPORTER:-}${OTEL_METRICS_EXPORTER:-}${OTEL_LOGS_EXPORTER:-}" in
+  "") export OTEL_TRACES_EXPORTER=none OTEL_METRICS_EXPORTER=none OTEL_LOGS_EXPORTER=none ;;
+esac
 for a in "$@"; do
   case "$a" in
     -version|--version|-help|--help|-h|-dump|--dump) export OTEL_LOG_LEVEL=error ;;

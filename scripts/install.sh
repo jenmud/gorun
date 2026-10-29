@@ -34,26 +34,12 @@ VERSION_NO_V="${VERSION#v}"
 # Choose which variant to install as "gorun".
 # By default the OpenTelemetry-instrumented (otel) build is used.
 # Setting INSTALL_VARIANTS enables an interactive prompt.
-VARIANT="otel"
-PROMPT=0
-case "${INSTALL_VARIANTS:-}" in
-  normal|otel)
-    VARIANT="${INSTALL_VARIANTS}"
-    ;;
-  1|prompt|true|yes)
-    PROMPT=1
-    ;;
-esac
-
-if [ "$PROMPT" = "1" ]; then
-  if [ -r /dev/tty ]; then
-    printf "Install which variant? [otel/normal] (default: otel): " > /dev/tty
-    read -r answer < /dev/tty
-    case "$answer" in
-      normal|otel) VARIANT="$answer" ;;
-      *) VARIANT="otel" ;;
-    esac
-  fi
+# Default to the OpenTelemetry-instrumented build.
+# Setting INSTALL_VARIANTS (e.g. to 1) selects the standard (non-OTELC) build.
+if [ -n "${INSTALL_VARIANTS:-}" ]; then
+  VARIANT="normal"
+else
+  VARIANT="otel"
 fi
 
 # Map variant to release asset name.

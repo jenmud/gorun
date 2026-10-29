@@ -20,13 +20,7 @@ curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install
 ```
 
 By default the script installs the OpenTelemetry-instrumented build as `gorun`.
-Choose a variant directly with `INSTALL_VARIANTS`:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install.sh | INSTALL_VARIANTS=normal sh
-```
-
-Or set `INSTALL_VARIANTS=1` to be prompted for `otel` or `normal`:
+Set `INSTALL_VARIANTS=1` to install the standard (non-OTELC) build instead:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install.sh | INSTALL_VARIANTS=1 sh

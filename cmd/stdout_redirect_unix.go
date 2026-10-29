@@ -4,7 +4,8 @@ package main
 
 import (
 	"os"
-	"syscall"
+
+	"golang.org/x/sys/unix"
 
 	"gorun"
 )
@@ -22,13 +23,13 @@ func redirectStdoutToLog() func() {
 	}
 	defer func() { _ = f.Close() }()
 
-	saved, err := syscall.Dup(int(os.Stdout.Fd()))
+	saved, err := unix.Dup(int(os.Stdout.Fd()))
 	if err != nil {
 		return func() {}
 	}
 
-	if err := syscall.Dup2(int(f.Fd()), int(os.Stdout.Fd())); err != nil {
-		_ = syscall.Close(saved)
+	if err := unix.Dup2(int(f.Fd()), int(os.Stdout.Fd())); err != nil {
+		_ = unix.Close(saved)
 		return func() {}
 	}
 

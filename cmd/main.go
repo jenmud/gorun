@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -25,7 +26,15 @@ import (
 
 var version = "dev"
 
+// restoreStdout is replaced by init when the instrumented build needs to keep
+// its startup logs out of the terminal. It is a no-op otherwise.
+var restoreStdout = func() {}
+
 func init() {
+	if instrumentedBuild() {
+		restoreStdout = redirectStdoutToLog()
+	}
+
 	// The OTELC build enables an OTLP exporter for every signal by default,
 	// pointed at localhost:4318. Most gorun runs have no collector there, which
 	// used to fill the TUI with "traces export: connection refused" errors.
@@ -42,6 +51,20 @@ func init() {
 			_ = os.Setenv("OTEL_SDK_DISABLED", "true")
 		}
 	}
+}
+
+// instrumentedBuild reports whether this binary was built with the OTELC tool.
+func instrumentedBuild() bool {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return false
+	}
+	for _, dep := range info.Deps {
+		if dep.Path == "go.opentelemetry.io/otelc" || strings.HasPrefix(dep.Path, "go.opentelemetry.io/otelc/") {
+			return true
+		}
+	}
+	return false
 }
 
 // configureOTELDefaults disables a signal's exporter unless the user asked for
@@ -86,6 +109,10 @@ func (s *stringSlice) Set(v string) error {
 }
 
 func main() {
+	// Startup logs from the instrumented build have been sent to the log file;
+	// take the terminal's stdout back before parsing flags or drawing the TUI.
+	restoreStdout()
+
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancel()
 

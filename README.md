@@ -209,7 +209,8 @@ time, set a large duration for it.
 
 gorun's own log messages go to a log file instead of the terminal: `~/.gorun/gorun.log`,
 or `GORUN_LOG_FILE` if it's set. The file is appended to on every run, and each line carries
-the run's `gorun_uuid`. In `-plain` mode the terminal shows one line per task, and failed
+the run's `gorun_uuid`. In the instrumented build, OpenTelemetry's startup and export messages
+are written there too. In `-plain` mode the terminal shows one line per task, and failed
 tasks also show the tail of their stderr (add `-v` to print every task's output). When a run
 fails, the error message includes the path to the log file.
 

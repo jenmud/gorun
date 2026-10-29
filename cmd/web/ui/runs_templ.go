@@ -224,6 +224,19 @@ func RunsList(runs []store.RunSummary) templ.Component {
 							return templ_7745c5c3_Err
 						}
 					} else {
+						var templ_7745c5c3_Var10b string
+						templ_7745c5c3_Var10b, templ_7745c5c3_Err = templ.JoinStringErrs(r.Servers)
+						if templ_7745c5c3_Err != nil {
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/runs.templ`, Line: 79, Col: 10}
+						}
+						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10b))
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, " servers · ")
+						if templ_7745c5c3_Err != nil {
+							return templ_7745c5c3_Err
+						}
 						var templ_7745c5c3_Var11 string
 						templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(r.TotalTasks)
 						if templ_7745c5c3_Err != nil {

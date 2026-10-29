@@ -76,7 +76,7 @@ templ RunsList(runs []store.RunSummary) {
 									if !r.Finished {
 										{ r.Failed } failed · in progress — { r.StartedAt.Format("2006-01-02 15:04:05") }
 									} else {
-										{ r.TotalTasks } tasks, { r.Failed } failed, { r.Skipped } skipped — { r.StartedAt.Format("2006-01-02 15:04:05") }
+										{ r.Servers } servers · { r.TotalTasks } tasks, { r.Failed } failed, { r.Skipped } skipped — { r.StartedAt.Format("2006-01-02 15:04:05") }
 									}
 								</div>
 							</a>

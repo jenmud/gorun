@@ -36,12 +36,11 @@ VERSION_NO_V="${VERSION#v}"
 # Setting INSTALL_VARIANTS enables an interactive prompt.
 VARIANT="otel"
 if [ -n "${INSTALL_VARIANTS:-}" ]; then
-  if [ -t 0 ]; then
-    printf "Install which variant? [otel/normal] (default: otel): "
-    read -r answer
+  if [ -r /dev/tty ]; then
+    printf "Install which variant? [otel/normal] (default: otel): " > /dev/tty
+    read -r answer < /dev/tty
     case "$answer" in
       normal|otel) VARIANT="$answer" ;;
-      "") VARIANT="otel" ;;
       *) VARIANT="otel" ;;
     esac
   fi

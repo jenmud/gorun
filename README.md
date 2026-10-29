@@ -2,6 +2,71 @@
 
 Gorun is a tool for running tasks on multiple servers with an interactive TUI.
 
+## Why Gorun
+
+Gorun is for the moment when you know exactly which commands you want to run, and you just
+need them run on a pile of machines — without packaging every command into a playbook, role,
+collection, module and support group first.
+
+It is deliberately small: one Go binary, one TOML file and SSH. No Python on the controller,
+no agent on the servers, no runtime to install, and nothing left behind on a machine beyond
+what your commands actually did.
+
+### What it is good at
+
+- **Plain commands, all the way down.** A task is ultimately a shell command. Gorun shows you
+  that command, runs it over SSH, and captures stdout, stderr and the exit code. When something
+  breaks you can copy the command, ssh into the box and reproduce it by hand — no "what did the
+  module actually do?" archaeology.
+- **Parallel across servers, ordered within one.** Every server runs at the same time by
+  default; set `max_parallel` (or `-parallel`) to run them N at a time. Within a server, tasks
+  run in dependency order. If a task fails, the rest of that server's tasks are skipped, the
+  other servers carry on, and gorun exits 1.
+- **No accidental forever runs.** Every task times out after 30 minutes by default, and you can
+  override that per task, so a hung command or a stuck download cannot hold the run hostage.
+- **A task library instead of copy-paste.** Define a task once, give it `depends_on`, and let
+  servers pick it by name. A host can replace the global task list with its own. Typos in the
+  file, unknown tasks and dependency cycles are reported before anything runs.
+- **Templating and file copies that stay readable.** Go `text/template` with a `Server{}` gets
+  you per-host commands and config files (`{{.Name}}`, `{{.Hostname}}`, ...), and `copy`,
+  `src_template` and `content` push files or rendered files to the host.
+- **You can watch it happen.** The TUI shows per-server progress, expands task output inline
+  and opens failures automatically. `--select` gives you a fuzzy server picker, `--task` and
+  `--server` narrow a run, `-plain` is there for CI, and `-v` is there when you want the noise.
+- **A memory and a paper trail.** Logs go to a file, runs are stored in SQLite, `-history`
+  replays them, `-web` gives you a live dashboard, and events can go out over NATS. The
+  instrumented build adds OpenTelemetry traces and metrics.
+- **Small enough to embed.** The CLI is a thin layer over the `gorun` package: `Config.Load`,
+  `ResolvePaths`, `ServersPipeline`, `Run` and the `OnEvent` callback.
+
+### What it is not great at
+
+- **Configuration management.** Gorun does not know the desired state of a machine; it has no
+  facts, drift detection, check mode or diff. Idempotence is whatever your shell commands make
+  it. If you want a system that keeps enforcing state forever, use Ansible, Puppet, Salt, Nix or
+  similar — Gorun is the runner, not the police.
+- **Modules.** There are no packaged `package`/`service`/`user` abstractions. The shell is the
+  abstraction. That is the point, but it does mean more scripting than a module-heavy tool.
+- **Dynamic inventories.** Servers live in the Gorunfile. There is no cloud discovery or
+  inventory plugin; generate the file if your machines move around.
+- **Fancy orchestration.** It runs every selected server at once by default, with no rolling
+  batches, retries, health checks or dry-run. `max_parallel` can cap how many hosts run at the
+  same time, but tasks on a host are sequential, and the run is only as smart as the commands
+  you give it.
+- **Secrets management.** SSH keys, optional passwords and env vars — not a vault. Keep
+  secrets out of the Gorunfile.
+- **Non-SSH targets.** SSH and a local shell only: no WinRM, no cloud APIs, no agent behind
+  NAT. Local tasks assume a POSIX-ish `sh` environment.
+- **Host-key verification.** The SSH client currently skips it, so treat gorun as a tool for
+  trusted networks rather than the open internet.
+- **Big transfers.** Copies are one file at a time and read fully into memory — fine for
+  configs and scripts, not for rsync-sized trees.
+- **Maturity and ecosystem.** Gorun is young and small. If you need a huge module ecosystem,
+  vendor support and a decade of battle stories, it is the wrong tool. It is a small, sharp
+  knife.
+
+If that sounds like your kind of knife, the rest of this README is about how to use it.
+
 ![gorun provisioning ten servers in parallel](docs/screenshot.png)
 
 ## Features
@@ -9,6 +74,8 @@ Gorun is a tool for running tasks on multiple servers with an interactive TUI.
 - Run tasks on multiple servers in parallel
 - Interactive TUI for task monitoring and server selection
 - Task dependency management
+- Per-task timeouts (30 minutes by default, exit code 124 on timeout)
+- Optional host concurrency limit (`max_parallel` / `-parallel`; default is all servers)
 - SSH key support
 
 ## Installation
@@ -50,6 +117,9 @@ gorun example/Gorunfile -v
 # Run tasks with verbose output and interactive server selection
 gorun example/Gorunfile --select -v
 
+# Run at most 4 hosts at a time
+gorun example/Gorunfile -parallel 4
+
 # Start the web UI
 gorun -web
 
@@ -84,6 +154,32 @@ skipped, the other servers carry on, and gorun exits with status 1:
 In verbose mode the failed task is marked ✗ and its output opens automatically:
 
 ![gorun verbose view with a failed task expanded](docs/screenshot-failure-verbose.png)
+
+### Task timeouts
+
+Every task is limited to **30 minutes** by default. Set `timeout` on a task to give it longer
+(or shorter):
+
+```toml
+[tasks.migrate]
+cmd = "docker compose run --rm migrate"
+timeout = "45m"
+```
+
+The timeout is any Go duration (`90s`, `10m`, `2h`). It starts when the task starts, so file
+copies count against it along with the command. A timeout is treated as a failure, so the rest
+of that server's tasks are skipped while the other servers carry on. The reason is shown in the
+TUI and plain output (`task "migrate" timed out after 45m0s`) and is also written to stderr, so
+the web UI and history database show it too.
+
+Timed-out tasks use exit code **124**, the same convention as `timeout(1)`. Local tasks are
+killed together with their process group, so a child process cannot keep running in the
+background. SSH tasks are sent `SIGTERM` and the connection is closed, which also unblocks a
+stuck command or file copy.
+
+Leaving `timeout` unset (or setting it to zero) uses the 30-minute default. Negative durations
+are rejected before the task runs. There is no "run forever" switch; if a task really needs more
+time, set a large duration for it.
 
 ### Logs
 
@@ -262,9 +358,15 @@ always win). A server with no SSH block still runs locally.
 
 ## Configuration
 
+`max_parallel` caps how many hosts run at the same time. It defaults to `0`, which means every
+selected host at once. Set `max_parallel = 4` in the Gorunfile, or pass `-parallel 4` for a
+single run; `-parallel 0` removes the limit. Hosts wait for a free slot before connecting, so
+the limit covers SSH setup and that host's whole task pipeline.
+
 Tasks are defined once in a task library and servers pick them by name:
 
-- `[tasks.<name>]` defines a task: `cmd`, `cmd_file`, `cmd_template` or `cmd_template_file`, plus optional `sudo`, `depends_on`, `envvars`, `shell`, `log_level`, and file copies (`copy`/`copies`/`upload`/`files`).
+- `[tasks.<name>]` defines a task: `cmd`, `cmd_file`, `cmd_template` or `cmd_template_file`, plus optional `sudo`, `depends_on`, `envvars`, `shell`, `log_level`, `timeout`, and file copies (`copy`/`copies`/`upload`/`files`).
+- `timeout` is a Go duration string (for example `"45m"`) and limits the task on each server, including its file copies. It defaults to 30 minutes when unset or zero, and negative values are rejected. A timed-out task fails with exit code 124, so that server's remaining tasks are skipped while the other servers carry on. See [Task timeouts](#task-timeouts).
 - Tasks can specify a command source OR copies (or both). If both are specified, copies run first, then the command.
 - `cmd_template` and `cmd_template_file` are compiled as Go text templates at task execution time with a `Server{}` passed in (so you can use `.Name`, `.Hostname`, etc.). The compiled result is the command that gets broadcast/sent to the server (NATS/web UI events show the compiled command).
 - Copy files to remote servers with `[[tasks.<name>.copy]]` (or `copy = [...]`): set `src` (local path, resolved relative to Gorunfile) and `dst` (remote path) or `dir` (remote directory). Also works for local execution.
@@ -276,10 +378,12 @@ Tasks are defined once in a task library and servers pick them by name:
 ```toml
 # example/Gorunfile
 title = "Provision app servers"
+max_parallel = 4                           # optional; 0 (default) means all servers at once
 
 [tasks.packages]
 cmd_file = "./scripts/packages.sh"
 sudo = true
+timeout = "15m"                            # optional; defaults to 30m
 
 [tasks.timezone]
 cmd = "cp /usr/share/zoneinfo/UTC /etc/localtime"

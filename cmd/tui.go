@@ -452,7 +452,7 @@ func (m tuiModel) failureBox(s *serverView, t *taskView) string {
 	if t.event.Err != nil {
 		sections = append(sections, failStyle.Render("reason: ")+t.event.Err.Error())
 	}
-	if out := tail(t.event.Stderr, failTailLines); out != "" {
+	if out := tail(t.event.Stderr, failTailLines); out != "" && (t.event.Err == nil || strings.TrimSpace(out) != t.event.Err.Error()) {
 		sections = append(sections, mutedStyle.Render("stderr")+"\n"+out)
 	} else if out := tail(t.event.Stdout, failTailLines); out != "" {
 		sections = append(sections, mutedStyle.Render("stdout")+"\n"+out)
@@ -561,7 +561,11 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 	p := tea.NewProgram(newTUIModel(cfg.Title, verbose, cancel), tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1")))
 
 	st, _ := store.Open(getHistoryDBPath())
-	defer func() { if st != nil { _ = st.Close() } }()
+	defer func() {
+		if st != nil {
+			_ = st.Close()
+		}
+	}()
 
 	cfg.OnEvent = func(event any) {
 		if st != nil {

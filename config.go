@@ -63,11 +63,12 @@ var (
 
 // Config represents a config file.
 type Config struct {
-	Title     string            `toml:"title"`
-	GorunUUID string            `toml:"-"`
-	LogLevel  string            `toml:"log_level"`
-	EnvVars   map[string]string `toml:"envvars"`
-	SSH       SSH               `toml:"ssh"`
+	Title       string            `toml:"title"`
+	GorunUUID   string            `toml:"-"`
+	LogLevel    string            `toml:"log_level"`
+	MaxParallel int               `toml:"max_parallel"` // 0 means run every selected host at once
+	EnvVars     map[string]string `toml:"envvars"`
+	SSH         SSH               `toml:"ssh"`
 
 	// Tasks is the task library, keyed by task name. Servers pick tasks from it by name.
 	Tasks map[string]Task `toml:"tasks"`
@@ -114,6 +115,10 @@ func (c *Config) Load(r io.Reader) error {
 	}
 
 	*c = f.Config
+
+	if c.MaxParallel < 0 {
+		return fmt.Errorf("error with loading config: max_parallel must not be negative")
+	}
 
 	// tasks and servers are named by their table keys
 	for name, task := range c.Tasks {
@@ -400,6 +405,10 @@ func (c *Config) selectedTaskSet() map[string]bool {
 
 // Run runs all the tasks as returned by `Pipeline` on one or more servers.
 func (c *Config) Run(ctx context.Context, server ...Server) error {
+	if c.MaxParallel < 0 {
+		return errors.New("max_parallel must not be negative")
+	}
+
 	hostname, _ := os.Hostname()
 	if c.GorunUUID == "" {
 		c.GorunUUID = fmt.Sprintf("%s-%d-%d", hostname, os.Getpid(), time.Now().UnixNano())
@@ -465,6 +474,12 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		totalTasks += len(s.Tasks)
 	}
 
+	maxParallel := c.MaxParallel
+	if maxParallel == 0 || maxParallel > len(pipeline) {
+		maxParallel = len(pipeline)
+	}
+	parallelSlots := make(chan struct{}, maxParallel)
+
 	var failedCount, skippedCount atomic.Int64
 
 	c.emit(ProcessStartedEvent{
@@ -507,6 +522,13 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			server.Tasks[i] = task
 		}
 		wg.Go(func() {
+			select {
+			case parallelSlots <- struct{}{}:
+				defer func() { <-parallelSlots }()
+			case <-ctx.Done():
+				return
+			}
+
 			ctx, span := tracer.Start(ctx, "server.run")
 			defer span.End()
 			span.SetAttributes(

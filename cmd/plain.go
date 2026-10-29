@@ -34,10 +34,15 @@ func (p *plainPrinter) event(event any) {
 			}
 		case gorun.TaskFailed:
 			fmt.Fprintf(p.w, "%s: %s FAILED (exit code %d, %s)\n", ev.Server, ev.Task, ev.ExitCode, ev.Duration.Round(time.Millisecond))
+			if ev.Err != nil {
+				fmt.Fprintf(p.w, "    reason: %v\n", ev.Err)
+			}
 			if p.verbose {
 				p.output("stdout", ev.Stdout, outputTailLines)
 			}
-			p.output("stderr", ev.Stderr, failTailLines)
+			if ev.Err == nil || strings.TrimSpace(ev.Stderr) != ev.Err.Error() {
+				p.output("stderr", ev.Stderr, failTailLines)
+			}
 		case gorun.TaskSkipped:
 			fmt.Fprintf(p.w, "%s: %s skipped\n", ev.Server, ev.Task)
 		}

@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 	"text/template"
 	"time"
 
@@ -19,6 +18,16 @@ import (
 	"golang.org/x/crypto/ssh"
 
 	"gorun/internal/envvars"
+)
+
+const (
+	// DefaultTaskTimeout is how long a task may run when it doesn't set its own
+	// timeout. It stops a hung command from holding up a run forever.
+	DefaultTaskTimeout = 30 * time.Minute
+
+	// taskKillGrace bounds how long gorun waits for output pipes to close after
+	// a canceled task has been killed.
+	taskKillGrace = 5 * time.Second
 )
 
 // Copy represents a file copy operation.
@@ -39,20 +48,31 @@ type Copy struct {
 
 // Task is a task to execute on one or more servers.
 type Task struct {
-	LogLevel         string            `toml:"log_level"`
-	Name             string            `toml:"-"` // the <name> in [tasks.<name>]
-	Sudo             bool              `toml:"sudo"`
-	Cmd              string            `toml:"cmd,omitempty"`
-	CmdFile          string            `toml:"cmd_file,omitempty"`
-	CmdTemplate      string            `toml:"cmd_template,omitempty"`
-	CmdTemplateFile  string            `toml:"cmd_template_file,omitempty"`
-	Copy             []Copy            `toml:"copy,omitempty"`
-	Copies           []Copy            `toml:"copies,omitempty"`
-	Upload           []Copy            `toml:"upload,omitempty"`
-	Files            []Copy            `toml:"files,omitempty"`
-	EnvVars          map[string]string `toml:"envvars"`
-	DependsOn        []string          `toml:"depends_on"`
-	Shell            string            `toml:"shell"`
+	LogLevel        string            `toml:"log_level"`
+	Name            string            `toml:"-"` // the <name> in [tasks.<name>]
+	Sudo            bool              `toml:"sudo"`
+	Cmd             string            `toml:"cmd,omitempty"`
+	CmdFile         string            `toml:"cmd_file,omitempty"`
+	CmdTemplate     string            `toml:"cmd_template,omitempty"`
+	CmdTemplateFile string            `toml:"cmd_template_file,omitempty"`
+	Copy            []Copy            `toml:"copy,omitempty"`
+	Copies          []Copy            `toml:"copies,omitempty"`
+	Upload          []Copy            `toml:"upload,omitempty"`
+	Files           []Copy            `toml:"files,omitempty"`
+	EnvVars         map[string]string `toml:"envvars"`
+	DependsOn       []string          `toml:"depends_on"`
+	Shell           string            `toml:"shell"`
+	Timeout         time.Duration     `toml:"timeout,omitempty"`
+}
+
+// TimeoutDuration returns the timeout to apply to the task. A zero (or
+// negative) Timeout uses DefaultTaskTimeout.
+func (t Task) TimeoutDuration() time.Duration {
+	if t.Timeout > 0 {
+		return t.Timeout
+	}
+
+	return DefaultTaskTimeout
 }
 
 // Command reads the command from either inline cmd or from a file
@@ -109,6 +129,10 @@ func (t *Task) CommandFor(server any) (string, error) {
 
 // validate runs some validations against the task checking that it is valid for execution.
 func (t Task) validate() error {
+	if t.Timeout < 0 {
+		return fmt.Errorf("task %s timeout must not be negative", t.Name)
+	}
+
 	count := 0
 	if t.Cmd != "" {
 		count++
@@ -202,6 +226,26 @@ type TaskExec struct {
 	exitCode    int
 }
 
+// contextErr turns a canceled or timed-out context into an error that explains
+// why the task stopped.
+func (t *TaskExec) contextErr(err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("task %q timed out after %s", t.task.Name, t.task.TimeoutDuration())
+	}
+
+	return fmt.Errorf("task %q was interrupted", t.task.Name)
+}
+
+// appendStderr adds a reason to the captured stderr without losing any output
+// the command already produced. This keeps the reason visible to consumers
+// that only see stdout/stderr (the web UI and history database).
+func (t *TaskExec) appendStderr(msg string) {
+	if len(t.stderr) > 0 && !bytes.HasSuffix(t.stderr, []byte("\n")) {
+		t.stderr = append(t.stderr, '\n')
+	}
+	t.stderr = append(t.stderr, msg...)
+}
+
 // Fail will fail a task.
 func (t *TaskExec) Fail(ctx context.Context, err error) error {
 	ctx, span := tracer.Start(ctx, "Fail")
@@ -213,21 +257,36 @@ func (t *TaskExec) Fail(ctx context.Context, err error) error {
 	)
 
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-
 		// report the command's real exit code when there is one
 		var sshErr *ssh.ExitError
 		var execErr *exec.ExitError
 
+		ctxErr := ctx.Err()
+
 		switch {
+		case errors.Is(ctxErr, context.DeadlineExceeded):
+			t.exitCode = 124 // same convention as timeout(1)
+			err = t.contextErr(ctxErr)
+		case errors.Is(ctxErr, context.Canceled):
+			t.exitCode = 130 // interrupted by SIGINT
+			err = t.contextErr(ctxErr)
 		case errors.As(err, &sshErr):
 			t.exitCode = sshErr.ExitStatus()
 		case errors.As(err, &execErr):
 			t.exitCode = execErr.ExitCode()
+		case errors.Is(err, exec.ErrWaitDelay):
+			t.exitCode = 2
+			err = fmt.Errorf("task %q finished but left a background process holding its output open", t.task.Name)
 		default:
 			t.exitCode = 2
 		}
+
+		if ctxErr != nil {
+			t.appendStderr(err.Error())
+		}
+
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 
 		t.logger.ErrorContext(
 			ctx,
@@ -257,10 +316,17 @@ func (t *TaskExec) Terminate(ctx context.Context, err error) error {
 	span.SetAttributes(attribute.String("task.name", t.task.Name))
 
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			t.exitCode = 124 // same convention as timeout(1)
+			err = t.contextErr(err)
+		} else {
+			t.exitCode = 130 // interrupted by SIGINT
+			err = t.contextErr(err)
+		}
+		t.appendStderr(err.Error())
+
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		t.stderr = []byte(err.Error())
-		t.exitCode = 1
 
 		t.logger.WarnContext(
 			ctx,
@@ -362,8 +428,25 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 	return tasks, nil
 }
 
+// timeoutContext applies the task's timeout to ctx.
+func (t *TaskExec) timeoutContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	timeout := t.task.TimeoutDuration()
+	if timeout <= 0 {
+		return ctx, func() {}
+	}
+
+	return context.WithTimeout(ctx, timeout)
+}
+
 // LocalExecute executes the task as a local task.
 func (t *TaskExec) LocalExecute(ctx context.Context) error {
+	ctx, cancel := t.timeoutContext(ctx)
+	defer cancel()
+
+	return t.localExecute(ctx)
+}
+
+func (t *TaskExec) localExecute(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "TaskExec.LocalExecute")
 	defer span.End()
 
@@ -433,6 +516,7 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 	}
 
 	cmd := exec.CommandContext(ctx, name, args...)
+	configureCommand(cmd)
 
 	t.command = cmd.String()
 
@@ -460,6 +544,13 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 	return t.Completed(ctx)
 }
 
+// execResult carries the output of a remote command back to Execute.
+type execResult struct {
+	stdout []byte
+	stderr []byte
+	err    error
+}
+
 // Execute executes the task with the attached SSH client.
 func (t *TaskExec) Execute(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "TaskExec.Execute")
@@ -475,8 +566,11 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		attribute.Bool("task.sudo", t.task.Sudo),
 	)
 
+	ctx, cancel := t.timeoutContext(ctx)
+	defer cancel()
+
 	if t.server == nil {
-		return t.LocalExecute(ctx)
+		return t.localExecute(ctx)
 	}
 
 	defer func() {
@@ -502,28 +596,36 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		t.completedAt = time.Now()
 	}()
 
-	wg := sync.WaitGroup{}
-
-	errChan := make(chan error, 1)
-	doneChan := make(chan bool, 1)
-
 	session, err := t.server.NewSession()
-
-	if err := t.Fail(ctx, err); err != nil {
-		err = fmt.Errorf("error creating SSH session: %w", err)
-		return err
+	if err != nil {
+		return t.Fail(ctx, fmt.Errorf("error creating SSH session: %w", err))
 	}
-
 	defer func() { _ = session.Close() }()
 
-	wg.Go(func() {
-		var stdout bytes.Buffer
-		var stderr bytes.Buffer
+	var serverArg any
+	if t.gorunServer != nil {
+		serverArg = t.gorunServer
+	} else if t.serverName != "" {
+		serverArg = Server{Name: t.serverName}
+	}
 
-		defer func() {
-			t.stdout = stdout.Bytes()
-			t.stderr = stderr.Bytes()
-		}()
+	command, err := t.task.CommandFor(serverArg)
+	if err != nil {
+		return t.Fail(ctx, fmt.Errorf("error running the task on the remote server: %w", err))
+	}
+
+	if t.task.Sudo {
+		// wrap in single quotes, escaping any single quotes in the command
+		command = "sudo -n sh -c '" + strings.ReplaceAll(command, "'", `'\''`) + "'"
+	}
+
+	t.command = command
+	t.startedAt = time.Now()
+
+	result := make(chan execResult, 1)
+
+	go func() {
+		var stdout, stderr bytes.Buffer
 
 		session.Stdout = &stdout
 		session.Stderr = &stderr
@@ -532,53 +634,58 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 			_ = session.Setenv(strings.ToUpper(key), value)
 		}
 
-		t.startedAt = time.Now()
-
-		var serverArg any
-		if t.gorunServer != nil {
-			serverArg = t.gorunServer
-		} else if t.serverName != "" {
-			serverArg = Server{Name: t.serverName}
-		}
-
 		if err := CopyFiles(t.server, serverArg, &t.task); err != nil {
-			errChan <- fmt.Errorf("error running the task on the remote server: %w", err)
+			result <- execResult{
+				stdout: stdout.Bytes(),
+				stderr: stderr.Bytes(),
+				err:    fmt.Errorf("error running the task on the remote server: %w", err),
+			}
 			return
 		}
 
-		command, err := t.task.CommandFor(serverArg)
+		err := session.Run(command)
 		if err != nil {
-			errChan <- fmt.Errorf("error running the task on the remote server: %w", err)
-			return
+			err = fmt.Errorf("error running the task on the remote server: %w", err)
 		}
 
-		if t.task.Sudo {
-			// wrap in single quotes, escaping any single quotes in the command
-			command = "sudo -n sh -c '" + strings.ReplaceAll(command, "'", `'\''`) + "'"
-		}
-
-		t.command = command
-
-		if err := session.Run(command); err != nil {
-			errChan <- fmt.Errorf("error running the task on the remote server: %w", err)
-			return
-		}
-
-		t.stderr = stderr.Bytes()
-		t.stdout = stdout.Bytes()
-		doneChan <- true
-	})
-
-	wg.Wait()
+		result <- execResult{stdout: stdout.Bytes(), stderr: stderr.Bytes(), err: err}
+	}()
 
 	select {
-	case <-ctx.Done():
-		err := ctx.Err()
-		_ = session.Signal(ssh.SIGTERM)
-		return t.Terminate(ctx, err)
-	case err := <-errChan:
-		return t.Fail(ctx, err)
-	case <-doneChan:
+	case res := <-result:
+		t.stdout = res.stdout
+		t.stderr = res.stderr
+		if res.err != nil {
+			return t.Fail(ctx, res.err)
+		}
 		return t.Completed(ctx)
+	case <-ctx.Done():
+		// The command may have finished at the same moment the deadline hit.
+		// Prefer its result over reporting a timeout.
+		select {
+		case res := <-result:
+			t.stdout = res.stdout
+			t.stderr = res.stderr
+			if res.err != nil {
+				return t.Fail(ctx, res.err)
+			}
+			return t.Completed(ctx)
+		default:
+		}
+
+		// Ask the remote command to stop. Closing the client also unblocks a
+		// stuck copy or command, so Execute can return promptly.
+		_ = session.Signal(ssh.SIGTERM)
+		_ = t.server.Close()
+
+		select {
+		case res := <-result:
+			t.stdout = res.stdout
+			t.stderr = res.stderr
+		case <-time.After(taskKillGrace):
+			// The connection didn't close in time; don't hold up the whole run.
+		}
+
+		return t.Terminate(ctx, ctx.Err())
 	}
 }

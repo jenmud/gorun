@@ -40,6 +40,7 @@ sudo = true
 [tasks.packages]
 cmd_file = "./scripts/packages.sh"
 sudo = true
+timeout = "1m30s"
 
 [tasks.timezone]
 cmd = "cp /usr/share/zoneinfo/UTC /etc/localtime && echo UTC > /etc/timezone"

@@ -1,8 +1,13 @@
 package gorun
 
 import (
+	"context"
+	"fmt"
+	"io"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -64,6 +69,7 @@ func TestResolveTasks(t *testing.T) {
 func TestConfig_Load(t *testing.T) {
 	gorunfile := `
 title = "test"
+max_parallel = 3
 
 [tasks.packages]
 cmd = "apk add curl"
@@ -95,6 +101,10 @@ tasks = []
 		t.Fatal(err)
 	}
 
+	if c.MaxParallel != 3 {
+		t.Errorf("MaxParallel = %d, want 3", c.MaxParallel)
+	}
+
 	if got := c.Tasks["timezone"].Name; got != "timezone" {
 		t.Errorf("task name should come from its key, got %q", got)
 	}
@@ -123,6 +133,82 @@ tasks = []
 	}
 }
 
+func TestRunMaxParallel(t *testing.T) {
+	old := logOutput
+	SetLogOutput(io.Discard)
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	// Each task writes a marker and waits until two markers exist. That only
+	// succeeds if at least two servers run at the same time, and the event
+	// accounting below proves no more than the configured limit run together.
+	dir := t.TempDir()
+	command := fmt.Sprintf(
+		`touch %s/{{.Name}}; while [ "$(ls %s | wc -l)" -lt 2 ]; do sleep 0.01; done`,
+		dir, dir,
+	)
+
+	const (
+		serverCount = 6
+		limit       = 2
+	)
+
+	servers := make([]Server, serverCount)
+	for i := range servers {
+		servers[i] = Server{
+			Name:      fmt.Sprintf("host-%d", i),
+			TaskNames: []string{"gate"},
+		}
+	}
+
+	cfg := Config{
+		MaxParallel: limit,
+		Tasks: map[string]Task{
+			"gate": {Name: "gate", CmdTemplate: command, Timeout: 2 * time.Second},
+		},
+		Servers: servers,
+	}
+
+	var mu sync.Mutex
+	running, peak, done := 0, 0, 0
+	cfg.OnEvent = func(event any) {
+		ev, ok := event.(TaskEvent)
+		if !ok {
+			return
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		switch ev.State {
+		case TaskRunning:
+			running++
+			if running > peak {
+				peak = running
+			}
+		case TaskDone, TaskFailed, TaskSkipped:
+			running--
+			done++
+		}
+	}
+
+	if err := cfg.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if done != serverCount {
+		t.Errorf("finished tasks = %d, want %d", done, serverCount)
+	}
+	if peak < limit {
+		t.Errorf("peak concurrent servers = %d, want at least %d", peak, limit)
+	}
+	if peak > limit {
+		t.Errorf("peak concurrent servers = %d, want at most %d", peak, limit)
+	}
+}
+
 func TestConfig_Load_Errors(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -138,6 +224,11 @@ func TestConfig_Load_Errors(t *testing.T) {
 			name:      "old array layout",
 			gorunfile: "[[servers]]\nname = \"server1\"\n",
 			wantErr:   "error with loading config",
+		},
+		{
+			name:      "negative max parallel",
+			gorunfile: "max_parallel = -1\n",
+			wantErr:   "max_parallel must not be negative",
 		},
 	}
 

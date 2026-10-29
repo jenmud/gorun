@@ -61,6 +61,7 @@ func main() {
 	flag.Var(&taskFlags, "task", "run only the named task (repeatable); dependencies are included")
 	serverFlags := stringSlice{}
 	flag.Var(&serverFlags, "server", "run only the named server (repeatable)")
+	parallel := flag.Int("parallel", 0, "maximum number of hosts to run in parallel (0 = all)")
 	listTasks := flag.Bool("list-tasks", false, "list available tasks and exit")
 	listServers := flag.Bool("list-servers", false, "list servers and their task pipelines and exit")
 
@@ -141,6 +142,19 @@ func main() {
 
 	// relative paths in the config are relative to the config file, not the working directory
 	cfg.ResolvePaths(filepath.Dir(filename))
+
+	if *parallel < 0 {
+		fatal(errors.New("parallel must be 0 or greater"))
+	}
+	parallelSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "parallel" {
+			parallelSet = true
+		}
+	})
+	if parallelSet {
+		cfg.MaxParallel = *parallel
+	}
 
 	if *listTasks {
 		// Build a reverse dependency tree: a task's children are the tasks that
@@ -343,6 +357,7 @@ Options:
   -select   select servers to deploy to using the TUI
   -task     run only the named task (repeatable; dependencies included)
   -server  run only the named server (repeatable)
+  -parallel N  run at most N hosts at once (0 = all servers)
   -list-tasks  list available tasks and exit
   -list-servers  list servers and their task pipelines and exit
   -dump     dump an empty Gorunfile template to stdout
@@ -375,6 +390,7 @@ func emptyGorunfile() string {
 
 title = "My deployment"
 log_level = "info"   # debug|info|warn|error (inherited by servers/tasks)
+# max_parallel = 0     # 0 (default) = every selected host at once
 
 # envvars = { FOO = "bar" }   # exported to every task (keys upper-cased)
 
@@ -393,6 +409,7 @@ log_level = "info"   # debug|info|warn|error (inherited by servers/tasks)
 # depends_on = []
 # shell = "sh -c"               # default
 # log_level = "info"
+# timeout = "30m"               # default; task fails with exit code 124 after this
 # [tasks.example.envvars]
 # KEY = "value"
 # [[tasks.example.copy]]

@@ -32,6 +32,28 @@ fi
 
 VERSION_NO_V="${VERSION#v}"
 
+# Which variants to install (both, normal, otel). Prompt when interactive.
+INSTALL_VARIANTS="${INSTALL_VARIANTS:-}"
+if [ -z "$INSTALL_VARIANTS" ]; then
+  if [ -t 0 ]; then
+    printf "Install which binaries? [both/normal/otel] (default: both): "
+    read -r answer
+    case "$answer" in
+      normal|otel|both) INSTALL_VARIANTS="$answer" ;;
+      "") INSTALL_VARIANTS="both" ;;
+      *) INSTALL_VARIANTS="both" ;;
+    esac
+  else
+    INSTALL_VARIANTS="both"
+  fi
+fi
+
+case "$INSTALL_VARIANTS" in
+  normal) INSTALL_NORMAL=1 ;;
+  otel) INSTALL_OTEL=1 ;;
+  *) INSTALL_NORMAL=1; INSTALL_OTEL=1 ;;
+esac
+
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
@@ -55,13 +77,17 @@ install_asset() {
 }
 
 # Normal build (all platforms).
+if [ -n "$INSTALL_NORMAL" ]; then
 ASSET="gorun_${VERSION_NO_V}_${OS_TITLE}_${ARCH_NAME}.tar.gz"
 if ! install_asset "$BINARY_NAME" "$ASSET"; then
   echo "No prebuilt binary found for ${OS}/${ARCH} (${VERSION}); building from source..."
   BUILD_FROM_SOURCE=1
 fi
 
+fi
+
 # OpenTelemetry-instrumented build (Linux x86_64 only in releases).
+if [ -n "$INSTALL_OTEL" ]; then
 OTEL_ASSET="gorun-otel_${VERSION_NO_V}_${OS_TITLE}_${ARCH_NAME}.tar.gz"
 if install_asset "$OTEL_BINARY_NAME" "$OTEL_ASSET"; then
   :
@@ -69,6 +95,7 @@ else
   if [ "$OS" = "linux" ] && [ "$ARCH" = "amd64" ]; then
     BUILD_OTEL_FROM_SOURCE=1
   fi
+fi
 fi
 
 if [ -n "$BUILD_FROM_SOURCE" ] || [ -n "$BUILD_OTEL_FROM_SOURCE" ]; then
@@ -92,14 +119,14 @@ if [ -n "$BUILD_FROM_SOURCE" ] || [ -n "$BUILD_OTEL_FROM_SOURCE" ]; then
     cd gorun-* 2>/dev/null || cd */ 2>/dev/null
   fi
 
-  if [ -n "$BUILD_FROM_SOURCE" ]; then
+  if [ -n "$BUILD_FROM_SOURCE" ] && [ -n "$INSTALL_NORMAL" ]; then
     go build -o "$BINARY_NAME" ./cmd
     chmod +x "$BINARY_NAME"
     mv "$BINARY_NAME" "${INSTALL_DIR}/${BINARY_NAME}"
     echo "gorun installed to ${INSTALL_DIR}/${BINARY_NAME}"
   fi
 
-  if [ -n "$BUILD_OTEL_FROM_SOURCE" ]; then
+  if [ -n "$BUILD_OTEL_FROM_SOURCE" ] && [ -n "$INSTALL_OTEL" ]; then
     if command -v go >/dev/null 2>&1 && go tool otelc 2>/dev/null; then
       go tool otelc go build -o "$OTEL_BINARY_NAME" ./cmd
       chmod +x "$OTEL_BINARY_NAME"

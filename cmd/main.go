@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
+	"log"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -15,7 +18,9 @@ import (
 	"golang.org/x/term"
 
 	"gorun"
-	web "gorun/app/websrv"
+	inats "gorun/internal/nats"
+	"gorun/internal/store"
+	web "gorun/cmd/websrv"
 )
 
 var version = "dev"
@@ -31,6 +36,8 @@ func main() {
 	versionFlag := flag.Bool("version", false, "print version and exit")
 	webFlag := flag.Bool("web", false, "start the web server")
 	historyFlag := flag.Bool("history", false, "view historical runs")
+
+	flag.Usage = printUsage
 	flag.Parse()
 
 	if *versionFlag {
@@ -57,8 +64,6 @@ func main() {
 		return
 	}
 
-	gorun.StartNATS()
-
 	filename := flag.Arg(0)
 
 	// the flag package stops at the first positional argument, so parse again
@@ -68,13 +73,22 @@ func main() {
 	}
 
 	useTUI := !*plain && term.IsTerminal(int(os.Stdout.Fd()))
+
+	if filename == "" {
+		printUsage()
+		os.Exit(1)
+	}
+
 	if !useTUI {
 		slog.Info("parsing gorun file", slog.String("filename", filename))
 	}
 
-	if filename == "" {
-		fatal(errors.New("usage: gorun [-v] [-plain] [-select] [-web] [-history] <Gorunfile>"))
+	// hide all log output unless running in plain mode
+	if useTUI {
+		log.SetOutput(io.Discard)
+		gorun.SetLogOutput(io.Discard)
 	}
+	gorun.StartNATS()
 
 	cfg := gorun.Config{}
 	r, err := os.Open(filename)
@@ -131,6 +145,20 @@ func main() {
 		fmt.Printf("%s: %s\n", server.Name, strings.Join(names, " -> "))
 	}
 
+	st, _ := store.Open(getHistoryDBPath())
+	defer func() { if st != nil { _ = st.Close() } }()
+
+	cfg.OnEvent = func(event any) {
+		if st != nil {
+			if data, err := json.Marshal(event); err == nil {
+				var ev inats.Event
+				if json.Unmarshal(data, &ev) == nil {
+					inats.UpdateDatabase(ctx, st, &ev)
+				}
+			}
+		}
+	}
+
 	if err := cfg.Run(ctx); err != nil {
 		slog.Error("error executing tasks", slog.String("reason", err.Error()))
 		os.Exit(1)
@@ -143,6 +171,38 @@ func fatal(err error) {
 	os.Exit(1)
 }
 
+func printUsage() {
+	fmt.Fprintf(os.Stderr, `Usage: gorun [options] <Gorunfile>
+
+Run the tasks defined in a Gorunfile across one or more servers.
+
+Options:
+  -v        verbose: show every task and its output
+  -plain    plain log output instead of the TUI (default when stdout is not a terminal)
+  -select   select servers to deploy to using the TUI
+  -dump     dump an empty Gorunfile template to stdout
+  -version  print version and exit
+  -web      start the web server
+  -history  view historical runs
+
+Environment variables (can be overridden via the process environment or a .env file
+in the current working directory; .env values never override variables already set
+in the environment):
+
+  GORUN_NAME                          default: gorun
+  GORUN_ADDRESS                       default: :8080 (web server listen address)
+  GORUN_DB_PATH                       default: ~/.gorun/gorun.db (falls back to gorun.db)
+  GORUN_EVENT_TOPIC                   default: gorun.events
+  GORUN_SKIP_NATS                     default: unset (set to skip NATS publishing)
+  GORUN_NATS_CLIENT_URL               default: nats://127.0.0.1:4222
+  GORUN_NATS_CLIENT_NAME              default: GORUN_NAME (or gorun)
+  GORUN_NATS_CLIENT_ALLOW_RECONNECT   default: true
+  GORUN_NATS_CLIENT_RECONNECT_WAIT    default: nats default (e.g. 2s)
+  GORUN_NATS_CLIENT_TIMEOUT           default: nats default (e.g. 5s)
+
+OpenTelemetry SDK variables (OTEL_*) are also honoured by the instrumented build.
+`)
+}
 
 func emptyGorunfile() string {
 	return `# Gorunfile

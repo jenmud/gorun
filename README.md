@@ -24,7 +24,7 @@ curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install
 Download a prebuilt binary from the [releases](https://github.com/jenmud/gorun/releases), or build from source:
 
 ```bash
-go build -o gorun ./app/tui
+go build -o gorun ./cmd
 mv gorun /usr/local/bin/
 ```
 
@@ -94,7 +94,7 @@ list by server name (falling back to hostname): `wp2` finds `web-prod-2`, and `e
 
 ## Using gorun as a library
 
-The command-line tool and TUI live under `app/tui`. The rest of the repository is the
+The command-line tool and TUI live under `cmd`. The rest of the repository is the
 `gorun` package, which you can import to drive deployments from your own code:
 
 ```go
@@ -109,7 +109,7 @@ cfg := gorun.Config{}
 
 ## Web UI
 
-A web frontend lives under `app/web` and is built with [a-h/templ](https://templ.guide),
+A web frontend lives under `cmd/web` and is built with [a-h/templ](https://templ.guide),
 [Datastar](https://data-star.dev) and Tailwind CSS (via CDN). It subscribes to the
 `gorun.events` NATS topic and renders a realtime dashboard grouped by `gorun_uuid`.
 
@@ -118,7 +118,7 @@ A web frontend lives under `app/web` and is built with [a-h/templ](https://templ
 gorun -web
 
 # or run directly
-go run ./app/web
+go run ./cmd -web
 ```
 
 ### Dashboard
@@ -140,7 +140,7 @@ The dashboard mirrors the TUI. Each running gorun process is a collapsible card:
 
 Historical run data is stored in SQLite. Runs are recorded automatically
 by gorun instances and can be viewed in the TUI or the web UI. By default,
-runs are saved to `~/.gorun/gorun.sqlite`.
+runs are saved to `~/.gorun/gorun.db`.
 
 ### Configuration
 
@@ -160,7 +160,7 @@ When a run occurs, gorun automatically:
 
 - **TUI:** `gorun -history` shows a navigable history with expandable servers, tasks, commands, stdout, and stderr.
   - Press `d` to delete the selected run, `t` to keep only the 10 most recent runs.
-- **Web UI:** Start it with `gorun -web` (or `go run ./app/web`) and open http://localhost:8080/runs to see all historical runs.
+- **Web UI:** Start it with `gorun -web` (or `go run ./cmd -web`) and open http://localhost:8080/runs to see all historical runs.
   - Use the "Keep 10 most recent" button or the delete button on a run's detail page.
 
 The `/runs` endpoint queries the database directly; if the store is unavailable, it returns a 503 error.

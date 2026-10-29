@@ -70,7 +70,7 @@ else
   cd gorun-* 2>/dev/null || cd */ 2>/dev/null
 fi
 
-go build -o "$BINARY_NAME" ./app/tui
+go build -o "$BINARY_NAME" ./cmd
 chmod +x "$BINARY_NAME"
 mv "$BINARY_NAME" "${INSTALL_DIR}/${BINARY_NAME}"
 

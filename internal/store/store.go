@@ -9,6 +9,7 @@ import (
 )
 
 type RunSummary struct {
+	Servers    int
 	ID         string
 	Title      string
 	Hostname   string
@@ -49,7 +50,9 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	db.SetMaxOpenConns(1)
 	s := &Store{db: db}
+	_, _ = db.Exec("PRAGMA busy_timeout=5000;")
 	if err := s.migrate(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -162,7 +165,7 @@ func (s *Store) FinishRun(ctx context.Context, runID string, success bool, total
 
 func (s *Store) ListRuns(ctx context.Context) ([]RunSummary, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns FROM runs ORDER BY started_at ASC`)
+		`SELECT (SELECT COUNT(*) FROM servers WHERE run_id=runs.id),id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns FROM runs ORDER BY started_at ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +178,7 @@ func (s *Store) ListRuns(ctx context.Context) ([]RunSummary, error) {
 		var pid sql.NullInt64
 		var total, failed, skipped sql.NullInt64
 		var dur sql.NullInt64
-		if err := rows.Scan(&r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &succ, &total, &failed, &skipped, &dur); err != nil {
+		if err := rows.Scan(&r.Servers, &r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &succ, &total, &failed, &skipped, &dur); err != nil {
 			return nil, err
 		}
 		r.PID = int(pid.Int64)

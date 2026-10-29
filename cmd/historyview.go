@@ -393,6 +393,9 @@ func (m historyModel) View() tea.View {
 					}
 				}
 				line := fmt.Sprintf("%s%s %s %s", cursor, status, r.ID[:8], r.Title)
+				if r.Servers > 0 {
+					line += mutedStyle.Render(fmt.Sprintf("  [%d servers]", r.Servers))
+				}
 				if r.Finished {
 					line += mutedStyle.Render(fmt.Sprintf(" (%.1fs, %d failed)", r.Duration.Seconds(), r.Failed))
 				} else {
@@ -477,7 +480,18 @@ func (m historyModel) View() tea.View {
 			}
 
 
-			srvLine := cursor + arrow + " " + lipgloss.NewStyle().Bold(true).Render(it.server)
+			serverFailed := false
+			for _, t := range run.Tasks {
+				if t.Server == it.server && t.State == 3 {
+					serverFailed = true
+					break
+				}
+			}
+			serverStyle := lipgloss.NewStyle().Bold(true)
+			if serverFailed {
+				serverStyle = serverStyle.Foreground(lipgloss.Color("#EF4444"))
+			}
+			srvLine := cursor + arrow + " " + serverStyle.Render(it.server)
 			if total > 0 {
 				srvLine += mutedStyle.Render(fmt.Sprintf(" %d/%d", done, total))
 			}
@@ -601,7 +615,7 @@ func getHistoryDBPath() string {
 		return "gorun.db"
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		p := filepath.Join(home, ".gorun", "gorun.sqlite")
+		p := filepath.Join(home, ".gorun", "gorun.db")
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}

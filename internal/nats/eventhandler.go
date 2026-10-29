@@ -15,7 +15,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
-	"gorun/app/web/ui"
+	"gorun/cmd/web/ui"
 	"gorun/internal/store"
 )
 

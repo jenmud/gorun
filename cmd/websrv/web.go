@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go"
-	"gorun/app/web/ui"
+	"gorun/cmd/web/ui"
 	"gorun/internal/envvars"
 	inats "gorun/internal/nats"
 	"gorun/internal/store"
@@ -90,7 +90,7 @@ func Run() {
 		if home, err := os.UserHomeDir(); err == nil {
 			dir := filepath.Join(home, ".gorun")
 			_ = os.MkdirAll(dir, 0755)
-			dbPath = filepath.Join(dir, "gorun.sqlite")
+			dbPath = filepath.Join(dir, "gorun.db")
 		} else {
 			dbPath = "gorun.db"
 		}

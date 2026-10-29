@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,8 +17,9 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"gorun"
+	inats "gorun/internal/nats"
+	"gorun/internal/store"
 )
-
 
 var (
 	colorAccent = lipgloss.Color("#7C3AED")
@@ -291,9 +293,15 @@ func (m tuiModel) serverSummary(s *serverView) string {
 		}
 	}
 
+	// Make server name red if it has failed tasks
+	serverNameStyle := serverStyle
+	if s.err != nil || s.count(gorun.TaskFailed) > 0 {
+		serverNameStyle = failStyle
+	}
+
 	return fmt.Sprintf(
 		"%s %s\n%s %s  %s",
-		serverStyle.Render(s.name),
+		serverNameStyle.Render(s.name),
 		mutedStyle.Render(s.address),
 		bar.ViewAs(percent),
 		mutedStyle.Render(fmt.Sprintf("%2d/%d", finished, total)),
@@ -552,7 +560,21 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 	gorun.SetLogOutput(io.Discard)
 	defer drainTerminalInput()
 	p := tea.NewProgram(newTUIModel(cfg.Title, verbose, cancel), tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1")))
-	cfg.OnEvent = func(event any) { p.Send(event) }
+
+	st, _ := store.Open(getHistoryDBPath())
+	defer func() { if st != nil { _ = st.Close() } }()
+
+	cfg.OnEvent = func(event any) {
+		if st != nil {
+			if data, err := json.Marshal(event); err == nil {
+				var ev inats.Event
+				if json.Unmarshal(data, &ev) == nil {
+					inats.UpdateDatabase(ctx, st, &ev)
+				}
+			}
+		}
+		p.Send(event)
+	}
 
 	done := make(chan error, 1)
 	go func() {

@@ -8,7 +8,7 @@ before:
 
 builds:
   - id: gorun
-    main: ./app/tui
+    main: ./cmd
     binary: gorun
     ldflags:
       - -s -w -X main.version={{.Tag}}
@@ -23,7 +23,7 @@ builds:
       - arm64
 
   - id: gorun-otel
-    main: ./app/tui
+    main: ./cmd
     binary: gorun-otel
     tool: ./scripts/go-otel.sh
     ldflags:

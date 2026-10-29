@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -20,7 +19,6 @@ import (
 
 	"gorun"
 	web "gorun/cmd/websrv"
-	inats "gorun/internal/nats"
 	"gorun/internal/store"
 )
 
@@ -320,15 +318,7 @@ func main() {
 
 	cfg.OnEvent = func(event any) {
 		printer.event(event)
-
-		if st != nil {
-			if data, err := json.Marshal(event); err == nil {
-				var ev inats.Event
-				if json.Unmarshal(data, &ev) == nil {
-					inats.UpdateDatabase(ctx, st, &ev)
-				}
-			}
-		}
+		recordEvent(ctx, st, event)
 	}
 
 	if err := cfg.Run(ctx); err != nil {

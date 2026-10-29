@@ -13,6 +13,7 @@
 #
 title = "Provision app servers"
 log_level = "info"
+# max_parallel = 4
 
 #
 # Task library. Each [tasks.<name>] defines a task once; servers pick tasks by name.

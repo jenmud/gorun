@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -16,7 +15,6 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"gorun"
-	inats "gorun/internal/nats"
 	"gorun/internal/store"
 )
 
@@ -568,14 +566,7 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 	}()
 
 	cfg.OnEvent = func(event any) {
-		if st != nil {
-			if data, err := json.Marshal(event); err == nil {
-				var ev inats.Event
-				if json.Unmarshal(data, &ev) == nil {
-					inats.UpdateDatabase(ctx, st, &ev)
-				}
-			}
-		}
+		recordEvent(ctx, st, event)
 		p.Send(event)
 	}
 

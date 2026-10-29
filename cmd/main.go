@@ -59,6 +59,8 @@ func main() {
 	historyFlag := flag.Bool("history", false, "view historical runs")
 	taskFlags := stringSlice{}
 	flag.Var(&taskFlags, "task", "run only the named task (repeatable); dependencies are included")
+	serverFlags := stringSlice{}
+	flag.Var(&serverFlags, "server", "run only the named server (repeatable)")
 	listTasks := flag.Bool("list-tasks", false, "list available tasks and exit")
 	listServers := flag.Bool("list-servers", false, "list servers and their task pipelines and exit")
 
@@ -197,6 +199,30 @@ func main() {
 	}
 	cfg.SelectedTasks = []string(taskFlags)
 
+	// validate and apply --server filter
+	if len(serverFlags) > 0 {
+		known := map[string]bool{}
+		for _, srv := range cfg.Servers {
+			known[srv.Name] = true
+		}
+		for _, name := range serverFlags {
+			if !known[name] {
+				fatal(fmt.Errorf("unknown server %q", name))
+			}
+		}
+		selected := map[string]bool{}
+		for _, name := range serverFlags {
+			selected[name] = true
+		}
+		filtered := make([]gorun.Server, 0, len(serverFlags))
+		for _, srv := range cfg.Servers {
+			if selected[srv.Name] {
+				filtered = append(filtered, srv)
+			}
+		}
+		cfg.Servers = filtered
+	}
+
 	// check every server's task list up front, so config mistakes such as an unknown task
 	// are reported before the TUI starts rather than lost inside it
 	servers, err := cfg.ServersPipeline()
@@ -300,6 +326,7 @@ Options:
   -plain    plain log output instead of the TUI (default when stdout is not a terminal)
   -select   select servers to deploy to using the TUI
   -task     run only the named task (repeatable; dependencies included)
+  -server  run only the named server (repeatable)
   -list-tasks  list available tasks and exit
   -list-servers  list servers and their task pipelines and exit
   -dump     dump an empty Gorunfile template to stdout

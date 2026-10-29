@@ -96,6 +96,9 @@ gorun example/Gorunfile --list-servers
 
 # Run only the named tasks (their dependencies are included automatically)
 gorun example/Gorunfile --task greet --task verify
+
+# Run only the named servers
+gorun example/Gorunfile --server server1 --server web-prod-1
 ```
 
 ## Server Selection

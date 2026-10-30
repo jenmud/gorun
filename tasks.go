@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -485,11 +486,6 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 
 		logger := NewLogger(t.LogLevel, logOutput, false)
 
-		envVarList := []string{}
-		for key, value := range t.EnvVars {
-			envVarList = append(envVarList, fmt.Sprintf("%s=%s", key, value))
-		}
-
 		logger = logger.With(
 			slog.String("name", t.Name),
 			slog.String("shell", t.Shell),
@@ -498,7 +494,7 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 			slog.String("cmd_template_file", t.CmdTemplateFile),
 			slog.String("cmd_template", t.CmdTemplate),
 			slog.Any("depends_on", t.DependsOn),
-			slog.Any("envvars", envVarList),
+			slog.Any("envvars", envNames(t.EnvVars)), // names only, the values can be secrets
 		)
 
 		if server != nil {
@@ -604,33 +600,19 @@ func (t *TaskExec) localExecute(ctx context.Context) error {
 		return t.Fail(ctx, err)
 	}
 
-	// default to running the command through sh so multi-word commands work
-	name, args := "sh", []string{"-c", command}
-
-	if t.task.Shell != "" {
-		scmd := strings.Split(t.task.Shell, " ")
-		name = scmd[0]
-
-		args = append([]string{}, scmd[1:]...)
-		args = append(args, command)
+	stdin, err := envStdin(t.task.EnvVars)
+	if err != nil {
+		return t.Fail(ctx, err)
 	}
 
-	if t.task.Sudo {
-		// -n: fail instead of hanging on a password prompt
-		args = append([]string{"-n", name}, args...)
-		name = "sudo"
-	}
-
+	name, args := t.task.localArgs(command, stdin != nil)
 	cmd := exec.CommandContext(ctx, name, args...)
 	configureCommand(cmd)
+	cmd.Stdin = stdin
 
-	// record the command as written (templates rendered), not the shell and sudo
-	// wrapping, so history and events show what the user wrote
+	// record the command as written (templates rendered), not the shell, sudo and
+	// envvars wrapping, so history and events show what the user wrote
 	t.command = command
-
-	for key, value := range t.task.EnvVars {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", strings.ToUpper(key), value))
-	}
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -725,12 +707,23 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		}
 	}
 
-	// record the command as written, before the sudo wrapping and quoting below
+	// record the command as written, before the envvars prelude, sudo wrapping and quoting below
 	t.command = command
 
-	if command != "" && t.task.Sudo {
-		// wrap in single quotes, escaping any single quotes in the command
-		command = "sudo -n sh -c '" + strings.ReplaceAll(command, "'", `'\''`) + "'"
+	if command != "" {
+		stdin, err := envStdin(t.task.EnvVars)
+		if err != nil {
+			return t.Fail(ctx, err)
+		}
+
+		switch {
+		case t.task.Sudo:
+			command = sudoWrap(envPreludeIf(stdin) + command)
+		case stdin != nil:
+			// run the prelude in sh, whatever the remote user's login shell is
+			command = shWrap(envPrelude + command)
+		}
+		session.Stdin = stdin
 	}
 
 	t.startedAt = time.Now()
@@ -742,10 +735,6 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 
 		session.Stdout = &stdout
 		session.Stderr = &stderr
-
-		for key, value := range t.task.EnvVars {
-			_ = session.Setenv(strings.ToUpper(key), value)
-		}
 
 		if err := CopyFiles(t.server, serverArg, &t.task); err != nil {
 			result <- execResult{
@@ -806,4 +795,51 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 
 		return t.Terminate(ctx, ctx.Err())
 	}
+}
+
+// localArgs returns the program and arguments that run command locally: through
+// the task's shell (sh -c by default, so multi-word commands work), under sudo if set.
+// With env, a plain sh first runs envPrelude and then execs the task's shell, so that
+// shell never sees the values.
+func (t *Task) localArgs(command string, env bool) (string, []string) {
+	name, args := "sh", []string{"-c", command}
+
+	if t.Shell != "" {
+		scmd := strings.Split(t.Shell, " ")
+		name = scmd[0]
+
+		args = append([]string{}, scmd[1:]...)
+		args = append(args, command)
+	}
+
+	if env {
+		args = append([]string{"-c", envPrelude + `exec "$@"`, "sh", name}, args...)
+		name = "sh"
+	}
+
+	if t.Sudo {
+		// -n: fail instead of hanging on a password prompt
+		args = append([]string{"-n", name}, args...)
+		name = "sudo"
+	}
+
+	return name, args
+}
+
+// sudoWrap runs command as root through sh, single-quoting it.
+func sudoWrap(command string) string {
+	return "sudo -n " + shWrap(command)
+}
+
+// shWrap runs command through sh, single-quoting it.
+func shWrap(command string) string {
+	return "sh -c '" + strings.ReplaceAll(command, "'", `'\''`) + "'"
+}
+
+// envPreludeIf returns envPrelude when there is env stdin to read.
+func envPreludeIf(stdin io.Reader) string {
+	if stdin == nil {
+		return ""
+	}
+	return envPrelude
 }

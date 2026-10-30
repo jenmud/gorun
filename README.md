@@ -232,10 +232,12 @@ dst = "/opt/app"         # /opt/app gets the contents of ./files/app
 - **Dependencies:** `depends_on` tasks always run first, once, even if a server doesn't list them.
   Cycles are reported before anything runs.
 - **Env vars:** a task's own `envvars` win over its server's (and groups'), which win over the
-  global `envvars`; write keys in upper case, as they are upper-cased when set. Over SSH they are
-  sent with the session, which the server's sshd only accepts for names in its `AcceptEnv`, so
-  rely on them for local hosts, or render values into the command with `cmd_template`
-  (`{{index .EnvVars "REGION"}}`).
+  global `envvars`. Keys are upper-cased. They are exported to the task's command on local and SSH
+  hosts alike, also under `sudo`. Values expand `$VAR` and `${VAR}` from gorun's own environment,
+  including a `.env` file in the directory you run gorun from, so secrets stay out of the
+  Gorunfile: `TOKEN = "${DOCKERHUB_TOKEN}"`. Use `$$` for a literal `$`; an unset variable
+  expands to an empty string. The values are sent to the task over stdin, so they don't appear
+  in gorun's logs, the history, NATS events or the server's process list.
 
 ### Servers and SSH
 

@@ -500,19 +500,16 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		pipeline = pipelines
 	}
 
-	// merge the server's (including its groups') envvars, then the global ones, into
-	// each task; task-level values take precedence, then server-level ones
+	// merge the global envvars, then the server's (including its groups'), then the
+	// task's own into each task, later ones winning. Keys are compared upper-cased and
+	// values expand $VAR from gorun's environment. Tasks share their library map
+	// between servers, so each one gets a fresh map.
 	for name, server := range pipeline {
 		for i := range server.Tasks {
-			env := maps.Clone(server.Tasks[i].EnvVars)
-			if env == nil {
-				env = map[string]string{}
-			}
-			for _, defaults := range []map[string]string{server.EnvVars, c.EnvVars} {
-				for k, v := range defaults {
-					if _, ok := env[k]; !ok {
-						env[k] = v
-					}
+			env := map[string]string{}
+			for _, layer := range []map[string]string{c.EnvVars, server.EnvVars, server.Tasks[i].EnvVars} {
+				for k, v := range layer {
+					env[strings.ToUpper(k)] = expandEnv(v)
 				}
 			}
 			server.Tasks[i].EnvVars = env

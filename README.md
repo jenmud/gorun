@@ -395,6 +395,11 @@ Tasks are defined once in a task library and servers pick them by name:
 - Tasks can specify a command source OR copies (or both). If both are specified, copies run first, then the command.
 - `cmd_template` and `cmd_template_file` are compiled as Go text templates at task execution time with a `Server{}` passed in (so you can use `.Name`, `.Hostname`, etc.). The compiled result is the command that gets broadcast/sent to the server (NATS/web UI events show the compiled command).
 - Copy files to remote servers with `[[tasks.<name>.copy]]` (or `copy = [...]`): set `src` (local path, resolved relative to Gorunfile) and `dst` (remote path) or `dir` (remote directory). Also works for local execution.
+- Copy a directory recursively by pointing `src` at a local directory. Gorun copies the whole tree, like `scp -r`, and keeps file permissions:
+  - `dst = "/opt/app"`: `/opt/app` gets the *contents* of `src`.
+  - `dir = "/opt"`: the directory itself lands in `/opt/<basename of src>`.
+  The target directory and its parents are created if missing. Existing files are overwritten, and remote files that aren't in `src` are left alone. Symlinks are followed.
+- A task can consist only of copies; it doesn't need a `cmd`.
 - Copy as a template: set `src_template`/`template` to a local template file (resolved relative to Gorunfile) or `content` inline; it will be compiled as a Go text template with `Server{}` before being pushed to `dst`/`dir`.
 - `[servers]` `tasks` is the global list every server runs.
 - `[servers.hosts.<name>]` defines a server. If it sets its own `tasks`, that list **replaces** the global one.
@@ -429,6 +434,11 @@ cmd_template_file = "./templates/greet.sh.tmpl"
 [[tasks.deploy-config.copy]]
 src = "./config/app.conf"
 dst = "/etc/app/app.conf"
+
+[tasks.app-files]                          # copy a directory tree recursively
+[[tasks.app-files.copy]]
+src = "./files/app"                        # local directory
+dst = "/tmp/app"                           # receives the contents of ./files/app
 
 [servers]
 tasks = ["timezone"]                       # every server runs packages, then timezone

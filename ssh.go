@@ -1,9 +1,12 @@
 package gorun
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -136,35 +139,210 @@ func NewSSHClient(ctx context.Context, server Server) (*ssh.Client, error) {
 	return client, nil
 }
 
-// scpCopy copies data to remote using scp via SSH session.
-func scpCopy(client *ssh.Client, data []byte, remotePath string, mode os.FileMode) error {
-	if client == nil {
-		if mode == 0 {
-			mode = 0644
-		}
-		return os.WriteFile(remotePath, data, mode)
-	}
+// scpSender drives the source side of the scp protocol against a remote
+// `scp -t` sink. Every command is acknowledged by the sink before the next one.
+type scpSender struct {
+	w io.Writer
+	r *bufio.Reader
+}
 
+// ack reads the sink's reply: 0 is OK, 1 (warning) and 2 (fatal) carry a message.
+func (s *scpSender) ack() error {
+	b, err := s.r.ReadByte()
+	if err != nil {
+		return fmt.Errorf("scp: reading reply: %w", err)
+	}
+	switch b {
+	case 0:
+		return nil
+	case 1, 2:
+		msg, _ := s.r.ReadString('\n')
+		return fmt.Errorf("scp: %s", strings.TrimSpace(msg))
+	default:
+		return fmt.Errorf("scp: unexpected reply %q", b)
+	}
+}
+
+func (s *scpSender) command(format string, args ...any) error {
+	if _, err := fmt.Fprintf(s.w, format, args...); err != nil {
+		return err
+	}
+	return s.ack()
+}
+
+// file sends one regular file named name into the sink's current directory.
+func (s *scpSender) file(name string, mode os.FileMode, size int64, r io.Reader) error {
+	if err := s.command("C%04o %d %s\n", mode.Perm(), size, name); err != nil {
+		return err
+	}
+	if _, err := io.CopyN(s.w, r, size); err != nil {
+		return err
+	}
+	if _, err := s.w.Write([]byte{0}); err != nil {
+		return err
+	}
+	return s.ack()
+}
+
+// dirContents sends every entry of localDir into the sink's current directory,
+// descending into subdirectories. Symlinks are followed, as `scp -r` does.
+func (s *scpSender) dirContents(localDir string) error {
+	entries, err := os.ReadDir(localDir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		path := filepath.Join(localDir, e.Name())
+		info, err := os.Stat(path)
+		if err != nil {
+			return err
+		}
+		switch {
+		case info.IsDir():
+			if err := s.command("D%04o 0 %s\n", info.Mode().Perm(), e.Name()); err != nil {
+				return err
+			}
+			if err := s.dirContents(path); err != nil {
+				return err
+			}
+			if err := s.command("E\n"); err != nil {
+				return err
+			}
+		case info.Mode().IsRegular():
+			if err := s.localFile(path, e.Name(), info); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("scp: %s is not a regular file or directory", path)
+		}
+	}
+	return nil
+}
+
+func (s *scpSender) localFile(path, name string, info os.FileInfo) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return s.file(name, info.Mode(), info.Size(), f)
+}
+
+// shellQuote quotes s for a POSIX shell.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// runRemote runs cmd on the remote and returns its error together with stderr.
+func runRemote(client *ssh.Client, cmd string) error {
+	session, err := client.NewSession()
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+	out, err := session.CombinedOutput(cmd)
+	if err != nil {
+		return fmt.Errorf("%s: %w: %s", cmd, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// runSCP starts `scp <flags> -t target` on the remote and lets send stream into it.
+func runSCP(client *ssh.Client, flags, target string, send func(*scpSender) error) error {
 	session, err := client.NewSession()
 	if err != nil {
 		return err
 	}
 	defer session.Close()
 
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return err
+	}
+	stdout, err := session.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	var stderr bytes.Buffer
+	session.Stderr = &stderr
+
+	if err := session.Start("scp " + flags + " -t " + shellQuote(target)); err != nil {
+		return err
+	}
+	s := &scpSender{w: stdin, r: bufio.NewReader(stdout)}
+	sendErr := s.ack() // the sink announces it is ready
+	if sendErr == nil {
+		sendErr = send(s)
+	}
+	_ = stdin.Close()
+	waitErr := session.Wait()
+
+	if err := errors.Join(sendErr, waitErr); err != nil {
+		if msg := strings.TrimSpace(stderr.String()); msg != "" {
+			return fmt.Errorf("scp to %s: %w: %s", target, err, msg)
+		}
+		return fmt.Errorf("scp to %s: %w", target, err)
+	}
+	return nil
+}
+
+// scpCopy copies data to remotePath. A nil client writes locally.
+func scpCopy(client *ssh.Client, data []byte, remotePath string, mode os.FileMode) error {
 	if mode == 0 {
 		mode = 0644
 	}
+	if client == nil {
+		return os.WriteFile(remotePath, data, mode)
+	}
+	return runSCP(client, "", filepath.Dir(remotePath), func(s *scpSender) error {
+		return s.file(filepath.Base(remotePath), mode, int64(len(data)), bytes.NewReader(data))
+	})
+}
 
-	go func() {
-		w, _ := session.StdinPipe()
-		defer w.Close()
-		fmt.Fprintf(w, "C%04o %d %s\n", mode.Perm(), len(data), filepath.Base(remotePath))
-		w.Write(data)
-		fmt.Fprint(w, "\x00")
-	}()
+// scpCopyDir recursively copies the contents of localDir into remoteDir,
+// creating remoteDir (and its parents) if needed. A nil client copies locally.
+func scpCopyDir(client *ssh.Client, localDir, remoteDir string) error {
+	if client == nil {
+		return copyDirLocal(localDir, remoteDir)
+	}
+	if err := runRemote(client, "mkdir -p "+shellQuote(remoteDir)); err != nil {
+		return err
+	}
+	return runSCP(client, "-r -d", remoteDir, func(s *scpSender) error {
+		return s.dirContents(localDir)
+	})
+}
 
-	if err := session.Run("/usr/bin/scp -t " + filepath.Dir(remotePath)); err != nil {
-		if err := session.Run("scp -t " + filepath.Dir(remotePath)); err != nil {
+// copyDirLocal recursively copies src into dst, overwriting existing files.
+func copyDirLocal(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, info.Mode().Perm()); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		from, to := filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())
+		info, err := os.Stat(from)
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			if err := copyDirLocal(from, to); err != nil {
+				return err
+			}
+			continue
+		}
+		data, err := os.ReadFile(from)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(to, data, info.Mode().Perm()); err != nil {
 			return err
 		}
 	}
@@ -199,7 +377,6 @@ func CopyFiles(client *ssh.Client, server any, task *Task) error {
 		}
 
 		var data []byte
-		var err error
 		if cc.Content != "" {
 			data = []byte(cc.Content)
 		} else if cc.SrcTpl != "" {
@@ -217,6 +394,16 @@ func CopyFiles(client *ssh.Client, server any, task *Task) error {
 			}
 			data = buf.Bytes()
 		} else if srcPath != "" {
+			info, err := os.Stat(srcPath)
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				if err := scpCopyDir(client, srcPath, dst); err != nil {
+					return err
+				}
+				continue
+			}
 			data, err = os.ReadFile(srcPath)
 			if err != nil {
 				return err

@@ -127,6 +127,11 @@ func (t *Task) CommandFor(server any) (string, error) {
 	return "", fmt.Errorf("task %s has no command specified", t.Name)
 }
 
+// hasCommand reports whether the task runs a command (as opposed to only copying files).
+func (t Task) hasCommand() bool {
+	return t.Cmd != "" || t.CmdFile != "" || t.CmdTemplate != "" || t.CmdTemplateFile != ""
+}
+
 // validate runs some validations against the task checking that it is valid for execution.
 func (t Task) validate() error {
 	if t.Timeout < 0 {
@@ -489,8 +494,12 @@ func (t *TaskExec) localExecute(ctx context.Context) error {
 		serverArg = Server{Name: t.serverName}
 	}
 
+	t.startedAt = time.Now()
 	if err := CopyFiles(t.server, serverArg, &t.task); err != nil {
 		return t.Fail(ctx, err)
+	}
+	if !t.task.hasCommand() {
+		return t.Completed(ctx)
 	}
 
 	command, err := t.task.CommandFor(serverArg)
@@ -609,12 +618,15 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		serverArg = Server{Name: t.serverName}
 	}
 
-	command, err := t.task.CommandFor(serverArg)
-	if err != nil {
-		return t.Fail(ctx, fmt.Errorf("error running the task on the remote server: %w", err))
+	var command string
+	if t.task.hasCommand() {
+		command, err = t.task.CommandFor(serverArg)
+		if err != nil {
+			return t.Fail(ctx, fmt.Errorf("error running the task on the remote server: %w", err))
+		}
 	}
 
-	if t.task.Sudo {
+	if command != "" && t.task.Sudo {
 		// wrap in single quotes, escaping any single quotes in the command
 		command = "sudo -n sh -c '" + strings.ReplaceAll(command, "'", `'\''`) + "'"
 	}
@@ -640,6 +652,11 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 				stderr: stderr.Bytes(),
 				err:    fmt.Errorf("error running the task on the remote server: %w", err),
 			}
+			return
+		}
+		if command == "" {
+			// copy-only task
+			result <- execResult{}
 			return
 		}
 

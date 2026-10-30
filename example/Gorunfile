@@ -31,7 +31,7 @@ log_level = "info"
 #             └─ docker-install ── deploy-user ─┬───────┘
 #                                               └─ go-workspace
 #   verify depends on all the leaves above.
-#   go-smoke-test, ssh-user-docker-access and compose-project are only used by some servers.
+#   go-smoke-test, ssh-user-docker-access, compose-project and app-files are only used by some servers.
 #
 
 [tasks.apt-update]
@@ -117,6 +117,13 @@ cmd_file = "./scripts/compose-project.sh"
 sudo = true
 depends_on = ["deploy-user"]
 
+# Copy a whole directory tree recursively (like `scp -r`). With `dst`, the remote
+# directory receives the contents of ./files/app; it is created if missing and
+# existing files are overwritten. Copy-only tasks need no cmd.
+[tasks.app-files]
+[[tasks.app-files.copy]]
+src = "./files/app"
+dst = "/tmp/app"
 
 [tasks.greet]
 cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}:{{.SSH.Port}} ({{.SSH.User}}) -> {{.SSH.Identityfile}}'"
@@ -143,7 +150,7 @@ tasks = ["verify", "go-smoke-test", "apt-update"]
 [servers.hosts.server2]
 hostname = "localhost"
 # docker host: the usual setup, plus docker without sudo and the app's compose project
-tasks = ["verify", "ssh-user-docker-access", "compose-project"]
+tasks = ["verify", "ssh-user-docker-access", "compose-project", "app-files"]
     [servers.hosts.server2.ssh]
     port = 2222
     username = "testuser"

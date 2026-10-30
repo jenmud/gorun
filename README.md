@@ -8,6 +8,13 @@ One Go binary, one TOML file and SSH. No agent on the servers, no Python on your
 nothing left behind beyond what your commands did. Pick the servers and tasks to run in an
 interactive picker, follow every server's progress live, and look back at any run later.
 
+> [!WARNING]
+> **Use at your own risk.** gorun runs commands on your servers, often as root. The author takes no
+> responsibility for anything that goes wrong from using gorun, the `gorun` command or the Go
+> library, including data loss, outages, misconfigured or broken servers, and security
+> vulnerabilities. It is provided as is, without warranty of any kind (see the [MIT license](LICENSE)).
+> Review your Gorunfiles and test them on non-production servers first.
+
 ![gorun provisioning ten servers in parallel](docs/screenshot.png)
 
 ## Contents

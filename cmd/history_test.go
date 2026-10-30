@@ -9,8 +9,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"gorun"
-	"gorun/internal/store"
+	"github.com/jenmud/gorun"
+	"github.com/jenmud/gorun/internal/store"
 )
 
 func TestRecordEventFinishesRunAfterCancellation(t *testing.T) {

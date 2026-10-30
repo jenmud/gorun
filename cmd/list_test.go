@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"gorun"
+	"github.com/jenmud/gorun"
 )
 
 const listGorunfile = `

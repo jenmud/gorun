@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
-	inats "gorun/internal/nats"
-	"gorun/internal/store"
+	inats "github.com/jenmud/gorun/internal/nats"
+	"github.com/jenmud/gorun/internal/store"
 )
 
 // recordEvent saves an event to the history database. Writes use a context

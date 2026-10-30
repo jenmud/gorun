@@ -1,7 +1,7 @@
 package envvars_test
 
 import (
-	"gorun/internal/envvars"
+	"github.com/jenmud/gorun/internal/envvars"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"

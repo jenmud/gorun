@@ -15,11 +15,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jenmud/gorun/cmd/web/ui"
+	"github.com/jenmud/gorun/internal/envvars"
+	inats "github.com/jenmud/gorun/internal/nats"
+	"github.com/jenmud/gorun/internal/store"
 	"github.com/nats-io/nats.go"
-	"gorun/cmd/web/ui"
-	"gorun/internal/envvars"
-	inats "gorun/internal/nats"
-	"gorun/internal/store"
 )
 
 type hub struct {

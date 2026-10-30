@@ -1,4 +1,4 @@
-module gorun
+module github.com/jenmud/gorun
 
 go 1.26.2
 

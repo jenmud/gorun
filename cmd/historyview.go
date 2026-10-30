@@ -11,7 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"gorun/internal/store"
+	"github.com/jenmud/gorun/internal/store"
 )
 
 type historyState int

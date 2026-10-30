@@ -11,12 +11,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jenmud/gorun/cmd/web/ui"
+	"github.com/jenmud/gorun/internal/store"
 	natsclient "github.com/nats-io/nats.go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
-	"gorun/cmd/web/ui"
-	"gorun/internal/store"
 )
 
 // hub manages the dashboard state and client connections.

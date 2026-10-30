@@ -1,7 +1,7 @@
 package gorun
 
 import (
-	"gorun/internal/nats"
+	"github.com/jenmud/gorun/internal/nats"
 	"log"
 	"os"
 	"sync"

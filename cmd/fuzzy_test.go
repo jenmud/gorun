@@ -7,7 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/google/go-cmp/cmp"
-	"gorun"
+	"github.com/jenmud/gorun"
 )
 
 func TestFuzzyMatch(t *testing.T) {

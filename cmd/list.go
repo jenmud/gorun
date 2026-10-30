@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"gorun"
+	"github.com/jenmud/gorun"
 )
 
 // printTags writes every tag with the servers that have it, for --list-tags. Only the

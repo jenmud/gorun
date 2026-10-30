@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"gorun"
+	"github.com/jenmud/gorun"
 )
 
 // The template from -dump must load and run as-is.

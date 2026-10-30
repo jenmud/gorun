@@ -1,7 +1,7 @@
 package gorun
 
 import (
-	"gorun/internal/envvars"
+	"github.com/jenmud/gorun/internal/envvars"
 	"io"
 	"log/slog"
 	"os"

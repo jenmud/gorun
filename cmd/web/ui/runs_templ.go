@@ -9,7 +9,7 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
-	"gorun/internal/store"
+	"github.com/jenmud/gorun/internal/store"
 	"os"
 )
 

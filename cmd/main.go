@@ -21,9 +21,9 @@ import (
 	"go.opentelemetry.io/otel"
 	"golang.org/x/term"
 
-	"gorun"
-	web "gorun/cmd/websrv"
-	"gorun/internal/store"
+	"github.com/jenmud/gorun"
+	web "github.com/jenmud/gorun/cmd/websrv"
+	"github.com/jenmud/gorun/internal/store"
 )
 
 var version = "dev"

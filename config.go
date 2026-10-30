@@ -24,7 +24,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"golang.org/x/crypto/ssh"
 
-	"gorun/internal/envvars"
+	"github.com/jenmud/gorun/internal/envvars"
 )
 
 func init() {

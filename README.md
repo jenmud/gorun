@@ -1,5 +1,7 @@
 # Gorun
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/jenmud/gorun.svg)](https://pkg.go.dev/github.com/jenmud/gorun)
+
 **Run plain shell commands on a pile of servers, in parallel, and watch it happen.**
 
 One Go binary, one TOML file and SSH. No agent on the servers, no Python on your machine, and
@@ -611,6 +613,10 @@ so short runs don't lose any. The connection is configured with the `GORUN_NATS_
 
 The CLI and TUI live under `cmd`; the rest is the `gorun` package. Load a Gorunfile, select
 servers and tasks the way the command-line flags do, and get every event as it happens:
+
+```bash
+go get github.com/jenmud/gorun
+```
 
 ```go
 f, err := os.Open("example/Gorunfile")

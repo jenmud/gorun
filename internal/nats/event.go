@@ -8,7 +8,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
-	"gorun/cmd/web/ui"
+	"github.com/jenmud/gorun/cmd/web/ui"
 )
 
 // Event represents a NATS message payload.

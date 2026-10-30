@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"gorun"
+	"github.com/jenmud/gorun"
 )
 
 // plainPrinter prints a line per finished task for -plain runs, now that the

@@ -7,7 +7,7 @@ import (
 	"slices"
 	"sort"
 
-	"gorun"
+	"github.com/jenmud/gorun"
 )
 
 // completionNames returns the names a shell can complete for kind, which is

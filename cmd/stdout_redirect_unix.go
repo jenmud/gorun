@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"gorun"
+	"github.com/jenmud/gorun"
 )
 
 // redirectStdoutToLog sends output written to stdout before main() runs to the

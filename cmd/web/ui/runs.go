@@ -3,7 +3,7 @@ package ui
 import (
 	"time"
 
-	"gorun/internal/store"
+	"github.com/jenmud/gorun/internal/store"
 )
 
 // runServerHasFailed reports whether any task on the server failed.

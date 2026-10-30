@@ -6,11 +6,11 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jenmud/gorun/internal/envvars"
 	natsclient "github.com/nats-io/nats.go"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
-	"gorun/internal/envvars"
 )
 
 // Client is an alias for the NATS client connection.

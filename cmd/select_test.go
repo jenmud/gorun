@@ -14,8 +14,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/google/go-cmp/cmp"
 
-	"gorun"
-	"gorun/internal/store"
+	"github.com/jenmud/gorun"
+	"github.com/jenmud/gorun/internal/store"
 )
 
 // pipelineServers returns servers with resolved pipelines, as main passes them in:

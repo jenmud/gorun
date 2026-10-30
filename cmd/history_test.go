@@ -3,8 +3,11 @@ package main
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/charmbracelet/x/ansi"
 
 	"gorun"
 	"gorun/internal/store"
@@ -67,5 +70,40 @@ func TestRecordEventFinishesRunAfterCancellation(t *testing.T) {
 	}
 	if run.Tasks[0].State != int(gorun.TaskFailed) {
 		t.Errorf("task state = %d, want %d", run.Tasks[0].State, gorun.TaskFailed)
+	}
+}
+
+func TestHistoryShowsMultiLineCommands(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "history.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	const runID = "multi-line-run"
+	script := "#!/bin/sh\nset -e\nif [ -d ~/.config/jj ]; then\n\techo ok\nfi\n"
+	recordEvent(context.Background(), st, gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: runID, Title: "run", Servers: []string{"host-1"}, StartedAt: time.Now()})
+	recordEvent(context.Background(), st, gorun.TaskEvent{Type: "task", GorunUUID: runID, Server: "host-1", Task: "jj-config", State: gorun.TaskDone, Command: script})
+
+	m := newHistoryModel(st)
+	m.height = 40
+	next, _ := m.Update(m.loadRun(runID))
+	m = next.(historyModel)
+
+	// expand the server, then its task
+	for i := range m.items {
+		m.items[i].expanded = true
+	}
+
+	view := ansi.Strip(m.View().Content)
+	want := strings.Join([]string{
+		"        $ #!/bin/sh",
+		"          set -e",
+		"          if [ -d ~/.config/jj ]; then",
+		"              echo ok",
+		"          fi",
+	}, "\n")
+	if !strings.Contains(view, want) {
+		t.Errorf("the command should be shown line by line, as written; got:\n%s", view)
 	}
 }

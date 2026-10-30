@@ -60,7 +60,7 @@ services:
     networks:
       - gorun-network
 
-  # extra servers, mostly to exercise the --select fuzzy search
+  # extra servers, mostly to exercise the server picker's fuzzy search
   web-prod-1:
     <<: *ssh-server
     container_name: gorun-web-prod-1

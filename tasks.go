@@ -624,7 +624,9 @@ func (t *TaskExec) localExecute(ctx context.Context) error {
 	cmd := exec.CommandContext(ctx, name, args...)
 	configureCommand(cmd)
 
-	t.command = cmd.String()
+	// record the command as written (templates rendered), not the shell and sudo
+	// wrapping, so history and events show what the user wrote
+	t.command = command
 
 	for key, value := range t.task.EnvVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", strings.ToUpper(key), value))
@@ -723,12 +725,14 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		}
 	}
 
+	// record the command as written, before the sudo wrapping and quoting below
+	t.command = command
+
 	if command != "" && t.task.Sudo {
 		// wrap in single quotes, escaping any single quotes in the command
 		command = "sudo -n sh -c '" + strings.ReplaceAll(command, "'", `'\''`) + "'"
 	}
 
-	t.command = command
 	t.startedAt = time.Now()
 
 	result := make(chan execResult, 1)

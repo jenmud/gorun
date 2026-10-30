@@ -1,0 +1,169 @@
+# Demo inventory for the README screenshots (see capture.sh). Same servers, groups,
+# tags and bundles as example/Gorunfile, but every host runs locally and the tasks only
+# echo and sleep, so it is safe to run anywhere. cache-redis fails on purpose.
+
+title = "Provision app servers"
+log_level = "info"
+
+[tasks.packages]
+cmd = "echo 'fetch https://dl-cdn.alpinelinux.org/alpine/v3.20/main'; sleep 0.7; sleep $JITTER; echo 'OK: 42 packages installed'"
+description = "Install the base package set"
+rerun = "safe"
+retries = 1
+
+[tasks.timezone]
+cmd = "sleep 0.4; sleep $JITTER; echo 'timezone set to UTC'"
+description = "Set the system timezone to UTC"
+details = "Copies the UTC zoneinfo file and writes /etc/timezone so the change survives reboots."
+rerun = "safe"
+depends_on = ["packages"]
+
+[tasks.monitoring-tools]
+cmd = "sleep 0.5; sleep $JITTER; echo 'installed htop btop'"
+depends_on = ["packages"]
+
+[tasks.cli-tools]
+cmd = "sleep 0.9; sleep $JITTER; echo 'installed git jq ripgrep fd fzf tmux make'"
+depends_on = ["packages"]
+
+[tasks.jj-install]
+cmd = "sleep 0.6; sleep $JITTER; echo 'installed jujutsu 0.22.0'"
+depends_on = ["cli-tools"]
+
+[tasks.golang-install]
+cmd = "sleep 1.1; sleep $JITTER; echo 'go version go1.25.3 linux/amd64'"
+depends_on = ["cli-tools"]
+
+[tasks.neovim-install]
+cmd = "sleep 0.5; sleep $JITTER; echo 'installed neovim 0.10.2'"
+depends_on = ["packages"]
+
+[tasks.editor-setup]
+cmd = "sleep 0.4; sleep $JITTER; echo 'nvim config linked for deploy'"
+depends_on = ["neovim-install"]
+
+[tasks.docker-install]
+cmd_template = "sleep 0.8; sleep $JITTER; {{if eq .Name \"cache-redis\"}}echo 'ERROR: unable to select packages:' >&2; echo '  docker-ce (no such package):' >&2; echo '    required by: world[docker-ce]' >&2; exit 1{{else}}echo 'docker 27.3.1 installed'{{end}}"
+depends_on = ["packages"]
+
+[tasks.deploy-user]
+cmd = "sleep 0.3; sleep $JITTER; echo 'user deploy added to group docker'"
+description = "Create the deploy user and add it to the docker group"
+rerun = "safe"
+depends_on = ["docker-install"]
+
+[tasks.jj-config]
+cmd_file = "./scripts/jj-config.sh"
+depends_on = ["jj-install", "neovim-install", "deploy-user"]
+
+[tasks.go-workspace]
+cmd = "sleep 0.3; sleep $JITTER; echo '/home/deploy/go'"
+depends_on = ["golang-install", "deploy-user"]
+
+[tasks.verify]
+cmd = "sleep 0.5; sleep $JITTER; echo 'all checks passed'"
+description = "Check the server is configured correctly"
+rerun = "safe"
+depends_on = ["timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace"]
+
+[tasks.go-smoke-test]
+cmd = "sleep 0.6; sleep $JITTER; echo 'hello from go'"
+depends_on = ["go-workspace"]
+
+[tasks.compose-project]
+cmd = "sleep 0.7; sleep $JITTER; echo 'compose project app started'"
+rerun = "unsafe"
+depends_on = ["deploy-user"]
+
+[tasks.server-info]
+cmd_template = "echo '{{.Name}}: region={{index .EnvVars \"REGION\"}} env={{index .EnvVars \"APP_ENV\"}}'"
+description = "Print the region, environment and tags the server ended up with"
+rerun = "safe"
+
+[bundles.baseline]
+description = "Minimal setup every box gets"
+tasks = ["timezone", "monitoring-tools"]
+
+[bundles.devtools]
+description = "Editor, jj and a Go workspace for the deploy user"
+tasks = ["editor-setup", "jj-config", "go-workspace"]
+
+[bundles.standard]
+description = "The usual app server setup"
+tasks = ["@baseline", "@devtools", "verify"]
+
+[server_groups.lab]
+tags = ["lab"]
+
+[server_groups.prod]
+tags = ["prod"]
+envvars = { APP_ENV = "production" }
+
+[server_groups.staging]
+tags = ["staging"]
+envvars = { APP_ENV = "staging" }
+
+[server_groups.eu]
+tags = ["eu"]
+tasks = ["server-info"]
+envvars = { REGION = "eu-west-1" }
+
+[server_groups.db]
+tags = ["db"]
+
+[servers]
+tasks = ["@standard"]
+
+[servers.hosts.server1]
+groups = ["lab"]
+tags = ["build"]
+add_tasks = ["go-smoke-test"]
+envvars = { JITTER = "0.3" }
+
+[servers.hosts.server2]
+groups = ["lab"]
+tags = ["docker"]
+add_tasks = ["compose-project"]
+envvars = { JITTER = "0.1" }
+
+[servers.hosts.web-prod-1]
+groups = ["lab", "prod"]
+tags = ["web"]
+envvars = { JITTER = "0.2" }
+
+[servers.hosts.web-prod-2]
+groups = ["lab", "prod"]
+tags = ["web"]
+envvars = { JITTER = "0.4" }
+
+[servers.hosts.db-primary]
+groups = ["lab", "prod", "db"]
+tasks = ["@baseline"]
+envvars = { JITTER = "0.5" }
+
+[servers.hosts.db-replica-eu]
+groups = ["lab", "prod", "db", "eu"]
+tasks = ["@baseline"]
+add_tasks = ["server-info"]
+envvars = { JITTER = "0.6" }
+
+[servers.hosts.cache-redis]
+groups = ["lab", "prod"]
+tags = ["cache"]
+envvars = { JITTER = "0.1" }
+
+[servers.hosts.worker-eu-a]
+groups = ["lab", "prod", "eu"]
+tags = ["worker"]
+envvars = { JITTER = "0.2" }
+
+[servers.hosts.worker-eu-b]
+groups = ["lab", "prod", "eu"]
+tags = ["worker"]
+envvars = { JITTER = "0.3", REGION = "eu-central-1" }
+
+[servers.hosts.staging-api]
+groups = ["lab", "staging"]
+tags = ["api"]
+add_tasks = ["compose-project"]
+envvars = { JITTER = "0.0" }

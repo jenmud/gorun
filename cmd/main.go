@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"flag"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strings"
 
@@ -25,6 +27,11 @@ import (
 )
 
 var version = "dev"
+
+// emptyGorunfile is the starting Gorunfile printed by -dump.
+//
+//go:embed Gorunfile.empty
+var emptyGorunfile string
 
 // restoreStdout is replaced by init when the instrumented build needs to keep
 // its startup logs out of the terminal. It is a no-op otherwise.
@@ -118,19 +125,29 @@ func main() {
 
 	verbose := flag.Bool("v", false, "verbose: show every task and its output")
 	plain := flag.Bool("plain", false, "plain log output instead of the TUI (default when stdout is not a terminal)")
-	selectServers := flag.Bool("select", false, "select servers to deploy to using TUI")
-	dump := flag.Bool("dump", false, "dump an empty Gorunfile template to stdout")
+	var runNow bool
+	flag.BoolVar(&runNow, "run", false, "run without the interactive server picker (needed when there is no terminal)")
+	flag.BoolVar(&runNow, "r", false, "shorthand for -run")
+	dump := flag.Bool("dump", false, "print a starting Gorunfile that works as-is and documents every option")
 	versionFlag := flag.Bool("version", false, "print version and exit")
 	webFlag := flag.Bool("web", false, "start the web server")
 	historyFlag := flag.Bool("history", false, "view historical runs")
 	taskFlags := stringSlice{}
-	flag.Var(&taskFlags, "task", "run only the named task on any selected server (repeatable); dependencies are included")
+	flag.Var(&taskFlags, "task", "run only the named task, glob or @bundle on any selected server (repeatable); dependencies are included")
 	serverFlags := stringSlice{}
-	flag.Var(&serverFlags, "server", "run only the named server (repeatable)")
+	flag.Var(&serverFlags, "server", "run only the named server or glob (repeatable)")
+	excludeFlags := stringSlice{}
+	flag.Var(&excludeFlags, "exclude-server", "skip the named server or glob (repeatable)")
+	tagFlags := stringSlice{}
+	flag.Var(&tagFlags, "tag", "run only servers with this tag (repeatable; servers need every tag)")
+	groupFlags := stringSlice{}
+	flag.Var(&groupFlags, "group", "run only servers in this server group (repeatable; servers need every group)")
 	parallel := flag.Int("parallel", 0, "maximum number of hosts to run in parallel (0 = all)")
 	listTasks := flag.Bool("list-tasks", false, "list available tasks and exit")
 	listServers := flag.Bool("list-servers", false, "list servers and their task pipelines and exit")
-	complete := flag.String("complete", "", "print shell completion candidates for tasks or servers and exit")
+	listTags := flag.Bool("list-tags", false, "list tags and the servers that have them and exit")
+	listBundles := flag.Bool("list-bundles", false, "list task bundles and what they expand to and exit")
+	complete := flag.String("complete", "", "print shell completion candidates (tasks, servers, tags or groups) and exit")
 
 	flag.Usage = printUsage
 	flag.Parse()
@@ -154,19 +171,21 @@ func main() {
 
 	if *dump {
 		os.Setenv("GORUN_SKIP_NATS", "1")
-		fmt.Print(emptyGorunfile())
+		fmt.Print(emptyGorunfile)
 		return
 	}
 
 	filename := flag.Arg(0)
 
 	// the flag package stops at the first positional argument, so parse again
-	// to allow flags after the filename, e.g. `gorun Gorunfile --select -v`
+	// to allow flags after the filename, e.g. `gorun Gorunfile --run -v`
 	if flag.NArg() > 1 {
 		_ = flag.CommandLine.Parse(flag.Args()[1:])
 	}
 
 	useTUI := !*plain && term.IsTerminal(int(os.Stdout.Fd()))
+	// the server picker needs to read keys as well as draw
+	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 
 	// Set up logging before anything interactive starts, so the TUI, the
 	// history view and the web server all keep library logs (including OTEL
@@ -199,7 +218,7 @@ func main() {
 	}
 
 	slog.Info("parsing gorun file", slog.String("filename", filename))
-	if *listTasks || *listServers {
+	if *listTasks || *listServers || *listTags || *listBundles {
 		os.Setenv("GORUN_SKIP_NATS", "1")
 	}
 	gorun.StartNATS()
@@ -230,12 +249,61 @@ func main() {
 		cfg.MaxParallel = *parallel
 	}
 
+	// validate and apply --task filter. A named task is run on every selected
+	// server even when it is not part of that server's configured pipeline, so
+	// one-off tasks work on any host.
+	var selectedTasks []string
+	if len(taskFlags) > 0 {
+		selectedTasks, err = cfg.ExpandTaskPatterns(taskFlags...)
+		if err != nil {
+			fatal(err)
+		}
+		for i := range cfg.Servers {
+			cfg.Servers[i].TaskNames = slices.Clone(selectedTasks)
+		}
+		cfg.SelectedTasks = selectedTasks
+	}
+
+	// validate and apply the server filters
+	filter := gorun.ServerFilter{Names: serverFlags, Exclude: excludeFlags, Tags: tagFlags, Groups: groupFlags}
+	if cfg.Servers, err = cfg.SelectServers(filter); err != nil {
+		fatal(err)
+	}
+
+	if *listBundles {
+		printBundles(os.Stdout, &cfg)
+		return
+	}
+
+	if *listTags {
+		printTags(os.Stdout, &cfg, cfg.Servers, !filter.IsZero())
+		return
+	}
+
 	if *listTasks {
+		// With a filter, list only the tasks the selection would run.
+		var shown map[string]bool
+		if len(selectedTasks) > 0 || !filter.IsZero() {
+			shown = map[string]bool{}
+			servers, err := cfg.ServersPipeline()
+			if err != nil {
+				fatal(fmt.Errorf("%s: %w", filename, err))
+			}
+			for _, server := range servers {
+				for _, t := range server.Tasks {
+					shown[t.Name] = true
+				}
+			}
+		}
+
 		// Build a reverse dependency tree: a task's children are the tasks that
 		// depend on it, so dependencies appear above their dependents.
 		children := map[string][]string{}
 		roots := []string{}
 		for name := range cfg.Tasks {
+			if shown != nil && !shown[name] {
+				continue
+			}
 			if len(cfg.Tasks[name].DependsOn) == 0 {
 				roots = append(roots, name)
 			}
@@ -300,46 +368,8 @@ func main() {
 			_ = i
 			printNode(root, "", true, true)
 		}
+
 		return
-	}
-
-	// validate and apply --task filter. A named task is run on every selected
-	// server even when it is not part of that server's configured pipeline, so
-	// one-off tasks work on any host.
-	for _, t := range taskFlags {
-		if _, ok := cfg.Tasks[t]; !ok {
-			fatal(fmt.Errorf("unknown task %q", t))
-		}
-	}
-	if len(taskFlags) > 0 {
-		for i := range cfg.Servers {
-			cfg.Servers[i].TaskNames = append([]string{}, taskFlags...)
-		}
-		cfg.SelectedTasks = []string(taskFlags)
-	}
-
-	// validate and apply --server filter
-	if len(serverFlags) > 0 {
-		known := map[string]bool{}
-		for _, srv := range cfg.Servers {
-			known[srv.Name] = true
-		}
-		for _, name := range serverFlags {
-			if !known[name] {
-				fatal(fmt.Errorf("unknown server %q", name))
-			}
-		}
-		selected := map[string]bool{}
-		for _, name := range serverFlags {
-			selected[name] = true
-		}
-		filtered := make([]gorun.Server, 0, len(serverFlags))
-		for _, srv := range cfg.Servers {
-			if selected[srv.Name] {
-				filtered = append(filtered, srv)
-			}
-		}
-		cfg.Servers = filtered
 	}
 
 	// check every server's task list up front, so config mistakes such as an unknown task
@@ -358,6 +388,12 @@ func main() {
 		for _, name := range names {
 			server := servers[name]
 			fmt.Printf("%s (%s)\n", server.Name, server.Address())
+			if len(server.Groups) > 0 {
+				fmt.Printf("    groups: %s\n", strings.Join(server.Groups, ", "))
+			}
+			if len(server.Tags) > 0 {
+				fmt.Printf("    tags: %s\n", strings.Join(server.Tags, ", "))
+			}
 			for i, t := range server.Tasks {
 				connector := "├── "
 				if i == len(server.Tasks)-1 {
@@ -377,12 +413,20 @@ func main() {
 		return
 	}
 
-	if *selectServers {
-		if !useTUI {
-			fatal(errors.New("--select needs an interactive terminal"))
+	// Runs start with the server picker unless --run says to go straight ahead, so
+	// nothing is deployed without an explicit choice.
+	if !runNow {
+		if !interactive {
+			fatal(errors.New("the server picker needs an interactive terminal; pass --run (-r) to run without it"))
 		}
 
-		selected, err := runServerSelectionTUI(cfg.Title, cfg.Servers)
+		// the picker lists each server's resolved pipeline, so tasks can be left out
+		choices := make([]gorun.Server, 0, len(cfg.Servers))
+		for _, s := range cfg.Servers {
+			choices = append(choices, servers[s.Name])
+		}
+
+		selected, err := runServerSelectionTUI(cfg.Title, choices)
 		if err != nil {
 			fatal(err)
 		}
@@ -391,6 +435,11 @@ func main() {
 			return
 		}
 		cfg.Servers = selected
+
+		// the plain output below prints the plan, which is now just the selection
+		if servers, err = cfg.ServersPipeline(); err != nil {
+			fatal(fmt.Errorf("%s: %w", filename, err))
+		}
 	}
 
 	if useTUI {
@@ -467,18 +516,25 @@ func fatal(err error) {
 func printUsage() {
 	fmt.Fprintf(os.Stderr, `Usage: gorun [options] <Gorunfile>
 
-Run the tasks defined in a Gorunfile across one or more servers.
+Run the tasks defined in a Gorunfile across one or more servers. By default gorun first
+opens a picker to choose the servers (and tasks) to run; pass -run to skip it.
 
 Options:
   -v        verbose: show every task and its output
   -plain    plain log output instead of the TUI (default when stdout is not a terminal)
-  -select   select servers to deploy to using the TUI
-  -task     run only the named task on any selected server (repeatable; dependencies included)
-  -server  run only the named server (repeatable)
+  -run, -r  run without the interactive server picker (needed when there is no terminal)
+  -task     run only the named task on any selected server (repeatable; dependencies included);
+            accepts globs ('deploy-*') and bundles ('@base')
+  -server   run only the named server (repeatable; accepts globs like 'web-*')
+  -exclude-server  skip the named server (repeatable; accepts globs)
+  -tag      run only servers with this tag (repeatable; servers need every tag)
+  -group    run only servers in this server group (repeatable; servers need every group)
   -parallel N  run at most N hosts at once (0 = all servers)
   -list-tasks  list available tasks and exit
   -list-servers  list servers and their task pipelines and exit
-  -dump     dump an empty Gorunfile template to stdout
+  -list-tags  list tags and the servers that have them and exit
+  -list-bundles  list task bundles and what they expand to and exit
+  -dump     print a starting Gorunfile that works as-is and documents every option
   -version  print version and exit
   -web      start the web server
   -history  view historical runs
@@ -502,59 +558,4 @@ in the environment):
 OpenTelemetry SDK variables (OTEL_*) are also honoured by the instrumented build.
 Exporters are disabled unless an OTLP endpoint or exporter is configured.
 `)
-}
-
-func emptyGorunfile() string {
-	return `# Gorunfile
-
-title = "My deployment"
-log_level = "info"   # debug|info|warn|error (inherited by servers/tasks)
-# max_parallel = 0     # 0 (default) = every selected host at once
-
-# envvars = { FOO = "bar" }   # exported to every task (keys upper-cased)
-
-# Global SSH defaults (per-server values win; config_file is inherited).
-# [ssh]
-# username = "root"
-# port = 22
-# identityfile = "~/.ssh/id_rsa"
-# password = ""               # prefer identityfile
-# config_file = "~/.ssh/config"  # fills gaps; defaults to ~/.ssh/config
-
-# Task library: define once, reference by name.
-# [tasks.example]
-# cmd = "echo hello"            # or cmd_file / cmd_template / cmd_template_file (pick one)
-# description = "Say hello"     # one-line summary in lists and the TUI
-# details = "Longer explanation shown when the task is expanded."
-# rerun = "safe"                # safe | unsafe; omit if you don't know
-# sudo = false
-# depends_on = []
-# shell = "sh -c"               # default
-# log_level = "info"
-# timeout = "30m"               # default; task fails with exit code 124 after this
-# retries = 0                   # optional; extra attempts after a failure (off by default)
-# retry_delay = "50ms"          # optional; wait before each retry ("0s" = immediate)
-# retry_unsafe = false          # allow retries when rerun = "unsafe"
-# [tasks.example.envvars]
-# KEY = "value"
-# [[tasks.example.copy]]
-# src = "./local/file"          # or src_template / content
-# dst = "/remote/path"          # or dir = "/remote/dir/"
-# mode = "0644"
-
-# Servers.
-[servers]
-tasks = []                      # global list; a host's own list replaces it
-
-# [servers.hosts.myserver]
-# hostname = "example.com"      # empty => run locally
-# tasks = ["example"]           # omit to inherit global
-# log_level = "info"
-#   [servers.hosts.myserver.ssh]
-#   username = "root"
-#   port = 22
-#   identityfile = "~/.ssh/id_rsa"
-#   password = ""               # prefer identityfile
-#   config_file = "~/.ssh/config"  # fills gaps; defaults to ~/.ssh/config
-`
 }

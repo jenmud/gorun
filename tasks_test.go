@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -711,5 +712,39 @@ func TestRunRetriesUnsafeWhenOverridden(t *testing.T) {
 	}
 	if final == nil || final.Attempt != 2 || final.Attempts != 2 {
 		t.Errorf("final event = %+v, want success on attempt 2/2", final)
+	}
+}
+
+func TestTaskEventCommandIsAsWritten(t *testing.T) {
+	old := logOutput
+	SetLogOutput(io.Discard)
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	command := "set -e\nfor f in a b; do\n\techo \"it's $f\"\ndone\n"
+	cfg := Config{
+		Tasks: map[string]Task{
+			"multi":   {Name: "multi", Cmd: command},
+			"shelled": {Name: "shelled", Cmd: command, Shell: "sh -c"},
+		},
+		Servers: []Server{{Name: "local", TaskNames: []string{"multi", "shelled"}}},
+	}
+
+	got := map[string]string{}
+	var mu sync.Mutex
+	cfg.OnEvent = func(event any) {
+		if ev, ok := event.(TaskEvent); ok && ev.State == TaskDone {
+			mu.Lock()
+			got[ev.Task] = ev.Command
+			mu.Unlock()
+		}
+	}
+	if err := cfg.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, task := range []string{"multi", "shelled"} {
+		if got[task] != command {
+			t.Errorf("%s: event command = %q, want the command as written %q", task, got[task], command)
+		}
 	}
 }

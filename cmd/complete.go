@@ -2,15 +2,17 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"os"
+	"slices"
 	"sort"
 
 	"gorun"
 )
 
 // completionNames returns the names a shell can complete for kind, which is
-// either "tasks" or "servers". It is used by the bash completion function
-// documented in the README.
+// "tasks" (including "@bundle" references), "servers", "tags" or "groups". It is
+// used by the bash completion function documented in the README.
 func completionNames(kind, filename string) ([]string, error) {
 	if filename == "" {
 		filename = "Gorunfile"
@@ -30,9 +32,12 @@ func completionNames(kind, filename string) ([]string, error) {
 	var names []string
 	switch kind {
 	case "tasks":
-		names = make([]string, 0, len(cfg.Tasks))
+		names = make([]string, 0, len(cfg.Tasks)+len(cfg.Bundles))
 		for name := range cfg.Tasks {
 			names = append(names, name)
+		}
+		for name := range cfg.Bundles {
+			names = append(names, gorun.BundlePrefix+name)
 		}
 	case "servers":
 		names = make([]string, 0, len(cfg.Servers))
@@ -41,8 +46,23 @@ func completionNames(kind, filename string) ([]string, error) {
 				names = append(names, server.Name)
 			}
 		}
+	case "tags":
+		seen := map[string]bool{}
+		for _, server := range cfg.Servers {
+			for _, tag := range server.Tags {
+				seen[tag] = true
+			}
+		}
+		for _, group := range cfg.Groups {
+			for _, tag := range group.Tags {
+				seen[tag] = true
+			}
+		}
+		names = slices.Collect(maps.Keys(seen))
+	case "groups":
+		names = slices.Collect(maps.Keys(cfg.Groups))
 	default:
-		return nil, fmt.Errorf("unknown completion kind %q (want tasks or servers)", kind)
+		return nil, fmt.Errorf("unknown completion kind %q (want tasks, servers, tags or groups)", kind)
 	}
 
 	sort.Strings(names)

@@ -1,0 +1,120 @@
+# Gorunfile — a starting point from `gorun -dump`.
+#
+# The uncommented part works as-is: it runs two tasks on this machine.
+#   gorun Gorunfile                # pick servers and tasks, then run
+#   gorun Gorunfile --run          # run everything without the picker (-r)
+#   gorun Gorunfile --list-servers # show what each server would run
+#
+# Relative paths (cmd_file, copy src, identityfile, ...) are relative to this file.
+# Unknown keys are errors, so typos don't go unnoticed.
+
+title = "My deployment"
+log_level = "info"                # debug | info | warn | error; servers and tasks inherit it
+# max_parallel = 4                # hosts at once; 0 (default) = all; -parallel N overrides
+envvars = { APP_ENV = "development" }   # exported to every task (a task's own envvars win)
+
+# Global SSH settings. Only config_file is inherited by hosts; put shared logins on a
+# server group instead (see below), so hosts without SSH settings stay local.
+# [ssh]
+# config_file = "~/.ssh/config"   # fills in user/port/key/hostname a host doesn't set
+
+#
+# Tasks: define each once in the library, then refer to it by name.
+#
+
+[tasks.hello]
+description = "Say hello"         # one line, shown in lists, the picker and the TUI
+cmd_template = "echo 'hello from {{.Name}}, tags:{{range .Tags}} #{{.}}{{end}}'"
+rerun = "safe"                    # safe | unsafe; omit if you don't know
+
+[tasks.show-env]
+description = "Print the environment this server runs with"
+cmd = 'echo "APP_ENV=$APP_ENV REGION=$REGION"'
+depends_on = ["hello"]            # always pulled in and run first
+rerun = "safe"
+
+# Every task option (pick one command source: cmd, cmd_file, cmd_template or
+# cmd_template_file; a task can also be copies only):
+# [tasks.example]
+# cmd = "apt-get install -y nginx"
+# cmd_file = "./scripts/setup.sh"             # a local script, sent to the server
+# cmd_template = "echo {{.Name}} {{.Hostname}} {{index .EnvVars \"REGION\"}}"  # Go template over the server
+# cmd_template_file = "./templates/setup.sh.tmpl"
+# description = "Install nginx"
+# details = "A longer explanation, shown when the task is expanded."
+# rerun = "unsafe"                # marks it ⚠ in lists and the TUI
+# sudo = true
+# shell = "sh -c"                 # default
+# depends_on = ["packages"]
+# log_level = "debug"
+# timeout = "15m"                 # default 30m; a timeout fails with exit code 124
+# retries = 2                     # extra attempts after a failure (default 0)
+# retry_delay = "5s"              # wait before each retry (default 50ms, "0s" = immediately)
+# retry_unsafe = false            # allow retries of a rerun = "unsafe" task
+# envvars = { NGINX_PORT = "8080" }
+#
+# [[tasks.example.copy]]          # copies run before the command
+# src = "./files/nginx.conf"      # a file, or a directory (copied recursively)
+# dst = "/etc/nginx/nginx.conf"   # or dir = "/etc/nginx/" to keep the file name
+# mode = "0644"
+#
+# [[tasks.example.copy]]
+# src_template = "./templates/site.conf.tmpl"  # or content = "inline text"; rendered with the server
+# dst = "/etc/nginx/conf.d/site.conf"
+
+#
+# Bundles: named task lists. Use "@name" in any task list, or `--task @name`.
+#
+
+[bundles.base]
+description = "What every server gets"
+tasks = ["hello", "show-env"]     # tasks and/or other "@bundles"
+
+#
+# Server groups: defaults shared by the hosts that list them in `groups`. Later groups
+# override earlier ones and the host's own settings win: log_level and each ssh field
+# take the last value set, envvars merge by key, tags add up, and the group's tasks are
+# appended to [servers] tasks (unless the host sets its own tasks).
+#
+
+[server_groups.local]
+tags = ["local"]                  # select with --tag local
+envvars = { REGION = "home" }
+
+# [server_groups.prod]
+# tags = ["prod"]
+# tasks = ["@base"]
+# log_level = "warn"
+# envvars = { APP_ENV = "production" }
+#   [server_groups.prod.ssh]
+#   username = "deploy"
+#   identityfile = "~/.ssh/id_ed25519"
+#   port = 22
+
+#
+# Servers. Every host runs [servers] tasks plus its groups' tasks, unless it sets its
+# own `tasks`, which replace both. Then add_tasks are appended and skip_tasks removed.
+#
+
+[servers]
+tasks = ["@base"]
+
+[servers.hosts.localhost]         # no hostname and no ssh: runs on this machine
+groups = ["local"]
+tags = ["dev"]
+
+# [servers.hosts.web-01]
+# hostname = "web-01.example.com"
+# groups = ["prod"]               # selection: --group prod, --tag web, --server 'web-*'
+# tags = ["web"]
+# tasks = ["@base"]               # replaces [servers] tasks and the groups' tasks
+# add_tasks = ["example"]         # appended to the list
+# skip_tasks = ["show-env"]       # removed from the list
+# envvars = { REGION = "eu-west-1" }
+# log_level = "info"
+#   [servers.hosts.web-01.ssh]    # fills in what the groups don't set
+#   username = "root"
+#   port = 22
+#   identityfile = "~/.ssh/id_ed25519"
+#   password = ""                 # prefer identityfile
+#   config_file = "~/.ssh/config"

@@ -9,9 +9,25 @@ type Server struct {
 	Hostname string `toml:"hostname"`
 	SSH      SSH    `toml:"ssh"`
 
-	// TaskNames are the tasks to run, by name. Load fills in the global servers.tasks
-	// list when the server doesn't set its own.
+	// TaskNames are the tasks to run, by name. Load replaces them with the server's
+	// final task list: its own tasks (or the global and group lists), plus AddTasks,
+	// minus SkipTasks, with bundles expanded.
 	TaskNames []string `toml:"tasks"`
+
+	// Groups are the [server_groups.<name>] this server joins, in order. Load applies
+	// their defaults to the server.
+	Groups []string `toml:"groups"`
+
+	// Tags label the server for --tag selection. Load adds its groups' tags.
+	Tags []string `toml:"tags"`
+
+	// EnvVars are exported to every task on this server. Load merges in its groups'
+	// envvars; a task's own envvars still win.
+	EnvVars map[string]string `toml:"envvars"`
+
+	// AddTasks are appended to the server's task list and SkipTasks removed from it.
+	AddTasks  []string `toml:"add_tasks"`
+	SkipTasks []string `toml:"skip_tasks"`
 
 	// Tasks is the resolved pipeline, including dependencies, set by ServerPipeline.
 	Tasks []Task `toml:"-"`

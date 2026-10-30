@@ -41,6 +41,10 @@ type historyModel struct {
 	err       error
 	askKeep   bool
 	keepInput string
+
+	// embedded is set when the history is a tab of the server picker, where esc and q
+	// on the runs list go back to the servers instead of quitting
+	embedded bool
 }
 
 func newHistoryModel(st *store.Store) historyModel {
@@ -70,6 +74,13 @@ func isLocalHost(h string) bool {
 		return true
 	}
 	return h == nh
+}
+
+// listRows returns how many runs fit on the runs list: each run takes three lines (summary,
+// start time and a blank line), under the title (two lines) and above the position
+// counter and help (three lines).
+func (m historyModel) listRows() int {
+	return max((m.height-5)/3, 1)
 }
 
 func (m historyModel) loadRuns() tea.Msg {
@@ -145,10 +156,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor = 0
 		}
 		// set offset so cursor is visible
-		visible := m.height - 14
-		if visible < 3 {
-			visible = 3
-		}
+		visible := m.listRows()
 		if m.cursor >= visible {
 			m.offset = m.cursor - visible + 1
 		} else {
@@ -216,10 +224,6 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state == historyList {
 				if m.cursor > 0 {
 					m.cursor--
-					visible := m.height - 10
-					if visible < 5 {
-						visible = 5
-					}
 					if m.cursor < m.offset {
 						m.offset = m.cursor
 					}
@@ -253,10 +257,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state == historyList {
 				if m.cursor < len(m.runs)-1 {
 					m.cursor++
-					visible := m.height - 10
-					if visible < 5 {
-						visible = 5
-					}
+					visible := m.listRows()
 					if m.cursor >= m.offset+visible {
 						m.offset = m.cursor - visible + 1
 					}
@@ -360,10 +361,7 @@ func (m historyModel) View() tea.View {
 		} else if len(m.runs) == 0 {
 			b.WriteString(mutedStyle.Render("No runs recorded yet.") + "\n")
 		} else {
-			visible := m.height - 14
-			if visible < 3 {
-				visible = 3
-			}
+			visible := m.listRows()
 			start := m.offset
 			if start < 0 {
 				start = 0
@@ -392,7 +390,7 @@ func (m historyModel) View() tea.View {
 						status = failStyle.Render("✗ failed")
 					}
 				}
-				line := fmt.Sprintf("%s%s %s %s", cursor, status, r.ID[:8], r.Title)
+				line := fmt.Sprintf("%s%s %s %s", cursor, status, shortID(r.ID), r.Title)
 				if r.Servers > 0 {
 					line += mutedStyle.Render(fmt.Sprintf("  [%d servers]", r.Servers))
 				}
@@ -416,7 +414,11 @@ func (m historyModel) View() tea.View {
 		if m.askKeep {
 		b.WriteString("\n" + mutedStyle.Render("Keep how many recent runs? ") + m.keepInput + mutedStyle.Render("_ (enter confirm, esc cancel)"))
 	} else {
-		b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter view · d delete · t keep N · q quit"))
+		help := "↑/↓ move · enter view · d delete · t keep N · q quit"
+		if m.embedded {
+			help = "↑/↓ move · enter view · d delete · t keep N · esc/q back to servers · shift+tab switch"
+		}
+		b.WriteString("\n" + mutedStyle.Render(help))
 	}
 		v := tea.NewView(b.String())
 		return v
@@ -546,8 +548,16 @@ func (m historyModel) View() tea.View {
 		lines = append(lines, line)
 		if it.expanded {
 			if t.Command != "" {
+				// show the command as written, line by line, with later lines lined up
+				// under the first; tabs would throw off the layout, so they become spaces
 				lines = append(lines, mutedStyle.Render("      command"))
-				lines = append(lines, "        $ "+strings.ReplaceAll(t.Command, "\n", " "))
+				for i, l := range strings.Split(strings.TrimRight(t.Command, "\r\n"), "\n") {
+					prefix := "        $ "
+					if i > 0 {
+						prefix = "          "
+					}
+					lines = append(lines, prefix+strings.ReplaceAll(strings.TrimRight(l, "\r"), "\t", "    "))
+				}
 			}
 			if t.Stdout != "" {
 				lines = append(lines, mutedStyle.Render("      stdout"))
@@ -595,9 +605,21 @@ func (m historyModel) View() tea.View {
 		b.WriteString(mutedStyle.Render(fmt.Sprintf("    [%d/%d lines]", cursorLine+1, len(lines))) + "\n")
 	}
 	b.WriteString("\n")
-	b.WriteString("\n" + mutedStyle.Render("↑/↓ move · enter expand task · d delete run · esc back · q quit"))
+	help := "↑/↓ move · enter expand task · d delete run · esc back · q quit"
+	if m.embedded {
+		help = "↑/↓ move · enter expand task · d delete run · esc/q back to runs"
+	}
+	b.WriteString("\n" + mutedStyle.Render(help))
 	v := tea.NewView(b.String())
 	return v
+}
+
+// shortID returns the start of a run ID, enough to tell runs apart in a list.
+func shortID(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
 }
 
 func getHistoryDBPath() string {

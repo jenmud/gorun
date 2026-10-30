@@ -3,6 +3,7 @@ package gorun
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -50,5 +51,16 @@ func TestOpenLogFile_CreatesDirAndAppends(t *testing.T) {
 	}
 	if want := "first\nsecond\n"; string(got) != want {
 		t.Errorf("log file = %q, want %q", got, want)
+	}
+}
+
+func TestLogOutput(t *testing.T) {
+	old := LogOutput()
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	var b strings.Builder
+	SetLogOutput(&b)
+	if LogOutput() != &b {
+		t.Error("LogOutput should return the writer given to SetLogOutput")
 	}
 }

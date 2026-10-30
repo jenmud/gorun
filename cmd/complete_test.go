@@ -16,8 +16,16 @@ cmd = "true"
 [tasks.alpha]
 cmd = "true"
 
+[bundles.base]
+tasks = ["alpha", "zeta"]
+
+[server_groups.prod]
+tags = ["prod"]
+
 [servers.hosts.web-1]
 tasks = ["alpha"]
+groups = ["prod"]
+tags = ["web"]
 
 [servers.hosts.db-1]
 tasks = ["zeta"]
@@ -30,8 +38,10 @@ tasks = ["zeta"]
 		kind string
 		want []string
 	}{
-		{kind: "tasks", want: []string{"alpha", "zeta"}},
+		{kind: "tasks", want: []string{"@base", "alpha", "zeta"}},
 		{kind: "servers", want: []string{"db-1", "web-1"}},
+		{kind: "tags", want: []string{"prod", "web"}},
+		{kind: "groups", want: []string{"prod"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.kind, func(t *testing.T) {

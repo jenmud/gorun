@@ -18,6 +18,12 @@ func SetLogOutput(w io.Writer) {
 	logOutput = w
 }
 
+// LogOutput returns the current destination for task and server logs, so it can be
+// put back after something interactive silences it.
+func LogOutput() io.Writer {
+	return logOutput
+}
+
 // LogFilePath returns the file gorun writes its logs to: GORUN_LOG_FILE when set
 // (a leading ~ is expanded), otherwise ~/.gorun/gorun.log.
 func LogFilePath() string {

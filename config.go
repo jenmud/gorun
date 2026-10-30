@@ -73,6 +73,12 @@ type Config struct {
 	// Tasks is the task library, keyed by task name. Servers pick tasks from it by name.
 	Tasks map[string]Task `toml:"tasks"`
 
+	// Bundles are named task lists, referred to as "@<name>" wherever a task list is accepted.
+	Bundles map[string]Bundle `toml:"bundles"`
+
+	// Groups hold defaults shared by the servers that join them.
+	Groups map[string]ServerGroup `toml:"server_groups"`
+
 	// Servers are the [servers.hosts.<name>] tables, in the order they appear in the file.
 	Servers []Server `toml:"-"`
 
@@ -80,7 +86,7 @@ type Config struct {
 	OnEvent func(event any) `toml:"-"`
 
 	// SelectedTasks, when non-empty, limits execution to these tasks (and their
-	// dependencies). Used by the --task CLI flag.
+	// dependencies). Bundle references ("@name") are expanded. Used by the --task CLI flag.
 	SelectedTasks []string `toml:"-"`
 }
 
@@ -120,10 +126,22 @@ func (c *Config) Load(r io.Reader) error {
 		return fmt.Errorf("error with loading config: max_parallel must not be negative")
 	}
 
-	// tasks and servers are named by their table keys
+	// tasks, bundles, groups and servers are named by their table keys
 	for name, task := range c.Tasks {
 		task.Name = name
 		c.Tasks[name] = task
+	}
+	for name, bundle := range c.Bundles {
+		bundle.Name = name
+		c.Bundles[name] = bundle
+	}
+	for name, group := range c.Groups {
+		group.Name = name
+		c.Groups[name] = group
+	}
+
+	if err := c.validateLibrary(); err != nil {
+		return fmt.Errorf("error with loading config: %w", err)
 	}
 
 	// map iteration order is random, so walk the keys to keep the servers in file order
@@ -136,9 +154,9 @@ func (c *Config) Load(r io.Reader) error {
 		server := f.Servers.Hosts[key[2]]
 		server.Name = key[2]
 
-		// a server's own task list replaces the global one
-		if !md.IsDefined(append(key, "tasks")...) {
-			server.TaskNames = f.Servers.Tasks
+		ownTasks := md.IsDefined("servers", "hosts", key[2], "tasks")
+		if err := c.composeServer(&server, f.Servers.Tasks, ownTasks); err != nil {
+			return fmt.Errorf("error with loading config: server %q: %w", server.Name, err)
 		}
 
 		c.Servers = append(c.Servers, server)
@@ -152,6 +170,11 @@ func (c *Config) Load(r io.Reader) error {
 // can be run from anywhere.
 func (c *Config) ResolvePaths(dir string) {
 	resolve := func(path string) string {
+		if rest, ok := strings.CutPrefix(path, "~/"); ok {
+			if home, err := os.UserHomeDir(); err == nil {
+				return filepath.Join(home, rest)
+			}
+		}
 		if path == "" || filepath.IsAbs(path) {
 			return path
 		}
@@ -344,7 +367,13 @@ func (c *Config) ServersPipeline() (map[string]Server, error) {
 
 // ServerPipeline returns the server with its tasks, and their dependencies, resolved into run order.
 func (c *Config) ServerPipeline(server Server) (Server, error) {
-	pipeline, err := resolveTasks(c.Tasks, server.TaskNames...)
+	names, err := c.ExpandTaskRefs(server.TaskNames...)
+	if err != nil {
+		err = fmt.Errorf("error building task pipeline for server %q: %w", server.Name, err)
+		return Server{}, err
+	}
+
+	pipeline, err := resolveTasks(c.Tasks, names...)
 	if err != nil {
 		err = fmt.Errorf("error building task pipeline for server %q: %w", server.Name, err)
 		return Server{}, err
@@ -425,7 +454,12 @@ func (c *Config) selectedTaskSet() map[string]bool {
 			}
 		}
 	}
-	for _, name := range c.SelectedTasks {
+	names, err := c.ExpandTaskRefs(c.SelectedTasks...)
+	if err != nil {
+		// unknown names can't match a task; keep the plain ones
+		names = c.SelectedTasks
+	}
+	for _, name := range names {
 		visit(name)
 	}
 	return allowed
@@ -466,17 +500,22 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		pipeline = pipelines
 	}
 
-	// merge global envvars into each task (task-level values take precedence)
+	// merge the server's (including its groups') envvars, then the global ones, into
+	// each task; task-level values take precedence, then server-level ones
 	for name, server := range pipeline {
 		for i := range server.Tasks {
-			if server.Tasks[i].EnvVars == nil {
-				server.Tasks[i].EnvVars = map[string]string{}
+			env := maps.Clone(server.Tasks[i].EnvVars)
+			if env == nil {
+				env = map[string]string{}
 			}
-			for k, v := range c.EnvVars {
-				if _, ok := server.Tasks[i].EnvVars[k]; !ok {
-					server.Tasks[i].EnvVars[k] = v
+			for _, defaults := range []map[string]string{server.EnvVars, c.EnvVars} {
+				for k, v := range defaults {
+					if _, ok := env[k]; !ok {
+						env[k] = v
+					}
 				}
 			}
+			server.Tasks[i].EnvVars = env
 		}
 		pipeline[name] = server
 	}

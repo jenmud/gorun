@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -71,7 +72,7 @@ func TestServerSelectionModel_Filter(t *testing.T) {
 	servers := []gorun.Server{
 		{Name: "worker-eu-b", Hostname: "localhost"},
 		{Name: "web-prod-1", Hostname: "localhost"},
-		{Name: "db-primary", Hostname: "db.internal"},
+		{Name: "db-primary", Hostname: "db.internal", Tags: []string{"prod", "database"}},
 	}
 
 	m := newServerSelectionModel("test", servers)
@@ -92,13 +93,27 @@ func TestServerSelectionModel_Filter(t *testing.T) {
 	// falls back to matching the hostname
 	m.query = "internal"
 	m.filter()
-	if len(m.matches) != 1 || m.matches[0].onName {
+	if len(m.matches) != 1 || m.matches[0].field != matchHost {
 		t.Fatalf("expected a single hostname match, got %+v", m.matches)
 	}
 
-	// enter with nothing selected picks the server under the cursor
-	if diff := cmp.Diff([]gorun.Server{servers[2]}, m.chosen()); diff != "" {
-		t.Errorf("chosen mismatch (-want +got):\n%s", diff)
+	// then the tags, picking the best matching tag
+	m.query = "datab"
+	m.filter()
+	if len(m.matches) != 1 || m.matches[0].field != matchTag || m.matches[0].tag != 1 {
+		t.Fatalf("expected a single match on the database tag, got %+v", m.matches)
+	}
+	if view := m.viewContent(); !strings.Contains(view, "#prod") {
+		t.Errorf("the server's tags should be shown, got:\n%s", view)
+	}
+
+	// with nothing selected, nothing runs, whatever is under the cursor
+	if got := m.chosen(); len(got) != 0 {
+		t.Errorf("nothing is selected, so nothing should run, got %+v", got)
+	}
+	next, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m = next.(serverSelectionModel); m.confirmed || cmd != nil {
+		t.Error("enter with nothing selected should do nothing")
 	}
 }
 

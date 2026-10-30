@@ -2,8 +2,11 @@
 # Gorunfile: provisions the app servers with Docker, dev tooling, and a deploy user.
 #
 # Usage (relative paths resolve from this file's directory, so run it from anywhere):
-#   go run . example/Gorunfile
-#   go run . example/Gorunfile --select
+#   go run ./cmd example/Gorunfile                  # pick servers and tasks, then run
+#   go run ./cmd example/Gorunfile --run            # run everything, no picker (-r)
+#   go run ./cmd example/Gorunfile --tag prod --exclude-server 'db-*'
+#   go run ./cmd example/Gorunfile --group eu --task @baseline
+#   go run ./cmd example/Gorunfile --list-servers --tag web
 #
 # Every task and script is idempotent, so the whole file is safe to re-run.
 # To reproduce a failed task by hand on a server:
@@ -19,20 +22,6 @@ log_level = "info"
 # Task library. Each [tasks.<name>] defines a task once; servers pick tasks by name.
 # A task's depends_on are always pulled in and run first, so a server only needs to
 # list the tasks it wants and gets everything they need.
-#
-# Dependency graph:
-#
-#   packages ─┬─ timezone
-#             ├─ monitoring-tools (htop, btop)
-#             ├─ cli-tools ─┬─ jj-install ──────────────┐
-#             │             └─ golang-install ─┐        │
-#             ├─ neovim-install ─┬─ editor-setup        │
-#             │                  └──────────────────────┼─ jj-config
-#             └─ docker-install ── deploy-user ─┬───────┘
-#                                               └─ go-workspace
-#   verify depends on all the leaves above.
-#   go-smoke-test, ssh-user-docker-access, compose-project and app-files are only used by some servers.
-#
 
 [tasks.apt-update]
 cmd = "apt update"
@@ -139,90 +128,151 @@ dst = "/tmp/app"
 [tasks.greet]
 cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}:{{.SSH.Port}} ({{.SSH.User}}) -> {{.SSH.Identityfile}}'"
 
+# Templates see the server after its groups are applied, so .Tags and .EnvVars include
+# what the groups added.
+[tasks.server-info]
+cmd_template = "echo '{{.Name}}: region={{index .EnvVars \"REGION\"}} env={{index .EnvVars \"APP_ENV\"}} tags={{range .Tags}}{{.}} {{end}}'"
+description = "Print the region, environment and tags the server ended up with"
+rerun = "safe"
+
 #
-# Inventory. Every host runs servers.tasks unless it sets its own `tasks`, which
-# replaces the global list (dependencies are still pulled in).
-# SSH settings are per server (there is no global fallback).
-# Key-based auth only: no passwords in this file.
+# Bundles name a list of tasks so it can be reused. Use them as "@name" in any task
+# list (servers.tasks, a host's tasks / add_tasks / skip_tasks, a group's tasks,
+# another bundle) or on the command line with --task @name.
+#
+
+[bundles.baseline]
+description = "Minimal setup every box gets"
+tasks = ["timezone", "monitoring-tools"]
+
+[bundles.devtools]
+description = "Editor, jj and a Go workspace for the deploy user"
+tasks = ["editor-setup", "jj-config", "go-workspace"]
+
+[bundles.standard]
+description = "The usual app server setup"
+tasks = ["greet", "@baseline", "@devtools", "verify"]   # bundles can include bundles
+
+#
+# Server groups share defaults between the hosts that list them in `groups`.
+# Later groups override earlier ones, and the host's own settings win:
+#   - ssh fields and log_level: the last one set wins
+#   - envvars: merged by key
+#   - tags: all of them
+#   - tasks: appended to servers.tasks (unless the host sets its own tasks)
+#
+
+# Every machine in the docker-compose lab: shared SSH login, so hosts only set a port.
+[server_groups.lab]
+tags = ["lab"]
+    [server_groups.lab.ssh]
+    username = "testuser"
+    identityfile = "./ssh-keys/id_ecdsa"   # key-based auth only: no passwords in this file
+
+[server_groups.prod]
+tags = ["prod"]
+envvars = { APP_ENV = "production" }
+
+[server_groups.staging]
+tags = ["staging"]
+log_level = "debug"
+envvars = { APP_ENV = "staging" }
+
+[server_groups.eu]
+tags = ["eu"]
+tasks = ["server-info"]
+envvars = { REGION = "eu-west-1" }
+
+[server_groups.db]
+tags = ["db"]
+
+#
+# Inventory. Every host runs servers.tasks plus its groups' tasks, unless it sets its
+# own `tasks`, which replaces both. add_tasks then appends and skip_tasks removes.
+# Dependencies are always pulled in.
+#
+# Try:  --tag web · --group eu · --tag prod --tag db · --server 'worker-*' · --exclude-server 'db-*'
 #
 
 [servers]
-tasks = ["greet", "timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace", "verify"]
+tasks = ["@standard"]
 
 [servers.hosts.server1]
 hostname = "localhost"
+groups = ["lab"]
+tags = ["build"]
 # build server: the usual setup, plus prove the Go toolchain works end to end
-tasks = ["verify", "go-smoke-test", "apt-update"]
+add_tasks = ["go-smoke-test", "apt-update"]
     [servers.hosts.server1.ssh]
     port = 2221
-    username = "testuser"
-    identityfile = "./ssh-keys/id_ecdsa"
 
 [servers.hosts.server2]
 hostname = "localhost"
+groups = ["lab"]
+tags = ["docker"]
 # docker host: the usual setup, plus docker without sudo and the app's compose project
-tasks = ["verify", "ssh-user-docker-access", "compose-project", "app-files"]
+add_tasks = ["ssh-user-docker-access", "compose-project", "app-files"]
     [servers.hosts.server2.ssh]
     port = 2222
-    username = "testuser"
-    identityfile = "./ssh-keys/id_ecdsa"
 
 [servers.hosts.web-prod-1]
 hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web"]
     [servers.hosts.web-prod-1.ssh]
     port = 2223
-    username = "testuser"
-    identityfile = "./ssh-keys/id_ecdsa"
 
 [servers.hosts.web-prod-2]
 hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web"]
     [servers.hosts.web-prod-2.ssh]
     port = 2224
-    username = "testuser"
-    identityfile = "./ssh-keys/id_ecdsa"
 
 [servers.hosts.db-primary]
 hostname = "localhost"
-# database boxes stay minimal
-tasks = ["timezone", "monitoring-tools"]
+groups = ["lab", "prod", "db"]
+# database boxes stay minimal: their own list replaces servers.tasks
+tasks = ["@baseline"]
     [servers.hosts.db-primary.ssh]
     port = 2225
-    username = "testuser"
-    identityfile = "./ssh-keys/id_ecdsa"
 
 [servers.hosts.db-replica-eu]
 hostname = "localhost"
-tasks = ["timezone", "monitoring-tools"]
+groups = ["lab", "prod", "db", "eu"]
+# its own tasks also replace the eu group's tasks, so add server-info back
+tasks = ["@baseline"]
+add_tasks = ["server-info"]
     [servers.hosts.db-replica-eu.ssh]
     port = 2226
-    username = "testuser"
-    identityfile = "./ssh-keys/id_ecdsa"
 
 [servers.hosts.cache-redis]
 hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["cache"]
+skip_tasks = ["greet"]   # the usual setup, minus the greeting
     [servers.hosts.cache-redis.ssh]
     port = 2227
-    username = "testuser"
-    identityfile = "./ssh-keys/id_ecdsa"
 
 [servers.hosts.worker-eu-a]
 hostname = "localhost"
+groups = ["lab", "prod", "eu"]   # gets the eu group's server-info task
+tags = ["worker"]
     [servers.hosts.worker-eu-a.ssh]
     port = 2228
-    username = "testuser"
-    identityfile = "./ssh-keys/id_ecdsa"
 
 [servers.hosts.worker-eu-b]
 hostname = "localhost"
+groups = ["lab", "prod", "eu"]
+tags = ["worker"]
+envvars = { REGION = "eu-central-1" }   # the host wins over the eu group
     [servers.hosts.worker-eu-b.ssh]
     port = 2229
-    username = "testuser"
-    identityfile = "./ssh-keys/id_ecdsa"
 
 [servers.hosts.staging-api]
 hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api"]
 tasks = ["verify", "compose-project"]
     [servers.hosts.staging-api.ssh]
     port = 2230
-    username = "testuser"
-    identityfile = "./ssh-keys/id_ecdsa"

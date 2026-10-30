@@ -11,6 +11,7 @@
   - [Manual install](#manual-install)
 - [OpenTelemetry](#opentelemetry)
 - [Usage](#usage)
+  - [Shell completion](#shell-completion)
   - [Generate a starting Gorunfile](#generate-a-starting-gorunfile)
   - [Failures](#failures)
   - [Task timeouts](#task-timeouts)
@@ -179,6 +180,54 @@ gorun -web
 # View historical runs in the TUI
 gorun -history
 ```
+
+### Shell completion
+
+Bash can complete gorun's flags, Gorunfile paths, and the task and server names
+from a Gorunfile. Add this function to `~/.bashrc`, then start a new shell or run
+`source ~/.bashrc`:
+
+```bash
+_gorun_complete() {
+    local cur prev file word i
+    cur=${COMP_WORDS[COMP_CWORD]}
+    prev=${COMP_WORDS[COMP_CWORD-1]}
+
+    # Find the Gorunfile argument, skipping flags and their values.
+    for ((i = 1; i < COMP_CWORD; i++)); do
+        word=${COMP_WORDS[i]}
+        case $word in
+            -task|--task|-server|--server|-parallel|--parallel) ((i++)) ;;
+            -*) ;;
+            *) file=$word; break ;;
+        esac
+    done
+
+    case $prev in
+        -task|--task)
+            COMPREPLY=($(compgen -W "$(gorun -complete tasks "$file" 2>/dev/null)" -- "$cur"))
+            return
+            ;;
+        -server|--server)
+            COMPREPLY=($(compgen -W "$(gorun -complete servers "$file" 2>/dev/null)" -- "$cur"))
+            return
+            ;;
+    esac
+
+    if [[ $cur == -* ]]; then
+        COMPREPLY=($(compgen -W "-v -plain -select -task -server -parallel -list-tasks -list-servers -dump -version -web -history -h --task --server --parallel --select --plain --list-tasks --list-servers --dump --version --web --history --help" -- "$cur"))
+    else
+        COMPREPLY=($(compgen -f -- "$cur"))
+    fi
+}
+
+complete -o filenames -F _gorun_complete gorun
+```
+
+`gorun -complete tasks <Gorunfile>` and `gorun -complete servers <Gorunfile>`
+print the candidate names. Without a Gorunfile argument they look for
+`./Gorunfile`, so tab after `-task` or `-server` also works in a directory that
+contains one.
 
 ### Generate a starting Gorunfile
 

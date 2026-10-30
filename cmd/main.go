@@ -130,12 +130,25 @@ func main() {
 	parallel := flag.Int("parallel", 0, "maximum number of hosts to run in parallel (0 = all)")
 	listTasks := flag.Bool("list-tasks", false, "list available tasks and exit")
 	listServers := flag.Bool("list-servers", false, "list servers and their task pipelines and exit")
+	complete := flag.String("complete", "", "print shell completion candidates for tasks or servers and exit")
 
 	flag.Usage = printUsage
 	flag.Parse()
 
 	if *versionFlag {
 		fmt.Println(version)
+		return
+	}
+
+	if *complete != "" {
+		os.Setenv("GORUN_SKIP_NATS", "1")
+		names, err := completionNames(*complete, flag.Arg(0))
+		if err != nil {
+			fatal(err)
+		}
+		for _, name := range names {
+			fmt.Println(name)
+		}
 		return
 	}
 

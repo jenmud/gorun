@@ -1,6 +1,35 @@
 # Gorun
 
-Gorun is a tool for running tasks on multiple servers with an interactive TUI.
+## Table of Contents
+
+- [Why Gorun](#why-gorun)
+  - [What it is good at](#what-it-is-good-at)
+  - [What it is not great at](#what-it-is-not-great-at)
+- [Features](#features)
+- [Installation](#installation)
+  - [Quick install (curl | sh)](#quick-install-curl--sh)
+  - [Manual install](#manual-install)
+- [OpenTelemetry](#opentelemetry)
+- [Usage](#usage)
+  - [Generate a starting Gorunfile](#generate-a-starting-gorunfile)
+  - [Failures](#failures)
+  - [Task timeouts](#task-timeouts)
+  - [Logs](#logs)
+- [Task selection and inspection](#task-selection-and-inspection)
+- [Server Selection](#server-selection)
+- [Using gorun as a library](#using-gorun-as-a-library)
+- [Web UI](#web-ui)
+  - [Dashboard](#dashboard)
+- [Database Store](#database-store)
+  - [Configuration](#configuration)
+  - [Viewing Historical Runs](#viewing-historical-runs)
+- [Events (NATS)](#events-nats)
+  - [Connection](#connection)
+  - [Topic](#topic)
+  - [Event types](#event-types)
+  - [Notes](#notes)
+- [SSH Keys](#ssh-keys)
+- [Configuration](#configuration)
 
 ## Why Gorun
 
@@ -223,11 +252,17 @@ gorun example/Gorunfile --list-tasks
 # List servers and their resolved task pipelines
 gorun example/Gorunfile --list-servers
 
-# Run only the named tasks (their dependencies are included automatically)
+# Run only the named tasks (their dependencies are included automatically).
+# A named task runs on every selected server even if it is not part of that
+# server's configured pipeline, so one-off tasks work on any host. Use the
+# one-of task with caution!
 gorun example/Gorunfile --task greet --task verify
 
 # Run only the named servers
 gorun example/Gorunfile --server server1 --server web-prod-1
+
+# Run a one-off task on a single server
+gorun example/Gorunfile --server localhost --task echo-hostname
 ```
 
 ## Server Selection
@@ -317,7 +352,7 @@ When a run occurs, gorun automatically:
 
 The `/runs` endpoint queries the database directly; if the store is unavailable, it returns a 503 error.
 
-### Events (NATS)
+## Events (NATS)
 
 Gorun publishes lifecycle events to [NATS](https://nats.io) so external tools (the web UI,
 dashboards, other gorun instances) can observe runs. Events are published only when a NATS

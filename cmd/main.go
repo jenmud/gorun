@@ -124,7 +124,7 @@ func main() {
 	webFlag := flag.Bool("web", false, "start the web server")
 	historyFlag := flag.Bool("history", false, "view historical runs")
 	taskFlags := stringSlice{}
-	flag.Var(&taskFlags, "task", "run only the named task (repeatable); dependencies are included")
+	flag.Var(&taskFlags, "task", "run only the named task on any selected server (repeatable); dependencies are included")
 	serverFlags := stringSlice{}
 	flag.Var(&serverFlags, "server", "run only the named server (repeatable)")
 	parallel := flag.Int("parallel", 0, "maximum number of hosts to run in parallel (0 = all)")
@@ -275,13 +275,20 @@ func main() {
 		return
 	}
 
-	// validate and apply --task filter
+	// validate and apply --task filter. A named task is run on every selected
+	// server even when it is not part of that server's configured pipeline, so
+	// one-off tasks work on any host.
 	for _, t := range taskFlags {
 		if _, ok := cfg.Tasks[t]; !ok {
 			fatal(fmt.Errorf("unknown task %q", t))
 		}
 	}
-	cfg.SelectedTasks = []string(taskFlags)
+	if len(taskFlags) > 0 {
+		for i := range cfg.Servers {
+			cfg.Servers[i].TaskNames = append([]string{}, taskFlags...)
+		}
+		cfg.SelectedTasks = []string(taskFlags)
+	}
 
 	// validate and apply --server filter
 	if len(serverFlags) > 0 {
@@ -431,7 +438,7 @@ Options:
   -v        verbose: show every task and its output
   -plain    plain log output instead of the TUI (default when stdout is not a terminal)
   -select   select servers to deploy to using the TUI
-  -task     run only the named task (repeatable; dependencies included)
+  -task     run only the named task on any selected server (repeatable; dependencies included)
   -server  run only the named server (repeatable)
   -parallel N  run at most N hosts at once (0 = all servers)
   -list-tasks  list available tasks and exit

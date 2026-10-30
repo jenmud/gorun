@@ -354,9 +354,37 @@ func (c *Config) ServerPipeline(server Server) (Server, error) {
 	return server, nil
 }
 
-// RunTask runs a single task one or more servers.
+// RunTask runs a single task (and its dependencies) on one or more servers. When
+// no servers are given, every server in the config is used. The task does not
+// need to be part of any server's configured task list.
 func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
-	return errors.New("not implemented")
+	if t.Name == "" {
+		return errors.New("task must have a name")
+	}
+
+	if c.Tasks == nil {
+		c.Tasks = map[string]Task{}
+	}
+	c.Tasks[t.Name] = t
+
+	targets := make([]Server, len(server))
+	copy(targets, server)
+	if len(targets) == 0 {
+		targets = make([]Server, len(c.Servers))
+		copy(targets, c.Servers)
+	}
+	if len(targets) == 0 {
+		return errors.New("no servers to run on")
+	}
+
+	for i := range targets {
+		targets[i].TaskNames = []string{t.Name}
+	}
+
+	// a one-off run ignores any previously selected task filter
+	c.SelectedTasks = nil
+
+	return c.Run(ctx, targets...)
 }
 
 // TaskNames returns the task names in dependency order (dependencies first).

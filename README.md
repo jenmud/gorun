@@ -311,8 +311,24 @@ unset waits `50ms`; setting `"0s"` (or `0`) retries immediately. The wait is out
 timeout, so a slow retry delay does not count against the next attempt. It also stops early if
 the run is canceled.
 
+A task marked `rerun = "unsafe"` is **not retried automatically**, even when `retries` is set.
+The first failure is final, and the error explains that the task is unsafe to rerun. If a
+particular failure really is safe to repeat, opt in explicitly:
+
+```toml
+[tasks.rotate-key]
+cmd = "..."
+rerun = "unsafe"
+retries = 2
+retry_unsafe = true   # retry only because this task's failures are safe to repeat
+```
+
+`retry_unsafe` only affects automatic retries. Manually running an unsafe task is still allowed,
+with the usual warning. This separation matters because a human can see that a task failed
+before it changed anything, while an automatic retry cannot.
+
 Timeouts and cancellations are never retried, because retrying after a timeout usually means the
-command is stuck and a canceled run is being stopped on purpose. Negative `retries` or
+command is stuck and a canceled run is being stopped on purpose. Negative `retries` and
 `retry_delay` values are rejected. Retries are per task and per server; a failed task still stops
 the rest of that server's pipeline once its attempts are used up.
 
@@ -533,9 +549,9 @@ the limit covers SSH setup and that host's whole task pipeline.
 
 Tasks are defined once in a task library and servers pick them by name:
 
-- `[tasks.<name>]` defines a task: `cmd`, `cmd_file`, `cmd_template` or `cmd_template_file`, plus optional `sudo`, `depends_on`, `envvars`, `shell`, `log_level`, `timeout`, `retries`, `retry_delay`, `description`, `details`, `rerun`, and file copies (`copy`/`copies`/`upload`/`files`).
+- `[tasks.<name>]` defines a task: `cmd`, `cmd_file`, `cmd_template` or `cmd_template_file`, plus optional `sudo`, `depends_on`, `envvars`, `shell`, `log_level`, `timeout`, `retries`, `retry_delay`, `retry_unsafe`, `description`, `details`, `rerun`, and file copies (`copy`/`copies`/`upload`/`files`).
 - `timeout` is a Go duration string (for example `"45m"`) and limits the task on each server, including its file copies. It defaults to 30 minutes when unset or zero, and negative values are rejected. A timed-out task fails with exit code 124, so that server's remaining tasks are skipped while the other servers carry on. See [Task timeouts](#task-timeouts).
-- `retries` is how many extra times a failed task may run (default `0`), and `retry_delay` is the wait before each retry (default `50ms`; `"0s"` means immediately). Timeouts and cancellations are not retried. See [Task retries](#task-retries).
+- `retries` is how many extra times a failed task may run (default `0`), and `retry_delay` is the wait before each retry (default `50ms`; `"0s"` means immediately). Unsafe tasks also need `retry_unsafe = true`; timeouts and cancellations are not retried. See [Task retries](#task-retries).
 - `description` is a one-line summary, `details` is an optional longer explanation, and `rerun` is `"safe"` or `"unsafe"`. They are shown by `--list-tasks`, the TUI and the web dashboard. See [Task descriptions and rerun safety](#task-descriptions-and-rerun-safety).
 - Tasks can specify a command source OR copies (or both). If both are specified, copies run first, then the command.
 - `cmd_template` and `cmd_template_file` are compiled as Go text templates at task execution time with a `Server{}` passed in (so you can use `.Name`, `.Hostname`, etc.). The compiled result is the command that gets broadcast/sent to the server (NATS/web UI events show the compiled command).

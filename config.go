@@ -682,6 +682,16 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 						break
 					}
 
+					if !task.task.CanRetry() {
+						task.appendStderr("not retried: task is marked unsafe to rerun (set retry_unsafe = true to override)")
+						tlogger.Warn("task failed; not retrying because it is marked unsafe to rerun",
+							slog.Int("attempt", attempt),
+							slog.Int("attempts", attempts),
+							slog.String("reason", runErr.Error()),
+						)
+						break
+					}
+
 					tlogger.Warn("task failed, retrying",
 						slog.Int("attempt", attempt),
 						slog.Int("attempts", attempts),

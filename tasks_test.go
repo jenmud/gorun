@@ -556,3 +556,160 @@ func TestRunWaitsBetweenRetries(t *testing.T) {
 		t.Errorf("gap between attempts = %s, want at least %s", gap, delay)
 	}
 }
+
+func TestTaskCanRetry(t *testing.T) {
+	tests := []struct {
+		name        string
+		rerun       string
+		retryUnsafe bool
+		want        bool
+	}{
+		{name: "unset", rerun: "", want: true},
+		{name: "safe", rerun: RerunSafe, want: true},
+		{name: "unsafe", rerun: RerunUnsafe, want: false},
+		{name: "unsafe with override", rerun: RerunUnsafe, retryUnsafe: true, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := Task{Rerun: tt.rerun, RetryUnsafe: tt.retryUnsafe}
+			if got := task.CanRetry(); got != tt.want {
+				t.Errorf("CanRetry() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadTaskRetryUnsafe(t *testing.T) {
+	var c Config
+	if err := c.Load(strings.NewReader(`
+[tasks.override]
+cmd = "true"
+rerun = "unsafe"
+retries = 1
+retry_unsafe = true
+`)); err != nil {
+		t.Fatal(err)
+	}
+
+	task := c.Tasks["override"]
+	if !task.RetryUnsafe {
+		t.Error("retry_unsafe = false, want true")
+	}
+	if !task.CanRetry() {
+		t.Error("CanRetry() = false, want true with retry_unsafe set")
+	}
+}
+
+func TestRunDoesNotRetryUnsafeTask(t *testing.T) {
+	old := logOutput
+	SetLogOutput(io.Discard)
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	var (
+		running []TaskEvent
+		final   *TaskEvent
+		done    *ProcessFinishedEvent
+	)
+	cfg := Config{
+		Tasks: map[string]Task{
+			"rotate": {
+				Name:    "rotate",
+				Cmd:     "echo boom >&2; exit 9",
+				Rerun:   RerunUnsafe,
+				Retries: 2,
+			},
+		},
+		Servers: []Server{{Name: "local", TaskNames: []string{"rotate"}}},
+		OnEvent: func(event any) {
+			switch ev := event.(type) {
+			case TaskEvent:
+				if ev.State == TaskRunning {
+					running = append(running, ev)
+				}
+				if ev.State == TaskFailed {
+					final = &ev
+				}
+			case ProcessFinishedEvent:
+				done = &ev
+			}
+		},
+	}
+
+	if err := cfg.Run(context.Background()); err == nil {
+		t.Fatal("expected Run to fail")
+	}
+	if len(running) != 1 {
+		t.Errorf("running events = %d, want 1 (unsafe tasks are not retried)", len(running))
+	}
+	if final == nil {
+		t.Fatal("expected a failed task event")
+	}
+	if final.ExitCode != 9 {
+		t.Errorf("exit code = %d, want 9", final.ExitCode)
+	}
+	if !strings.Contains(final.Stderr, "not retried: task is marked unsafe to rerun") {
+		t.Errorf("stderr = %q, want it to explain why the task was not retried", final.Stderr)
+	}
+	if !strings.Contains(final.Stderr, "retry_unsafe = true") {
+		t.Errorf("stderr = %q, want it to mention the retry_unsafe override", final.Stderr)
+	}
+	if done == nil || done.Success || done.Failed != 1 {
+		t.Errorf("process finished = %+v, want one failed task", done)
+	}
+}
+
+func TestRunRetriesUnsafeWhenOverridden(t *testing.T) {
+	old := logOutput
+	SetLogOutput(io.Discard)
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	dir := t.TempDir()
+	counter := dir + "/count"
+	cmd := strings.Join([]string{
+		"n=0",
+		"[ -f " + counter + " ] && n=$(cat " + counter + ")",
+		"n=$((n+1))",
+		"echo $n > " + counter,
+		"[ $n -ge 2 ]",
+	}, "; ")
+
+	var (
+		running []TaskEvent
+		final   *TaskEvent
+	)
+	zero := time.Duration(0)
+	cfg := Config{
+		Tasks: map[string]Task{
+			"rotate": {
+				Name:        "rotate",
+				Cmd:         cmd,
+				Rerun:       RerunUnsafe,
+				Retries:     1,
+				RetryDelay:  &zero,
+				RetryUnsafe: true,
+			},
+		},
+		Servers: []Server{{Name: "local", TaskNames: []string{"rotate"}}},
+		OnEvent: func(event any) {
+			if ev, ok := event.(TaskEvent); ok {
+				if ev.State == TaskRunning {
+					running = append(running, ev)
+				}
+				if ev.State == TaskDone {
+					final = &ev
+				}
+			}
+		},
+	}
+
+	if err := cfg.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(running) != 2 {
+		t.Fatalf("running events = %d, want 2 attempts", len(running))
+	}
+	if final == nil || final.Attempt != 2 || final.Attempts != 2 {
+		t.Errorf("final event = %+v, want success on attempt 2/2", final)
+	}
+}

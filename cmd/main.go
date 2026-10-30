@@ -534,6 +534,7 @@ log_level = "info"   # debug|info|warn|error (inherited by servers/tasks)
 # timeout = "30m"               # default; task fails with exit code 124 after this
 # retries = 0                   # optional; extra attempts after a failure (off by default)
 # retry_delay = "50ms"          # optional; wait before each retry ("0s" = immediate)
+# retry_unsafe = false          # allow retries when rerun = "unsafe"
 # [tasks.example.envvars]
 # KEY = "value"
 # [[tasks.example.copy]]

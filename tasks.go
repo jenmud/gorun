@@ -85,6 +85,8 @@ type Task struct {
 	// RetryDelay is how long to wait before each retry. Unset uses
 	// DefaultRetryDelay; an explicit zero retries immediately.
 	RetryDelay *time.Duration `toml:"retry_delay,omitempty"`
+	// RetryUnsafe allows automatic retries for a task marked rerun = "unsafe".
+	RetryUnsafe bool `toml:"retry_unsafe,omitempty"`
 }
 
 // Attempts returns how many times the task may run, including the first try.
@@ -93,6 +95,12 @@ func (t Task) Attempts() int {
 		return 1
 	}
 	return t.Retries + 1
+}
+
+// CanRetry reports whether a failed attempt may be retried. Tasks marked unsafe
+// to rerun require an explicit RetryUnsafe opt-in.
+func (t Task) CanRetry() bool {
+	return t.Rerun != RerunUnsafe || t.RetryUnsafe
 }
 
 // RetryDelayDuration returns the wait between attempts. A task that doesn't set

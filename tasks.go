@@ -25,6 +25,11 @@ const (
 	// timeout. It stops a hung command from holding up a run forever.
 	DefaultTaskTimeout = 30 * time.Minute
 
+	// DefaultRetryDelay is how long gorun waits between attempts when a task
+	// sets retries but not retry_delay. A short pause gives transient failures
+	// (a restarting service, a busy package mirror) a moment to settle.
+	DefaultRetryDelay = 50 * time.Millisecond
+
 	// taskKillGrace bounds how long gorun waits for output pipes to close after
 	// a canceled task has been killed.
 	taskKillGrace = 5 * time.Second
@@ -77,6 +82,9 @@ type Task struct {
 	Rerun string `toml:"rerun,omitempty"`
 	// Retries is how many extra times to run a failed task. Zero means run once.
 	Retries int `toml:"retries,omitempty"`
+	// RetryDelay is how long to wait before each retry. Unset uses
+	// DefaultRetryDelay; an explicit zero retries immediately.
+	RetryDelay *time.Duration `toml:"retry_delay,omitempty"`
 }
 
 // Attempts returns how many times the task may run, including the first try.
@@ -85,6 +93,15 @@ func (t Task) Attempts() int {
 		return 1
 	}
 	return t.Retries + 1
+}
+
+// RetryDelayDuration returns the wait between attempts. A task that doesn't set
+// retry_delay uses DefaultRetryDelay.
+func (t Task) RetryDelayDuration() time.Duration {
+	if t.RetryDelay == nil {
+		return DefaultRetryDelay
+	}
+	return *t.RetryDelay
 }
 
 // TimeoutDuration returns the timeout to apply to the task. A zero (or
@@ -168,6 +185,10 @@ func (t Task) validate() error {
 
 	if t.Retries < 0 {
 		return fmt.Errorf("task %s retries must not be negative", t.Name)
+	}
+
+	if t.RetryDelay != nil && *t.RetryDelay < 0 {
+		return fmt.Errorf("task %s retry_delay must not be negative", t.Name)
 	}
 
 	count := 0
@@ -276,6 +297,25 @@ func (t *TaskExec) resetForRetry() {
 	t.stopped = false
 	t.startedAt = time.Time{}
 	t.completedAt = time.Time{}
+}
+
+// waitForRetry pauses before the next attempt. It returns false when the run is
+// canceled while waiting, so the task is not retried.
+func (t *TaskExec) waitForRetry(ctx context.Context) bool {
+	delay := t.task.RetryDelayDuration()
+	if delay <= 0 {
+		return ctx.Err() == nil
+	}
+
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // contextErr turns a canceled or timed-out context into an error that explains

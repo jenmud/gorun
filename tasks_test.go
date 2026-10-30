@@ -458,3 +458,101 @@ func TestRunWithoutRetriesOmitsAttemptInfo(t *testing.T) {
 		t.Errorf("attempt = %d/%d, want both unset when retries are not configured", final.Attempt, final.Attempts)
 	}
 }
+
+func TestTaskRetryDelayDuration(t *testing.T) {
+	if got := (Task{}).RetryDelayDuration(); got != DefaultRetryDelay {
+		t.Errorf("unset RetryDelayDuration() = %s, want %s", got, DefaultRetryDelay)
+	}
+
+	zero := time.Duration(0)
+	if got := (Task{RetryDelay: &zero}).RetryDelayDuration(); got != 0 {
+		t.Errorf("explicit zero RetryDelayDuration() = %s, want 0", got)
+	}
+
+	delay := 2 * time.Second
+	if got := (Task{RetryDelay: &delay}).RetryDelayDuration(); got != delay {
+		t.Errorf("RetryDelayDuration() = %s, want %s", got, delay)
+	}
+}
+
+func TestLoadTaskRetryDelay(t *testing.T) {
+	var c Config
+	if err := c.Load(strings.NewReader(`
+[tasks.delayed]
+cmd = "true"
+retries = 1
+retry_delay = "1s"
+
+[tasks.default]
+cmd = "true"
+`)); err != nil {
+		t.Fatal(err)
+	}
+
+	delayed := c.Tasks["delayed"]
+	if delayed.RetryDelay == nil || *delayed.RetryDelay != time.Second {
+		t.Errorf("delayed retry_delay = %v, want 1s", delayed.RetryDelay)
+	}
+	if got := c.Tasks["default"].RetryDelayDuration(); got != DefaultRetryDelay {
+		t.Errorf("default RetryDelayDuration() = %s, want %s", got, DefaultRetryDelay)
+	}
+}
+
+func TestTaskValidateRejectsNegativeRetryDelay(t *testing.T) {
+	delay := -time.Second
+	task := Task{Name: "bad", Cmd: "true", RetryDelay: &delay}
+	err := task.validate()
+	if err == nil {
+		t.Fatal("expected an error for a negative retry delay")
+	}
+	if !strings.Contains(err.Error(), "retry_delay must not be negative") {
+		t.Errorf("error = %q, want it to mention retry_delay", err)
+	}
+}
+
+func TestTaskWaitForRetry(t *testing.T) {
+	delay := 5 * time.Second
+	te := &TaskExec{task: Task{RetryDelay: &delay}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if te.waitForRetry(ctx) {
+		t.Error("waitForRetry returned true for a canceled context")
+	}
+
+	zero := time.Duration(0)
+	te = &TaskExec{task: Task{RetryDelay: &zero}}
+	if !te.waitForRetry(context.Background()) {
+		t.Error("waitForRetry returned false for an active context")
+	}
+}
+
+func TestRunWaitsBetweenRetries(t *testing.T) {
+	old := logOutput
+	SetLogOutput(io.Discard)
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	delay := 80 * time.Millisecond
+	var starts []time.Time
+	cfg := Config{
+		Tasks: map[string]Task{
+			"broken": {Name: "broken", Cmd: "exit 1", Retries: 1, RetryDelay: &delay},
+		},
+		Servers: []Server{{Name: "local", TaskNames: []string{"broken"}}},
+		OnEvent: func(event any) {
+			if ev, ok := event.(TaskEvent); ok && ev.State == TaskRunning {
+				starts = append(starts, time.Now())
+			}
+		},
+	}
+
+	if err := cfg.Run(context.Background()); err == nil {
+		t.Fatal("expected Run to fail")
+	}
+	if len(starts) != 2 {
+		t.Fatalf("running events = %d, want 2 attempts", len(starts))
+	}
+	if gap := starts[1].Sub(starts[0]); gap < delay {
+		t.Errorf("gap between attempts = %s, want at least %s", gap, delay)
+	}
+}

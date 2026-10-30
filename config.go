@@ -685,8 +685,13 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 					tlogger.Warn("task failed, retrying",
 						slog.Int("attempt", attempt),
 						slog.Int("attempts", attempts),
+						slog.Duration("delay", task.task.RetryDelayDuration()),
 						slog.String("reason", runErr.Error()),
 					)
+
+					if !task.waitForRetry(ctx) {
+						break
+					}
 				}
 
 				event := TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskDone}

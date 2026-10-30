@@ -88,6 +88,12 @@ templ Dashboard(s DashboardState) {
 											<span class="text-amber-400">⊘</span>
 										}
 										<span class="w-40 truncate text-zinc-200">{ t.Name }</span>
+										if t.Rerun == "unsafe" {
+											<span class="text-amber-400" title="Not safe to rerun: running this task again may change the server">⚠</span>
+										}
+										if t.Description != "" {
+											<span class="min-w-0 flex-1 truncate text-xs text-zinc-500">{ t.Description }</span>
+										}
 										if t.State == 2 || t.State == 3 {
 											<span class="text-zinc-500">{ int(t.Duration / 1000000000) }s</span>
 										}
@@ -97,6 +103,22 @@ templ Dashboard(s DashboardState) {
 											<span class="text-amber-400">skipped</span>
 										}
 									</div>
+									if t.Description != "" || t.Details != "" || t.Rerun == "unsafe" {
+										<details class="ml-6 mt-1">
+											<summary class="cursor-pointer text-xs text-zinc-400 hover:text-zinc-200">about</summary>
+											<div class="mt-1 rounded bg-zinc-950 p-2 text-xs text-zinc-300">
+												if t.Description != "" {
+													<p class="font-medium text-zinc-100">{ t.Description }</p>
+												}
+												if t.Details != "" {
+													<p class="mt-1 whitespace-pre-wrap">{ t.Details }</p>
+												}
+												if t.Rerun == "unsafe" {
+													<p class="mt-1 text-amber-400">⚠ Not safe to rerun: running this task again may change the server.</p>
+												}
+											</div>
+										</details>
+									}
 									if t.Command != "" {
 										<details class="ml-6 mt-1">
 											<summary class="cursor-pointer text-xs text-zinc-400 hover:text-zinc-200">command</summary>

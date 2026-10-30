@@ -44,11 +44,14 @@ const (
 )
 
 type taskView struct {
-	name     string
-	state    gorun.TaskState
-	started  time.Time
-	event    gorun.TaskEvent
-	expanded bool
+	name        string
+	description string
+	details     string
+	rerun       string
+	state       gorun.TaskState
+	started     time.Time
+	event       gorun.TaskEvent
+	expanded    bool
 }
 
 type serverView struct {
@@ -187,8 +190,18 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gorun.PlanEvent:
 		s := &serverView{name: msg.Server, address: msg.Address}
+		meta := make(map[string]gorun.TaskMeta, len(msg.TaskMeta))
+		for _, tm := range msg.TaskMeta {
+			meta[tm.Name] = tm
+		}
 		for _, name := range msg.Tasks {
-			s.tasks = append(s.tasks, &taskView{name: name})
+			tv := &taskView{name: name}
+			if tm, ok := meta[name]; ok {
+				tv.description = tm.Description
+				tv.details = tm.Details
+				tv.rerun = tm.Rerun
+			}
+			s.tasks = append(s.tasks, tv)
 		}
 		m.servers = append(m.servers, s)
 		return m, nil
@@ -405,15 +418,24 @@ func (m tuiModel) taskRow(t *taskView) string {
 		detail = skipStyle.Render("skipped")
 	}
 
-	toggle := ""
-	if t.state == gorun.TaskDone || t.state == gorun.TaskFailed || t.state == gorun.TaskSkipped {
-		toggle = mutedStyle.Render(" ▸")
-		if t.expanded {
-			toggle = mutedStyle.Render(" ▾")
-		}
+	description := ""
+	if t.description != "" {
+		// Leave room for the icon, name, duration and toggle so rows don't wrap.
+		width := max(10, min(48, m.width-44))
+		description = " " + mutedStyle.Render(truncate(t.description, width))
 	}
 
-	return fmt.Sprintf("%s %-24s %s%s", icon, t.name, detail, toggle)
+	warning := ""
+	if t.rerun == gorun.RerunUnsafe {
+		warning = " " + skipStyle.Render("⚠")
+	}
+
+	toggle := mutedStyle.Render(" ▸")
+	if t.expanded {
+		toggle = mutedStyle.Render(" ▾")
+	}
+
+	return fmt.Sprintf("%s %-24s%s%s %s%s", icon, t.name, description, warning, detail, toggle)
 }
 
 func (m tuiModel) boxWidth() int {
@@ -423,6 +445,16 @@ func (m tuiModel) boxWidth() int {
 // outputBox renders a finished task's output for the verbose view.
 func (m tuiModel) outputBox(t *taskView) string {
 	sections := []string{}
+
+	if t.description != "" {
+		sections = append(sections, serverStyle.Render(t.description))
+	}
+	if t.details != "" {
+		sections = append(sections, mutedStyle.Render(t.details))
+	}
+	if t.rerun == gorun.RerunUnsafe {
+		sections = append(sections, skipStyle.Render("⚠ not safe to rerun: running this task again may change the server"))
+	}
 
 	if t.state == gorun.TaskSkipped && t.event.Err != nil {
 		sections = append(sections, skipStyle.Render("skipped: ")+t.event.Err.Error())
@@ -434,7 +466,11 @@ func (m tuiModel) outputBox(t *taskView) string {
 		sections = append(sections, mutedStyle.Render("stderr")+"\n"+out)
 	}
 	if len(sections) == 0 {
-		sections = append(sections, mutedStyle.Render("(no output)"))
+		if t.state == gorun.TaskPending || t.state == gorun.TaskRunning {
+			sections = append(sections, mutedStyle.Render("(no description or output yet)"))
+		} else {
+			sections = append(sections, mutedStyle.Render("(no output)"))
+		}
 	}
 
 	return outputBoxStyle.Width(m.boxWidth()).Render(strings.Join(sections, "\n\n"))
@@ -446,6 +482,13 @@ func (m tuiModel) failureBox(s *serverView, t *taskView) string {
 		mutedStyle.Render(fmt.Sprintf("  exit %d · %s", t.event.ExitCode, formatDuration(t.event.Duration)))
 
 	sections := []string{title}
+
+	if t.details != "" {
+		sections = append(sections, mutedStyle.Render(t.details))
+	}
+	if t.rerun == gorun.RerunUnsafe {
+		sections = append(sections, skipStyle.Render("⚠ not safe to rerun: running this task again may change the server"))
+	}
 
 	if t.event.Err != nil {
 		sections = append(sections, failStyle.Render("reason: ")+t.event.Err.Error())
@@ -513,11 +556,11 @@ func (m tuiModel) footer() string {
 		if m.quitting {
 			return summary + "\n"
 		}
-		return summary + "\n" + mutedStyle.Render("↑/↓ move · enter toggle output · v compact · q quit")
+		return summary + "\n" + mutedStyle.Render("↑/↓ move · enter details/output · v compact · q quit")
 	}
 
 	if m.verbose {
-		return mutedStyle.Render("↑/↓ move · enter toggle output · v compact · q quit")
+		return mutedStyle.Render("↑/↓ move · enter details/output · v compact · q quit")
 	}
 	return mutedStyle.Render("v verbose · q quit")
 }
@@ -543,6 +586,18 @@ func tail(s string, n int) string {
 func indent(s string, n int) string {
 	pad := strings.Repeat(" ", n)
 	return pad + strings.ReplaceAll(s, "\n", "\n"+pad)
+}
+
+// truncate shortens s to n runes, adding an ellipsis when it cuts anything.
+func truncate(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	if n <= 1 {
+		return string(r[:n])
+	}
+	return string(r[:n-1]) + "…"
 }
 
 func formatDuration(d time.Duration) string {

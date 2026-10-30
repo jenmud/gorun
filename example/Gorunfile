@@ -40,11 +40,16 @@ sudo = true
 
 [tasks.packages]
 cmd_file = "./scripts/packages.sh"
+description = "Install the base package set"
+rerun = "safe"
 sudo = true
 timeout = "1m30s"
 
 [tasks.timezone]
 cmd = "cp /usr/share/zoneinfo/UTC /etc/localtime && echo UTC > /etc/timezone"
+description = "Set the system timezone to UTC"
+details = "Copies the UTC zoneinfo file and writes /etc/timezone so the change survives reboots."
+rerun = "safe"
 sudo = true
 depends_on = ["packages"]
 
@@ -85,6 +90,8 @@ depends_on = ["packages"]
 
 [tasks.deploy-user]
 cmd_file = "./scripts/deploy-user.sh"
+description = "Create the deploy user and add it to the docker group"
+rerun = "safe"
 sudo = true
 depends_on = ["docker-install"]
 
@@ -100,6 +107,8 @@ depends_on = ["golang-install", "deploy-user"]
 
 [tasks.verify]
 cmd_file = "./scripts/verify.sh"
+description = "Check the server is configured correctly"
+rerun = "safe"
 depends_on = ["timezone", "monitoring-tools", "editor-setup", "jj-config", "go-workspace"]
 
 [tasks.go-smoke-test]

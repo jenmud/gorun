@@ -61,6 +61,98 @@ func TestTaskValidateRejectsNegativeTimeout(t *testing.T) {
 	}
 }
 
+func TestLoadTaskMetadata(t *testing.T) {
+	var c Config
+	err := c.Load(strings.NewReader(`
+[tasks.deploy]
+cmd = "deploy"
+description = "Deploy the app"
+details = """
+Stops the service, swaps the binary and starts it again.
+"""
+rerun = "unsafe"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	task := c.Tasks["deploy"]
+	if task.Description != "Deploy the app" {
+		t.Errorf("description = %q, want %q", task.Description, "Deploy the app")
+	}
+	if !strings.Contains(task.Details, "swaps the binary") {
+		t.Errorf("details = %q, want the long description", task.Details)
+	}
+	if task.Rerun != RerunUnsafe {
+		t.Errorf("rerun = %q, want %q", task.Rerun, RerunUnsafe)
+	}
+}
+
+func TestTaskValidateRerun(t *testing.T) {
+	tests := []struct {
+		name    string
+		rerun   string
+		wantErr bool
+	}{
+		{name: "unset", rerun: ""},
+		{name: "safe", rerun: RerunSafe},
+		{name: "unsafe", rerun: RerunUnsafe},
+		{name: "typo", rerun: "save", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := Task{Name: "task", Cmd: "true", Rerun: tt.rerun}
+			err := task.validate()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && !strings.Contains(err.Error(), "rerun must be") {
+				t.Errorf("error = %q, want it to explain the rerun values", err)
+			}
+		})
+	}
+}
+
+func TestRunEmitsTaskMetadataInPlan(t *testing.T) {
+	old := logOutput
+	SetLogOutput(io.Discard)
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	var plan *PlanEvent
+	cfg := Config{
+		Tasks: map[string]Task{
+			"deploy": {
+				Name:        "deploy",
+				Cmd:         "true",
+				Description: "Deploy the app",
+				Details:     "Replaces the running binary.",
+				Rerun:       RerunUnsafe,
+			},
+		},
+		Servers: []Server{{Name: "local", TaskNames: []string{"deploy"}}},
+		OnEvent: func(event any) {
+			if ev, ok := event.(PlanEvent); ok {
+				plan = &ev
+			}
+		},
+	}
+
+	if err := cfg.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if plan == nil {
+		t.Fatal("expected a plan event")
+	}
+	if len(plan.TaskMeta) != 1 {
+		t.Fatalf("task metadata = %v, want one entry", plan.TaskMeta)
+	}
+	meta := plan.TaskMeta[0]
+	if meta.Name != "deploy" || meta.Description != "Deploy the app" || meta.Details != "Replaces the running binary." || meta.Rerun != RerunUnsafe {
+		t.Errorf("task metadata = %+v, want the task's description, details and rerun value", meta)
+	}
+}
+
 func TestRunEmitsTimeout(t *testing.T) {
 	old := logOutput
 	SetLogOutput(io.Discard)

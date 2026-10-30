@@ -28,6 +28,11 @@ const (
 	// taskKillGrace bounds how long gorun waits for output pipes to close after
 	// a canceled task has been killed.
 	taskKillGrace = 5 * time.Second
+
+	// RerunSafe and RerunUnsafe are the accepted values of Task.Rerun. An
+	// empty value means the author has not said whether rerunning is safe.
+	RerunSafe   = "safe"
+	RerunUnsafe = "unsafe"
 )
 
 // Copy represents a file copy operation.
@@ -63,6 +68,13 @@ type Task struct {
 	DependsOn       []string          `toml:"depends_on"`
 	Shell           string            `toml:"shell"`
 	Timeout         time.Duration     `toml:"timeout,omitempty"`
+
+	// Description is a one-line summary shown in task lists and the TUI.
+	Description string `toml:"description,omitempty"`
+	// Details is an optional longer explanation shown when a task is expanded.
+	Details string `toml:"details,omitempty"`
+	// Rerun is RerunSafe or RerunUnsafe. Empty means unspecified.
+	Rerun string `toml:"rerun,omitempty"`
 }
 
 // TimeoutDuration returns the timeout to apply to the task. A zero (or
@@ -136,6 +148,12 @@ func (t Task) hasCommand() bool {
 func (t Task) validate() error {
 	if t.Timeout < 0 {
 		return fmt.Errorf("task %s timeout must not be negative", t.Name)
+	}
+
+	switch t.Rerun {
+	case "", RerunSafe, RerunUnsafe:
+	default:
+		return fmt.Errorf("task %s rerun must be %q or %q, got %q", t.Name, RerunSafe, RerunUnsafe, t.Rerun)
 	}
 
 	count := 0

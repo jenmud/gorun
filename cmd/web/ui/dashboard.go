@@ -3,13 +3,16 @@ package ui
 import "strconv"
 
 type TaskInfo struct {
-	Name     string
-	State    int
-	Duration int64
-	ExitCode int
-	Command  string
-	Stdout   string
-	Stderr   string
+	Name        string
+	Description string
+	Details     string
+	Rerun       string
+	State       int
+	Duration    int64
+	ExitCode    int
+	Command     string
+	Stdout      string
+	Stderr      string
 }
 
 type ServerInfo struct {
@@ -91,10 +94,21 @@ func (s *DashboardState) Apply(ev Event) {
 		}
 		srv := p.Servers[ev.Server]
 		srv.Address = ev.Address
+		meta := make(map[string]TaskMeta, len(ev.TaskMeta))
+		for _, m := range ev.TaskMeta {
+			meta[m.Name] = m
+		}
 		for _, name := range ev.Tasks {
-			if _, ok := srv.Tasks[name]; !ok {
-				srv.Tasks[name] = &TaskInfo{Name: name}
+			t, ok := srv.Tasks[name]
+			if !ok {
+				t = &TaskInfo{Name: name}
+				srv.Tasks[name] = t
 				srv.Order = append(srv.Order, name)
+			}
+			if m, ok := meta[name]; ok {
+				t.Description = m.Description
+				t.Details = m.Details
+				t.Rerun = m.Rerun
 			}
 		}
 	case "task":

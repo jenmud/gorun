@@ -526,11 +526,18 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		server := pipeline[name]
 
 		tasks := []string{}
+		meta := make([]TaskMeta, 0, len(server.Tasks))
 		for _, task := range server.Tasks {
 			tasks = append(tasks, task.Name)
+			meta = append(meta, TaskMeta{
+				Name:        task.Name,
+				Description: task.Description,
+				Details:     task.Details,
+				Rerun:       task.Rerun,
+			})
 		}
 
-		c.emit(PlanEvent{Type: "plan", GorunUUID: c.GorunUUID, Server: server.Name, Address: server.Address(), Tasks: tasks})
+		c.emit(PlanEvent{Type: "plan", GorunUUID: c.GorunUUID, Server: server.Name, Address: server.Address(), Tasks: tasks, TaskMeta: meta})
 	}
 
 	var failed atomic.Bool

@@ -248,6 +248,18 @@ func main() {
 			sort.Strings(kids)
 		}
 
+		label := func(name string) string {
+			task := cfg.Tasks[name]
+			s := name
+			if task.Description != "" {
+				s += " — " + task.Description
+			}
+			if task.Rerun == gorun.RerunUnsafe {
+				s += " (⚠ not safe to rerun)"
+			}
+			return s
+		}
+
 		visited := map[string]bool{}
 		var printNode func(name, prefix string, last, root bool)
 		printNode = func(name, prefix string, last, root bool) {
@@ -257,16 +269,16 @@ func main() {
 			}
 			if visited[name] {
 				if root {
-					fmt.Printf("%s (already shown)\n", name)
+					fmt.Printf("%s (already shown)\n", label(name))
 				} else {
-					fmt.Printf("%s%s%s (already shown)\n", prefix, connector, name)
+					fmt.Printf("%s%s%s (already shown)\n", prefix, connector, label(name))
 				}
 				return
 			}
 			if root {
-				fmt.Println(name)
+				fmt.Println(label(name))
 			} else {
-				fmt.Printf("%s%s%s\n", prefix, connector, name)
+				fmt.Printf("%s%s%s\n", prefix, connector, label(name))
 			}
 			visited[name] = true
 			kids := children[name]
@@ -348,7 +360,11 @@ func main() {
 				if i == len(server.Tasks)-1 {
 					connector = "└── "
 				}
-				fmt.Printf("    %s%s\n", connector, t.Name)
+				label := t.Name
+				if t.Rerun == gorun.RerunUnsafe {
+					label += " ⚠"
+				}
+				fmt.Printf("    %s%s\n", connector, label)
 			}
 			fmt.Println()
 		}
@@ -502,6 +518,9 @@ log_level = "info"   # debug|info|warn|error (inherited by servers/tasks)
 # Task library: define once, reference by name.
 # [tasks.example]
 # cmd = "echo hello"            # or cmd_file / cmd_template / cmd_template_file (pick one)
+# description = "Say hello"     # one-line summary in lists and the TUI
+# details = "Longer explanation shown when the task is expanded."
+# rerun = "safe"                # safe | unsafe; omit if you don't know
 # sudo = false
 # depends_on = []
 # shell = "sh -c"               # default

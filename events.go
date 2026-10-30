@@ -75,11 +75,22 @@ type ProcessFinishedEvent struct {
 
 // PlanEvent is sent once per server, before any task runs, with the tasks in execution order.
 type PlanEvent struct {
-	Type      string   `json:"type"`
-	GorunUUID string   `json:"gorun_uuid"`
-	Server    string   `json:"server"`
-	Address   string   `json:"address"`
-	Tasks     []string `json:"tasks"`
+	Type      string     `json:"type"`
+	GorunUUID string     `json:"gorun_uuid"`
+	Server    string     `json:"server"`
+	Address   string     `json:"address"`
+	Tasks     []string   `json:"tasks"`
+	TaskMeta  []TaskMeta `json:"task_meta,omitempty"`
+}
+
+// TaskMeta carries the documentation attached to a task in a PlanEvent, so
+// consumers such as the TUI and web dashboard can show descriptions and rerun
+// warnings. Tasks still lists the bare names for older consumers.
+type TaskMeta struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Details     string `json:"details,omitempty"`
+	Rerun       string `json:"rerun,omitempty"`
 }
 
 // TaskEvent is sent when a task changes state.

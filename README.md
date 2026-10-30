@@ -15,6 +15,7 @@
   - [Generate a starting Gorunfile](#generate-a-starting-gorunfile)
   - [Failures](#failures)
   - [Task timeouts](#task-timeouts)
+  - [Task descriptions and rerun safety](#task-descriptions-and-rerun-safety)
   - [Logs](#logs)
 - [Task selection and inspection](#task-selection-and-inspection)
 - [Server Selection](#server-selection)
@@ -105,6 +106,7 @@ If that sounds like your kind of knife, the rest of this README is about how to 
 - Interactive TUI for task monitoring and server selection
 - Task dependency management
 - Per-task timeouts (30 minutes by default, exit code 124 on timeout)
+- Task descriptions, long details and rerun-safety hints (`description`, `details`, `rerun`)
 - Optional host concurrency limit (`max_parallel` / `-parallel`; default is all servers)
 - SSH key support
 
@@ -282,6 +284,32 @@ stuck command or file copy.
 Leaving `timeout` unset (or setting it to zero) uses the 30-minute default. Negative durations
 are rejected before the task runs. There is no "run forever" switch; if a task really needs more
 time, set a large duration for it.
+
+### Task descriptions and rerun safety
+
+Give a task a one-line `description` so `--list-tasks` and the TUI explain what it does. An
+optional `details` string is shown when the task is expanded in the TUI and under "about" in
+the web dashboard:
+
+```toml
+[tasks.migrate]
+cmd = "docker compose run --rm migrate"
+description = "Apply database migrations"
+details = """
+Runs every pending migration against the database and records the applied version.
+"""
+rerun = "safe"
+```
+
+`rerun` records whether running the task again is harmless:
+
+- `safe` — rerunning has no additional effect, or only converges the server to the same state (installing a package, syncing a config file).
+- `unsafe` — rerunning may change the server again or fail (appending a line, rotating a key, replacing a running binary).
+- unset — unknown; don't guess.
+
+Unsafe tasks get a `⚠` in `--list-tasks` and the TUI, and expanded details spell out that
+rerunning may change the server. It is documentation, not a guard: gorun still runs the task.
+Invalid `rerun` values are rejected before the task runs.
 
 ### Logs
 
@@ -474,8 +502,9 @@ the limit covers SSH setup and that host's whole task pipeline.
 
 Tasks are defined once in a task library and servers pick them by name:
 
-- `[tasks.<name>]` defines a task: `cmd`, `cmd_file`, `cmd_template` or `cmd_template_file`, plus optional `sudo`, `depends_on`, `envvars`, `shell`, `log_level`, `timeout`, and file copies (`copy`/`copies`/`upload`/`files`).
+- `[tasks.<name>]` defines a task: `cmd`, `cmd_file`, `cmd_template` or `cmd_template_file`, plus optional `sudo`, `depends_on`, `envvars`, `shell`, `log_level`, `timeout`, `description`, `details`, `rerun`, and file copies (`copy`/`copies`/`upload`/`files`).
 - `timeout` is a Go duration string (for example `"45m"`) and limits the task on each server, including its file copies. It defaults to 30 minutes when unset or zero, and negative values are rejected. A timed-out task fails with exit code 124, so that server's remaining tasks are skipped while the other servers carry on. See [Task timeouts](#task-timeouts).
+- `description` is a one-line summary, `details` is an optional longer explanation, and `rerun` is `"safe"` or `"unsafe"`. They are shown by `--list-tasks`, the TUI and the web dashboard. See [Task descriptions and rerun safety](#task-descriptions-and-rerun-safety).
 - Tasks can specify a command source OR copies (or both). If both are specified, copies run first, then the command.
 - `cmd_template` and `cmd_template_file` are compiled as Go text templates at task execution time with a `Server{}` passed in (so you can use `.Name`, `.Hostname`, etc.). The compiled result is the command that gets broadcast/sent to the server (NATS/web UI events show the compiled command).
 - Copy files to remote servers with `[[tasks.<name>.copy]]` (or `copy = [...]`): set `src` (local path, resolved relative to Gorunfile) and `dst` (remote path) or `dir` (remote directory). Also works for local execution.
@@ -496,11 +525,15 @@ max_parallel = 4                           # optional; 0 (default) means all ser
 
 [tasks.packages]
 cmd_file = "./scripts/packages.sh"
+description = "Install the base package set"  # one-line summary
+details = "Installs the packages every server needs."  # shown when expanded
+rerun = "safe"                             # safe | unsafe; omit if unknown
 sudo = true
 timeout = "15m"                            # optional; defaults to 30m
 
 [tasks.timezone]
 cmd = "cp /usr/share/zoneinfo/UTC /etc/localtime"
+description = "Set the system timezone to UTC"
 sudo = true
 depends_on = ["packages"]
 

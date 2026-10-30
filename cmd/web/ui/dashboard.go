@@ -10,6 +10,8 @@ type TaskInfo struct {
 	State       int
 	Duration    int64
 	ExitCode    int
+	Attempt     int
+	Attempts    int
 	Command     string
 	Stdout      string
 	Stderr      string
@@ -130,6 +132,8 @@ func (s *DashboardState) Apply(ev Event) {
 		t.State = ev.State
 		t.Duration = ev.Duration
 		t.ExitCode = ev.ExitCode
+		t.Attempt = ev.Attempt
+		t.Attempts = ev.Attempts
 		t.Command = ev.Command
 		t.Stdout = ev.Stdout
 		t.Stderr = ev.Stderr

@@ -640,16 +640,65 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 
 				parent = task
 
-				runningCmd, _ := task.task.CommandFor(&server)
-				c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskRunning, Command: runningCmd})
-				started := time.Now()
+				attempts := task.task.Attempts()
+				var (
+					attempt int
+					runErr  error
+					started = time.Now()
+				)
+
+				for attempt = 1; attempt <= attempts; attempt++ {
+					// Retry events only carry attempt numbers when retries are configured.
+					evAttempt, evAttempts := 0, 0
+					if attempts > 1 {
+						evAttempt, evAttempts = attempt, attempts
+					}
+
+					runningCmd, _ := task.task.CommandFor(&server)
+					runningEvent := TaskEvent{
+						Type:      "task",
+						GorunUUID: c.GorunUUID,
+						Server:    server.Name,
+						Task:      task.task.Name,
+						State:     TaskRunning,
+						Command:   runningCmd,
+						Attempt:   evAttempt,
+						Attempts:  evAttempts,
+					}
+
+					if attempt > 1 {
+						// Carry the previous attempt's failure so consumers can
+						// explain why the task is running again.
+						runningEvent.ExitCode = task.exitCode
+						runningEvent.Stderr = string(task.stderr)
+						runningEvent.Err = runErr
+						task.resetForRetry()
+					}
+
+					c.emit(runningEvent)
+
+					runErr = task.Execute(ctx)
+					if runErr == nil || task.stopped || ctx.Err() != nil || attempt == attempts {
+						break
+					}
+
+					tlogger.Warn("task failed, retrying",
+						slog.Int("attempt", attempt),
+						slog.Int("attempts", attempts),
+						slog.String("reason", runErr.Error()),
+					)
+				}
 
 				event := TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: task.task.Name, State: TaskDone}
-				if err := task.Execute(ctx); err != nil {
+				if attempts > 1 {
+					event.Attempt = attempt
+					event.Attempts = attempts
+				}
+				if runErr != nil {
 					failed.Store(true)
 					failedCount.Add(1)
 					event.State = TaskFailed
-					event.Err = err
+					event.Err = runErr
 				}
 
 				event.Command = task.command

@@ -7,6 +7,8 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+
+	"gorun/cmd/web/ui"
 )
 
 // Event represents a NATS message payload.
@@ -34,6 +36,8 @@ type Event struct {
 	Stderr     string     `json:"stderr"`
 	Command    string     `json:"command"`
 	ExitCode   int        `json:"exit_code"`
+	Attempt    int        `json:"attempt,omitempty"`
+	Attempts   int        `json:"attempts,omitempty"`
 }
 
 // TaskMeta carries the documentation attached to a task in a plan event.
@@ -42,6 +46,52 @@ type TaskMeta struct {
 	Description string `json:"description,omitempty"`
 	Details     string `json:"details,omitempty"`
 	Rerun       string `json:"rerun,omitempty"`
+}
+
+// UIEvent converts the event into the type used by the web dashboard. Keeping
+// the mapping in one place means new fields cannot be silently dropped by one
+// of the listeners.
+func (e Event) UIEvent() ui.Event {
+	return ui.Event{
+		Type:       e.Type,
+		GorunUUID:  e.GorunUUID,
+		Title:      e.Title,
+		Servers:    e.Servers,
+		StartedAt:  e.StartedAt,
+		Hostname:   e.Hostname,
+		PID:        e.PID,
+		Success:    e.Success,
+		Duration:   e.Duration,
+		TotalTasks: e.TotalTasks,
+		Failed:     e.Failed,
+		Skipped:    e.Skipped,
+		FinishedAt: e.FinishedAt,
+		Server:     e.Server,
+		Address:    e.Address,
+		Tasks:      e.Tasks,
+		TaskMeta:   taskMeta(e.TaskMeta),
+		Task:       e.Task,
+		State:      e.State,
+		Stdout:     e.Stdout,
+		Stderr:     e.Stderr,
+		Command:    e.Command,
+		ExitCode:   e.ExitCode,
+		Attempt:    e.Attempt,
+		Attempts:   e.Attempts,
+	}
+}
+
+// taskMeta converts event metadata for the web UI package without making the
+// two packages share a type.
+func taskMeta(meta []TaskMeta) []ui.TaskMeta {
+	if len(meta) == 0 {
+		return nil
+	}
+	out := make([]ui.TaskMeta, len(meta))
+	for i, m := range meta {
+		out[i] = ui.TaskMeta{Name: m.Name, Description: m.Description, Details: m.Details, Rerun: m.Rerun}
+	}
+	return out
 }
 
 // UnmarshalJSON unmarshals the event with tracing and metrics.

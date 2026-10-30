@@ -49,3 +49,36 @@ func TestDashboardPlanCarriesTaskMetadata(t *testing.T) {
 		}
 	}
 }
+
+func TestDashboardShowsAttemptProgress(t *testing.T) {
+	var state DashboardState
+	state.Apply(Event{Type: "process_started", GorunUUID: "run-2", Title: "demo"})
+	state.Apply(Event{
+		Type:      "plan",
+		GorunUUID: "run-2",
+		Server:    "web-1",
+		Tasks:     []string{"flaky"},
+	})
+	state.Apply(Event{
+		Type:      "task",
+		GorunUUID: "run-2",
+		Server:    "web-1",
+		Task:      "flaky",
+		State:     1,
+		Attempt:   2,
+		Attempts:  3,
+	})
+
+	task := state.Processes["run-2"].Servers["web-1"].Tasks["flaky"]
+	if task.Attempt != 2 || task.Attempts != 3 {
+		t.Errorf("attempt = %d/%d, want 2/3", task.Attempt, task.Attempts)
+	}
+
+	var buf bytes.Buffer
+	if err := Dashboard(state).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "attempt 2/3") {
+		t.Error("dashboard output does not show the attempt progress")
+	}
+}

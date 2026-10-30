@@ -257,6 +257,9 @@ func main() {
 			if task.Rerun == gorun.RerunUnsafe {
 				s += " (⚠ not safe to rerun)"
 			}
+			if task.Retries > 0 {
+				s += fmt.Sprintf(" (retries: %d)", task.Retries)
+			}
 			return s
 		}
 
@@ -361,6 +364,9 @@ func main() {
 					connector = "└── "
 				}
 				label := t.Name
+				if t.Retries > 0 {
+					label += fmt.Sprintf(" (retries: %d)", t.Retries)
+				}
 				if t.Rerun == gorun.RerunUnsafe {
 					label += " ⚠"
 				}
@@ -526,6 +532,7 @@ log_level = "info"   # debug|info|warn|error (inherited by servers/tasks)
 # shell = "sh -c"               # default
 # log_level = "info"
 # timeout = "30m"               # default; task fails with exit code 124 after this
+# retries = 0                   # optional; extra attempts after a failure (off by default)
 # [tasks.example.envvars]
 # KEY = "value"
 # [[tasks.example.copy]]

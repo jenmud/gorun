@@ -25,15 +25,26 @@ func (p *plainPrinter) event(event any) {
 
 	switch ev := event.(type) {
 	case gorun.TaskEvent:
+		attempt := ""
+		if ev.Attempts > 1 {
+			attempt = fmt.Sprintf(", attempt %d/%d", ev.Attempt, ev.Attempts)
+		}
 		switch ev.State {
+		case gorun.TaskRunning:
+			if ev.Attempt > 1 {
+				fmt.Fprintf(p.w, "%s: %s retrying (attempt %d/%d)\n", ev.Server, ev.Task, ev.Attempt, ev.Attempts)
+				if ev.Err != nil {
+					fmt.Fprintf(p.w, "    previous attempt: %v\n", ev.Err)
+				}
+			}
 		case gorun.TaskDone:
-			fmt.Fprintf(p.w, "%s: %s ok (%s)\n", ev.Server, ev.Task, ev.Duration.Round(time.Millisecond))
+			fmt.Fprintf(p.w, "%s: %s ok (%s%s)\n", ev.Server, ev.Task, ev.Duration.Round(time.Millisecond), attempt)
 			if p.verbose {
 				p.output("stdout", ev.Stdout, outputTailLines)
 				p.output("stderr", ev.Stderr, outputTailLines)
 			}
 		case gorun.TaskFailed:
-			fmt.Fprintf(p.w, "%s: %s FAILED (exit code %d, %s)\n", ev.Server, ev.Task, ev.ExitCode, ev.Duration.Round(time.Millisecond))
+			fmt.Fprintf(p.w, "%s: %s FAILED (exit code %d, %s%s)\n", ev.Server, ev.Task, ev.ExitCode, ev.Duration.Round(time.Millisecond), attempt)
 			if ev.Err != nil {
 				fmt.Fprintf(p.w, "    reason: %v\n", ev.Err)
 			}

@@ -127,30 +127,7 @@ func Run() {
 			if err := json.Unmarshal(m.Data, &ev); err != nil {
 				return
 			}
-			h.apply(ui.Event{
-				Type:       ev.Type,
-				GorunUUID:  ev.GorunUUID,
-				Title:      ev.Title,
-				Servers:    ev.Servers,
-				StartedAt:  ev.StartedAt,
-				Hostname:   ev.Hostname,
-				PID:        ev.PID,
-				Success:    ev.Success,
-				Duration:   ev.Duration,
-				TotalTasks: ev.TotalTasks,
-				Failed:     ev.Failed,
-				Skipped:    ev.Skipped,
-				FinishedAt: ev.FinishedAt,
-				Server:     ev.Server,
-				Address:    ev.Address,
-				Tasks:      ev.Tasks,
-				Task:       ev.Task,
-				State:      ev.State,
-				Stdout:     ev.Stdout,
-				Stderr:     ev.Stderr,
-				Command:    ev.Command,
-				ExitCode:   ev.ExitCode,
-			})
+			h.apply(ev.UIEvent())
 			if st != nil {
 				inats.UpdateDatabase(context.Background(), st, &ev)
 			}

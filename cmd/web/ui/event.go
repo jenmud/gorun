@@ -32,4 +32,6 @@ type Event struct {
 	Stderr     string     `json:"stderr"`
 	Command    string     `json:"command"`
 	ExitCode   int        `json:"exit_code"`
+	Attempt    int        `json:"attempt,omitempty"`
+	Attempts   int        `json:"attempts,omitempty"`
 }

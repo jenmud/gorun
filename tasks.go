@@ -75,6 +75,16 @@ type Task struct {
 	Details string `toml:"details,omitempty"`
 	// Rerun is RerunSafe or RerunUnsafe. Empty means unspecified.
 	Rerun string `toml:"rerun,omitempty"`
+	// Retries is how many extra times to run a failed task. Zero means run once.
+	Retries int `toml:"retries,omitempty"`
+}
+
+// Attempts returns how many times the task may run, including the first try.
+func (t Task) Attempts() int {
+	if t.Retries < 0 {
+		return 1
+	}
+	return t.Retries + 1
 }
 
 // TimeoutDuration returns the timeout to apply to the task. A zero (or
@@ -154,6 +164,10 @@ func (t Task) validate() error {
 	case "", RerunSafe, RerunUnsafe:
 	default:
 		return fmt.Errorf("task %s rerun must be %q or %q, got %q", t.Name, RerunSafe, RerunUnsafe, t.Rerun)
+	}
+
+	if t.Retries < 0 {
+		return fmt.Errorf("task %s retries must not be negative", t.Name)
 	}
 
 	count := 0
@@ -247,6 +261,21 @@ type TaskExec struct {
 	stdout      []byte
 	stderr      []byte
 	exitCode    int
+	// stopped is set when the task stopped because its context was canceled or
+	// its timeout expired. Such attempts are not retried.
+	stopped bool
+}
+
+// resetForRetry clears the result of the previous attempt so the task can run
+// again with a clean exit code, output and command.
+func (t *TaskExec) resetForRetry() {
+	t.stdout = nil
+	t.stderr = nil
+	t.exitCode = 0
+	t.command = ""
+	t.stopped = false
+	t.startedAt = time.Time{}
+	t.completedAt = time.Time{}
 }
 
 // contextErr turns a canceled or timed-out context into an error that explains
@@ -285,6 +314,7 @@ func (t *TaskExec) Fail(ctx context.Context, err error) error {
 		var execErr *exec.ExitError
 
 		ctxErr := ctx.Err()
+		t.stopped = ctxErr != nil
 
 		switch {
 		case errors.Is(ctxErr, context.DeadlineExceeded):
@@ -339,6 +369,7 @@ func (t *TaskExec) Terminate(ctx context.Context, err error) error {
 	span.SetAttributes(attribute.String("task.name", t.task.Name))
 
 	if err != nil {
+		t.stopped = true
 		if errors.Is(err, context.DeadlineExceeded) {
 			t.exitCode = 124 // same convention as timeout(1)
 			err = t.contextErr(err)

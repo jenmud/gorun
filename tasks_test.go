@@ -214,3 +214,247 @@ func TestLocalExecuteTimeout(t *testing.T) {
 		t.Errorf("task took %s to time out, want less than 2s", elapsed)
 	}
 }
+
+func TestTaskAttempts(t *testing.T) {
+	tests := []struct {
+		name    string
+		retries int
+		want    int
+	}{
+		{name: "default", retries: 0, want: 1},
+		{name: "two retries", retries: 2, want: 3},
+		{name: "negative falls back to one", retries: -1, want: 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task := Task{Retries: tt.retries}
+			if got := task.Attempts(); got != tt.want {
+				t.Errorf("Attempts() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadTaskRetries(t *testing.T) {
+	var c Config
+	if err := c.Load(strings.NewReader(`
+[tasks.flaky]
+cmd = "true"
+retries = 2
+
+[tasks.once]
+cmd = "true"
+`)); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := c.Tasks["flaky"].Retries; got != 2 {
+		t.Errorf("flaky retries = %d, want 2", got)
+	}
+	if got := c.Tasks["flaky"].Attempts(); got != 3 {
+		t.Errorf("flaky Attempts() = %d, want 3", got)
+	}
+	if got := c.Tasks["once"].Attempts(); got != 1 {
+		t.Errorf("once Attempts() = %d, want 1", got)
+	}
+}
+
+func TestTaskValidateRejectsNegativeRetries(t *testing.T) {
+	task := Task{Name: "bad", Cmd: "true", Retries: -1}
+	err := task.validate()
+	if err == nil {
+		t.Fatal("expected an error for negative retries")
+	}
+	if !strings.Contains(err.Error(), "retries must not be negative") {
+		t.Errorf("error = %q, want it to mention retries", err)
+	}
+}
+
+func TestRunRetriesUntilSuccess(t *testing.T) {
+	old := logOutput
+	SetLogOutput(io.Discard)
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	dir := t.TempDir()
+	counter := dir + "/count"
+	cmd := strings.Join([]string{
+		"n=0",
+		"[ -f " + counter + " ] && n=$(cat " + counter + ")",
+		"n=$((n+1))",
+		"echo $n > " + counter,
+		"echo attempt $n",
+		"[ $n -ge 3 ]",
+	}, "; ")
+
+	var (
+		running []TaskEvent
+		final   *TaskEvent
+		done    *ProcessFinishedEvent
+	)
+	cfg := Config{
+		Tasks: map[string]Task{
+			"flaky": {Name: "flaky", Cmd: cmd, Retries: 2},
+		},
+		Servers: []Server{{Name: "local", TaskNames: []string{"flaky"}}},
+		OnEvent: func(event any) {
+			switch ev := event.(type) {
+			case TaskEvent:
+				if ev.State == TaskRunning {
+					running = append(running, ev)
+				}
+				if ev.State == TaskDone {
+					final = &ev
+				}
+			case ProcessFinishedEvent:
+				done = &ev
+			}
+		},
+	}
+
+	if err := cfg.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(running) != 3 {
+		t.Fatalf("running events = %d, want 3 attempts", len(running))
+	}
+	for i, ev := range running {
+		if ev.Attempt != i+1 || ev.Attempts != 3 {
+			t.Errorf("running event %d = attempt %d/%d, want %d/3", i, ev.Attempt, ev.Attempts, i+1)
+		}
+	}
+	if running[1].Err == nil || !strings.Contains(running[1].Err.Error(), "exit status 1") {
+		t.Errorf("second running event error = %v, want the previous attempt's failure", running[1].Err)
+	}
+	if final == nil {
+		t.Fatal("expected the task to succeed on the third attempt")
+	}
+	if final.Attempt != 3 || final.Attempts != 3 {
+		t.Errorf("final attempt = %d/%d, want 3/3", final.Attempt, final.Attempts)
+	}
+	if done == nil || !done.Success || done.Failed != 0 {
+		t.Errorf("process finished = %+v, want success with no failures", done)
+	}
+}
+
+func TestRunRetriesExhaustedCountsOneFailure(t *testing.T) {
+	old := logOutput
+	SetLogOutput(io.Discard)
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	var (
+		running []TaskEvent
+		final   *TaskEvent
+		done    *ProcessFinishedEvent
+	)
+	cfg := Config{
+		Tasks: map[string]Task{
+			"broken": {Name: "broken", Cmd: "exit 7", Retries: 2},
+		},
+		Servers: []Server{{Name: "local", TaskNames: []string{"broken"}}},
+		OnEvent: func(event any) {
+			switch ev := event.(type) {
+			case TaskEvent:
+				if ev.State == TaskRunning {
+					running = append(running, ev)
+				}
+				if ev.State == TaskFailed {
+					final = &ev
+				}
+			case ProcessFinishedEvent:
+				done = &ev
+			}
+		},
+	}
+
+	if err := cfg.Run(context.Background()); err == nil {
+		t.Fatal("expected Run to fail")
+	}
+	if len(running) != 3 {
+		t.Fatalf("running events = %d, want 3 attempts", len(running))
+	}
+	if final == nil {
+		t.Fatal("expected a failed task event")
+	}
+	if final.Attempt != 3 || final.Attempts != 3 {
+		t.Errorf("final attempt = %d/%d, want 3/3", final.Attempt, final.Attempts)
+	}
+	if final.ExitCode != 7 {
+		t.Errorf("exit code = %d, want 7", final.ExitCode)
+	}
+	if done == nil || done.Success || done.Failed != 1 {
+		t.Errorf("process finished = %+v, want one failed task regardless of attempts", done)
+	}
+}
+
+func TestRunDoesNotRetryTimeouts(t *testing.T) {
+	old := logOutput
+	SetLogOutput(io.Discard)
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	var (
+		running []TaskEvent
+		final   *TaskEvent
+	)
+	cfg := Config{
+		Tasks: map[string]Task{
+			"slow": {Name: "slow", Cmd: "sleep 5", Timeout: 50 * time.Millisecond, Retries: 3},
+		},
+		Servers: []Server{{Name: "local", TaskNames: []string{"slow"}}},
+		OnEvent: func(event any) {
+			if ev, ok := event.(TaskEvent); ok {
+				switch ev.State {
+				case TaskRunning:
+					running = append(running, ev)
+				case TaskFailed:
+					final = &ev
+				}
+			}
+		},
+	}
+
+	if err := cfg.Run(context.Background()); err == nil {
+		t.Fatal("expected Run to fail")
+	}
+	if len(running) != 1 {
+		t.Errorf("running events = %d, want 1 (timeouts are not retried)", len(running))
+	}
+	if final == nil {
+		t.Fatal("expected a failed task event")
+	}
+	if final.ExitCode != 124 {
+		t.Errorf("exit code = %d, want 124", final.ExitCode)
+	}
+	if final.Attempt != 1 || final.Attempts != 4 {
+		t.Errorf("final attempt = %d/%d, want 1/4", final.Attempt, final.Attempts)
+	}
+}
+
+func TestRunWithoutRetriesOmitsAttemptInfo(t *testing.T) {
+	old := logOutput
+	SetLogOutput(io.Discard)
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	var final *TaskEvent
+	cfg := Config{
+		Tasks: map[string]Task{
+			"once": {Name: "once", Cmd: "true"},
+		},
+		Servers: []Server{{Name: "local", TaskNames: []string{"once"}}},
+		OnEvent: func(event any) {
+			if ev, ok := event.(TaskEvent); ok && ev.State == TaskDone {
+				final = &ev
+			}
+		},
+	}
+
+	if err := cfg.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if final == nil {
+		t.Fatal("expected a done task event")
+	}
+	if final.Attempt != 0 || final.Attempts != 0 {
+		t.Errorf("attempt = %d/%d, want both unset when retries are not configured", final.Attempt, final.Attempts)
+	}
+}

@@ -15,6 +15,7 @@
   - [Generate a starting Gorunfile](#generate-a-starting-gorunfile)
   - [Failures](#failures)
   - [Task timeouts](#task-timeouts)
+  - [Task retries](#task-retries)
   - [Task descriptions and rerun safety](#task-descriptions-and-rerun-safety)
   - [Logs](#logs)
 - [Task selection and inspection](#task-selection-and-inspection)
@@ -81,9 +82,9 @@ what your commands actually did.
 - **Dynamic inventories.** Servers live in the Gorunfile. There is no cloud discovery or
   inventory plugin; generate the file if your machines move around.
 - **Fancy orchestration.** It runs every selected server at once by default, with no rolling
-  batches, retries, health checks or dry-run. `max_parallel` can cap how many hosts run at the
-  same time, but tasks on a host are sequential, and the run is only as smart as the commands
-  you give it.
+  batches, health checks or dry-run. Per-task retries are available, but there is no backoff or
+  jitter. `max_parallel` can cap how many hosts run at the same time, but tasks on a host are
+  sequential, and the run is only as smart as the commands you give it.
 - **Secrets management.** SSH keys, optional passwords and env vars — not a vault. Keep
   secrets out of the Gorunfile.
 - **Non-SSH targets.** SSH and a local shell only: no WinRM, no cloud APIs, no agent behind
@@ -106,6 +107,7 @@ If that sounds like your kind of knife, the rest of this README is about how to 
 - Interactive TUI for task monitoring and server selection
 - Task dependency management
 - Per-task timeouts (30 minutes by default, exit code 124 on timeout)
+- Opt-in retries for failed tasks (`retries`, off by default)
 - Task descriptions, long details and rerun-safety hints (`description`, `details`, `rerun`)
 - Optional host concurrency limit (`max_parallel` / `-parallel`; default is all servers)
 - SSH key support
@@ -284,6 +286,29 @@ stuck command or file copy.
 Leaving `timeout` unset (or setting it to zero) uses the 30-minute default. Negative durations
 are rejected before the task runs. There is no "run forever" switch; if a task really needs more
 time, set a large duration for it.
+
+### Task retries
+
+Retries are **opt-in**. By default a failed task fails immediately and the rest of that server's
+tasks are skipped. Set `retries` to run a failed task up to that many extra times before giving
+up:
+
+```toml
+[tasks.packages]
+cmd_file = "./scripts/packages.sh"
+retries = 2   # up to three attempts in total
+```
+
+Each retry gets a fresh timeout, and the previous attempt's stdout, stderr and exit code are
+cleared before the next one starts. The attempt count is shown while the task runs and in the
+final result (`attempt 2/3`). A task that eventually succeeds is not counted as a failure, and an
+exhausted task counts as **one** failed task no matter how many attempts it used. The CLI prints
+`retrying (attempt 2/3)` in plain mode.
+
+Timeouts and cancellations are never retried, because retrying after a timeout usually means the
+command is stuck and a canceled run is being stopped on purpose. Negative `retries` values are
+rejected. Retries are per task and per server; a failed task still stops the rest of that
+server's pipeline once its attempts are used up.
 
 ### Task descriptions and rerun safety
 
@@ -502,8 +527,9 @@ the limit covers SSH setup and that host's whole task pipeline.
 
 Tasks are defined once in a task library and servers pick them by name:
 
-- `[tasks.<name>]` defines a task: `cmd`, `cmd_file`, `cmd_template` or `cmd_template_file`, plus optional `sudo`, `depends_on`, `envvars`, `shell`, `log_level`, `timeout`, `description`, `details`, `rerun`, and file copies (`copy`/`copies`/`upload`/`files`).
+- `[tasks.<name>]` defines a task: `cmd`, `cmd_file`, `cmd_template` or `cmd_template_file`, plus optional `sudo`, `depends_on`, `envvars`, `shell`, `log_level`, `timeout`, `retries`, `description`, `details`, `rerun`, and file copies (`copy`/`copies`/`upload`/`files`).
 - `timeout` is a Go duration string (for example `"45m"`) and limits the task on each server, including its file copies. It defaults to 30 minutes when unset or zero, and negative values are rejected. A timed-out task fails with exit code 124, so that server's remaining tasks are skipped while the other servers carry on. See [Task timeouts](#task-timeouts).
+- `retries` is how many extra times a failed task may run (default `0`). Timeouts and cancellations are not retried. See [Task retries](#task-retries).
 - `description` is a one-line summary, `details` is an optional longer explanation, and `rerun` is `"safe"` or `"unsafe"`. They are shown by `--list-tasks`, the TUI and the web dashboard. See [Task descriptions and rerun safety](#task-descriptions-and-rerun-safety).
 - Tasks can specify a command source OR copies (or both). If both are specified, copies run first, then the command.
 - `cmd_template` and `cmd_template_file` are compiled as Go text templates at task execution time with a `Server{}` passed in (so you can use `.Name`, `.Hostname`, etc.). The compiled result is the command that gets broadcast/sent to the server (NATS/web UI events show the compiled command).
@@ -528,6 +554,7 @@ cmd_file = "./scripts/packages.sh"
 description = "Install the base package set"  # one-line summary
 details = "Installs the packages every server needs."  # shown when expanded
 rerun = "safe"                             # safe | unsafe; omit if unknown
+retries = 1                                # optional; retry a failure once (off by default)
 sudo = true
 timeout = "15m"                            # optional; defaults to 30m
 

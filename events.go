@@ -106,6 +106,11 @@ type TaskEvent struct {
 	ExitCode  int           `json:"exit_code"`
 	Err       error         `json:"error,omitempty"`
 	Duration  time.Duration `json:"duration"`
+	// Attempt and Attempts are set when a task has retries configured. A
+	// running event with Attempt greater than one means the previous attempt
+	// failed and the task is being retried.
+	Attempt  int `json:"attempt,omitempty"`
+	Attempts int `json:"attempts,omitempty"`
 }
 
 // ServerErrorEvent is sent when a server can't run its tasks at all (e.g. SSH connection failed).

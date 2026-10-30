@@ -194,47 +194,10 @@ func (h *eventHandler) renderAndBroadcast() {
 // Apply applies an event to the hub state.
 func (h *eventHandler) Apply(event Event) {
 	startTime := time.Now()
-	h.hub.apply(ui.Event{
-		Type:       event.Type,
-		GorunUUID:  event.GorunUUID,
-		Title:      event.Title,
-		Servers:    event.Servers,
-		StartedAt:  event.StartedAt,
-		Hostname:   event.Hostname,
-		PID:        event.PID,
-		Success:    event.Success,
-		Duration:   event.Duration,
-		TotalTasks: event.TotalTasks,
-		Failed:     event.Failed,
-		Skipped:    event.Skipped,
-		FinishedAt: event.FinishedAt,
-		Server:     event.Server,
-		Address:    event.Address,
-		Tasks:      event.Tasks,
-		TaskMeta:   taskMeta(event.TaskMeta),
-		Task:       event.Task,
-		State:      event.State,
-		Stdout:     event.Stdout,
-		Stderr:     event.Stderr,
-		Command:    event.Command,
-		ExitCode:   event.ExitCode,
-	})
+	h.hub.apply(event.UIEvent())
 	hubApplyDuration.Record(context.Background(), float64(time.Since(startTime)), metric.WithAttributes(
 		attribute.String("type", event.Type),
 	))
-}
-
-// taskMeta converts event metadata for the web UI package without making the
-// two packages share a type.
-func taskMeta(meta []TaskMeta) []ui.TaskMeta {
-	if len(meta) == 0 {
-		return nil
-	}
-	out := make([]ui.TaskMeta, len(meta))
-	for i, m := range meta {
-		out[i] = ui.TaskMeta{Name: m.Name, Description: m.Description, Details: m.Details, Rerun: m.Rerun}
-	}
-	return out
 }
 
 // Handle processes an event by applying it to the hub, updating the database,

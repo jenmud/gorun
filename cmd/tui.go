@@ -401,18 +401,26 @@ func (m tuiModel) verboseView() string {
 func (m tuiModel) taskRow(t *taskView) string {
 	var icon, detail string
 
+	attempt := ""
+	if t.event.Attempts > 1 {
+		attempt = fmt.Sprintf("%d/%d · ", t.event.Attempt, t.event.Attempts)
+	}
+
 	switch t.state {
 	case gorun.TaskPending:
 		icon = mutedStyle.Render("○")
 	case gorun.TaskRunning:
 		icon = m.spinner.View()
-		detail = mutedStyle.Render(formatDuration(time.Since(t.started)))
+		if t.event.Attempts > 1 && t.event.Err != nil {
+			attempt = fmt.Sprintf("retry %d/%d · ", t.event.Attempt, t.event.Attempts)
+		}
+		detail = mutedStyle.Render(attempt + formatDuration(time.Since(t.started)))
 	case gorun.TaskDone:
 		icon = okStyle.Render("✓")
-		detail = mutedStyle.Render(formatDuration(t.event.Duration))
+		detail = mutedStyle.Render(attempt + formatDuration(t.event.Duration))
 	case gorun.TaskFailed:
 		icon = failStyle.Render("✗")
-		detail = failStyle.Render(fmt.Sprintf("exit %d", t.event.ExitCode)) + mutedStyle.Render(" · "+formatDuration(t.event.Duration))
+		detail = failStyle.Render(fmt.Sprintf("exit %d", t.event.ExitCode)) + mutedStyle.Render(" · "+attempt+formatDuration(t.event.Duration))
 	case gorun.TaskSkipped:
 		icon = skipStyle.Render("⊘")
 		detail = skipStyle.Render("skipped")
@@ -459,6 +467,9 @@ func (m tuiModel) outputBox(t *taskView) string {
 	if t.state == gorun.TaskSkipped && t.event.Err != nil {
 		sections = append(sections, skipStyle.Render("skipped: ")+t.event.Err.Error())
 	}
+	if t.state == gorun.TaskRunning && t.event.Err != nil && t.event.Attempts > 1 {
+		sections = append(sections, failStyle.Render(fmt.Sprintf("attempt %d/%d failed: ", t.event.Attempt-1, t.event.Attempts))+t.event.Err.Error())
+	}
 	if out := tail(t.event.Stdout, outputTailLines); out != "" {
 		sections = append(sections, mutedStyle.Render("stdout")+"\n"+out)
 	}
@@ -478,8 +489,12 @@ func (m tuiModel) outputBox(t *taskView) string {
 
 // failureBox renders why a task failed: the error, then the tail of stderr (or stdout).
 func (m tuiModel) failureBox(s *serverView, t *taskView) string {
+	attempt := ""
+	if t.event.Attempts > 1 {
+		attempt = fmt.Sprintf(" · attempt %d/%d", t.event.Attempt, t.event.Attempts)
+	}
 	title := failStyle.Render(fmt.Sprintf("✗ %s › %s failed", s.name, t.name)) +
-		mutedStyle.Render(fmt.Sprintf("  exit %d · %s", t.event.ExitCode, formatDuration(t.event.Duration)))
+		mutedStyle.Render(fmt.Sprintf("  exit %d · %s%s", t.event.ExitCode, formatDuration(t.event.Duration), attempt))
 
 	sections := []string{title}
 

@@ -42,6 +42,7 @@ sudo = true
 cmd_file = "./scripts/packages.sh"
 description = "Install the base package set"
 rerun = "safe"
+retries = 1
 sudo = true
 timeout = "1m30s"
 

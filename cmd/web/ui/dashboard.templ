@@ -97,6 +97,13 @@ templ Dashboard(s DashboardState) {
 										if t.State == 2 || t.State == 3 {
 											<span class="text-zinc-500">{ int(t.Duration / 1000000000) }s</span>
 										}
+										if t.Attempts > 1 {
+											if t.State == 1 {
+												<span class="text-xs text-accent">attempt { t.Attempt }/{ t.Attempts }</span>
+											} else if t.State == 2 || t.State == 3 {
+												<span class="text-xs text-zinc-500" title="Attempts used">{ t.Attempt }/{ t.Attempts } attempts</span>
+											}
+										}
 										if t.State == 3 {
 											<span class="text-red-400">exit { t.ExitCode }</span>
 										} else if t.State == 4 {

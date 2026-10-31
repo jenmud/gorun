@@ -2,6 +2,8 @@
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/jenmud/gorun.svg)](https://pkg.go.dev/github.com/jenmud/gorun)
 
+[![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/jenmud/badge.svg)](https://hub.xerj.org/contributors/jenmud)
+
 **Run plain shell commands on a pile of servers, in parallel, and watch it happen.**
 
 One Go binary, one TOML file and SSH. No agent on the servers, no Python on your machine, and

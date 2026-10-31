@@ -12,10 +12,6 @@ title = "My deployment"
 log_level = "info"                # debug | info | warn | error; servers and tasks inherit it
 # max_parallel = 4                # hosts at once; 0 (default) = all; -parallel N overrides
 # max_task_parallel = -1            # tasks at once per host; 0 (default) = one at a time, -1 = all
-# parallel_tasks = false            # run independent tasks in parallel (alias: tasks_parallel, parallel, task_parallel)
-# tasks_parallel = false
-# parallel = false
-# task_parallel = false
 envvars = { APP_ENV = "development" }   # exported to every task (a task's own envvars win)
 
 # Global SSH settings: only config_file is used. Setting it gives every host SSH settings,

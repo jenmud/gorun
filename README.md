@@ -254,8 +254,8 @@ dst = "/opt/app"         # /opt/app gets the contents of ./files/app
 
 ### Parallelism
 
-By default a host runs its tasks one at a time. Set `parallel_tasks = true`
-(or `max_task_parallel = -1`) to run independent tasks together; use `max_task_parallel = N`
+By default a host runs its tasks one at a time. Set `max_task_parallel = -1`
+to run independent tasks together; use `max_task_parallel = N`
 to cap how many run at once. Applies globally or per server.
 
 ### Servers and SSH
@@ -800,7 +800,6 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | `log_level` | `debug`, `info`, `warn` or `error`; servers and tasks inherit it |
 | `max_parallel` | servers at once; `0` (default) means all |
 | `max_task_parallel` | tasks at once per host; `0` (default) means one at a time, `-1` means all |
-| `parallel_tasks` | run independent tasks in parallel (`tasks_parallel`, `parallel`, `task_parallel` are aliases) |
 | `envvars` | env vars for every task |
 | `[ssh]` | only `config_file` (or `config`) is used: the SSH config every host reads (and it makes every host use SSH) |
 

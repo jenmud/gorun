@@ -68,10 +68,6 @@ type Config struct {
 	LogLevel        string            `toml:"log_level"`
 	MaxParallel     int               `toml:"max_parallel"`      // 0 means run every selected host at once
 	MaxTaskParallel int               `toml:"max_task_parallel"` // 0 (default) = one at a time; -1 = all at once
-	ParallelTasks   bool              `toml:"parallel_tasks"`    // run independent tasks in parallel
-	TasksParallel   bool              `toml:"tasks_parallel"`    // alias of parallel_tasks
-	Parallel        bool              `toml:"parallel"`          // alias of parallel_tasks
-	TaskParallel    bool              `toml:"task_parallel"`     // alias of parallel_tasks
 	EnvVars         map[string]string `toml:"envvars"`
 	SSH             SSH               `toml:"ssh"`
 
@@ -664,7 +660,6 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				task.logger = task.logger.With(slog.String("gorun_uuid", c.GorunUUID))
 			}
 
-
 			// completion signals: a task closes its channel when it finishes
 			// (success, failure or skip), so dependents can wait on it.
 			done := make(map[string]chan struct{}, len(tasks))
@@ -680,11 +675,6 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			taskLimit := server.MaxTaskParallel
 			if taskLimit == 0 {
 				taskLimit = c.MaxTaskParallel
-			}
-			// a bool toggle forces all independent tasks to run together
-			if server.ParallelTasks || server.TasksParallel || server.Parallel || server.TaskParallel ||
-				c.ParallelTasks || c.TasksParallel || c.Parallel || c.TaskParallel {
-				taskLimit = -1
 			}
 			if taskLimit == 0 {
 				// default: run a host's tasks one at a time

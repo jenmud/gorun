@@ -95,7 +95,9 @@ type tuiModel struct {
 
 	runErr   error // the run failed before any server started
 	verbose  bool
-	cursor   int // index into the flattened task list (verbose view)
+	cursor   int  // index into the flattened task list (verbose view)
+	scroll   int  // line offset for the compact view
+	follow   bool // keep compact view pinned to the bottom as output grows
 	width    int
 	height   int
 	started  time.Time
@@ -109,6 +111,7 @@ func newTUIModel(title string, verbose bool, cancel context.CancelFunc) tuiModel
 		title:   title,
 		verbose: verbose,
 		cancel:  cancel,
+		follow:  true,
 		started: time.Now(),
 		width:   80,
 		height:  24,
@@ -173,9 +176,43 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "v":
 			m.verbose = !m.verbose
 		case "up", "k":
-			m.cursor = max(m.cursor-1, 0)
+			if m.verbose {
+				m.cursor = max(m.cursor-1, 0)
+			} else {
+				m.scroll = max(0, m.scroll-1)
+				m.follow = false
+			}
 		case "down", "j":
-			m.cursor = min(m.cursor+1, len(m.flatTasks())-1)
+			if m.verbose {
+				m.cursor = min(m.cursor+1, len(m.flatTasks())-1)
+			} else {
+				m.scroll = min(m.compactMaxScroll(), m.scroll+1)
+				m.follow = m.scroll >= m.compactMaxScroll()
+			}
+		case "pgup":
+			if m.verbose {
+				m.cursor = max(0, m.cursor-5)
+			} else {
+				m.scroll = max(0, m.scroll-5)
+				m.follow = false
+			}
+		case "pgdown":
+			if m.verbose {
+				m.cursor = min(len(m.flatTasks())-1, m.cursor+5)
+			} else {
+				m.scroll = min(m.compactMaxScroll(), m.scroll+5)
+				m.follow = m.scroll >= m.compactMaxScroll()
+			}
+		case "home", "g":
+			if !m.verbose {
+				m.scroll = 0
+				m.follow = false
+			}
+		case "end", "G":
+			if !m.verbose {
+				m.scroll = m.compactMaxScroll()
+				m.follow = true
+			}
 		case "enter", "space":
 			if tasks := m.flatTasks(); m.verbose && m.cursor < len(tasks) {
 				tasks[m.cursor].expanded = !tasks[m.cursor].expanded
@@ -214,8 +251,8 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if msg.State == gorun.TaskRunning {
 					t.started = time.Now()
 				}
-				// failures always open so the reason is visible straight away
-				if msg.State == gorun.TaskFailed {
+				// failures and skips always open so the reason is visible straight away
+				if msg.State == gorun.TaskFailed || msg.State == gorun.TaskSkipped {
 					t.expanded = true
 				}
 			}
@@ -319,35 +356,67 @@ func (m tuiModel) serverSummary(s *serverView) string {
 	)
 }
 
-func (m tuiModel) compactView() string {
-	b := strings.Builder{}
-	b.WriteString(m.header() + "\n\n")
-
+func (m tuiModel) compactLines() []string {
+	lines := []string{m.header(), ""}
 	switch {
 	case m.runErr != nil:
-		b.WriteString(m.runErrorBox() + "\n")
+		lines = append(lines, strings.Split(m.runErrorBox(), "\n")...)
 	case len(m.servers) == 0:
-		b.WriteString(m.spinner.View() + " building pipelines\n")
+		lines = append(lines, m.spinner.View()+" building pipelines")
 	}
-
 	for _, s := range m.servers {
-		b.WriteString(m.serverSummary(s) + "\n\n")
+		lines = append(lines, strings.Split(m.serverSummary(s), "\n")...)
+		lines = append(lines, "")
 	}
-
-	// failures are always shown in full, even in the compact view
+	// failures and skips are always shown in full, even in the compact view
 	for _, s := range m.servers {
 		if s.err != nil {
-			b.WriteString(m.serverErrorBox(s) + "\n")
+			lines = append(lines, strings.Split(m.serverErrorBox(s), "\n")...)
 		}
 		for _, t := range s.tasks {
 			if t.state == gorun.TaskFailed {
-				b.WriteString(m.failureBox(s, t) + "\n")
+				lines = append(lines, strings.Split(m.failureBox(s, t), "\n")...)
+			}
+			if t.state == gorun.TaskSkipped {
+				lines = append(lines, strings.Split(m.skipBox(s, t), "\n")...)
 			}
 		}
 	}
+	return lines
+}
 
-	b.WriteString(m.footer())
-	return b.String()
+func (m tuiModel) compactMaxScroll() int {
+	footerLines := len(strings.Split(m.footer(), "\n"))
+	height := max(m.height-footerLines, 5)
+	lines := m.compactLines()
+	if len(lines) <= height {
+		return 0
+	}
+	return len(lines) - height
+}
+
+func (m tuiModel) compactView() string {
+	lines := m.compactLines()
+	footer := m.footer()
+	footerLines := strings.Split(footer, "\n")
+	height := max(m.height-len(footerLines), 5)
+	if len(lines) > height {
+		scroll := m.scroll
+		if m.follow {
+			scroll = len(lines) - height
+		}
+		if scroll < 0 {
+			scroll = 0
+		}
+		if scroll > len(lines)-height {
+			scroll = len(lines) - height
+		}
+		lines = lines[scroll:]
+		if len(lines) > height {
+			lines = lines[:height]
+		}
+	}
+	return strings.Join(lines, "\n") + "\n" + footer
 }
 
 func (m tuiModel) verboseView() string {
@@ -528,6 +597,21 @@ func (m tuiModel) failureBox(s *serverView, t *taskView) string {
 	return failBoxStyle.Width(m.boxWidth()).Render(strings.Join(sections, "\n"))
 }
 
+// skipBox renders why a task was skipped and which task caused it.
+func (m tuiModel) skipBox(s *serverView, t *taskView) string {
+	title := skipStyle.Render(fmt.Sprintf("⊘ %s › %s skipped", s.name, t.name))
+
+	sections := []string{title}
+	if t.event.Err != nil {
+		sections = append(sections, skipStyle.Render("reason: ")+t.event.Err.Error())
+	}
+	if out := tail(t.event.Stderr, failTailLines); out != "" {
+		sections = append(sections, mutedStyle.Render("stderr")+"\n"+out)
+	}
+
+	return outputBoxStyle.BorderForeground(colorSkip).Width(m.boxWidth()).Render(strings.Join(sections, "\n"))
+}
+
 func (m tuiModel) runErrorBox() string {
 	title := failStyle.Render("✗ could not start the run")
 	return failBoxStyle.Width(m.boxWidth()).Render(title + "\n" + failStyle.Render("reason: ") + m.runErr.Error())
@@ -577,7 +661,7 @@ func (m tuiModel) footer() string {
 	if m.verbose {
 		return mutedStyle.Render("↑/↓ move · enter details/output · v compact · q quit")
 	}
-	return mutedStyle.Render("v verbose · q quit")
+	return mutedStyle.Render("↑/↓ scroll · v verbose · q quit")
 }
 
 // tail returns the last n lines of s, noting how many were cut.

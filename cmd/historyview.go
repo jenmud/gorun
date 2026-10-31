@@ -539,6 +539,9 @@ func (m historyModel) View() tea.View {
 			mark = mutedStyle.Render("○")
 		}
 		line := cursor + mark + " " + t.Name
+		if (t.State == 3 || t.State == 4) && t.Stderr != "" {
+			line += mutedStyle.Render(" — " + strings.SplitN(strings.TrimSpace(t.Stderr), "\n", 2)[0])
+		}
 		if t.Duration > 0 {
 			line += mutedStyle.Render(fmt.Sprintf(" %.1fs", t.Duration.Seconds()))
 		}

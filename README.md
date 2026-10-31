@@ -26,7 +26,7 @@ interactive picker, follow every server's progress live, and look back at any ru
 - [Installation](#installation)
 - [The Gorunfile](#the-gorunfile)
   - [Tasks](#tasks) · [Servers and SSH](#servers-and-ssh) · [Bundles](#bundles) · [Server groups and tags](#server-groups-and-tags) · [How a server's settings are worked out](#how-a-servers-settings-are-worked-out)
-  - [Timeouts](#timeouts) · [Retries](#retries) · [Descriptions and rerun safety](#descriptions-and-rerun-safety)
+  - [Timeouts](#timeouts) · [Retries](#retries) · [Descriptions and rerun safety](#descriptions-and-rerun-safety) · [Parallelism](#parallelism)
 - [Running](#running)
   - [The server picker](#the-server-picker)
   - [Watching a run](#watching-a-run)
@@ -85,9 +85,11 @@ module first.
 - **Plain commands, all the way down.** A task is a shell command. Gorun shows you that command,
   runs it over SSH (or locally), and captures stdout, stderr and the exit code. When something
   breaks you can copy the command, ssh into the box and reproduce it by hand.
-- **Parallel across servers, ordered within one.** Every selected server runs at the same time
-  (or N at a time with `max_parallel`). On each server, tasks run in dependency order; if one
-  fails, the rest of that server's tasks are skipped and the other servers carry on.
+- **Parallel across servers, and across independent tasks.** Every selected server runs at the
+  same time (or N at a time with `max_parallel`). On each server, tasks with no pending
+  dependencies run together; a task waits for its `depends_on` to finish first. If one task
+  fails, the rest of that server's tasks are skipped and the other servers carry on. Set
+  `max_task_parallel = -1` (globally or per server) to run a host's independent tasks all at once.
 - **Nothing runs by accident.** In a terminal, every run starts in a picker where you choose the
   servers, and even individual tasks, before anything happens (`--run` skips it on purpose). Every task has a timeout (30 minutes by
   default), so a hung command can't hold the run hostage.
@@ -249,6 +251,12 @@ dst = "/opt/app"         # /opt/app gets the contents of ./files/app
   Gorunfile: `TOKEN = "${DOCKERHUB_TOKEN}"`. Use `$$` for a literal `$`; an unset variable
   expands to an empty string. The values are sent to the task over stdin, so they don't appear
   in gorun's logs, the history, NATS events or the server's process list.
+
+### Parallelism
+
+By default a host runs its tasks one at a time. Set `parallel_tasks = true`
+(or `max_task_parallel = -1`) to run independent tasks together; use `max_task_parallel = N`
+to cap how many run at once. Applies globally or per server.
 
 ### Servers and SSH
 
@@ -791,6 +799,8 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | `title` | shown in the picker, the TUI and the history |
 | `log_level` | `debug`, `info`, `warn` or `error`; servers and tasks inherit it |
 | `max_parallel` | servers at once; `0` (default) means all |
+| `max_task_parallel` | tasks at once per host; `0` (default) means one at a time, `-1` means all |
+| `parallel_tasks` | run independent tasks in parallel (`tasks_parallel`, `parallel`, `task_parallel` are aliases) |
 | `envvars` | env vars for every task |
 | `[ssh]` | only `config_file` (or `config`) is used: the SSH config every host reads (and it makes every host use SSH) |
 

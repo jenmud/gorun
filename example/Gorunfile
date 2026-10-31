@@ -17,6 +17,7 @@
 title = "Provision app servers"
 log_level = "info"
 # max_parallel = 4
+# max_task_parallel = 1   # tasks on a host run one at a time (apt/apk lock safety)
 
 #
 # Task library. Each [tasks.<name>] defines a task once; servers pick tasks by name.

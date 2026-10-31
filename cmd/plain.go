@@ -56,6 +56,9 @@ func (p *plainPrinter) event(event any) {
 			}
 		case gorun.TaskSkipped:
 			fmt.Fprintf(p.w, "%s: %s skipped\n", ev.Server, ev.Task)
+			if ev.Err != nil {
+				fmt.Fprintf(p.w, "    reason: %v\n", ev.Err)
+			}
 		}
 	case gorun.ServerErrorEvent:
 		fmt.Fprintf(p.w, "%s: FAILED: %v\n", ev.Server, ev.Err)

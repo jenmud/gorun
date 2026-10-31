@@ -154,6 +154,7 @@ flags and this README say *server*, and mean the same thing.
 ```toml
 title = "Provision app servers"
 max_parallel = 4                  # hosts at once; 0 (default) means all of them
+max_task_parallel = 1              # tasks at once per host; 0 (default) means one at a time, -1 means all
 
 [tasks.packages]
 cmd_file = "./scripts/packages.sh"

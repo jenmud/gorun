@@ -64,6 +64,7 @@ type serverView struct {
 	failedCount  int
 	skippedCount int
 	runningCount int
+	open         bool // the compact view lists this server's tasks
 }
 
 func (s *serverView) task(name string) *taskView {
@@ -133,6 +134,7 @@ type tuiModel struct {
 	runErr   error // the run failed before any server started
 	verbose  bool
 	cursor   int  // index into the flattened task list (verbose view)
+	selected int  // index into servers (compact view)
 	scroll   int  // line offset for the compact view
 	follow   bool // keep compact view pinned to the bottom as output grows
 	width    int
@@ -299,17 +301,26 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "v":
 			m.verbose = !m.verbose
 		case "up", "k":
-			if m.verbose {
+			switch {
+			case m.verbose:
 				m.cursor = max(m.cursor-1, 0)
-			} else {
-				m.scroll = max(0, m.scroll-1)
+			case m.selectedServer() > 0:
+				m.selected = m.selectedServer() - 1
+				m.showSelected()
+			default:
+				m.scroll = max(0, m.compactScroll()-1)
 				m.follow = false
 			}
 		case "down", "j":
-			if m.verbose {
+			switch {
+			case m.verbose:
 				m.cursor = min(m.cursor+1, len(m.flatTasks())-1)
-			} else {
-				m.scroll = min(m.compactMaxScroll(), m.scroll+1)
+			case m.selectedServer() < len(m.servers)-1:
+				m.selected = m.selectedServer() + 1
+				m.showSelected()
+			default:
+				// past the last server, keep scrolling down to the failure boxes
+				m.scroll = min(m.compactMaxScroll(), m.compactScroll()+1)
 				m.follow = false
 			}
 		case "pgup":
@@ -330,6 +341,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.verbose {
 				m.cursor = 0
 			} else {
+				m.selected = 0
 				m.scroll = 0
 				m.follow = false
 			}
@@ -339,12 +351,23 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursor = len(tasks) - 1
 				}
 			} else {
+				m.selected = max(0, len(m.servers)-1)
 				m.scroll = m.compactMaxScroll()
 				m.follow = true
 			}
 		case "enter", "space":
 			if tasks := m.flatTasks(); m.verbose && m.cursor < len(tasks) {
 				tasks[m.cursor].expanded = !tasks[m.cursor].expanded
+			} else if !m.verbose && len(m.servers) > 0 {
+				m.setOpen(!m.servers[m.selectedServer()].open)
+			}
+		case "right", "l":
+			if !m.verbose && len(m.servers) > 0 {
+				m.setOpen(true)
+			}
+		case "left", "h":
+			if !m.verbose && len(m.servers) > 0 {
+				m.setOpen(false)
 			}
 		}
 		return m, nil
@@ -480,54 +503,125 @@ func (m tuiModel) compactHead() []string {
 // each server summary takes two lines plus a blank one
 const serverSummaryLines = 3
 
-func (m tuiModel) compactLineCount() int {
-	return len(m.compactHead()) + serverSummaryLines*len(m.servers) + len(m.boxLines)
+// serverBlockLines is how many lines server s takes in the compact view: its
+// summary, its tasks when it is open, and a blank line.
+func serverBlockLines(s *serverView) int {
+	if s.open {
+		return serverSummaryLines + len(s.tasks)
+	}
+	return serverSummaryLines
 }
 
-// compactWindow renders lines [from, to) of the compact view. Only the visible
-// server summaries are rendered and the failure boxes come pre-rendered, so the
-// cost depends on the window height rather than the size of the run.
-func (m tuiModel) compactWindow(from, to int) []string {
-	head := m.compactHead()
-	summaries := serverSummaryLines * len(m.servers)
-	to = min(to, len(head)+summaries+len(m.boxLines))
+func (m tuiModel) compactLineCount() int {
+	n := len(m.compactHead()) + len(m.boxLines)
+	for _, s := range m.servers {
+		n += serverBlockLines(s)
+	}
+	return n
+}
 
+// selectedServer is the index of the server under the compact view's cursor.
+func (m tuiModel) selectedServer() int {
+	return max(0, min(m.selected, len(m.servers)-1))
+}
+
+// serverBlock renders lines [from, to) of server i's block in the compact view.
+func (m tuiModel) serverBlock(i, from, to int) []string {
+	s := m.servers[i]
+	n := serverBlockLines(s)
+	to = min(to, n)
 	lines := make([]string, 0, max(0, to-from))
-	for i := from; i < to; i++ {
-		switch {
-		case i < len(head):
-			lines = append(lines, head[i])
-		case i < len(head)+summaries:
-			off := i - len(head)
-			block := append(strings.Split(m.serverSummary(m.servers[off/serverSummaryLines]), "\n"), "")
-			for j := off % serverSummaryLines; j < len(block) && i < to; j++ {
-				lines = append(lines, block[j])
-				i++
-			}
-			i--
-		default:
-			lines = append(lines, m.boxLines[i-len(head)-summaries])
+	if from < 2 {
+		pointer := "  "
+		if i == m.selectedServer() && !m.quitting {
+			pointer = cursorStyle.Render("❯ ")
 		}
+		summary := strings.SplitN(m.serverSummary(s), "\n", 2)
+		summary[0], summary[1] = pointer+summary[0], "  "+summary[1]
+		lines = append(lines, summary[from:min(to, 2)]...)
+	}
+	for j := max(from, 2); j < min(to, n-1); j++ {
+		lines = append(lines, "    "+m.taskStatus(s.tasks[j-2]))
+	}
+	if to == n {
+		lines = append(lines, "")
 	}
 	return lines
 }
 
+// compactWindow renders lines [from, to) of the compact view. Only the visible
+// server summaries and tasks are rendered and the failure boxes come
+// pre-rendered, so the cost depends on the window height rather than the size
+// of the run.
+func (m tuiModel) compactWindow(from, to int) []string {
+	lines := make([]string, 0, max(0, to-from))
+	pos := 0 // first line of the part being added
+	add := func(n int, render func(from, to int) []string) {
+		if pos < to && pos+n > from {
+			lines = append(lines, render(max(0, from-pos), min(n, to-pos))...)
+		}
+		pos += n
+	}
+
+	head := m.compactHead()
+	add(len(head), func(from, to int) []string { return head[from:to] })
+	for i, s := range m.servers {
+		if pos >= to {
+			break
+		}
+		add(serverBlockLines(s), func(from, to int) []string { return m.serverBlock(i, from, to) })
+	}
+	add(len(m.boxLines), func(from, to int) []string { return m.boxLines[from:to] })
+	return lines
+}
+
+// compactHeight is how many lines of the compact view fit above the footer.
+func (m tuiModel) compactHeight() int {
+	return max(m.height-len(strings.Split(m.footer(), "\n")), 5)
+}
+
 func (m tuiModel) compactMaxScroll() int {
-	footerLines := len(strings.Split(m.footer(), "\n"))
-	height := max(m.height-footerLines, 5)
-	return max(0, m.compactLineCount()-height)
+	return max(0, m.compactLineCount()-m.compactHeight())
+}
+
+// compactScroll is the line the compact view starts at.
+func (m tuiModel) compactScroll() int {
+	if m.follow {
+		return m.compactMaxScroll()
+	}
+	return max(0, min(m.scroll, m.compactMaxScroll()))
+}
+
+// setOpen shows or hides the selected server's tasks in the compact view.
+func (m *tuiModel) setOpen(open bool) {
+	m.servers[m.selectedServer()].open = open
+	m.showSelected()
+}
+
+// showSelected scrolls the compact view so the selected server is on screen,
+// as much of it as fits, starting with its summary.
+func (m *tuiModel) showSelected() {
+	if len(m.servers) == 0 {
+		return
+	}
+	start := len(m.compactHead())
+	for _, s := range m.servers[:m.selectedServer()] {
+		start += serverBlockLines(s)
+	}
+	end := start + serverBlockLines(m.servers[m.selectedServer()]) - 1 // without the blank line
+
+	scroll := m.compactScroll()
+	if end > scroll+m.compactHeight() {
+		scroll = end - m.compactHeight()
+	}
+	scroll = min(scroll, start)
+	m.scroll = max(0, min(scroll, m.compactMaxScroll()))
+	m.follow = false
 }
 
 func (m tuiModel) compactView() string {
-	footer := m.footer()
-	height := max(m.height-len(strings.Split(footer, "\n")), 5)
-	total := m.compactLineCount()
-	scroll := m.scroll
-	if m.follow {
-		scroll = total - height
-	}
-	scroll = max(0, min(scroll, total-height))
-	return strings.Join(m.compactWindow(scroll, scroll+height), "\n") + "\n" + footer
+	scroll := m.compactScroll()
+	return strings.Join(m.compactWindow(scroll, scroll+m.compactHeight()), "\n") + "\n" + m.footer()
 }
 
 // boxesRenderedMsg delivers compact view failure/skip boxes rendered in the background.
@@ -763,6 +857,15 @@ func (m tuiModel) verboseView() string {
 }
 
 func (m tuiModel) taskRow(t *taskView) string {
+	toggle := mutedStyle.Render(" ▸")
+	if t.expanded {
+		toggle = mutedStyle.Render(" ▾")
+	}
+	return m.taskStatus(t) + toggle
+}
+
+// taskStatus renders a task's state, name, description and timing on one line.
+func (m tuiModel) taskStatus(t *taskView) string {
 	var icon, detail string
 
 	attempt := ""
@@ -802,12 +905,7 @@ func (m tuiModel) taskRow(t *taskView) string {
 		warning = " " + skipStyle.Render("⚠")
 	}
 
-	toggle := mutedStyle.Render(" ▸")
-	if t.expanded {
-		toggle = mutedStyle.Render(" ▾")
-	}
-
-	return fmt.Sprintf("%s %-24s%s%s %s%s", icon, t.name, description, warning, detail, toggle)
+	return fmt.Sprintf("%s %-24s%s%s %s", icon, t.name, description, warning, detail)
 }
 
 func (m tuiModel) boxWidth() int {
@@ -969,7 +1067,7 @@ func (m tuiModel) footer() string {
 	if m.verbose {
 		return mutedStyle.Render("↑/↓/pgup/pgdown/home/end move · enter details/output · v compact · q quit")
 	}
-	return mutedStyle.Render("↑/↓/pgup/pgdown/home/end scroll · v verbose · q quit")
+	return mutedStyle.Render("↑/↓ select server · enter/→ show tasks · ← hide · pgup/pgdown/home/end scroll · v verbose · q quit")
 }
 
 // tail returns the last n lines of s, noting how many were cut.

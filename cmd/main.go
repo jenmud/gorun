@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"runtime/debug"
 	"slices"
-	"sort"
 	"strings"
 
 	_ "github.com/joho/godotenv/autoload"
@@ -124,7 +123,7 @@ func main() {
 	defer cancel()
 
 	verbose := flag.Bool("v", false, "verbose: show every task and its output")
-	plain := flag.Bool("plain", false, "plain log output instead of the TUI (default when stdout is not a terminal)")
+	plain := flag.Bool("plain", false, "plain output instead of the TUI, and print the --list-* trees in full (default when stdout is not a terminal)")
 	var runNow bool
 	flag.BoolVar(&runNow, "run", false, "run without the interactive server picker (needed when there is no terminal)")
 	flag.BoolVar(&runNow, "r", false, "shorthand for -run")
@@ -270,13 +269,28 @@ func main() {
 		fatal(err)
 	}
 
+	// the --list-* flags browse a collapsible tree in a terminal, and print
+	// everything as-is with --plain or when not interactive
+	listTUI := interactive && !*plain
+	showList := func(kind string, nodes []*treeNode, print func()) {
+		if !listTUI || len(nodes) == 0 {
+			print()
+			return
+		}
+		if err := runTreeTUI(cfg.Title, kind, nodes); err != nil {
+			fatal(err)
+		}
+	}
+
 	if *listBundles {
-		printBundles(os.Stdout, &cfg)
+		showList("bundles", bundleTreeNodes(&cfg), func() { printBundles(os.Stdout, &cfg) })
 		return
 	}
 
 	if *listTags {
-		printTags(os.Stdout, &cfg, cfg.Servers, !filter.IsZero())
+		showList("tags", tagTreeNodes(&cfg, cfg.Servers, !filter.IsZero()), func() {
+			printTags(os.Stdout, &cfg, cfg.Servers, !filter.IsZero())
+		})
 		return
 	}
 
@@ -296,79 +310,7 @@ func main() {
 			}
 		}
 
-		// Build a reverse dependency tree: a task's children are the tasks that
-		// depend on it, so dependencies appear above their dependents.
-		children := map[string][]string{}
-		roots := []string{}
-		for name := range cfg.Tasks {
-			if shown != nil && !shown[name] {
-				continue
-			}
-			if len(cfg.Tasks[name].DependsOn) == 0 {
-				roots = append(roots, name)
-			}
-			for _, dep := range cfg.Tasks[name].DependsOn {
-				children[dep] = append(children[dep], name)
-			}
-		}
-		sort.Strings(roots)
-		for _, kids := range children {
-			sort.Strings(kids)
-		}
-
-		label := func(name string) string {
-			task := cfg.Tasks[name]
-			s := name
-			if task.Description != "" {
-				s += " — " + task.Description
-			}
-			if task.Rerun == gorun.RerunUnsafe {
-				s += " (⚠ not safe to rerun)"
-			}
-			if task.Retries > 0 {
-				s += fmt.Sprintf(" (retries: %d)", task.Retries)
-			}
-			return s
-		}
-
-		visited := map[string]bool{}
-		var printNode func(name, prefix string, last, root bool)
-		printNode = func(name, prefix string, last, root bool) {
-			connector := "├── "
-			if last {
-				connector = "└── "
-			}
-			if visited[name] {
-				if root {
-					fmt.Printf("%s (already shown)\n", label(name))
-				} else {
-					fmt.Printf("%s%s%s (already shown)\n", prefix, connector, label(name))
-				}
-				return
-			}
-			if root {
-				fmt.Println(label(name))
-			} else {
-				fmt.Printf("%s%s%s\n", prefix, connector, label(name))
-			}
-			visited[name] = true
-			kids := children[name]
-			childPrefix := prefix
-			if last {
-				childPrefix += "    "
-			} else {
-				childPrefix += "│   "
-			}
-			for i, child := range kids {
-				printNode(child, childPrefix, i == len(kids)-1, false)
-			}
-		}
-
-		for i, root := range roots {
-			_ = i
-			printNode(root, "", true, true)
-		}
-
+		showList("tasks", taskTreeNodes(&cfg, shown), func() { printTasks(os.Stdout, &cfg, shown) })
 		return
 	}
 
@@ -380,36 +322,7 @@ func main() {
 	}
 
 	if *listServers {
-		names := make([]string, 0, len(servers))
-		for name := range servers {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			server := servers[name]
-			fmt.Printf("%s (%s)\n", server.Name, server.Address())
-			if len(server.Groups) > 0 {
-				fmt.Printf("    groups: %s\n", strings.Join(server.Groups, ", "))
-			}
-			if len(server.Tags) > 0 {
-				fmt.Printf("    tags: %s\n", strings.Join(server.Tags, ", "))
-			}
-			for i, t := range server.Tasks {
-				connector := "├── "
-				if i == len(server.Tasks)-1 {
-					connector = "└── "
-				}
-				label := t.Name
-				if t.Retries > 0 {
-					label += fmt.Sprintf(" (retries: %d)", t.Retries)
-				}
-				if t.Rerun == gorun.RerunUnsafe {
-					label += " ⚠"
-				}
-				fmt.Printf("    %s%s\n", connector, label)
-			}
-			fmt.Println()
-		}
+		showList("servers", serverTreeNodes(servers), func() { printServers(os.Stdout, servers) })
 		return
 	}
 
@@ -426,7 +339,7 @@ func main() {
 			choices = append(choices, servers[s.Name])
 		}
 
-		selected, err := runServerSelectionTUI(cfg.Title, choices)
+		selected, err := runServerSelectionTUI(&cfg, choices)
 		if err != nil {
 			fatal(err)
 		}
@@ -521,7 +434,8 @@ opens a picker to choose the servers (and tasks) to run; pass -run to skip it.
 
 Options:
   -v        verbose: show every task and its output
-  -plain    plain log output instead of the TUI (default when stdout is not a terminal)
+  -plain    plain output instead of the TUI, and print the -list-* trees in full
+            (default when stdout is not a terminal)
   -run, -r  run without the interactive server picker (needed when there is no terminal)
   -task     run only the named task on any selected server (repeatable; dependencies included);
             accepts globs ('deploy-*') and bundles ('@base')
@@ -530,10 +444,10 @@ Options:
   -tag      run only servers with this tag (repeatable; servers need every tag)
   -group    run only servers in this server group (repeatable; servers need every group)
   -parallel N  run at most N hosts at once (0 = all servers)
-  -list-tasks  list available tasks and exit
-  -list-servers  list servers and their task pipelines and exit
-  -list-tags  list tags and the servers that have them and exit
-  -list-bundles  list task bundles and what they expand to and exit
+  -list-tasks  list available tasks and exit (a collapsible tree in a terminal)
+  -list-servers  list servers and their task pipelines and exit (a collapsible tree in a terminal)
+  -list-tags  list tags and the servers that have them and exit (a collapsible tree in a terminal)
+  -list-bundles  list task bundles and what they expand to and exit (a collapsible tree in a terminal)
   -dump     print a starting Gorunfile that works as-is and documents every option
   -version  print version and exit
   -web      start the web server

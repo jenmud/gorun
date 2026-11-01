@@ -96,6 +96,10 @@ type serverSelectionModel struct {
 	history    historyModel
 	historyErr error // why the history database couldn't be opened
 
+	// the Tasks and Bundles tabs, shown when set up with withLists
+	tasks   *treeModel
+	bundles *treeModel
+
 	confirmed bool
 	quitting  bool
 }
@@ -103,8 +107,55 @@ type serverSelectionModel struct {
 // the picker's tabs
 const (
 	tabServers = iota
+	tabTasks
+	tabBundles
 	tabHistory
 )
+
+var tabNames = map[int]string{tabServers: "Servers", tabTasks: "Tasks", tabBundles: "Bundles", tabHistory: "History"}
+
+// withLists adds Tasks and Bundles tabs browsing cfg's tasks and bundles, like
+// --list-tasks and --list-bundles do.
+func (m serverSelectionModel) withLists(cfg *gorun.Config) serverSelectionModel {
+	if nodes := taskTreeNodes(cfg, nil); len(nodes) > 0 {
+		t := newTreeModel(m.title, "tasks", nodes)
+		t.embedded = true
+		m.tasks = &t
+	}
+	if nodes := bundleTreeNodes(cfg); len(nodes) > 0 {
+		t := newTreeModel(m.title, "bundles", nodes)
+		t.embedded = true
+		m.bundles = &t
+	}
+	m.resizeTabs()
+	return m
+}
+
+// tabs lists the picker's tabs in the order they are shown.
+func (m serverSelectionModel) tabs() []int {
+	tabs := []int{tabServers}
+	if m.tasks != nil {
+		tabs = append(tabs, tabTasks)
+	}
+	if m.bundles != nil {
+		tabs = append(tabs, tabBundles)
+	}
+	if m.hasHistory {
+		tabs = append(tabs, tabHistory)
+	}
+	return tabs
+}
+
+// resizeTabs gives the embedded views the picker's size.
+func (m *serverSelectionModel) resizeTabs() {
+	m.history.width, m.history.height = m.width, m.height
+	for _, t := range []*treeModel{m.tasks, m.bundles} {
+		if t != nil {
+			next, _ := t.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
+			*t = next.(treeModel)
+		}
+	}
+}
 
 // withHistory adds a History tab showing the runs in st, or err when the history
 // database couldn't be opened.
@@ -117,18 +168,71 @@ func (m serverSelectionModel) withHistory(st *store.Store, err error) serverSele
 	return m
 }
 
-// switchTab shows the other tab. The history is reloaded each time it is shown, so it
-// includes runs that finished since.
+// switchTab shows the next tab, wrapping around to the first.
 func (m serverSelectionModel) switchTab() (tea.Model, tea.Cmd) {
-	if m.tab == tabHistory {
-		m.tab = tabServers
-		return m, nil
-	}
-	m.tab = tabHistory
-	if m.historyErr != nil {
+	tabs := m.tabs()
+	i := slices.Index(tabs, m.tab)
+	return m.showTab(tabs[(i+1)%len(tabs)])
+}
+
+// showTab shows tab. The history is reloaded each time it is shown, so it includes
+// runs that finished since.
+func (m serverSelectionModel) showTab(tab int) (tea.Model, tea.Cmd) {
+	m.tab = tab
+	if tab != tabHistory || m.historyErr != nil {
 		return m, nil
 	}
 	return m, m.history.Init()
+}
+
+// treeTab returns the tree shown on the current tab, if it is a Tasks or Bundles tab.
+func (m serverSelectionModel) treeTab() *treeModel {
+	switch m.tab {
+	case tabTasks:
+		return m.tasks
+	case tabBundles:
+		return m.bundles
+	}
+	return nil
+}
+
+// updateTree handles input while the Tasks or Bundles tab is shown.
+func (m serverSelectionModel) updateTree(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "ctrl+c":
+			m.quitting = true
+			return m, tea.Quit
+		case "shift+tab":
+			return m.switchTab()
+		case "esc", "q":
+			return m.showTab(tabServers)
+		}
+	case tea.MouseClickMsg:
+		if tab, ok := m.tabAt(msg.X, msg.Y); ok && tab != m.tab {
+			return m.showTab(tab)
+		}
+		return m, nil
+	}
+
+	// the tree is shared by pointer, so copy it before updating to keep models immutable
+	t := *m.treeTab()
+	next, _ := t.Update(msg)
+	t = next.(treeModel)
+	if m.tab == tabTasks {
+		m.tasks = &t
+	} else {
+		m.bundles = &t
+	}
+	return m, nil
+}
+
+// treeContent renders the Tasks or Bundles tab, under the picker's title line.
+func (m serverSelectionModel) treeContent() string {
+	lines := strings.Split(m.treeTab().View().Content, "\n")
+	lines[0] = m.titleLine()
+	return strings.Join(lines, "\n")
 }
 
 // updateHistory handles input while the History tab is shown.
@@ -144,12 +248,12 @@ func (m serverSelectionModel) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc", "q":
 			// on the runs list these quit the history view; here they go back
 			if m.history.state == historyList && !m.history.askKeep {
-				return m.switchTab()
+				return m.showTab(tabServers)
 			}
 		}
 	case tea.MouseClickMsg:
 		if tab, ok := m.tabAt(msg.X, msg.Y); ok && tab != m.tab {
-			return m.switchTab()
+			return m.showTab(tab)
 		}
 		return m, nil
 	case tea.MouseWheelMsg:
@@ -165,26 +269,37 @@ func (m serverSelectionModel) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // tabsWidth is the width of the tabs part of the title line.
-var tabsWidth = lipgloss.Width("   Servers │ History  shift+tab")
+func (m serverSelectionModel) tabsWidth() int {
+	return lipgloss.Width(m.tabsLine())
+}
+
+// tabsLine renders the tab labels, after the title.
+func (m serverSelectionModel) tabsLine() string {
+	labels := []string{}
+	for _, tab := range m.tabs() {
+		labels = append(labels, m.tabLabel(tabNames[tab], tab))
+	}
+	return "   " + strings.Join(labels, mutedStyle.Render(" │ ")) + mutedStyle.Render("  shift+tab")
+}
 
 // titlePrefix renders "gorun" and the title, shortening the title so the tabs still fit
 // on the line.
 func (m serverSelectionModel) titlePrefix() string {
 	title := m.title
-	if m.hasHistory {
-		room := m.width - lipgloss.Width(titleStyle.Render("gorun")+" ") - tabsWidth
+	if len(m.tabs()) > 1 {
+		room := m.width - lipgloss.Width(titleStyle.Render("gorun")+" ") - m.tabsWidth()
 		title = truncate(title, max(room, 0))
 	}
 	return titleStyle.Render("gorun") + " " + mutedStyle.Render(title)
 }
 
-// titleLine renders the top line: the title and, with history, the tabs.
+// titleLine renders the top line: the title and, with more than one tab, the tabs.
 func (m serverSelectionModel) titleLine() string {
 	line := m.titlePrefix()
-	if !m.hasHistory {
+	if len(m.tabs()) < 2 {
 		return line
 	}
-	return line + "   " + m.tabLabel("Servers", tabServers) + mutedStyle.Render(" │ ") + m.tabLabel("History", tabHistory) + mutedStyle.Render("  shift+tab")
+	return line + m.tabsLine()
 }
 
 func (m serverSelectionModel) tabLabel(name string, tab int) string {
@@ -196,17 +311,16 @@ func (m serverSelectionModel) tabLabel(name string, tab int) string {
 
 // tabAt returns the tab whose label is at screen position x, y.
 func (m serverSelectionModel) tabAt(x, y int) (int, bool) {
-	if !m.hasHistory || y != 0 {
+	if len(m.tabs()) < 2 || y != 0 {
 		return 0, false
 	}
 	start := lipgloss.Width(m.titlePrefix() + "   ")
-	servers := lipgloss.Width("Servers")
-	history := start + servers + lipgloss.Width(" │ ")
-	switch {
-	case x >= start && x < start+servers:
-		return tabServers, true
-	case x >= history && x < history+lipgloss.Width("History"):
-		return tabHistory, true
+	for _, tab := range m.tabs() {
+		w := lipgloss.Width(tabNames[tab])
+		if x >= start && x < start+w {
+			return tab, true
+		}
+		start += w + lipgloss.Width(" │ ")
 	}
 	return 0, false
 }
@@ -639,7 +753,7 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		m.history.width, m.history.height = msg.Width, msg.Height
+		m.resizeTabs()
 		return m, nil
 	case historyRunsMsg, historyRunMsg:
 		next, cmd := m.history.Update(msg)
@@ -649,6 +763,9 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.tab == tabHistory {
 		return m.updateHistory(msg)
+	}
+	if m.treeTab() != nil {
+		return m.updateTree(msg)
 	}
 
 	switch msg := msg.(type) {
@@ -669,7 +786,7 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if tab, ok := m.tabAt(msg.X, msg.Y); ok && tab != m.tab {
-			return m.switchTab()
+			return m.showTab(tab)
 		}
 
 		l := m.layout()
@@ -720,7 +837,7 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter", "ctrl+r":
 			return m.run()
 		case "shift+tab":
-			if m.hasHistory {
+			if len(m.tabs()) > 1 {
 				return m.switchTab()
 			}
 		case "up", "ctrl+p", "ctrl+k":
@@ -819,9 +936,12 @@ func (m serverSelectionModel) View() tea.View {
 
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
-	if m.tab == tabHistory {
+	switch {
+	case m.tab == tabHistory:
 		v.SetContent(m.historyContent())
-	} else {
+	case m.treeTab() != nil:
+		v.SetContent(m.treeContent())
+	default:
 		v.SetContent(m.viewContent())
 	}
 	return v
@@ -1042,9 +1162,9 @@ func highlight(s string, positions []int, style lipgloss.Style) string {
 }
 
 // runServerSelectionTUI lets the user pick servers to deploy to, from servers with their
-// pipelines resolved, with past runs in a History tab. It returns an error if the
-// selection was cancelled.
-func runServerSelectionTUI(title string, servers []gorun.Server) ([]gorun.Server, error) {
+// pipelines resolved, with cfg's tasks and bundles and past runs in their own tabs.
+// It returns an error if the selection was cancelled.
+func runServerSelectionTUI(cfg *gorun.Config, servers []gorun.Server) ([]gorun.Server, error) {
 	st, stErr := store.Open(getHistoryDBPath())
 	if stErr == nil {
 		defer func() { _ = st.Close() }()
@@ -1055,7 +1175,7 @@ func runServerSelectionTUI(title string, servers []gorun.Server) ([]gorun.Server
 	gorun.SetLogOutput(io.Discard)
 	defer gorun.SetLogOutput(previous)
 	defer drainTerminalInput()
-	final, err := tea.NewProgram(newServerSelectionModel(title, servers).withHistory(st, stErr), tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1"))).Run()
+	final, err := tea.NewProgram(newServerSelectionModel(cfg.Title, servers).withLists(cfg).withHistory(st, stErr), tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1"))).Run()
 	if err != nil {
 		return nil, fmt.Errorf("error running server selection TUI: %w", err)
 	}

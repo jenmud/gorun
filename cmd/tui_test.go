@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/jenmud/gorun"
 )
@@ -132,29 +133,99 @@ func TestCompactWindow(t *testing.T) {
 	next, _ = m.Update(cmd())
 	m = next.(tuiModel)
 
-	full := m.compactHead()
-	for _, s := range m.servers {
-		full = append(full, strings.Split(m.serverSummary(s), "\n")...)
-		full = append(full, "")
-	}
-	full = append(full, strings.Split(m.failureBox(m.servers[0], m.servers[0].tasks[0]), "\n")...)
-	full = append(full, strings.Split(m.skipBox("a", m.servers[0].tasks[1]), "\n")...)
-	full = append(full, strings.Split(m.serverErrorBox(m.servers[1]), "\n")...)
-	if got := m.compactLineCount(); got != len(full) {
-		t.Fatalf("line count = %d, want %d", got, len(full))
-	}
-	if !strings.Contains(strings.Join(full, "\n"), "skipped 1 tasks") {
-		t.Error("failure box does not name the skipped task")
-	}
+	// with every server closed, then with the first one listing its tasks
+	for _, open := range []bool{false, true} {
+		m.servers[0].open = open
 
-	for from := range len(full) {
-		for to := from; to <= len(full)+2; to++ {
-			got := strings.Join(m.compactWindow(from, to), "\n")
-			want := strings.Join(full[from:min(to, len(full))], "\n")
-			if got != want {
-				t.Fatalf("window [%d,%d):\n%s\nwant:\n%s", from, to, got, want)
+		full := m.compactHead()
+		for i, s := range m.servers {
+			pointer := "  "
+			if i == 0 {
+				pointer = cursorStyle.Render("❯ ")
+			}
+			summary := strings.Split(m.serverSummary(s), "\n")
+			full = append(full, pointer+summary[0], "  "+summary[1])
+			if s.open {
+				for _, t := range s.tasks {
+					full = append(full, "    "+m.taskStatus(t))
+				}
+			}
+			full = append(full, "")
+		}
+		full = append(full, strings.Split(m.failureBox(m.servers[0], m.servers[0].tasks[0]), "\n")...)
+		full = append(full, strings.Split(m.skipBox("a", m.servers[0].tasks[1]), "\n")...)
+		full = append(full, strings.Split(m.serverErrorBox(m.servers[1]), "\n")...)
+		if got := m.compactLineCount(); got != len(full) {
+			t.Fatalf("open %v: line count = %d, want %d", open, got, len(full))
+		}
+		if !strings.Contains(strings.Join(full, "\n"), "skipped 1 tasks") {
+			t.Error("failure box does not name the skipped task")
+		}
+
+		for from := range len(full) {
+			for to := from; to <= len(full)+2; to++ {
+				got := strings.Join(m.compactWindow(from, to), "\n")
+				want := strings.Join(full[from:min(to, len(full))], "\n")
+				if got != want {
+					t.Fatalf("open %v: window [%d,%d):\n%s\nwant:\n%s", open, from, to, got, want)
+				}
 			}
 		}
+	}
+}
+
+// TestCompactServerTasks checks a server can be selected in the compact view
+// and opened to list just its tasks, and closed again.
+func TestCompactServerTasks(t *testing.T) {
+	m := bigTUIModel(t)
+	plain := func() string { return ansi.Strip(m.compactView()) }
+	update := func(keys ...string) {
+		for _, k := range keys {
+			start := time.Now()
+			next, _ := m.Update(keyPress(k))
+			m = next.(tuiModel)
+			_ = m.View()
+			if d := time.Since(start); d > 100*time.Millisecond {
+				t.Errorf("key %q took %s", k, d)
+			}
+		}
+	}
+
+	update("down", "down")
+	if m.selectedServer() != 2 || !strings.Contains(plain(), "❯ server3 ") {
+		t.Fatalf("cursor is on server %d, want server3:\n%s", m.selectedServer(), plain())
+	}
+	if strings.Contains(plain(), "task-000") {
+		t.Fatal("tasks are listed before any server is opened")
+	}
+
+	update("enter")
+	view := plain()
+	if !m.servers[2].open || !strings.Contains(view, "❯ server3 ") || !strings.Contains(view, "    ✗ task-000") {
+		t.Fatalf("enter did not list server3's tasks:\n%s", view)
+	}
+	if lines := strings.Count(view, "\n") + 1; lines > m.height {
+		t.Errorf("view is %d lines, screen is %d", lines, m.height)
+	}
+
+	// moving on past the open server scrolls its tasks out of the way
+	update("down")
+	if view := plain(); !strings.Contains(view, "❯ server4 ") {
+		t.Fatalf("the selected server4 is off screen:\n%s", view)
+	}
+
+	update("up", "left")
+	if m.servers[2].open || strings.Contains(plain(), "task-000") {
+		t.Fatalf("left did not hide server3's tasks:\n%s", plain())
+	}
+	update("right", "space")
+	if m.servers[2].open {
+		t.Fatal("space did not close the server opened with right")
+	}
+
+	update("end")
+	if m.selectedServer() != len(m.servers)-1 {
+		t.Errorf("end selected server %d, want the last", m.selectedServer())
 	}
 }
 

@@ -92,8 +92,9 @@ module first.
   fails, the rest of that server's tasks are skipped and the other servers carry on. Set
   `max_task_parallel = -1` (globally or per server) to run a host's independent tasks all at once.
 - **Nothing runs by accident.** In a terminal, every run starts in a picker where you choose the
-  servers, and even individual tasks, before anything happens (`--run` skips it on purpose). Every task has a timeout (30 minutes by
-  default), so a hung command can't hold the run hostage.
+  servers, and even individual tasks, before anything happens (`--run` skips it on purpose). Its
+  **Tasks** and **Bundles** tabs show what each task and bundle pulls in. Every task has a timeout
+  (30 minutes by default), so a hung command can't hold the run hostage.
 - **A task library, not copy-paste.** Define a task once, give it `depends_on`, group tasks into
   **bundles**, and share settings between servers with **server groups** and **tags**. Typos,
   unknown names and dependency cycles are reported before anything runs.
@@ -453,15 +454,21 @@ combine: `gorun Gorunfile --tag prod --task @baseline` opens a picker with just 
 | ctrl+t / ctrl+x | tick / clear all of the current server's tasks |
 | ctrl+a | select every server shown (again to deselect them) |
 | ctrl+d | clear the whole selection, including task choices |
-| shift+tab (or click the tab) | switch between **Servers** and [**History**](#history) |
+| shift+tab (or click the tab) | cycle through **Servers**, **Tasks**, **Bundles** and [**History**](#history) |
 | enter, ctrl+r, click **▶ Run** | run the selection |
 | esc | clear the filter, then quit |
 | ctrl+c | quit without running anything |
 
+The **Tasks** and **Bundles** tabs browse the Gorunfile's tasks and bundles as the same collapsible
+trees as `--list-tasks` and `--list-bundles`, so you can check what a task pulls in before you run
+it. esc or q goes back to **Servers**.
+
 ### Watching a run
 
 The compact view shows a progress bar per server and what each one is doing (the screenshot at
-the [top](#gorun)). Press **v** (or start with `-v`) for the verbose view, which lists every task:
+the [top](#gorun)). Move between servers with ↑/↓ and press **enter** or **→** to list just that
+server's tasks under its progress bar; **enter** or **←** hides them again. Press **v** (or start
+with `-v`) for the verbose view, which lists every task:
 
 ![verbose view listing every server's tasks](docs/screenshot-verbose.png)
 
@@ -526,8 +533,14 @@ gorun Gorunfile --list-tags       # each tag and the servers that have it
 gorun Gorunfile --list-bundles    # each bundle as a tree, and what it expands to
 ```
 
+In a terminal each list opens as a collapsible tree, starting collapsed: `enter`, `space` or `→`
+expands an entry, `←` collapses it (or jumps to its parent), `e`/`c` expand/collapse everything
+under the cursor, `E`/`C` expand/collapse the whole tree, `↑`/`↓`/`pgup`/`pgdown`/`home`/`end`
+move and `q` quits. With `--plain`, or when stdout isn't a terminal, the whole tree is printed
+as-is, ready for `grep` or a pipe.
+
 The server and task filters apply to `--list-servers`, `--list-tasks` and `--list-tags`, so
-`gorun Gorunfile --list-servers --tag prod` shows exactly what a `--tag prod` run would do:
+`gorun Gorunfile --list-servers --tag prod --plain` shows exactly what a `--tag prod` run would do:
 
 ```
 web-prod-1 (localhost:2223)
@@ -751,17 +764,17 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 |---|---|
 | `-run`, `-r` | run without the picker (needed when there is no terminal) |
 | `-v` | verbose: list every task and its output |
-| `-plain` | plain lines instead of the TUI (the default when stdout isn't a terminal) |
+| `-plain` | plain lines instead of the TUI, and the `-list-*` trees printed in full (the default when stdout isn't a terminal) |
 | `-server <name>` | only this server; repeatable, globs allowed |
 | `-exclude-server <name>` | not this server; repeatable, globs allowed |
 | `-tag <tag>` | only servers with this tag; repeatable, all must match |
 | `-group <group>` | only servers in this group; repeatable, all must match |
 | `-task <name>` | only this task (with its dependencies); repeatable, globs and `@bundles` allowed |
 | `-parallel <n>` | at most n servers at a time; `0` means all (overrides `max_parallel`) |
-| `-list-servers` | list servers with their groups, tags and task lists |
-| `-list-tasks` | list tasks as a dependency tree |
-| `-list-tags` | list tags and their servers |
-| `-list-bundles` | list bundles and what they expand to |
+| `-list-servers` | list servers with their groups, tags and task lists (a collapsible tree in a terminal) |
+| `-list-tasks` | list tasks as a dependency tree (collapsible in a terminal) |
+| `-list-tags` | list tags and their servers (a collapsible tree in a terminal) |
+| `-list-bundles` | list bundles and what they expand to (a collapsible tree in a terminal) |
 | `-dump` | print a starting Gorunfile |
 | `-history` | browse past runs |
 | `-web` | start the web UI |

@@ -475,6 +475,10 @@ with `-v`) for the verbose view, which lists every task:
 Move with ↑/↓ and press **enter** to open a task's command output inline. The view stays open after
 the run, so you can browse the output before quitting with **q**:
 
+A spinner on a server line means it has no task running right now: `connecting to host` while
+gorun opens that server's SSH connection (once per server, then reused for every task), or
+`waiting for next task` between two tasks.
+
 ![a task's output opened inline](docs/screenshot-output.png)
 
 **Failures** always show in a red box with the reason, exit code and the end of stderr, even in the

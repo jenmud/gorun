@@ -250,8 +250,8 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 		return nil, err
 	}
 
-	// tasks
-	trows, err := s.db.QueryContext(ctx, `SELECT server,name,state,command,stdout,stderr,exit_code,duration_ns FROM tasks WHERE run_id=?`, id)
+	// tasks (lightweight: heavy output is loaded on demand)
+	trows, err := s.db.QueryContext(ctx, `SELECT server,name,state,exit_code,duration_ns FROM tasks WHERE run_id=?`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +259,7 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	for trows.Next() {
 		var td TaskDetail
 		var dur sql.NullInt64
-		if err := trows.Scan(&td.Server, &td.Name, &td.State, &td.Command, &td.Stdout, &td.Stderr, &td.ExitCode, &dur); err != nil {
+		if err := trows.Scan(&td.Server, &td.Name, &td.State, &td.ExitCode, &dur); err != nil {
 			return nil, err
 		}
 		td.Duration = time.Duration(dur.Int64)
@@ -269,6 +269,31 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 		return nil, err
 	}
 	return &r, nil
+}
+
+// GetTask loads the full detail (command, stdout, stderr) for a single task.
+func (s *Store) GetTask(ctx context.Context, runID, server, name string) (TaskDetail, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT server,name,state,command,stdout,stderr,exit_code,duration_ns FROM tasks WHERE run_id=? AND server=? AND name=?`,
+		runID, server, name)
+	var td TaskDetail
+	var dur sql.NullInt64
+	if err := row.Scan(&td.Server, &td.Name, &td.State, &td.Command, &td.Stdout, &td.Stderr, &td.ExitCode, &dur); err != nil {
+		return TaskDetail{}, err
+	}
+	td.Duration = time.Duration(dur.Int64)
+	return td, nil
+}
+
+// Aliases for compatibility with callers that use other names.
+func (s *Store) GetTaskDetail(ctx context.Context, runID, server, name string) (TaskDetail, error) {
+	return s.GetTask(ctx, runID, server, name)
+}
+func (s *Store) LoadTask(ctx context.Context, runID, server, name string) (TaskDetail, error) {
+	return s.GetTask(ctx, runID, server, name)
+}
+func (s *Store) FetchTask(ctx context.Context, runID, server, name string) (TaskDetail, error) {
+	return s.GetTask(ctx, runID, server, name)
 }
 
 // DeleteRun removes a run and its associated servers and tasks.

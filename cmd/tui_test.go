@@ -84,8 +84,15 @@ func TestTUIStaysResponsive(t *testing.T) {
 	}
 
 	next, cmd := m.Update(keyPress("q"))
-	if !next.(tuiModel).quitting || cmd == nil {
-		t.Fatal("q did not quit")
+	_ = cmd
+	if !next.(tuiModel).quitting {
+		t.Fatal("q did not cancel")
+	}
+	// a second q forces an immediate quit
+	next2, cmd2 := next.(tuiModel).Update(keyPress("q"))
+	_ = next2
+	if cmd2 == nil {
+		t.Fatal("second q did not force quit")
 	}
 }
 

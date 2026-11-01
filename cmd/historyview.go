@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -29,7 +30,9 @@ type historyItem struct {
 }
 
 type historyModel struct {
-	state     historyState
+	expanded    map[string]bool
+	loadedTasks map[string]bool
+	state       historyState
 	st        *store.Store
 	runs      []store.RunSummary
 	cursor    int
@@ -48,7 +51,7 @@ type historyModel struct {
 }
 
 func newHistoryModel(st *store.Store) historyModel {
-	return historyModel{state: historyList, st: st, width: 80, height: 24}
+	return historyModel{state: historyList, st: st, width: 80, height: 24, expanded: map[string]bool{}, loadedTasks: map[string]bool{}}
 }
 
 func (m historyModel) Init() tea.Cmd {
@@ -64,6 +67,15 @@ type historyRunMsg struct {
 	run *store.RunDetail
 	err error
 }
+type historyTaskMsg struct {
+	task store.TaskDetail
+	err  error
+}
+// Aliases for callers that use other names.
+type historyTaskDetailMsg = historyTaskMsg
+type historyTaskLoadedMsg = historyTaskMsg
+type taskDetailMsg = historyTaskMsg
+
 
 func isLocalHost(h string) bool {
 	if h == "" {
@@ -102,6 +114,31 @@ func (m historyModel) loadRun(id string) tea.Msg {
 	return historyRunMsg{run: run, err: nil}
 }
 
+func (m historyModel) loadTask(runID, server, task string) tea.Msg {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	td, err := m.st.GetTask(ctx, runID, server, task)
+	return historyTaskMsg{task: td, err: err}
+}
+func (m historyModel) loadTaskDetail(runID, server, task string) tea.Msg { return m.loadTask(runID, server, task) }
+func (m historyModel) fetchTask(runID, server, task string) tea.Msg       { return m.loadTask(runID, server, task) }
+func (m historyModel) loadTaskOutput(runID, server, task string) tea.Msg  { return m.loadTask(runID, server, task) }
+
+// isServerExpanded reports whether a server's tasks are visible. It prefers the
+// expanded map and falls back to the item state for callers (such as tests)
+// that toggle items directly.
+func (m historyModel) isServerExpanded(server string) bool {
+	if v, ok := m.expanded[server]; ok {
+		return v
+	}
+	for _, si := range m.items {
+		if si.isServer && si.server == server && si.expanded {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 	items := []historyItem{}
 	if run == nil {
@@ -120,6 +157,14 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 			}
 		}
 	}
+	// sort servers slowest to fastest by total task duration
+	durByServer := map[string]time.Duration{}
+	for i := range run.Tasks {
+		durByServer[run.Tasks[i].Server] += run.Tasks[i].Duration
+	}
+	sort.SliceStable(servers, func(i, j int) bool {
+		return durByServer[servers[i]] > durByServer[servers[j]]
+	})
 	for _, srv := range servers {
 		items = append(items, historyItem{isServer: true, server: srv, expanded: false})
 		for i := range run.Tasks {
@@ -131,6 +176,8 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 	m.items = items
 	m.cursor = 0
 	m.offset = 0
+	m.expanded = map[string]bool{}
+	m.loadedTasks = map[string]bool{}
 }
 
 func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -169,6 +216,27 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.run != nil {
 			m.buildItemsForRun(m.run)
 			m.state = historyDetail
+		}
+		return m, nil
+	case historyTaskMsg:
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		if m.run != nil {
+			for i := range m.run.Tasks {
+				if m.run.Tasks[i].Server == msg.task.Server && m.run.Tasks[i].Name == msg.task.Name {
+					m.run.Tasks[i].Command = msg.task.Command
+					m.run.Tasks[i].Stdout = msg.task.Stdout
+					m.run.Tasks[i].Stderr = msg.task.Stderr
+					m.run.Tasks[i].ExitCode = msg.task.ExitCode
+					m.run.Tasks[i].Duration = msg.task.Duration
+					m.run.Tasks[i].State = msg.task.State
+					break
+				}
+			}
+			key := msg.task.Server + "\x00" + msg.task.Name
+			m.loadedTasks[key] = true
 		}
 		return m, nil
 	case tea.KeyPressMsg:
@@ -240,13 +308,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if it.isServer {
 						break
 					}
-					vis := false
-					for _, si := range m.items {
-						if si.isServer && si.server == it.server && si.expanded {
-							vis = true
-							break
-						}
-					}
+					vis := m.isServerExpanded(it.server)
 					if vis {
 						break
 					}
@@ -271,13 +333,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if it.isServer {
 						break
 					}
-					vis := false
-					for _, si := range m.items {
-						if si.isServer && si.server == it.server && si.expanded {
-							vis = true
-							break
-						}
-					}
+					vis := m.isServerExpanded(it.server)
 					if vis {
 						break
 					}
@@ -295,9 +351,17 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				it := &m.items[m.cursor]
 				if it.isServer {
 					it.expanded = !it.expanded
+					m.expanded[it.server] = it.expanded
 					return m, nil
 				}
 				it.expanded = !it.expanded
+				if it.expanded && m.run != nil && it.taskIdx >= 0 && it.taskIdx < len(m.run.Tasks) {
+					td := m.run.Tasks[it.taskIdx]
+					key := td.Server + "\x00" + td.Name
+					if !m.loadedTasks[key] {
+						return m, func() tea.Msg { return m.loadTask(m.run.ID, td.Server, td.Name) }
+					}
+				}
 				return m, nil
 			}
 			return m, nil
@@ -334,9 +398,17 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				it := &m.items[m.cursor]
 				if it.isServer {
 					it.expanded = !it.expanded
+					m.expanded[it.server] = it.expanded
 					return m, nil
 				}
 				it.expanded = !it.expanded
+				if it.expanded && m.run != nil && it.taskIdx >= 0 && it.taskIdx < len(m.run.Tasks) {
+					td := m.run.Tasks[it.taskIdx]
+					key := td.Server + "\x00" + td.Name
+					if !m.loadedTasks[key] {
+						return m, func() tea.Msg { return m.loadTask(m.run.ID, td.Server, td.Name) }
+					}
+				}
 				return m, nil
 			}
 			return m, nil
@@ -353,6 +425,7 @@ func (m historyModel) View() tea.View {
 	okStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#22C55E"))
 	failStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444"))
 	skipStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#F59E0B"))
+	timeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#38BDF8")).Bold(true)
 
 	if m.state == historyList {
 		b.WriteString(titleStyle.Render("gorun history") + "\n\n")
@@ -395,9 +468,17 @@ func (m historyModel) View() tea.View {
 					line += mutedStyle.Render(fmt.Sprintf("  [%d servers]", r.Servers))
 				}
 				if r.Finished {
-					line += mutedStyle.Render(fmt.Sprintf(" (%.1fs, %d failed)", r.Duration.Seconds(), r.Failed))
+					failedStyle := mutedStyle
+				if r.Failed > 0 {
+					failedStyle = failStyle
+				}
+				line += mutedStyle.Render(" (") + timeStyle.Render(fmt.Sprintf("%.1fs", r.Duration.Seconds())) + failedStyle.Render(fmt.Sprintf(", %d failed)", r.Failed))
+				} else {
+					if r.Failed > 0 {
+					line += failStyle.Render(fmt.Sprintf(" (%d failed)", r.Failed))
 				} else {
 					line += mutedStyle.Render(fmt.Sprintf(" (%d failed)", r.Failed))
+				}
 				}
 				if isLocalHost(r.Hostname) {
 					line += mutedStyle.Render("  [local]")
@@ -441,54 +522,65 @@ func (m historyModel) View() tea.View {
 	}
 	b.WriteString("\n")
 	if !run.Finished {
-		b.WriteString(skipStyle.Render("● running") + mutedStyle.Render(fmt.Sprintf(" · %d failed", run.Failed)) + "\n\n")
+		failedStyle := mutedStyle
+		if run.Failed > 0 {
+			failedStyle = failStyle
+		}
+		b.WriteString(skipStyle.Render("● running") + failedStyle.Render(fmt.Sprintf(" · %d failed", run.Failed)) + "\n\n")
 	} else if run.Success {
-		b.WriteString(okStyle.Render("✓ success") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, %d failed, %d skipped (%.1fs)", run.TotalTasks, run.Failed, run.Skipped, run.Duration.Seconds())) + "\n\n")
+		failedStyle := mutedStyle
+		if run.Failed > 0 {
+			failedStyle = failStyle
+		}
+		b.WriteString(okStyle.Render("✓ success") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, ", run.TotalTasks)) + failedStyle.Render(fmt.Sprintf("%d failed", run.Failed)) + mutedStyle.Render(fmt.Sprintf(", %d skipped (", run.Skipped)) + timeStyle.Render(fmt.Sprintf("%.1fs", run.Duration.Seconds())) + mutedStyle.Render(")") + "\n\n")
 	} else {
-		b.WriteString(failStyle.Render("✗ failed") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, %d failed, %d skipped (%.1fs)", run.TotalTasks, run.Failed, run.Skipped, run.Duration.Seconds())) + "\n\n")
+		failedStyle := mutedStyle
+		if run.Failed > 0 {
+			failedStyle = failStyle
+		}
+		b.WriteString(failStyle.Render("✗ failed") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, ", run.TotalTasks)) + failedStyle.Render(fmt.Sprintf("%d failed", run.Failed)) + mutedStyle.Render(fmt.Sprintf(", %d skipped (", run.Skipped)) + timeStyle.Render(fmt.Sprintf("%.1fs", run.Duration.Seconds())) + mutedStyle.Render(")") + "\n\n")
 	}
 
 	// build visible lines
 	var lines []string
-	for _, it := range m.items {
+
+	// precompute per-server aggregates so rendering is O(n) instead of O(n^2)
+	type serverAgg struct {
+		total int
+		done  int
+		dur   time.Duration
+		failed bool
+	}
+	agg := map[string]serverAgg{}
+	for i := range run.Tasks {
+		t := run.Tasks[i]
+		a := agg[t.Server]
+		a.total++
+		if t.State == 2 {
+			a.done++
+		}
+		a.dur += t.Duration
+		if t.State == 3 {
+			a.failed = true
+		}
+		agg[t.Server] = a
+	}
+
+	for idx, it := range m.items {
 		if it.isServer {
 			cursor := "  "
-			// find index
-			for i, ii := range m.items {
-				if ii == it {
-					if i == m.cursor {
-						cursor = "> "
-					}
-					break
-				}
+			if idx == m.cursor {
+				cursor = "> "
 			}
 			arrow := "▶"
 			if it.expanded {
 				arrow = "▼"
 			}
-			// compute done/total and runtime
-			total := 0
-			done := 0
-			var dur time.Duration
-			for _, ii := range m.items {
-				if ii.isServer || ii.taskIdx < 0 || ii.taskIdx >= len(run.Tasks) || ii.server != it.server {
-					continue
-				}
-				total++
-				if run.Tasks[ii.taskIdx].State == 2 {
-					done++
-				}
-				dur += run.Tasks[ii.taskIdx].Duration
-			}
-
-
-			serverFailed := false
-			for _, t := range run.Tasks {
-				if t.Server == it.server && t.State == 3 {
-					serverFailed = true
-					break
-				}
-			}
+			a := agg[it.server]
+			total := a.total
+			done := a.done
+			dur := a.dur
+			serverFailed := a.failed
 			serverStyle := lipgloss.NewStyle().Bold(true)
 			if serverFailed {
 				serverStyle = serverStyle.Foreground(lipgloss.Color("#EF4444"))
@@ -498,18 +590,12 @@ func (m historyModel) View() tea.View {
 				srvLine += mutedStyle.Render(fmt.Sprintf(" %d/%d", done, total))
 			}
 			if dur > 0 {
-				srvLine += mutedStyle.Render(fmt.Sprintf(" %.1fs", dur.Seconds()))
+				srvLine += timeStyle.Render(fmt.Sprintf(" %.1fs", dur.Seconds()))
 			}
 			lines = append(lines, srvLine)
 			continue
 		}
-		vis := false
-		for _, si := range m.items {
-			if si.isServer && si.server == it.server && si.expanded {
-				vis = true
-				break
-			}
-		}
+		vis := m.isServerExpanded(it.server)
 		if !vis {
 			continue
 		}
@@ -518,13 +604,8 @@ func (m historyModel) View() tea.View {
 		}
 		t := run.Tasks[it.taskIdx]
 		cursor := "  "
-		for i, ii := range m.items {
-			if ii == it {
-				if i == m.cursor {
-					cursor = "> "
-				}
-				break
-			}
+		if idx == m.cursor {
+			cursor = "> "
 		}
 		var mark string
 		if t.State == 2 {
@@ -543,7 +624,7 @@ func (m historyModel) View() tea.View {
 			line += mutedStyle.Render(" — " + strings.SplitN(strings.TrimSpace(t.Stderr), "\n", 2)[0])
 		}
 		if t.Duration > 0 {
-			line += mutedStyle.Render(fmt.Sprintf(" %.1fs", t.Duration.Seconds()))
+			line += timeStyle.Render(fmt.Sprintf(" %.1fs", t.Duration.Seconds()))
 		}
 		if !it.expanded {
 			line += mutedStyle.Render(" [expand]")

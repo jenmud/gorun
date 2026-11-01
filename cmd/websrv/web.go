@@ -230,6 +230,17 @@ func Run() {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
+		// hydrate task details (command, stdout, stderr) that are loaded lazily
+		for i := range run.Tasks {
+			if td, err := st.GetTask(r.Context(), id, run.Tasks[i].Server, run.Tasks[i].Name); err == nil {
+				run.Tasks[i].Command = td.Command
+				run.Tasks[i].Stdout = td.Stdout
+				run.Tasks[i].Stderr = td.Stderr
+				run.Tasks[i].ExitCode = td.ExitCode
+				run.Tasks[i].Duration = td.Duration
+				run.Tasks[i].State = td.State
+			}
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := ui.RunDetail(*run).Render(r.Context(), w); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

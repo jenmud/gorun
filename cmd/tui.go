@@ -24,10 +24,12 @@ var (
 	colorFail   = lipgloss.Color("#EF4444")
 	colorSkip   = lipgloss.Color("#F59E0B")
 	colorMuted  = lipgloss.Color("#6B7280")
+	colorTime   = lipgloss.Color("#38BDF8")
 
 	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorAccent).Padding(0, 1)
 	serverStyle = lipgloss.NewStyle().Bold(true)
 	mutedStyle  = lipgloss.NewStyle().Foreground(colorMuted)
+	timeStyle   = lipgloss.NewStyle().Foreground(colorTime).Bold(true)
 	okStyle     = lipgloss.NewStyle().Foreground(colorOK)
 	failStyle   = lipgloss.NewStyle().Foreground(colorFail).Bold(true)
 	skipStyle   = lipgloss.NewStyle().Foreground(colorSkip)
@@ -141,8 +143,9 @@ type tuiModel struct {
 	height   int
 	started  time.Time
 	elapsed  time.Duration
-	done     bool
-	quitting bool
+	done      bool
+	quitting  bool
+	forceQuit bool
 }
 
 func newTUIModel(title string, verbose bool, cancel context.CancelFunc) tuiModel {
@@ -275,9 +278,9 @@ func (m tuiModel) applyBatch(events []any) tuiModel {
 }
 
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Once the user has asked to quit, drop incoming event batches instead of
-	// applying them, so a backlog of queued events can't keep the UI stuck.
-	if m.quitting {
+	// Only drop incoming events on a forced quit; while waiting for a normal
+	// quit to finish, keep applying them so progress stays up to date.
+	if m.forceQuit {
 		switch msg.(type) {
 		case tuiBatchMsg, boxesRenderedMsg, gorun.TaskEvent, gorun.PlanEvent, gorun.ServerErrorEvent, gorun.ProcessFinishedEvent:
 			return m, nil
@@ -293,10 +296,15 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
-			m.cancel()
-			m.quitting = true
-			// Quit right away so the UI never blocks on a run that is slow to
-			// wind down; cfg.Run keeps finishing in the background.
+			if m.forceQuit {
+				return m, tea.Quit
+			}
+			if !m.quitting {
+				m.cancel()
+				m.quitting = true
+				return m, nil
+			}
+			m.forceQuit = true
 			return m, tea.Quit
 		case "v":
 			m.verbose = !m.verbose
@@ -463,12 +471,23 @@ func (m tuiModel) serverSummary(s *serverView) string {
 	default:
 		for _, t := range s.tasks {
 			if t.state == gorun.TaskRunning {
-				status = m.spinner.View() + " " + t.name + " " + mutedStyle.Render(formatDuration(time.Since(t.started)))
+				status = m.spinner.View() + " " + t.name + " " + timeStyle.Render(formatDuration(time.Since(t.started)))
 				break
 			}
 		}
 		if status == "" {
-			status = m.spinner.View() + mutedStyle.Render(" connecting")
+			startedAny := false
+			for _, t := range s.tasks {
+				if t.state != gorun.TaskPending {
+					startedAny = true
+					break
+				}
+			}
+			if startedAny {
+				status = m.spinner.View() + mutedStyle.Render(" waiting for next task")
+			} else {
+				status = m.spinner.View() + mutedStyle.Render(" connecting to host")
+			}
 		}
 	}
 
@@ -881,13 +900,13 @@ func (m tuiModel) taskStatus(t *taskView) string {
 		if t.event.Attempts > 1 && t.event.Err != nil {
 			attempt = fmt.Sprintf("retry %d/%d · ", t.event.Attempt, t.event.Attempts)
 		}
-		detail = mutedStyle.Render(attempt + formatDuration(time.Since(t.started)))
+		detail = mutedStyle.Render(attempt) + timeStyle.Render(formatDuration(time.Since(t.started)))
 	case gorun.TaskDone:
 		icon = okStyle.Render("✓")
-		detail = mutedStyle.Render(attempt + formatDuration(t.event.Duration))
+		detail = mutedStyle.Render(attempt) + timeStyle.Render(formatDuration(t.event.Duration))
 	case gorun.TaskFailed:
 		icon = failStyle.Render("✗")
-		detail = failStyle.Render(fmt.Sprintf("exit %d", t.event.ExitCode)) + mutedStyle.Render(" · "+attempt+formatDuration(t.event.Duration))
+		detail = failStyle.Render(fmt.Sprintf("exit %d", t.event.ExitCode)) + mutedStyle.Render(" · "+attempt) + timeStyle.Render(formatDuration(t.event.Duration))
 	case gorun.TaskSkipped:
 		icon = skipStyle.Render("⊘")
 		detail = skipStyle.Render("skipped")
@@ -971,7 +990,7 @@ func (m tuiModel) renderFailureBox(server string, t *taskView, skipped []string)
 		attempt = fmt.Sprintf(" · attempt %d/%d", t.event.Attempt, t.event.Attempts)
 	}
 	title := failStyle.Render(fmt.Sprintf("✗ %s › %s failed", server, t.name)) +
-		mutedStyle.Render(fmt.Sprintf("  exit %d · %s%s", t.event.ExitCode, formatDuration(t.event.Duration), attempt))
+		mutedStyle.Render(fmt.Sprintf("  exit %d · ", t.event.ExitCode)) + timeStyle.Render(formatDuration(t.event.Duration)) + mutedStyle.Render(attempt)
 
 	sections := []string{title}
 
@@ -1045,20 +1064,23 @@ func (m tuiModel) footer() string {
 		var summary string
 		switch {
 		case m.runErr != nil:
-			summary = failStyle.Render("✗ could not start the run") + mutedStyle.Render(" after "+formatDuration(elapsed))
+			summary = failStyle.Render("✗ could not start the run") + mutedStyle.Render(" after ") + timeStyle.Render(formatDuration(elapsed))
 		case !m.done:
-			summary = skipStyle.Render("⊘ cancelled") + mutedStyle.Render(" after "+formatDuration(elapsed))
+			summary = skipStyle.Render("⊘ cancelled") + mutedStyle.Render(" after ") + timeStyle.Render(formatDuration(elapsed))
 		case m.failed():
 			summary = failStyle.Render(fmt.Sprintf("✗ %d of %d tasks failed", failed, total))
 			if skipped > 0 {
 				summary += skipStyle.Render(fmt.Sprintf(", %d skipped", skipped))
 			}
-			summary += mutedStyle.Render(" in " + formatDuration(elapsed))
+			summary += mutedStyle.Render(" in ") + timeStyle.Render(formatDuration(elapsed))
 		default:
-			summary = okStyle.Render(fmt.Sprintf("✓ all %d tasks completed", total)) + mutedStyle.Render(" in "+formatDuration(elapsed))
+			summary = okStyle.Render(fmt.Sprintf("✓ all %d tasks completed", total)) + mutedStyle.Render(" in ") + timeStyle.Render(formatDuration(elapsed))
 		}
 
 		if m.quitting {
+			if !m.done {
+				summary += mutedStyle.Render("  (waiting for tasks to finish; q to force quit)")
+			}
 			return summary + "\n"
 		}
 		return summary + "\n" + mutedStyle.Render("↑/↓/pgup/pgdown/home/end move · enter details/output · v compact · q quit")
@@ -1126,10 +1148,12 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 	}()
 
 	recordCh := make(chan any, 4096)
+	recordDone := make(chan struct{})
 	go func() {
 		for ev := range recordCh {
 			recordEvent(ctx, st, ev)
 		}
+		close(recordDone)
 	}()
 
 	// Batch events instead of forwarding every one to the TUI: a large run can
@@ -1163,10 +1187,7 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 	}
 
 	cfg.OnEvent = func(event any) {
-		select {
-		case recordCh <- event:
-		default:
-		}
+		recordCh <- event
 		batchMu.Lock()
 		batch = append(batch, event)
 		batchMu.Unlock()
@@ -1176,14 +1197,19 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 	done := make(chan error, 1)
 	go func() {
 		err := cfg.Run(ctx)
-		done <- err
 		close(recordCh)
+		<-recordDone
+		done <- err
 		// flush any events still pending so the final state lands before RunDone
 		flushBatch()
 		p.Send(gorun.RunDoneEvent{Type: "run_done", GorunUUID: cfg.GorunUUID, Err: err})
 	}()
 
 	final, err := p.Run()
+	fm, _ := final.(tuiModel)
+	if !fm.forceQuit {
+		<-done
+	}
 	if err != nil {
 		return fmt.Errorf("error running TUI: %w", err)
 	}

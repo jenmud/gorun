@@ -90,6 +90,10 @@ func TestHistoryShowsMultiLineCommands(t *testing.T) {
 	next, _ := m.Update(m.loadRun(runID))
 	m = next.(historyModel)
 
+	// load the task's hidden detail (command) on demand
+	next, _ = m.Update(m.loadTask(runID, "host-1", "jj-config"))
+	m = next.(historyModel)
+
 	// expand the server, then its task
 	for i := range m.items {
 		m.items[i].expanded = true

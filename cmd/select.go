@@ -22,6 +22,7 @@ var (
 	searchBoxStyle   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colorAccent).Padding(0, 1)
 	searchLabelStyle = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
 	runButtonStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorOK).Padding(0, 2)
+	runAllButtonStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorAccent).Padding(0, 2)
 	offButtonStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#D1D5DB")).Background(lipgloss.Color("#374151")).Padding(0, 2)
 	headerStyle      = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
 	activeTabStyle   = lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Underline(true)
@@ -790,8 +791,15 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		l := m.layout()
-		if msg.Y == l.buttonY && msg.X < lipgloss.Width(m.runButton()) {
-			return m.run()
+		runW := lipgloss.Width(m.runButton())
+		allW := lipgloss.Width(m.runAllButton())
+		if msg.Y == l.buttonY {
+			if msg.X < runW {
+				return m.run()
+			}
+			if msg.X >= runW+2 && msg.X < runW+2+allW {
+				return m.runAll()
+			}
 		}
 
 		// clicking a server or task moves the cursor to it and toggles it; clicking a
@@ -868,6 +876,8 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.moveCursor(1)
 				}
 			}
+		case "a", "A":
+			return m.runAll()
 		case "ctrl+a":
 			// select every visible server, or deselect them if they are all selected already
 			all := true
@@ -926,6 +936,21 @@ func (m serverSelectionModel) run() (tea.Model, tea.Cmd) {
 	m.confirmed = true
 	m.quitting = true
 	return m, tea.Quit
+}
+
+// selectAllServers ticks every server (with all of its tasks) so the whole
+// deployment runs without the user selecting them one by one.
+func (m *serverSelectionModel) selectAllServers() {
+	for _, s := range m.servers {
+		m.selected[s.Name] = true
+		delete(m.skipped, s.Name)
+	}
+}
+
+// runAll selects every server and confirms the run.
+func (m serverSelectionModel) runAll() (tea.Model, tea.Cmd) {
+	m.selectAllServers()
+	return m.run()
 }
 
 func (m serverSelectionModel) View() tea.View {
@@ -1008,6 +1033,10 @@ func (m serverSelectionModel) runButton() string {
 		return runButtonStyle.Render("▶ Run on 1 server")
 	}
 	return runButtonStyle.Render(fmt.Sprintf("▶ Run on %d servers", len(chosen)))
+}
+
+func (m serverSelectionModel) runAllButton() string {
+	return runAllButtonStyle.Render("▶ Run all")
 }
 
 func (m serverSelectionModel) viewContent() string {
@@ -1093,8 +1122,8 @@ func (m serverSelectionModel) viewContent() string {
 		lines = append(lines, line)
 	}
 
-	lines = append(lines, "", m.runButton()+mutedStyle.Render("  enter"), "")
-	lines = append(lines, mutedStyle.Render("↑/↓ move · →/← show/hide tasks · space/tab select · ctrl+t/ctrl+x tick/clear a server's tasks · ctrl+a select all shown · ctrl+d clear · esc clear/quit · click to select or run"))
+	lines = append(lines, "", m.runButton()+"  "+m.runAllButton()+mutedStyle.Render("  enter / a"), "")
+	lines = append(lines, mutedStyle.Render("↑/↓ move · →/← show/hide tasks · space/tab select · ctrl+t/ctrl+x tick/clear a server's tasks · ctrl+a select all shown · a run all · ctrl+d clear · esc clear/quit · click to select or run"))
 	return strings.Join(lines, "\n")
 }
 

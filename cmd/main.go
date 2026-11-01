@@ -25,7 +25,7 @@ import (
 	"github.com/jenmud/gorun/internal/store"
 )
 
-var version = "dev"
+var version = "0.1.0"
 
 // emptyGorunfile is the starting Gorunfile printed by -dump.
 //

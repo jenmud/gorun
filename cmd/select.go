@@ -884,6 +884,31 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.buildRows()
 			}
+		case "e":
+			if row, ok := m.currentRow(); ok && row.kind == rowServer {
+				if s, _ := m.serverOfRow(row); len(s.Tasks) > 0 {
+					m.expanded[s.Name] = true
+					m.buildRows()
+				}
+			}
+		case "E":
+			for _, s := range m.servers {
+				m.expanded[s.Name] = true
+			}
+			m.buildRows()
+		case "c":
+			if s, ok := m.current(); ok && m.expanded[s.Name] {
+				m.expanded[s.Name] = false
+				for m.cursor > 0 && m.rows[m.cursor].kind == rowTask {
+					m.cursor--
+				}
+				m.buildRows()
+			}
+		case "C":
+			for _, s := range m.servers {
+				m.expanded[s.Name] = false
+			}
+			m.buildRows()
 		case "space", "tab":
 			if row, ok := m.currentRow(); ok {
 				m.toggleRow(row)
@@ -1138,7 +1163,7 @@ func (m serverSelectionModel) viewContent() string {
 	}
 
 	lines = append(lines, "", m.runButton()+"  "+m.runAllButton()+mutedStyle.Render("  enter / a"), "")
-	lines = append(lines, mutedStyle.Render("↑/↓ move · →/← show/hide tasks · space/tab select · ctrl+t/ctrl+x tick/clear a server's tasks · ctrl+a select all shown · a run all · ctrl+d clear · esc clear/quit · click to select or run"))
+	lines = append(lines, mutedStyle.Render("↑/↓ move · →/← show/hide tasks · e/E expand all · c/C collapse all · space/tab select · ctrl+t/ctrl+x tick/clear a server's tasks · ctrl+a select all shown · a run all · ctrl+d clear · esc clear/quit · click to select or run"))
 	return strings.Join(lines, "\n")
 }
 

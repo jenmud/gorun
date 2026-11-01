@@ -377,6 +377,42 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.verbose && len(m.servers) > 0 {
 				m.setOpen(false)
 			}
+		case "e":
+			if m.verbose {
+				if tasks := m.flatTasks(); m.cursor >= 0 && m.cursor < len(tasks) {
+					tasks[m.cursor].expanded = true
+				}
+			} else if len(m.servers) > 0 {
+				m.setOpen(true)
+			}
+		case "E":
+			if m.verbose {
+				for _, t := range m.flatTasks() {
+					t.expanded = true
+				}
+			} else {
+				for _, s := range m.servers {
+					s.open = true
+				}
+			}
+		case "c":
+			if m.verbose {
+				if tasks := m.flatTasks(); m.cursor >= 0 && m.cursor < len(tasks) {
+					tasks[m.cursor].expanded = false
+				}
+			} else if len(m.servers) > 0 {
+				m.setOpen(false)
+			}
+		case "C":
+			if m.verbose {
+				for _, t := range m.flatTasks() {
+					t.expanded = false
+				}
+			} else {
+				for _, s := range m.servers {
+					s.open = false
+				}
+			}
 		}
 		return m, nil
 
@@ -1083,13 +1119,13 @@ func (m tuiModel) footer() string {
 			}
 			return summary + "\n"
 		}
-		return summary + "\n" + mutedStyle.Render("↑/↓/pgup/pgdown/home/end move · enter details/output · v compact · q quit")
+		return summary + "\n" + mutedStyle.Render("↑/↓/pgup/pgdown/home/end move · enter details/output · e/E expand all · c/C collapse all · v compact · q quit")
 	}
 
 	if m.verbose {
-		return mutedStyle.Render("↑/↓/pgup/pgdown/home/end move · enter details/output · v compact · q quit")
+		return mutedStyle.Render("↑/↓/pgup/pgdown/home/end move · enter details/output · e/E expand all · c/C collapse all · v compact · q quit")
 	}
-	return mutedStyle.Render("↑/↓ select server · enter/→ show tasks · ← hide · pgup/pgdown/home/end scroll · v verbose · q quit")
+	return mutedStyle.Render("↑/↓ select server · enter/→ show tasks · ← hide · e/E expand all · c/C collapse all · pgup/pgdown/home/end scroll · v verbose · q quit")
 }
 
 // tail returns the last n lines of s, noting how many were cut.

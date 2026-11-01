@@ -637,7 +637,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				}
 
 				logger.Debug("connected to server via SSH")
-				defer func() { _ = client.Close() }()
+				defer func() { _ = closeSSHClient(client) }()
 				sshClient = client
 			}
 

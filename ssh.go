@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -139,6 +140,67 @@ func NewSSHClient(ctx context.Context, server Server) (*ssh.Client, error) {
 	return client, nil
 }
 
+// maxSessions is how many sessions gorun opens at once on one SSH connection.
+// OpenSSH's sshd allows 10 by default (MaxSessions) and rejects any more with
+// "open failed", so tasks beyond that wait for a free session instead.
+const maxSessions = 10
+
+// sessionSlots holds a semaphore of maxSessions slots per SSH connection.
+var sessionSlots sync.Map // *ssh.Client -> chan struct{}
+
+func slotsFor(client *ssh.Client) chan struct{} {
+	v, _ := sessionSlots.LoadOrStore(client, make(chan struct{}, maxSessions))
+	return v.(chan struct{})
+}
+
+// closeSSHClient closes client and forgets its session slots.
+func closeSSHClient(client *ssh.Client) error {
+	sessionSlots.Delete(client)
+	return client.Close()
+}
+
+// newSession opens a session on client once one of its maxSessions slots is
+// free. The returned close func closes the session and frees the slot.
+//
+// A server configured with a lower MaxSessions, or one that hasn't finished
+// tearing down a just-closed session, rejects the open with "open failed";
+// that is retried with backoff until ctx is done.
+func newSession(ctx context.Context, client *ssh.Client) (*ssh.Session, func(), error) {
+	slots := slotsFor(client)
+	select {
+	case slots <- struct{}{}:
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+
+	backoff := 20 * time.Millisecond
+	for attempt := 1; ; attempt++ {
+		session, err := client.NewSession()
+		if err == nil {
+			var once sync.Once
+			return session, func() {
+				once.Do(func() {
+					_ = session.Close()
+					<-slots
+				})
+			}, nil
+		}
+
+		var openErr *ssh.OpenChannelError
+		if !errors.As(err, &openErr) || openErr.Reason != ssh.ConnectionFailed || attempt >= 30 {
+			<-slots
+			return nil, nil, err
+		}
+		select {
+		case <-time.After(backoff):
+			backoff = min(2*backoff, time.Second)
+		case <-ctx.Done():
+			<-slots
+			return nil, nil, ctx.Err()
+		}
+	}
+}
+
 // scpSender drives the source side of the scp protocol against a remote
 // `scp -t` sink. Every command is acknowledged by the sink before the next one.
 type scpSender struct {
@@ -235,11 +297,11 @@ func shellQuote(s string) string {
 
 // runRemote runs cmd on the remote and returns its error together with stderr.
 func runRemote(client *ssh.Client, cmd string) error {
-	session, err := client.NewSession()
+	session, closeSession, err := newSession(context.Background(), client)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
+	defer closeSession()
 	out, err := session.CombinedOutput(cmd)
 	if err != nil {
 		return fmt.Errorf("%s: %w: %s", cmd, err, strings.TrimSpace(string(out)))
@@ -249,11 +311,11 @@ func runRemote(client *ssh.Client, cmd string) error {
 
 // runSCP starts `scp <flags> -t target` on the remote and lets send stream into it.
 func runSCP(client *ssh.Client, flags, target string, send func(*scpSender) error) error {
-	session, err := client.NewSession()
+	session, closeSession, err := newSession(context.Background(), client)
 	if err != nil {
 		return err
 	}
-	defer session.Close()
+	defer closeSession()
 
 	stdin, err := session.StdinPipe()
 	if err != nil {

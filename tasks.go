@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -686,12 +687,6 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		t.completedAt = time.Now()
 	}()
 
-	session, err := t.server.NewSession()
-	if err != nil {
-		return t.Fail(ctx, fmt.Errorf("error creating SSH session: %w", err))
-	}
-	defer func() { _ = session.Close() }()
-
 	var serverArg any
 	if t.gorunServer != nil {
 		serverArg = t.gorunServer
@@ -699,7 +694,10 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		serverArg = Server{Name: t.serverName}
 	}
 
-	var command string
+	var (
+		command string
+		err     error
+	)
 	if t.task.hasCommand() {
 		command, err = t.task.CommandFor(serverArg)
 		if err != nil {
@@ -710,8 +708,9 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 	// record the command as written, before the envvars prelude, sudo wrapping and quoting below
 	t.command = command
 
+	var stdin io.Reader
 	if command != "" {
-		stdin, err := envStdin(t.task.EnvVars)
+		stdin, err = envStdin(t.task.EnvVars)
 		if err != nil {
 			return t.Fail(ctx, err)
 		}
@@ -723,25 +722,23 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 			// run the prelude in sh, whatever the remote user's login shell is
 			command = shWrap(envPrelude + command)
 		}
-		session.Stdin = stdin
 	}
 
 	t.startedAt = time.Now()
 
 	result := make(chan execResult, 1)
 
+	// The command's session is only opened once the files are copied, so a task
+	// holds at most one of the connection's session slots at a time and tasks
+	// can't deadlock waiting on each other's slots.
+	var (
+		sessionMu sync.Mutex
+		session   *ssh.Session
+	)
+
 	go func() {
-		var stdout, stderr bytes.Buffer
-
-		session.Stdout = &stdout
-		session.Stderr = &stderr
-
 		if err := CopyFiles(t.server, serverArg, &t.task); err != nil {
-			result <- execResult{
-				stdout: stdout.Bytes(),
-				stderr: stderr.Bytes(),
-				err:    fmt.Errorf("error running the task on the remote server: %w", err),
-			}
+			result <- execResult{err: fmt.Errorf("error running the task on the remote server: %w", err)}
 			return
 		}
 		if command == "" {
@@ -750,7 +747,23 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 			return
 		}
 
-		err := session.Run(command)
+		s, closeSession, err := newSession(ctx, t.server)
+		if err != nil {
+			result <- execResult{err: fmt.Errorf("error creating SSH session: %w", err)}
+			return
+		}
+		defer closeSession()
+
+		var stdout, stderr bytes.Buffer
+		s.Stdin = stdin
+		s.Stdout = &stdout
+		s.Stderr = &stderr
+
+		sessionMu.Lock()
+		session = s
+		sessionMu.Unlock()
+
+		err = s.Run(command)
 		if err != nil {
 			err = fmt.Errorf("error running the task on the remote server: %w", err)
 		}
@@ -758,31 +771,38 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 		result <- execResult{stdout: stdout.Bytes(), stderr: stderr.Bytes(), err: err}
 	}()
 
-	select {
-	case res := <-result:
+	finish := func(res execResult) error {
 		t.stdout = res.stdout
 		t.stderr = res.stderr
-		if res.err != nil {
+		switch {
+		case res.err != nil && ctx.Err() != nil && errors.Is(res.err, ctx.Err()):
+			// cancelled while waiting for a free session
+			return t.Terminate(ctx, ctx.Err())
+		case res.err != nil:
 			return t.Fail(ctx, res.err)
 		}
 		return t.Completed(ctx)
+	}
+
+	select {
+	case res := <-result:
+		return finish(res)
 	case <-ctx.Done():
 		// The command may have finished at the same moment the deadline hit.
 		// Prefer its result over reporting a timeout.
 		select {
 		case res := <-result:
-			t.stdout = res.stdout
-			t.stderr = res.stderr
-			if res.err != nil {
-				return t.Fail(ctx, res.err)
-			}
-			return t.Completed(ctx)
+			return finish(res)
 		default:
 		}
 
 		// Ask the remote command to stop. Closing the client also unblocks a
 		// stuck copy or command, so Execute can return promptly.
-		_ = session.Signal(ssh.SIGTERM)
+		sessionMu.Lock()
+		if session != nil {
+			_ = session.Signal(ssh.SIGTERM)
+		}
+		sessionMu.Unlock()
 		_ = t.server.Close()
 
 		select {

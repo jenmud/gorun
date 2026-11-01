@@ -33,17 +33,17 @@ type historyModel struct {
 	expanded    map[string]bool
 	loadedTasks map[string]bool
 	state       historyState
-	st        *store.Store
-	runs      []store.RunSummary
-	cursor    int
-	offset    int
-	width     int
-	height    int
-	run       *store.RunDetail
-	items     []historyItem
-	err       error
-	askKeep   bool
-	keepInput string
+	st          *store.Store
+	runs        []store.RunSummary
+	cursor      int
+	offset      int
+	width       int
+	height      int
+	run         *store.RunDetail
+	items       []historyItem
+	err         error
+	askKeep     bool
+	keepInput   string
 
 	// embedded is set when the history is a tab of the server picker, where esc and q
 	// on the runs list go back to the servers instead of quitting
@@ -71,11 +71,11 @@ type historyTaskMsg struct {
 	task store.TaskDetail
 	err  error
 }
+
 // Aliases for callers that use other names.
 type historyTaskDetailMsg = historyTaskMsg
 type historyTaskLoadedMsg = historyTaskMsg
 type taskDetailMsg = historyTaskMsg
-
 
 func isLocalHost(h string) bool {
 	if h == "" {
@@ -120,9 +120,15 @@ func (m historyModel) loadTask(runID, server, task string) tea.Msg {
 	td, err := m.st.GetTask(ctx, runID, server, task)
 	return historyTaskMsg{task: td, err: err}
 }
-func (m historyModel) loadTaskDetail(runID, server, task string) tea.Msg { return m.loadTask(runID, server, task) }
-func (m historyModel) fetchTask(runID, server, task string) tea.Msg       { return m.loadTask(runID, server, task) }
-func (m historyModel) loadTaskOutput(runID, server, task string) tea.Msg  { return m.loadTask(runID, server, task) }
+func (m historyModel) loadTaskDetail(runID, server, task string) tea.Msg {
+	return m.loadTask(runID, server, task)
+}
+func (m historyModel) fetchTask(runID, server, task string) tea.Msg {
+	return m.loadTask(runID, server, task)
+}
+func (m historyModel) loadTaskOutput(runID, server, task string) tea.Msg {
+	return m.loadTask(runID, server, task)
+}
 
 // isServerExpanded reports whether a server's tasks are visible. It prefers the
 // expanded map and falls back to the item state for callers (such as tests)
@@ -469,16 +475,16 @@ func (m historyModel) View() tea.View {
 				}
 				if r.Finished {
 					failedStyle := mutedStyle
-				if r.Failed > 0 {
-					failedStyle = failStyle
-				}
-				line += mutedStyle.Render(" (") + timeStyle.Render(fmt.Sprintf("%.1fs", r.Duration.Seconds())) + failedStyle.Render(fmt.Sprintf(", %d failed)", r.Failed))
+					if r.Failed > 0 {
+						failedStyle = failStyle
+					}
+					line += mutedStyle.Render(" (") + timeStyle.Render(fmt.Sprintf("%.1fs", r.Duration.Seconds())) + failedStyle.Render(fmt.Sprintf(", %d failed)", r.Failed))
 				} else {
 					if r.Failed > 0 {
-					line += failStyle.Render(fmt.Sprintf(" (%d failed)", r.Failed))
-				} else {
-					line += mutedStyle.Render(fmt.Sprintf(" (%d failed)", r.Failed))
-				}
+						line += failStyle.Render(fmt.Sprintf(" (%d failed)", r.Failed))
+					} else {
+						line += mutedStyle.Render(fmt.Sprintf(" (%d failed)", r.Failed))
+					}
 				}
 				if isLocalHost(r.Hostname) {
 					line += mutedStyle.Render("  [local]")
@@ -493,14 +499,14 @@ func (m historyModel) View() tea.View {
 			}
 		}
 		if m.askKeep {
-		b.WriteString("\n" + mutedStyle.Render("Keep how many recent runs? ") + m.keepInput + mutedStyle.Render("_ (enter confirm, esc cancel)"))
-	} else {
-		help := "↑/↓ move · enter view · d delete · t keep N · q quit"
-		if m.embedded {
-			help = "↑/↓ move · enter view · d delete · t keep N · esc/q back to servers · shift+tab switch"
+			b.WriteString("\n" + mutedStyle.Render("Keep how many recent runs? ") + m.keepInput + mutedStyle.Render("_ (enter confirm, esc cancel)"))
+		} else {
+			help := "↑/↓ move · enter view · d delete · t keep N · q quit"
+			if m.embedded {
+				help = "↑/↓ move · enter view · d delete · t keep N · esc/q back to servers · shift+tab switch"
+			}
+			b.WriteString("\n" + mutedStyle.Render(help))
 		}
-		b.WriteString("\n" + mutedStyle.Render(help))
-	}
 		v := tea.NewView(b.String())
 		return v
 	}
@@ -546,9 +552,9 @@ func (m historyModel) View() tea.View {
 
 	// precompute per-server aggregates so rendering is O(n) instead of O(n^2)
 	type serverAgg struct {
-		total int
-		done  int
-		dur   time.Duration
+		total  int
+		done   int
+		dur    time.Duration
 		failed bool
 	}
 	agg := map[string]serverAgg{}

@@ -375,6 +375,29 @@ func tagTreeNodes(cfg *gorun.Config, servers []gorun.Server, filtered bool) []*t
 	return nodes
 }
 
+// groupTreeNodes builds the --list-groups tree: each group expands to its servers.
+func groupTreeNodes(cfg *gorun.Config, servers []gorun.Server, filtered bool) []*treeNode {
+	members := groupMembers(cfg, servers, filtered)
+	addresses := make(map[string]string, len(servers))
+	for _, s := range servers {
+		addresses[s.Name] = s.Address()
+	}
+
+	nodes := make([]*treeNode, 0, len(members))
+	for _, group := range slices.Sorted(maps.Keys(members)) {
+		names := members[group]
+		n := &treeNode{label: group, detail: fmt.Sprintf("%d servers", len(names))}
+		if len(names) == 0 {
+			n.detail = "no servers"
+		}
+		for _, name := range names {
+			n.children = append(n.children, &treeNode{label: name, detail: addresses[name]})
+		}
+		nodes = append(nodes, n)
+	}
+	return nodes
+}
+
 // bundleTreeNodes builds the --list-bundles tree: each bundle expands to its
 // tasks, with included bundles expandable in turn, then the task names it
 // expands to when it includes other bundles.

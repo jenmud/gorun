@@ -18,14 +18,14 @@ import (
 )
 
 var (
-	matchStyle       = lipgloss.NewStyle().Foreground(colorSkip).Bold(true)
-	searchBoxStyle   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colorAccent).Padding(0, 1)
-	searchLabelStyle = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
-	runButtonStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorOK).Padding(0, 2)
+	matchStyle        = lipgloss.NewStyle().Foreground(colorSkip).Bold(true)
+	searchBoxStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colorAccent).Padding(0, 1)
+	searchLabelStyle  = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
+	runButtonStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorOK).Padding(0, 2)
 	runAllButtonStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorAccent).Padding(0, 2)
-	offButtonStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#D1D5DB")).Background(lipgloss.Color("#374151")).Padding(0, 2)
-	headerStyle      = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
-	activeTabStyle   = lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Underline(true)
+	offButtonStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#D1D5DB")).Background(lipgloss.Color("#374151")).Padding(0, 2)
+	headerStyle       = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
+	activeTabStyle    = lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Underline(true)
 )
 
 // serverMatch is a server that matches the current filter.
@@ -73,10 +73,12 @@ type selectionRow struct {
 // Expanding a server lists its task pipeline, so individual tasks can be left out.
 // Groups and tags select all their servers at once.
 type serverSelectionModel struct {
-	title   string
-	servers []gorun.Server // with Tasks resolved, so they can be listed
-	groups  []string
-	tags    []string
+	title      string
+	servers    []gorun.Server // with Tasks resolved, so they can be listed
+	groupNames []string
+	tags       []string
+
+	groups *treeModel
 
 	selected map[string]bool
 	expanded map[string]bool
@@ -110,10 +112,11 @@ const (
 	tabServers = iota
 	tabTasks
 	tabBundles
+	tabGroups
 	tabHistory
 )
 
-var tabNames = map[int]string{tabServers: "Servers", tabTasks: "Tasks", tabBundles: "Bundles", tabHistory: "History"}
+var tabNames = map[int]string{tabServers: "Servers", tabTasks: "Tasks", tabBundles: "Bundles", tabGroups: "Groups", tabHistory: "History"}
 
 // withLists adds Tasks and Bundles tabs browsing cfg's tasks and bundles, like
 // --list-tasks and --list-bundles do.
@@ -128,6 +131,11 @@ func (m serverSelectionModel) withLists(cfg *gorun.Config) serverSelectionModel 
 		t.embedded = true
 		m.bundles = &t
 	}
+	if nodes := groupTreeNodes(cfg, cfg.Servers, false); len(nodes) > 0 {
+		t := newTreeModel(m.title, "groups", nodes)
+		t.embedded = true
+		m.groups = &t
+	}
 	m.resizeTabs()
 	return m
 }
@@ -141,6 +149,9 @@ func (m serverSelectionModel) tabs() []int {
 	if m.bundles != nil {
 		tabs = append(tabs, tabBundles)
 	}
+	if m.groups != nil {
+		tabs = append(tabs, tabGroups)
+	}
 	if m.hasHistory {
 		tabs = append(tabs, tabHistory)
 	}
@@ -150,7 +161,7 @@ func (m serverSelectionModel) tabs() []int {
 // resizeTabs gives the embedded views the picker's size.
 func (m *serverSelectionModel) resizeTabs() {
 	m.history.width, m.history.height = m.width, m.height
-	for _, t := range []*treeModel{m.tasks, m.bundles} {
+	for _, t := range []*treeModel{m.tasks, m.bundles, m.groups} {
 		if t != nil {
 			next, _ := t.Update(tea.WindowSizeMsg{Width: m.width, Height: m.height})
 			*t = next.(treeModel)
@@ -193,6 +204,8 @@ func (m serverSelectionModel) treeTab() *treeModel {
 		return m.tasks
 	case tabBundles:
 		return m.bundles
+	case tabGroups:
+		return m.groups
 	}
 	return nil
 }
@@ -223,8 +236,10 @@ func (m serverSelectionModel) updateTree(msg tea.Msg) (tea.Model, tea.Cmd) {
 	t = next.(treeModel)
 	if m.tab == tabTasks {
 		m.tasks = &t
-	} else {
+	} else if m.tab == tabBundles {
 		m.bundles = &t
+	} else if m.tab == tabGroups {
+		m.groups = &t
 	}
 	return m, nil
 }
@@ -359,7 +374,7 @@ func newServerSelectionModel(title string, servers []gorun.Server) serverSelecti
 			tags[t] = true
 		}
 	}
-	m.groups = slices.Sorted(maps.Keys(groups))
+	m.groupNames = slices.Sorted(maps.Keys(groups))
 	m.tags = slices.Sorted(maps.Keys(tags))
 
 	m.filter()
@@ -687,7 +702,7 @@ func (m *serverSelectionModel) filter() {
 		slices.SortStableFunc(items, func(a, b itemMatch) int { return b.score - a.score })
 		return items
 	}
-	m.groupMatches = matchItems(m.groups)
+	m.groupMatches = matchItems(m.groupNames)
 	m.tagMatches = matchItems(m.tags)
 
 	// a new filter starts at the top

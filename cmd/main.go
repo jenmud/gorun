@@ -145,6 +145,8 @@ func main() {
 	listTasks := flag.Bool("list-tasks", false, "list available tasks and exit")
 	listServers := flag.Bool("list-servers", false, "list servers and their task pipelines and exit")
 	listTags := flag.Bool("list-tags", false, "list tags and the servers that have them and exit")
+	listGroups := flag.Bool("list-groups", false, "list server groups and the servers that have them and exit")
+	listServerGroups := flag.Bool("list-server-groups", false, "list server groups and the servers that have them and exit")
 	listBundles := flag.Bool("list-bundles", false, "list task bundles and what they expand to and exit")
 	complete := flag.String("complete", "", "print shell completion candidates (tasks, servers, tags or groups) and exit")
 
@@ -217,7 +219,7 @@ func main() {
 	}
 
 	slog.Info("parsing gorun file", slog.String("filename", filename))
-	if *listTasks || *listServers || *listTags || *listBundles {
+	if *listTasks || *listServers || *listTags || *listGroups || *listServerGroups || *listBundles {
 		os.Setenv("GORUN_SKIP_NATS", "1")
 	}
 	gorun.StartNATS()
@@ -290,6 +292,13 @@ func main() {
 	if *listTags {
 		showList("tags", tagTreeNodes(&cfg, cfg.Servers, !filter.IsZero()), func() {
 			printTags(os.Stdout, &cfg, cfg.Servers, !filter.IsZero())
+		})
+		return
+	}
+
+	if *listGroups || *listServerGroups {
+		showList("groups", groupTreeNodes(&cfg, cfg.Servers, !filter.IsZero()), func() {
+			printGroups(os.Stdout, &cfg, cfg.Servers, !filter.IsZero())
 		})
 		return
 	}
@@ -447,6 +456,7 @@ Options:
   -list-tasks  list available tasks and exit (a collapsible tree in a terminal)
   -list-servers  list servers and their task pipelines and exit (a collapsible tree in a terminal)
   -list-tags  list tags and the servers that have them and exit (a collapsible tree in a terminal)
+  -list-groups  list server groups and the servers that have them and exit (a collapsible tree in a terminal)
   -list-bundles  list task bundles and what they expand to and exit (a collapsible tree in a terminal)
   -dump     print a starting Gorunfile that works as-is and documents every option
   -version  print version and exit

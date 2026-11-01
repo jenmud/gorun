@@ -230,16 +230,16 @@ func TestPickerListTabs(t *testing.T) {
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
 	m = next.(serverSelectionModel)
 
-	if plain := ansi.Strip(m.titleLine()); !strings.Contains(plain, "Servers │ Tasks │ Bundles │ History") {
+	if plain := ansi.Strip(m.titleLine()); !strings.Contains(plain, "Servers │ Tasks │ Bundles │ Groups │ History") {
 		t.Fatalf("title line %q is missing the tabs", plain)
 	}
 
 	order := []int{}
-	for range 4 {
+	for range 5 {
 		m = press(m, "shift+tab")
 		order = append(order, m.tab)
 	}
-	if diff := cmp.Diff([]int{tabTasks, tabBundles, tabHistory, tabServers}, order); diff != "" {
+	if diff := cmp.Diff([]int{tabTasks, tabBundles, tabGroups, tabHistory, tabServers}, order); diff != "" {
 		t.Fatalf("shift+tab order (-want +got):\n%s", diff)
 	}
 

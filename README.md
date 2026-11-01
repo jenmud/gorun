@@ -454,14 +454,14 @@ combine: `gorun Gorunfile --tag prod --task @baseline` opens a picker with just 
 | ctrl+t / ctrl+x | tick / clear all of the current server's tasks |
 | ctrl+a | select every server shown (again to deselect them) |
 | ctrl+d | clear the whole selection, including task choices |
-| shift+tab (or click the tab) | cycle through **Servers**, **Tasks**, **Bundles** and [**History**](#history) |
+| shift+tab (or click the tab) | cycle through **Servers**, **Tasks**, **Bundles**, **Groups** and [**History**](#history) |
 | enter, ctrl+r, click **▶ Run** | run the selection |
 | esc | clear the filter, then quit |
 | ctrl+c | quit without running anything |
 
-The **Tasks** and **Bundles** tabs browse the Gorunfile's tasks and bundles as the same collapsible
-trees as `--list-tasks` and `--list-bundles`, so you can check what a task pulls in before you run
-it. esc or q goes back to **Servers**.
+The **Tasks**, **Bundles** and **Groups** tabs browse the Gorunfile's tasks, bundles and server
+groups as the same collapsible trees as `--list-tasks`, `--list-bundles` and `--list-groups`, so you
+can check what a task pulls in before you run it. esc or q goes back to **Servers**.
 
 ### Watching a run
 
@@ -534,6 +534,7 @@ gorun Gorunfile --task 'deploy-*'                          # every matching task
 gorun Gorunfile --list-servers    # every server with its groups, tags and resolved task list
 gorun Gorunfile --list-tasks      # the task library as a dependency tree
 gorun Gorunfile --list-tags       # each tag and the servers that have it
+gorun Gorunfile --list-groups     # each server group and the servers that have it
 gorun Gorunfile --list-bundles    # each bundle as a tree, and what it expands to
 ```
 
@@ -741,7 +742,7 @@ _gorun_complete() {
     esac
 
     if [[ $cur == -* ]]; then
-        COMPREPLY=($(compgen -W "-v -plain -run -r -task -server -exclude-server -tag -group -parallel -list-tasks -list-servers -list-tags -list-bundles -dump -version -web -history -h --task --server --exclude-server --tag --group --parallel --run --plain --list-tasks --list-servers --list-tags --list-bundles --dump --version --web --history --help" -- "$cur"))
+        COMPREPLY=($(compgen -W "-v -plain -run -r -task -server -exclude-server -tag -group -parallel -list-tasks -list-servers -list-tags -list-groups -list-bundles -dump -version -web -history -h --task --server --exclude-server --tag --group --parallel --run --plain --list-tasks --list-servers --list-tags --list-groups --list-bundles --dump --version --web --history --help" -- "$cur"))
     else
         COMPREPLY=($(compgen -f -- "$cur"))
     fi
@@ -778,6 +779,7 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 | `-list-servers` | list servers with their groups, tags and task lists (a collapsible tree in a terminal) |
 | `-list-tasks` | list tasks as a dependency tree (collapsible in a terminal) |
 | `-list-tags` | list tags and their servers (a collapsible tree in a terminal) |
+| `-list-groups` | list server groups and their servers (a collapsible tree in a terminal) |
 | `-list-bundles` | list bundles and what they expand to (a collapsible tree in a terminal) |
 | `-dump` | print a starting Gorunfile |
 | `-history` | browse past runs |

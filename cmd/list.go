@@ -53,6 +53,46 @@ func tagMembers(cfg *gorun.Config, servers []gorun.Server, filtered bool) map[st
 	return members
 }
 
+// groupMembers maps every server group to the names of the servers that join it.
+func groupMembers(cfg *gorun.Config, servers []gorun.Server, filtered bool) map[string][]string {
+	members := map[string][]string{}
+	for _, server := range servers {
+		for _, group := range server.Groups {
+			members[group] = append(members[group], server.Name)
+		}
+	}
+
+	if !filtered {
+		for name := range cfg.Groups {
+			if _, ok := members[name]; !ok {
+				members[name] = nil
+			}
+		}
+	}
+
+	return members
+}
+
+// printGroups writes every server group with its servers, for --list-groups. Only the
+// given servers count, so the server filters apply. Unless filtered, groups that no
+// server joins are listed too.
+func printGroups(w io.Writer, cfg *gorun.Config, servers []gorun.Server, filtered bool) {
+	members := groupMembers(cfg, servers, filtered)
+	if len(members) == 0 {
+		fmt.Fprintln(w, "no groups")
+		return
+	}
+
+	for _, group := range slices.Sorted(maps.Keys(members)) {
+		names := members[group]
+		if len(names) == 0 {
+			fmt.Fprintf(w, "%s (no servers)\n", group)
+			continue
+		}
+		fmt.Fprintf(w, "%s (%d): %s\n", group, len(names), strings.Join(names, ", "))
+	}
+}
+
 // printBundles writes every bundle as a tree, for --list-bundles: its tasks in order, with
 // included bundles expanded underneath, then the task names it expands to when it
 // includes other bundles.

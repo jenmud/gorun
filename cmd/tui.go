@@ -133,16 +133,16 @@ type tuiModel struct {
 	boxLinesAt int // generation boxLines was rendered from
 	boxCache   *boxCache
 
-	runErr   error // the run failed before any server started
-	verbose  bool
-	cursor   int  // index into the flattened task list (verbose view)
-	selected int  // index into servers (compact view)
-	scroll   int  // line offset for the compact view
-	follow   bool // keep compact view pinned to the bottom as output grows
-	width    int
-	height   int
-	started  time.Time
-	elapsed  time.Duration
+	runErr    error // the run failed before any server started
+	verbose   bool
+	cursor    int  // index into the flattened task list (verbose view)
+	selected  int  // index into servers (compact view)
+	scroll    int  // line offset for the compact view
+	follow    bool // keep compact view pinned to the bottom as output grows
+	width     int
+	height    int
+	started   time.Time
+	elapsed   time.Duration
 	done      bool
 	quitting  bool
 	forceQuit bool

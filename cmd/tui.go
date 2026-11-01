@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -17,7 +16,6 @@ import (
 
 	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/internal/store"
-	_ "net/http/pprof"
 )
 
 var (
@@ -123,6 +121,15 @@ type tuiModel struct {
 	failBar        progress.Model
 	cancel         context.CancelFunc
 
+	// compact view failure/skip boxes are rendered off the UI loop (see
+	// maybeRenderBoxes) so a run with thousands of failures can't freeze input
+	boxLines   []string
+	boxesDirty bool
+	boxesBusy  bool
+	boxGen     int // generation of the latest box snapshot
+	boxLinesAt int // generation boxLines was rendered from
+	boxCache   *boxCache
+
 	runErr   error // the run failed before any server started
 	verbose  bool
 	cursor   int  // index into the flattened task list (verbose view)
@@ -140,6 +147,7 @@ func newTUIModel(title string, verbose bool, cancel context.CancelFunc) tuiModel
 	return tuiModel{
 		title:     title,
 		serverMap: make(map[string]*serverView),
+		boxCache:  &boxCache{},
 		verbose:   verbose,
 		cancel:    cancel,
 		follow:    false,
@@ -256,12 +264,20 @@ func (m tuiModel) applyEvent(event any) tuiModel {
 	return m
 }
 
+// applyBatch folds a batch of gorun events into the model.
+func (m tuiModel) applyBatch(events []any) tuiModel {
+	for _, ev := range events {
+		m = m.applyEvent(ev)
+	}
+	return m
+}
+
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Once the user has asked to quit, drop incoming event batches instead of
 	// applying them, so a backlog of queued events can't keep the UI stuck.
 	if m.quitting {
 		switch msg.(type) {
-		case tuiBatchMsg, gorun.TaskEvent, gorun.PlanEvent, gorun.ServerErrorEvent, gorun.ProcessFinishedEvent:
+		case tuiBatchMsg, boxesRenderedMsg, gorun.TaskEvent, gorun.PlanEvent, gorun.ServerErrorEvent, gorun.ProcessFinishedEvent:
 			return m, nil
 		}
 	}
@@ -269,7 +285,8 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-		return m, nil
+		m.boxesDirty = true
+		return m.maybeRenderBoxes()
 
 	case tea.KeyPressMsg:
 		switch msg.String() {
@@ -338,10 +355,17 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case tuiBatchMsg:
-		for _, ev := range msg.events {
-			m = m.applyEvent(ev)
+		m = m.applyBatch(msg.events)
+		m.boxesDirty = true
+		return m.maybeRenderBoxes()
+
+	case boxesRenderedMsg:
+		// a final synchronous render may already have replaced these lines
+		if msg.gen > m.boxLinesAt {
+			m.boxLines, m.boxLinesAt = msg.lines, msg.gen
 		}
-		return m, nil
+		m.boxesBusy = false
+		return m.maybeRenderBoxes()
 
 	case gorun.RunDoneEvent:
 		m.done = true
@@ -350,6 +374,13 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.runErr = msg.Err
 		}
 		m.elapsed = time.Since(m.started)
+		if m.quitting || !m.verbose {
+			// the compact view is left on the terminal, so make sure it shows
+			// every failure rather than the last background render
+			m.boxGen++
+			m.boxLines, m.boxLinesAt = m.boxSnapshot().render(), m.boxGen
+			m.boxesDirty = false
+		}
 		// stay open in verbose mode so the output can be browsed, unless the
 		// run was cancelled, in which case quit now that it has finished
 		if m.quitting || !m.verbose {
@@ -434,7 +465,8 @@ func (m tuiModel) serverSummary(s *serverView) string {
 	)
 }
 
-func (m tuiModel) compactLines() []string {
+// compactHead returns the lines above the server summaries.
+func (m tuiModel) compactHead() []string {
 	lines := []string{m.header(), ""}
 	switch {
 	case m.runErr != nil:
@@ -442,22 +474,39 @@ func (m tuiModel) compactLines() []string {
 	case len(m.servers) == 0:
 		lines = append(lines, m.spinner.View()+" building pipelines")
 	}
-	for _, s := range m.servers {
-		lines = append(lines, strings.Split(m.serverSummary(s), "\n")...)
-		lines = append(lines, "")
-	}
-	// failures and skips are always shown in full, even in the compact view
-	for _, s := range m.servers {
-		if s.err != nil {
-			lines = append(lines, strings.Split(m.serverErrorBox(s), "\n")...)
-		}
-		for _, t := range s.tasks {
-			if t.state == gorun.TaskFailed {
-				lines = append(lines, strings.Split(m.failureBox(s, t), "\n")...)
+	return lines
+}
+
+// each server summary takes two lines plus a blank one
+const serverSummaryLines = 3
+
+func (m tuiModel) compactLineCount() int {
+	return len(m.compactHead()) + serverSummaryLines*len(m.servers) + len(m.boxLines)
+}
+
+// compactWindow renders lines [from, to) of the compact view. Only the visible
+// server summaries are rendered and the failure boxes come pre-rendered, so the
+// cost depends on the window height rather than the size of the run.
+func (m tuiModel) compactWindow(from, to int) []string {
+	head := m.compactHead()
+	summaries := serverSummaryLines * len(m.servers)
+	to = min(to, len(head)+summaries+len(m.boxLines))
+
+	lines := make([]string, 0, max(0, to-from))
+	for i := from; i < to; i++ {
+		switch {
+		case i < len(head):
+			lines = append(lines, head[i])
+		case i < len(head)+summaries:
+			off := i - len(head)
+			block := append(strings.Split(m.serverSummary(m.servers[off/serverSummaryLines]), "\n"), "")
+			for j := off % serverSummaryLines; j < len(block) && i < to; j++ {
+				lines = append(lines, block[j])
+				i++
 			}
-			if t.state == gorun.TaskSkipped {
-				lines = append(lines, strings.Split(m.skipBox(s, t), "\n")...)
-			}
+			i--
+		default:
+			lines = append(lines, m.boxLines[i-len(head)-summaries])
 		}
 	}
 	return lines
@@ -466,35 +515,153 @@ func (m tuiModel) compactLines() []string {
 func (m tuiModel) compactMaxScroll() int {
 	footerLines := len(strings.Split(m.footer(), "\n"))
 	height := max(m.height-footerLines, 5)
-	lines := m.compactLines()
-	if len(lines) <= height {
-		return 0
-	}
-	return len(lines) - height
+	return max(0, m.compactLineCount()-height)
 }
 
 func (m tuiModel) compactView() string {
-	lines := m.compactLines()
 	footer := m.footer()
-	footerLines := strings.Split(footer, "\n")
-	height := max(m.height-len(footerLines), 5)
-	if len(lines) > height {
-		scroll := m.scroll
-		if m.follow {
-			scroll = len(lines) - height
+	height := max(m.height-len(strings.Split(footer, "\n")), 5)
+	total := m.compactLineCount()
+	scroll := m.scroll
+	if m.follow {
+		scroll = total - height
+	}
+	scroll = max(0, min(scroll, total-height))
+	return strings.Join(m.compactWindow(scroll, scroll+height), "\n") + "\n" + footer
+}
+
+// boxesRenderedMsg delivers compact view failure/skip boxes rendered in the background.
+type boxesRenderedMsg struct {
+	gen   int
+	lines []string
+}
+
+// boxCache keeps rendered boxes between background renders, so only boxes
+// whose content changed are rendered again.
+type boxCache struct {
+	mu    sync.Mutex
+	boxes map[string]cachedBox
+}
+
+type cachedBox struct {
+	sig   string
+	lines []string
+}
+
+type boxKind int
+
+const (
+	serverErrorBoxKind boxKind = iota
+	failureBoxKind
+	skipBoxKind
+)
+
+// boxItem is a copy of everything a box needs, so it can be rendered off the
+// UI loop without touching the live model.
+type boxItem struct {
+	kind      boxKind
+	server    string
+	serverErr error
+	task      taskView
+	skipped   []string
+}
+
+func (it boxItem) key() string {
+	return fmt.Sprintf("%d\x00%s\x00%s", it.kind, it.server, it.task.name)
+}
+
+// sig changes whenever the rendered box would.
+func (it boxItem) sig(width int) string {
+	ev := it.task.event
+	errText := ""
+	if ev.Err != nil {
+		errText = ev.Err.Error()
+	}
+	if it.serverErr != nil {
+		errText = it.serverErr.Error()
+	}
+	return fmt.Sprintf("%d|%d|%d|%d|%d|%d|%s|%d|%d|%d", width, it.task.state, ev.ExitCode, ev.Duration, ev.Attempt, ev.Attempts, errText, len(ev.Stdout), len(ev.Stderr), len(it.skipped))
+}
+
+type boxSnapshot struct {
+	gen   int
+	width int
+	items []boxItem
+	cache *boxCache
+}
+
+// boxSnapshot copies the failures, skips and server errors shown in the compact view.
+func (m tuiModel) boxSnapshot() boxSnapshot {
+	snap := boxSnapshot{gen: m.boxGen, width: m.width, cache: m.boxCache}
+	for _, s := range m.servers {
+		if s.err != nil {
+			snap.items = append(snap.items, boxItem{kind: serverErrorBoxKind, server: s.name, serverErr: s.err})
 		}
-		if scroll < 0 {
-			scroll = 0
+		if s.failedCount == 0 && s.skippedCount == 0 {
+			continue
 		}
-		if scroll > len(lines)-height {
-			scroll = len(lines) - height
+		var skipped []string
+		if s.failedCount > 0 {
+			skipped = s.skipped()
 		}
-		lines = lines[scroll:]
-		if len(lines) > height {
-			lines = lines[:height]
+		for _, t := range s.tasks {
+			switch t.state {
+			case gorun.TaskFailed:
+				snap.items = append(snap.items, boxItem{kind: failureBoxKind, server: s.name, task: *t, skipped: skipped})
+			case gorun.TaskSkipped:
+				snap.items = append(snap.items, boxItem{kind: skipBoxKind, server: s.name, task: *t})
+			}
 		}
 	}
-	return strings.Join(lines, "\n") + "\n" + footer
+	return snap
+}
+
+// render returns the lines of every box, reusing cached boxes that haven't changed.
+func (snap boxSnapshot) render() []string {
+	if snap.cache == nil {
+		snap.cache = &boxCache{}
+	}
+	snap.cache.mu.Lock()
+	defer snap.cache.mu.Unlock()
+
+	r := tuiModel{width: snap.width}
+	next := make(map[string]cachedBox, len(snap.items))
+	lines := []string{}
+	for _, it := range snap.items {
+		key, sig := it.key(), it.sig(snap.width)
+		c, ok := snap.cache.boxes[key]
+		if !ok || c.sig != sig {
+			var box string
+			switch it.kind {
+			case serverErrorBoxKind:
+				box = r.renderServerErrorBox(it.server, it.serverErr)
+			case failureBoxKind:
+				box = r.renderFailureBox(it.server, &it.task, it.skipped)
+			case skipBoxKind:
+				box = r.skipBox(it.server, &it.task)
+			}
+			c = cachedBox{sig: sig, lines: strings.Split(box, "\n")}
+		}
+		next[key] = c
+		lines = append(lines, c.lines...)
+	}
+	snap.cache.boxes = next
+	return lines
+}
+
+// maybeRenderBoxes starts a background render of the compact view boxes when
+// they are out of date and no render is already running.
+func (m tuiModel) maybeRenderBoxes() (tea.Model, tea.Cmd) {
+	if !m.boxesDirty || m.boxesBusy {
+		return m, nil
+	}
+	m.boxGen++
+	snap := m.boxSnapshot()
+	m.boxesDirty = false
+	m.boxesBusy = true
+	return m, func() tea.Msg {
+		return boxesRenderedMsg{gen: snap.gen, lines: snap.render()}
+	}
 }
 
 func (m tuiModel) verboseView() string {
@@ -517,20 +684,22 @@ func (m tuiModel) verboseView() string {
 		cursor = total - 1
 	}
 
-	height := max(m.height-2, 5)
-	windowSize := max(5, height-4)
-	startIdx := cursor - windowSize/3
-	if startIdx < 0 {
-		startIdx = 0
-	}
-	endIdx := startIdx + windowSize
-	if endIdx > total {
-		endIdx = total
-		startIdx = max(0, endIdx-windowSize)
-	}
+	footer := m.footer()
+	// leave room for the header, footer and the "tasks above/below" markers
+	bodyHeight := max(m.height-len(lines)-len(strings.Split(footer, "\n"))-2, 3)
+	startIdx := max(0, cursor-bodyHeight/3)
+	endIdx := min(total, startIdx+bodyHeight)
+	startIdx = max(0, min(startIdx, endIdx-bodyHeight))
 
-	if startIdx > 0 {
-		lines = append(lines, mutedStyle.Render(fmt.Sprintf("… %d tasks above", startIdx)))
+	// body holds the rendered tasks, lineTask the task each row line belongs to
+	body := []string{}
+	lineTask := []int{}
+	cursorLine := 0
+	add := func(task int, s ...string) {
+		for _, l := range s {
+			body = append(body, l)
+			lineTask = append(lineTask, task)
+		}
 	}
 
 	i := 0
@@ -542,9 +711,9 @@ func (m tuiModel) verboseView() string {
 			continue
 		}
 
-		lines = append(lines, strings.Split(m.serverSummary(s), "\n")...)
+		add(-1, strings.Split(m.serverSummary(s), "\n")...)
 		if s.err != nil {
-			lines = append(lines, strings.Split(indent(m.serverErrorBox(s), 2), "\n")...)
+			add(-1, strings.Split(indent(m.serverErrorBox(s), 2), "\n")...)
 		}
 
 		for _, t := range s.tasks {
@@ -552,8 +721,9 @@ func (m tuiModel) verboseView() string {
 				pointer := "  "
 				if i == cursor {
 					pointer = cursorStyle.Render("▸ ")
+					cursorLine = len(body)
 				}
-				lines = append(lines, pointer+m.taskRow(t))
+				add(i, pointer+m.taskRow(t))
 
 				if t.expanded {
 					box := m.outputBox(t)
@@ -561,20 +731,35 @@ func (m tuiModel) verboseView() string {
 						box = m.failureBox(s, t)
 					}
 					if box != "" {
-						lines = append(lines, strings.Split(indent(box, 4), "\n")...)
+						add(-1, strings.Split(indent(box, 4), "\n")...)
 					}
 				}
 			}
 			i++
 		}
-		lines = append(lines, "")
+		add(-1, "")
 	}
 
-	if endIdx < total {
-		lines = append(lines, mutedStyle.Render(fmt.Sprintf("… %d tasks below", total-endIdx)))
+	// expanded boxes can make the body taller than the screen: crop it around
+	// the cursor so the selected task is always visible
+	top := max(0, min(cursorLine-bodyHeight/3, len(body)-bodyHeight))
+	bottom := min(len(body), top+bodyHeight)
+	first, last := cursor, cursor
+	for l := top; l < bottom; l++ {
+		if lineTask[l] >= 0 {
+			first, last = min(first, lineTask[l]), max(last, lineTask[l])
+		}
 	}
 
-	return strings.Join(lines, "\n") + "\n" + m.footer()
+	if first > 0 {
+		lines = append(lines, mutedStyle.Render(fmt.Sprintf("… %d tasks above", first)))
+	}
+	lines = append(lines, body[top:bottom]...)
+	if below := total - 1 - last; below > 0 {
+		lines = append(lines, mutedStyle.Render(fmt.Sprintf("… %d tasks below", below)))
+	}
+
+	return strings.Join(lines, "\n") + "\n" + footer
 }
 
 func (m tuiModel) taskRow(t *taskView) string {
@@ -668,11 +853,26 @@ func (m tuiModel) outputBox(t *taskView) string {
 
 // failureBox renders why a task failed: the error, then the tail of stderr (or stdout).
 func (m tuiModel) failureBox(s *serverView, t *taskView) string {
+	return m.renderFailureBox(s.name, t, s.skipped())
+}
+
+// skipped names the server's skipped tasks.
+func (s *serverView) skipped() []string {
+	skipped := []string{}
+	for _, st := range s.tasks {
+		if st.state == gorun.TaskSkipped {
+			skipped = append(skipped, st.name)
+		}
+	}
+	return skipped
+}
+
+func (m tuiModel) renderFailureBox(server string, t *taskView, skipped []string) string {
 	attempt := ""
 	if t.event.Attempts > 1 {
 		attempt = fmt.Sprintf(" · attempt %d/%d", t.event.Attempt, t.event.Attempts)
 	}
-	title := failStyle.Render(fmt.Sprintf("✗ %s › %s failed", s.name, t.name)) +
+	title := failStyle.Render(fmt.Sprintf("✗ %s › %s failed", server, t.name)) +
 		mutedStyle.Render(fmt.Sprintf("  exit %d · %s%s", t.event.ExitCode, formatDuration(t.event.Duration), attempt))
 
 	sections := []string{title}
@@ -694,12 +894,6 @@ func (m tuiModel) failureBox(s *serverView, t *taskView) string {
 	}
 
 	// a failure stops the rest of the server's pipeline, so name what didn't run
-	skipped := []string{}
-	for _, st := range s.tasks {
-		if st.state == gorun.TaskSkipped {
-			skipped = append(skipped, st.name)
-		}
-	}
 	if len(skipped) > 0 {
 		sections = append(sections, skipStyle.Render(fmt.Sprintf("skipped %d tasks: ", len(skipped)))+strings.Join(skipped, ", "))
 	}
@@ -708,8 +902,8 @@ func (m tuiModel) failureBox(s *serverView, t *taskView) string {
 }
 
 // skipBox renders why a task was skipped and which task caused it.
-func (m tuiModel) skipBox(s *serverView, t *taskView) string {
-	title := skipStyle.Render(fmt.Sprintf("⊘ %s › %s skipped", s.name, t.name))
+func (m tuiModel) skipBox(server string, t *taskView) string {
+	title := skipStyle.Render(fmt.Sprintf("⊘ %s › %s skipped", server, t.name))
 
 	sections := []string{title}
 	if t.event.Err != nil {
@@ -728,8 +922,12 @@ func (m tuiModel) runErrorBox() string {
 }
 
 func (m tuiModel) serverErrorBox(s *serverView) string {
-	title := failStyle.Render(fmt.Sprintf("✗ %s could not run tasks", s.name))
-	return failBoxStyle.Width(m.boxWidth()).Render(title + "\n" + failStyle.Render("reason: ") + s.err.Error())
+	return m.renderServerErrorBox(s.name, s.err)
+}
+
+func (m tuiModel) renderServerErrorBox(server string, err error) string {
+	title := failStyle.Render(fmt.Sprintf("✗ %s could not run tasks", server))
+	return failBoxStyle.Width(m.boxWidth()).Render(title + "\n" + failStyle.Render("reason: ") + err.Error())
 }
 
 func (m tuiModel) footer() string {
@@ -886,8 +1084,6 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 		flushBatch()
 		p.Send(gorun.RunDoneEvent{Type: "run_done", GorunUUID: cfg.GorunUUID, Err: err})
 	}()
-
-	go func() { _ = http.ListenAndServe("localhost:6060", nil) }()
 
 	final, err := p.Run()
 	if err != nil {

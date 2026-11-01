@@ -1,0 +1,2267 @@
+title = "Recipe 4: massive dev server"
+log_level = "info"
+max_task_parallel = -1
+
+[tasks.bootstrap]
+cmd = "rm -rf /tmp/devserver && mkdir -p /tmp/devserver/bin /tmp/devserver/cfg /tmp/devserver/test /tmp/devserver/logs && echo bootstrap ok"
+description = "Bootstrap the dev server workspace"
+details = "Creates the working directories used by later tasks."
+
+[tasks.fetch-ca-certificates]
+cmd = "echo 'fetching ca-certificates' && sleep 0.1 && echo 'fetched ca-certificates'"
+description = "Fetch ca-certificates"
+details = "Downloads or locates the ca-certificates package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-ca-certificates]
+cmd = "echo 'installing ca-certificates' && sleep 0.1 && echo 'installed ca-certificates'"
+description = "Install ca-certificates"
+details = "Installs ca-certificates onto the server and verifies the binary."
+depends_on = ["fetch-ca-certificates"]
+
+[tasks.configure-ca-certificates]
+cmd = "echo 'configuring ca-certificates' && sleep 0.1 && echo 'configured ca-certificates'"
+description = "Configure ca-certificates"
+details = "Writes the default configuration for ca-certificates."
+depends_on = ["install-ca-certificates"]
+
+[tasks.smoke-ca-certificates]
+cmd = "echo 'smoke testing ca-certificates' && sleep 0.1 && echo 'smoke ca-certificates ok'"
+description = "Smoke test ca-certificates"
+details = "Runs a quick check that ca-certificates works."
+depends_on = ["configure-ca-certificates"]
+
+[tasks.fetch-tzdata]
+cmd = "echo 'fetching tzdata' && sleep 0.1 && echo 'fetched tzdata'"
+description = "Fetch tzdata"
+details = "Downloads or locates the tzdata package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-tzdata]
+cmd = "echo 'installing tzdata' && sleep 0.1 && echo 'installed tzdata'"
+description = "Install tzdata"
+details = "Installs tzdata onto the server and verifies the binary."
+depends_on = ["fetch-tzdata"]
+
+[tasks.configure-tzdata]
+cmd = "echo 'configuring tzdata' && sleep 0.1 && echo 'configured tzdata'"
+description = "Configure tzdata"
+details = "Writes the default configuration for tzdata."
+depends_on = ["install-tzdata"]
+
+[tasks.smoke-tzdata]
+cmd = "echo 'smoke testing tzdata' && sleep 0.1 && echo 'smoke tzdata ok'"
+description = "Smoke test tzdata"
+details = "Runs a quick check that tzdata works."
+depends_on = ["configure-tzdata"]
+
+[tasks.fetch-sudo]
+cmd = "echo 'fetching sudo' && sleep 0.1 && echo 'fetched sudo'"
+description = "Fetch sudo"
+details = "Downloads or locates the sudo package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-sudo]
+cmd = "echo 'installing sudo' && sleep 0.1 && echo 'installed sudo'"
+description = "Install sudo"
+details = "Installs sudo onto the server and verifies the binary."
+depends_on = ["fetch-sudo"]
+
+[tasks.configure-sudo]
+cmd = "echo 'configuring sudo' && sleep 0.1 && echo 'configured sudo'"
+description = "Configure sudo"
+details = "Writes the default configuration for sudo."
+depends_on = ["install-sudo"]
+
+[tasks.smoke-sudo]
+cmd = "echo 'smoke testing sudo' && sleep 0.1 && echo 'smoke sudo ok'"
+description = "Smoke test sudo"
+details = "Runs a quick check that sudo works."
+depends_on = ["configure-sudo"]
+
+[tasks.fetch-bash]
+cmd = "echo 'fetching bash' && sleep 0.1 && echo 'fetched bash'"
+description = "Fetch bash"
+details = "Downloads or locates the bash package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-bash]
+cmd = "echo 'installing bash' && sleep 0.1 && echo 'installed bash'"
+description = "Install bash"
+details = "Installs bash onto the server and verifies the binary."
+depends_on = ["fetch-bash"]
+
+[tasks.configure-bash]
+cmd = "echo 'configuring bash' && sleep 0.1 && echo 'configured bash'"
+description = "Configure bash"
+details = "Writes the default configuration for bash."
+depends_on = ["install-bash"]
+
+[tasks.smoke-bash]
+cmd = "echo 'smoke testing bash' && sleep 0.1 && echo 'smoke bash ok'"
+description = "Smoke test bash"
+details = "Runs a quick check that bash works."
+depends_on = ["configure-bash"]
+
+[tasks.fetch-zsh]
+cmd = "echo 'fetching zsh' && sleep 0.1 && echo 'fetched zsh'"
+description = "Fetch zsh"
+details = "Downloads or locates the zsh package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-zsh]
+cmd = "echo 'installing zsh' && sleep 0.1 && echo 'installed zsh'"
+description = "Install zsh"
+details = "Installs zsh onto the server and verifies the binary."
+depends_on = ["fetch-zsh"]
+
+[tasks.configure-zsh]
+cmd = "echo 'configuring zsh' && sleep 0.1 && echo 'configured zsh'"
+description = "Configure zsh"
+details = "Writes the default configuration for zsh."
+depends_on = ["install-zsh"]
+
+[tasks.smoke-zsh]
+cmd = "echo 'smoke testing zsh' && sleep 0.1 && echo 'smoke zsh ok'"
+description = "Smoke test zsh"
+details = "Runs a quick check that zsh works."
+depends_on = ["configure-zsh"]
+
+[tasks.fetch-curl]
+cmd = "echo 'fetching curl' && sleep 0.1 && echo 'fetched curl'"
+description = "Fetch curl"
+details = "Downloads or locates the curl package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-curl]
+cmd = "echo 'installing curl' && sleep 0.1 && echo 'installed curl'"
+description = "Install curl"
+details = "Installs curl onto the server and verifies the binary."
+depends_on = ["fetch-curl"]
+
+[tasks.configure-curl]
+cmd = "echo 'configuring curl' && sleep 0.1 && echo 'configured curl'"
+description = "Configure curl"
+details = "Writes the default configuration for curl."
+depends_on = ["install-curl"]
+
+[tasks.smoke-curl]
+cmd = "echo 'smoke testing curl' && sleep 0.1 && echo 'smoke curl ok'"
+description = "Smoke test curl"
+details = "Runs a quick check that curl works."
+depends_on = ["configure-curl"]
+
+[tasks.fetch-wget]
+cmd = "echo 'fetching wget' && sleep 0.1 && echo 'fetched wget'"
+description = "Fetch wget"
+details = "Downloads or locates the wget package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-wget]
+cmd = "echo 'installing wget' && sleep 0.1 && echo 'installed wget'"
+description = "Install wget"
+details = "Installs wget onto the server and verifies the binary."
+depends_on = ["fetch-wget"]
+
+[tasks.configure-wget]
+cmd = "echo 'configuring wget' && sleep 0.1 && echo 'configured wget'"
+description = "Configure wget"
+details = "Writes the default configuration for wget."
+depends_on = ["install-wget"]
+
+[tasks.smoke-wget]
+cmd = "echo 'smoke testing wget' && sleep 0.1 && echo 'smoke wget ok'"
+description = "Smoke test wget"
+details = "Runs a quick check that wget works."
+depends_on = ["configure-wget"]
+
+[tasks.fetch-jq]
+cmd = "echo 'fetching jq' && sleep 0.1 && echo 'fetched jq'"
+description = "Fetch jq"
+details = "Downloads or locates the jq package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-jq]
+cmd = "echo 'installing jq' && sleep 0.1 && echo 'installed jq'"
+description = "Install jq"
+details = "Installs jq onto the server and verifies the binary."
+depends_on = ["fetch-jq"]
+
+[tasks.configure-jq]
+cmd = "echo 'configuring jq' && sleep 0.1 && echo 'configured jq'"
+description = "Configure jq"
+details = "Writes the default configuration for jq."
+depends_on = ["install-jq"]
+
+[tasks.smoke-jq]
+cmd = "echo 'smoke testing jq' && sleep 0.1 && echo 'smoke jq ok'"
+description = "Smoke test jq"
+details = "Runs a quick check that jq works."
+depends_on = ["configure-jq"]
+
+[tasks.fetch-yq]
+cmd = "echo 'fetching yq' && sleep 0.1 && echo 'fetched yq'"
+description = "Fetch yq"
+details = "Downloads or locates the yq package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-yq]
+cmd = "echo 'installing yq' && sleep 0.1 && echo 'installed yq'"
+description = "Install yq"
+details = "Installs yq onto the server and verifies the binary."
+depends_on = ["fetch-yq"]
+
+[tasks.configure-yq]
+cmd = "echo 'configuring yq' && sleep 0.1 && echo 'configured yq'"
+description = "Configure yq"
+details = "Writes the default configuration for yq."
+depends_on = ["install-yq"]
+
+[tasks.smoke-yq]
+cmd = "echo 'smoke testing yq' && sleep 0.1 && echo 'smoke yq ok'"
+description = "Smoke test yq"
+details = "Runs a quick check that yq works."
+depends_on = ["configure-yq"]
+
+[tasks.fetch-fzf]
+cmd = "echo 'fetching fzf' && sleep 0.1 && echo 'fetched fzf'"
+description = "Fetch fzf"
+details = "Downloads or locates the fzf package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-fzf]
+cmd = "echo 'installing fzf' && sleep 0.1 && echo 'installed fzf'"
+description = "Install fzf"
+details = "Installs fzf onto the server and verifies the binary."
+depends_on = ["fetch-fzf"]
+
+[tasks.configure-fzf]
+cmd = "echo 'configuring fzf' && sleep 0.1 && echo 'configured fzf'"
+description = "Configure fzf"
+details = "Writes the default configuration for fzf."
+depends_on = ["install-fzf"]
+
+[tasks.smoke-fzf]
+cmd = "echo 'smoke testing fzf' && sleep 0.1 && echo 'smoke fzf ok'"
+description = "Smoke test fzf"
+details = "Runs a quick check that fzf works."
+depends_on = ["configure-fzf"]
+
+[tasks.fetch-ripgrep]
+cmd = "echo 'fetching ripgrep' && sleep 0.1 && echo 'fetched ripgrep'"
+description = "Fetch ripgrep"
+details = "Downloads or locates the ripgrep package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-ripgrep]
+cmd = "echo 'installing ripgrep' && sleep 0.1 && echo 'installed ripgrep'"
+description = "Install ripgrep"
+details = "Installs ripgrep onto the server and verifies the binary."
+depends_on = ["fetch-ripgrep"]
+
+[tasks.configure-ripgrep]
+cmd = "echo 'configuring ripgrep' && sleep 0.1 && echo 'configured ripgrep'"
+description = "Configure ripgrep"
+details = "Writes the default configuration for ripgrep."
+depends_on = ["install-ripgrep"]
+
+[tasks.smoke-ripgrep]
+cmd = "echo 'smoke testing ripgrep' && sleep 0.1 && echo 'smoke ripgrep ok'"
+description = "Smoke test ripgrep"
+details = "Runs a quick check that ripgrep works."
+depends_on = ["configure-ripgrep"]
+
+[tasks.fetch-fd]
+cmd = "echo 'fetching fd' && sleep 0.1 && echo 'fetched fd'"
+description = "Fetch fd"
+details = "Downloads or locates the fd package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-fd]
+cmd = "echo 'installing fd' && sleep 0.1 && echo 'installed fd'"
+description = "Install fd"
+details = "Installs fd onto the server and verifies the binary."
+depends_on = ["fetch-fd"]
+
+[tasks.configure-fd]
+cmd = "echo 'configuring fd' && sleep 0.1 && echo 'configured fd'"
+description = "Configure fd"
+details = "Writes the default configuration for fd."
+depends_on = ["install-fd"]
+
+[tasks.smoke-fd]
+cmd = "echo 'smoke testing fd' && sleep 0.1 && echo 'smoke fd ok'"
+description = "Smoke test fd"
+details = "Runs a quick check that fd works."
+depends_on = ["configure-fd"]
+
+[tasks.fetch-bat]
+cmd = "echo 'fetching bat' && sleep 0.1 && echo 'fetched bat'"
+description = "Fetch bat"
+details = "Downloads or locates the bat package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-bat]
+cmd = "echo 'installing bat' && sleep 0.1 && echo 'installed bat'"
+description = "Install bat"
+details = "Installs bat onto the server and verifies the binary."
+depends_on = ["fetch-bat"]
+
+[tasks.configure-bat]
+cmd = "echo 'configuring bat' && sleep 0.1 && echo 'configured bat'"
+description = "Configure bat"
+details = "Writes the default configuration for bat."
+depends_on = ["install-bat"]
+
+[tasks.smoke-bat]
+cmd = "echo 'smoke testing bat' && sleep 0.1 && echo 'smoke bat ok'"
+description = "Smoke test bat"
+details = "Runs a quick check that bat works."
+depends_on = ["configure-bat"]
+
+[tasks.fetch-eza]
+cmd = "echo 'fetching eza' && sleep 0.1 && echo 'fetched eza'"
+description = "Fetch eza"
+details = "Downloads or locates the eza package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-eza]
+cmd = "echo 'installing eza' && sleep 0.1 && echo 'installed eza'"
+description = "Install eza"
+details = "Installs eza onto the server and verifies the binary."
+depends_on = ["fetch-eza"]
+
+[tasks.configure-eza]
+cmd = "echo 'configuring eza' && sleep 0.1 && echo 'configured eza'"
+description = "Configure eza"
+details = "Writes the default configuration for eza."
+depends_on = ["install-eza"]
+
+[tasks.smoke-eza]
+cmd = "echo 'smoke testing eza' && sleep 0.1 && echo 'smoke eza ok'"
+description = "Smoke test eza"
+details = "Runs a quick check that eza works."
+depends_on = ["configure-eza"]
+
+[tasks.fetch-htop]
+cmd = "echo 'fetching htop' && sleep 0.1 && echo 'fetched htop'"
+description = "Fetch htop"
+details = "Downloads or locates the htop package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-htop]
+cmd = "echo 'installing htop' && sleep 0.1 && echo 'installed htop'"
+description = "Install htop"
+details = "Installs htop onto the server and verifies the binary."
+depends_on = ["fetch-htop"]
+
+[tasks.configure-htop]
+cmd = "echo 'configuring htop' && sleep 0.1 && echo 'configured htop'"
+description = "Configure htop"
+details = "Writes the default configuration for htop."
+depends_on = ["install-htop"]
+
+[tasks.smoke-htop]
+cmd = "echo 'smoke testing htop' && sleep 0.1 && echo 'smoke htop ok'"
+description = "Smoke test htop"
+details = "Runs a quick check that htop works."
+depends_on = ["configure-htop"]
+
+[tasks.fetch-btop]
+cmd = "echo 'fetching btop' && sleep 0.1 && echo 'fetched btop'"
+description = "Fetch btop"
+details = "Downloads or locates the btop package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-btop]
+cmd = "echo 'installing btop' && sleep 0.1 && echo 'installed btop'"
+description = "Install btop"
+details = "Installs btop onto the server and verifies the binary."
+depends_on = ["fetch-btop"]
+
+[tasks.configure-btop]
+cmd = "echo 'configuring btop' && sleep 0.1 && echo 'configured btop'"
+description = "Configure btop"
+details = "Writes the default configuration for btop."
+depends_on = ["install-btop"]
+
+[tasks.smoke-btop]
+cmd = "echo 'smoke testing btop' && sleep 0.1 && echo 'smoke btop ok'"
+description = "Smoke test btop"
+details = "Runs a quick check that btop works."
+depends_on = ["configure-btop"]
+
+[tasks.fetch-ncdu]
+cmd = "echo 'fetching ncdu' && sleep 0.1 && echo 'fetched ncdu'"
+description = "Fetch ncdu"
+details = "Downloads or locates the ncdu package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-ncdu]
+cmd = "echo 'installing ncdu' && sleep 0.1 && echo 'installed ncdu'"
+description = "Install ncdu"
+details = "Installs ncdu onto the server and verifies the binary."
+depends_on = ["fetch-ncdu"]
+
+[tasks.configure-ncdu]
+cmd = "echo 'configuring ncdu' && sleep 0.1 && echo 'configured ncdu'"
+description = "Configure ncdu"
+details = "Writes the default configuration for ncdu."
+depends_on = ["install-ncdu"]
+
+[tasks.smoke-ncdu]
+cmd = "echo 'smoke testing ncdu' && sleep 0.1 && echo 'smoke ncdu ok'"
+description = "Smoke test ncdu"
+details = "Runs a quick check that ncdu works."
+depends_on = ["configure-ncdu"]
+
+[tasks.fetch-duf]
+cmd = "echo 'fetching duf' && sleep 0.1 && echo 'fetched duf'"
+description = "Fetch duf"
+details = "Downloads or locates the duf package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-duf]
+cmd = "echo 'installing duf' && sleep 0.1 && echo 'installed duf'"
+description = "Install duf"
+details = "Installs duf onto the server and verifies the binary."
+depends_on = ["fetch-duf"]
+
+[tasks.configure-duf]
+cmd = "echo 'configuring duf' && sleep 0.1 && echo 'configured duf'"
+description = "Configure duf"
+details = "Writes the default configuration for duf."
+depends_on = ["install-duf"]
+
+[tasks.smoke-duf]
+cmd = "echo 'smoke testing duf' && sleep 0.1 && echo 'smoke duf ok'"
+description = "Smoke test duf"
+details = "Runs a quick check that duf works."
+depends_on = ["configure-duf"]
+
+[tasks.fetch-tmux]
+cmd = "echo 'fetching tmux' && sleep 0.1 && echo 'fetched tmux'"
+description = "Fetch tmux"
+details = "Downloads or locates the tmux package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-tmux]
+cmd = "echo 'installing tmux' && sleep 0.1 && echo 'installed tmux'"
+description = "Install tmux"
+details = "Installs tmux onto the server and verifies the binary."
+depends_on = ["fetch-tmux"]
+
+[tasks.configure-tmux]
+cmd = "echo 'configuring tmux' && sleep 0.1 && echo 'configured tmux'"
+description = "Configure tmux"
+details = "Writes the default configuration for tmux."
+depends_on = ["install-tmux"]
+
+[tasks.smoke-tmux]
+cmd = "echo 'smoke testing tmux' && sleep 0.1 && echo 'smoke tmux ok'"
+description = "Smoke test tmux"
+details = "Runs a quick check that tmux works."
+depends_on = ["configure-tmux"]
+
+[tasks.fetch-starship]
+cmd = "echo 'fetching starship' && sleep 0.1 && echo 'fetched starship'"
+description = "Fetch starship"
+details = "Downloads or locates the starship package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-starship]
+cmd = "echo 'installing starship' && sleep 0.1 && echo 'installed starship'"
+description = "Install starship"
+details = "Installs starship onto the server and verifies the binary."
+depends_on = ["fetch-starship"]
+
+[tasks.configure-starship]
+cmd = "echo 'configuring starship' && sleep 0.1 && echo 'configured starship'"
+description = "Configure starship"
+details = "Writes the default configuration for starship."
+depends_on = ["install-starship"]
+
+[tasks.smoke-starship]
+cmd = "echo 'smoke testing starship' && sleep 0.1 && echo 'smoke starship ok'"
+description = "Smoke test starship"
+details = "Runs a quick check that starship works."
+depends_on = ["configure-starship"]
+
+[tasks.fetch-tldr]
+cmd = "echo 'fetching tldr' && sleep 0.1 && echo 'fetched tldr'"
+description = "Fetch tldr"
+details = "Downloads or locates the tldr package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-tldr]
+cmd = "echo 'installing tldr' && sleep 0.1 && echo 'installed tldr'"
+description = "Install tldr"
+details = "Installs tldr onto the server and verifies the binary."
+depends_on = ["fetch-tldr"]
+
+[tasks.configure-tldr]
+cmd = "echo 'configuring tldr' && sleep 0.1 && echo 'configured tldr'"
+description = "Configure tldr"
+details = "Writes the default configuration for tldr."
+depends_on = ["install-tldr"]
+
+[tasks.smoke-tldr]
+cmd = "echo 'smoke testing tldr' && sleep 0.1 && echo 'smoke tldr ok'"
+description = "Smoke test tldr"
+details = "Runs a quick check that tldr works."
+depends_on = ["configure-tldr"]
+
+[tasks.fetch-httpie]
+cmd = "echo 'fetching httpie' && sleep 0.1 && echo 'fetched httpie'"
+description = "Fetch httpie"
+details = "Downloads or locates the httpie package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-httpie]
+cmd = "echo 'installing httpie' && sleep 0.1 && echo 'installed httpie'"
+description = "Install httpie"
+details = "Installs httpie onto the server and verifies the binary."
+depends_on = ["fetch-httpie"]
+
+[tasks.configure-httpie]
+cmd = "echo 'configuring httpie' && sleep 0.1 && echo 'configured httpie'"
+description = "Configure httpie"
+details = "Writes the default configuration for httpie."
+depends_on = ["install-httpie"]
+
+[tasks.smoke-httpie]
+cmd = "echo 'smoke testing httpie' && sleep 0.1 && echo 'smoke httpie ok'"
+description = "Smoke test httpie"
+details = "Runs a quick check that httpie works."
+depends_on = ["configure-httpie"]
+
+[tasks.fetch-git]
+cmd = "echo 'fetching git' && sleep 0.1 && echo 'fetched git'"
+description = "Fetch git"
+details = "Downloads or locates the git package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-git]
+cmd = "echo 'installing git' && sleep 0.1 && echo 'installed git'"
+description = "Install git"
+details = "Installs git onto the server and verifies the binary."
+depends_on = ["fetch-git"]
+
+[tasks.configure-git]
+cmd = "echo 'configuring git' && sleep 0.1 && echo 'configured git'"
+description = "Configure git"
+details = "Writes the default configuration for git."
+depends_on = ["install-git"]
+
+[tasks.smoke-git]
+cmd = "echo 'smoke testing git' && sleep 0.1 && echo 'smoke git ok'"
+description = "Smoke test git"
+details = "Runs a quick check that git works."
+depends_on = ["configure-git"]
+
+[tasks.fetch-git-lfs]
+cmd = "echo 'fetching git-lfs' && sleep 0.1 && echo 'fetched git-lfs'"
+description = "Fetch git-lfs"
+details = "Downloads or locates the git-lfs package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-git-lfs]
+cmd = "echo 'installing git-lfs' && sleep 0.1 && echo 'installed git-lfs'"
+description = "Install git-lfs"
+details = "Installs git-lfs onto the server and verifies the binary."
+depends_on = ["fetch-git-lfs"]
+
+[tasks.configure-git-lfs]
+cmd = "echo 'configuring git-lfs' && sleep 0.1 && echo 'configured git-lfs'"
+description = "Configure git-lfs"
+details = "Writes the default configuration for git-lfs."
+depends_on = ["install-git-lfs"]
+
+[tasks.smoke-git-lfs]
+cmd = "echo 'smoke testing git-lfs' && sleep 0.1 && echo 'smoke git-lfs ok'"
+description = "Smoke test git-lfs"
+details = "Runs a quick check that git-lfs works."
+depends_on = ["configure-git-lfs"]
+
+[tasks.fetch-git-delta]
+cmd = "echo 'fetching git-delta' && sleep 0.1 && echo 'fetched git-delta'"
+description = "Fetch git-delta"
+details = "Downloads or locates the git-delta package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-git-delta]
+cmd = "echo 'installing git-delta' && sleep 0.1 && echo 'installed git-delta'"
+description = "Install git-delta"
+details = "Installs git-delta onto the server and verifies the binary."
+depends_on = ["fetch-git-delta"]
+
+[tasks.configure-git-delta]
+cmd = "echo 'configuring git-delta' && sleep 0.1 && echo 'configured git-delta'"
+description = "Configure git-delta"
+details = "Writes the default configuration for git-delta."
+depends_on = ["install-git-delta"]
+
+[tasks.smoke-git-delta]
+cmd = "echo 'smoke testing git-delta' && sleep 0.1 && echo 'smoke git-delta ok'"
+description = "Smoke test git-delta"
+details = "Runs a quick check that git-delta works."
+depends_on = ["configure-git-delta"]
+
+[tasks.fetch-gh]
+cmd = "echo 'fetching gh' && sleep 0.1 && echo 'fetched gh'"
+description = "Fetch gh"
+details = "Downloads or locates the gh package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-gh]
+cmd = "echo 'installing gh' && sleep 0.1 && echo 'installed gh'"
+description = "Install gh"
+details = "Installs gh onto the server and verifies the binary."
+depends_on = ["fetch-gh"]
+
+[tasks.configure-gh]
+cmd = "echo 'configuring gh' && sleep 0.1 && echo 'configured gh'"
+description = "Configure gh"
+details = "Writes the default configuration for gh."
+depends_on = ["install-gh"]
+
+[tasks.smoke-gh]
+cmd = "echo 'smoke testing gh' && sleep 0.1 && echo 'smoke gh ok'"
+description = "Smoke test gh"
+details = "Runs a quick check that gh works."
+depends_on = ["configure-gh"]
+
+[tasks.fetch-jj]
+cmd = "echo 'fetching jj' && sleep 0.1 && echo 'fetched jj'"
+description = "Fetch jj"
+details = "Downloads or locates the jj package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-jj]
+cmd = "echo 'installing jj' && sleep 0.1 && echo 'installed jj'"
+description = "Install jj"
+details = "Installs jj onto the server and verifies the binary."
+depends_on = ["fetch-jj"]
+
+[tasks.configure-jj]
+cmd = "echo 'configuring jj' && sleep 0.1 && echo 'configured jj'"
+description = "Configure jj"
+details = "Writes the default configuration for jj."
+depends_on = ["install-jj"]
+
+[tasks.smoke-jj]
+cmd = "echo 'smoke testing jj' && sleep 0.1 && echo 'smoke jj ok'"
+description = "Smoke test jj"
+details = "Runs a quick check that jj works."
+depends_on = ["configure-jj"]
+
+[tasks.fetch-lazygit]
+cmd = "echo 'fetching lazygit' && sleep 0.1 && echo 'fetched lazygit'"
+description = "Fetch lazygit"
+details = "Downloads or locates the lazygit package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-lazygit]
+cmd = "echo 'installing lazygit' && sleep 0.1 && echo 'installed lazygit'"
+description = "Install lazygit"
+details = "Installs lazygit onto the server and verifies the binary."
+depends_on = ["fetch-lazygit"]
+
+[tasks.configure-lazygit]
+cmd = "echo 'configuring lazygit' && sleep 0.1 && echo 'configured lazygit'"
+description = "Configure lazygit"
+details = "Writes the default configuration for lazygit."
+depends_on = ["install-lazygit"]
+
+[tasks.smoke-lazygit]
+cmd = "echo 'smoke testing lazygit' && sleep 0.1 && echo 'smoke lazygit ok'"
+description = "Smoke test lazygit"
+details = "Runs a quick check that lazygit works."
+depends_on = ["configure-lazygit"]
+
+[tasks.fetch-neovim]
+cmd = "echo 'fetching neovim' && sleep 0.1 && echo 'fetched neovim'"
+description = "Fetch neovim"
+details = "Downloads or locates the neovim package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-neovim]
+cmd = "echo 'installing neovim' && sleep 0.1 && echo 'installed neovim'"
+description = "Install neovim"
+details = "Installs neovim onto the server and verifies the binary."
+depends_on = ["fetch-neovim"]
+
+[tasks.configure-neovim]
+cmd = "echo 'configuring neovim' && sleep 0.1 && echo 'configured neovim'"
+description = "Configure neovim"
+details = "Writes the default configuration for neovim."
+depends_on = ["install-neovim"]
+
+[tasks.smoke-neovim]
+cmd = "echo 'smoke testing neovim' && sleep 0.1 && echo 'smoke neovim ok'"
+description = "Smoke test neovim"
+details = "Runs a quick check that neovim works."
+depends_on = ["configure-neovim"]
+
+[tasks.fetch-vim]
+cmd = "echo 'fetching vim' && sleep 0.1 && echo 'fetched vim'"
+description = "Fetch vim"
+details = "Downloads or locates the vim package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-vim]
+cmd = "echo 'installing vim' && sleep 0.1 && echo 'installed vim'"
+description = "Install vim"
+details = "Installs vim onto the server and verifies the binary."
+depends_on = ["fetch-vim"]
+
+[tasks.configure-vim]
+cmd = "echo 'configuring vim' && sleep 0.1 && echo 'configured vim'"
+description = "Configure vim"
+details = "Writes the default configuration for vim."
+depends_on = ["install-vim"]
+
+[tasks.smoke-vim]
+cmd = "echo 'smoke testing vim' && sleep 0.1 && echo 'smoke vim ok'"
+description = "Smoke test vim"
+details = "Runs a quick check that vim works."
+depends_on = ["configure-vim"]
+
+[tasks.fetch-helix]
+cmd = "echo 'fetching helix' && sleep 0.1 && echo 'fetched helix'"
+description = "Fetch helix"
+details = "Downloads or locates the helix package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-helix]
+cmd = "echo 'installing helix' && sleep 0.1 && echo 'installed helix'"
+description = "Install helix"
+details = "Installs helix onto the server and verifies the binary."
+depends_on = ["fetch-helix"]
+
+[tasks.configure-helix]
+cmd = "echo 'configuring helix' && sleep 0.1 && echo 'configured helix'"
+description = "Configure helix"
+details = "Writes the default configuration for helix."
+depends_on = ["install-helix"]
+
+[tasks.smoke-helix]
+cmd = "echo 'smoke testing helix' && sleep 0.1 && echo 'smoke helix ok'"
+description = "Smoke test helix"
+details = "Runs a quick check that helix works."
+depends_on = ["configure-helix"]
+
+[tasks.fetch-docker]
+cmd = "echo 'fetching docker' && sleep 0.1 && echo 'fetched docker'"
+description = "Fetch docker"
+details = "Downloads or locates the docker package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-docker]
+cmd = "echo 'installing docker' && sleep 0.1 && echo 'installed docker'"
+description = "Install docker"
+details = "Installs docker onto the server and verifies the binary."
+depends_on = ["fetch-docker"]
+
+[tasks.configure-docker]
+cmd = "echo 'configuring docker' && sleep 0.1 && echo 'configured docker'"
+description = "Configure docker"
+details = "Writes the default configuration for docker."
+depends_on = ["install-docker"]
+
+[tasks.smoke-docker]
+cmd = "echo 'smoke testing docker' && sleep 0.1 && echo 'smoke docker ok'"
+description = "Smoke test docker"
+details = "Runs a quick check that docker works."
+depends_on = ["configure-docker"]
+
+[tasks.fetch-compose]
+cmd = "echo 'fetching compose' && sleep 0.1 && echo 'fetched compose'"
+description = "Fetch compose"
+details = "Downloads or locates the compose package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-compose]
+cmd = "echo 'installing compose' && sleep 0.1 && echo 'installed compose'"
+description = "Install compose"
+details = "Installs compose onto the server and verifies the binary."
+depends_on = ["fetch-compose"]
+
+[tasks.configure-compose]
+cmd = "echo 'configuring compose' && sleep 0.1 && echo 'configured compose'"
+description = "Configure compose"
+details = "Writes the default configuration for compose."
+depends_on = ["install-compose"]
+
+[tasks.smoke-compose]
+cmd = "echo 'smoke testing compose' && sleep 0.1 && echo 'smoke compose ok'"
+description = "Smoke test compose"
+details = "Runs a quick check that compose works."
+depends_on = ["configure-compose"]
+
+[tasks.fetch-lazydocker]
+cmd = "echo 'fetching lazydocker' && sleep 0.1 && echo 'fetched lazydocker'"
+description = "Fetch lazydocker"
+details = "Downloads or locates the lazydocker package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-lazydocker]
+cmd = "echo 'installing lazydocker' && sleep 0.1 && echo 'installed lazydocker'"
+description = "Install lazydocker"
+details = "Installs lazydocker onto the server and verifies the binary."
+depends_on = ["fetch-lazydocker"]
+
+[tasks.configure-lazydocker]
+cmd = "echo 'configuring lazydocker' && sleep 0.1 && echo 'configured lazydocker'"
+description = "Configure lazydocker"
+details = "Writes the default configuration for lazydocker."
+depends_on = ["install-lazydocker"]
+
+[tasks.smoke-lazydocker]
+cmd = "echo 'smoke testing lazydocker' && sleep 0.1 && echo 'smoke lazydocker ok'"
+description = "Smoke test lazydocker"
+details = "Runs a quick check that lazydocker works."
+depends_on = ["configure-lazydocker"]
+
+[tasks.fetch-podman]
+cmd = "echo 'fetching podman' && sleep 0.1 && echo 'fetched podman'"
+description = "Fetch podman"
+details = "Downloads or locates the podman package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-podman]
+cmd = "echo 'installing podman' && sleep 0.1 && echo 'installed podman'"
+description = "Install podman"
+details = "Installs podman onto the server and verifies the binary."
+depends_on = ["fetch-podman"]
+
+[tasks.configure-podman]
+cmd = "echo 'configuring podman' && sleep 0.1 && echo 'configured podman'"
+description = "Configure podman"
+details = "Writes the default configuration for podman."
+depends_on = ["install-podman"]
+
+[tasks.smoke-podman]
+cmd = "echo 'smoke testing podman' && sleep 0.1 && echo 'smoke podman ok'"
+description = "Smoke test podman"
+details = "Runs a quick check that podman works."
+depends_on = ["configure-podman"]
+
+[tasks.fetch-go]
+cmd = "echo 'fetching go' && sleep 0.1 && echo 'fetched go'"
+description = "Fetch go"
+details = "Downloads or locates the go package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-go]
+cmd = "echo 'installing go' && sleep 0.1 && echo 'installed go'"
+description = "Install go"
+details = "Installs go onto the server and verifies the binary."
+depends_on = ["fetch-go"]
+
+[tasks.configure-go]
+cmd = "echo 'configuring go' && sleep 0.1 && echo 'configured go'"
+description = "Configure go"
+details = "Writes the default configuration for go."
+depends_on = ["install-go"]
+
+[tasks.smoke-go]
+cmd = "echo 'smoke testing go' && sleep 0.1 && echo 'smoke go ok'"
+description = "Smoke test go"
+details = "Runs a quick check that go works."
+depends_on = ["configure-go"]
+
+[tasks.fetch-rust]
+cmd = "echo 'fetching rust' && sleep 0.1 && echo 'fetched rust'"
+description = "Fetch rust"
+details = "Downloads or locates the rust package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-rust]
+cmd = "echo 'installing rust' && sleep 0.1 && echo 'installed rust'"
+description = "Install rust"
+details = "Installs rust onto the server and verifies the binary."
+depends_on = ["fetch-rust"]
+
+[tasks.configure-rust]
+cmd = "echo 'configuring rust' && sleep 0.1 && echo 'configured rust'"
+description = "Configure rust"
+details = "Writes the default configuration for rust."
+depends_on = ["install-rust"]
+
+[tasks.smoke-rust]
+cmd = "echo 'smoke testing rust' && sleep 0.1 && echo 'smoke rust ok'"
+description = "Smoke test rust"
+details = "Runs a quick check that rust works."
+depends_on = ["configure-rust"]
+
+[tasks.fetch-node]
+cmd = "echo 'fetching node' && sleep 0.1 && echo 'fetched node'"
+description = "Fetch node"
+details = "Downloads or locates the node package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-node]
+cmd = "echo 'installing node' && sleep 0.1 && echo 'installed node'"
+description = "Install node"
+details = "Installs node onto the server and verifies the binary."
+depends_on = ["fetch-node"]
+
+[tasks.configure-node]
+cmd = "echo 'configuring node' && sleep 0.1 && echo 'configured node'"
+description = "Configure node"
+details = "Writes the default configuration for node."
+depends_on = ["install-node"]
+
+[tasks.smoke-node]
+cmd = "echo 'smoke testing node' && sleep 0.1 && echo 'smoke node ok'"
+description = "Smoke test node"
+details = "Runs a quick check that node works."
+depends_on = ["configure-node"]
+
+[tasks.fetch-python]
+cmd = "echo 'fetching python' && sleep 0.1 && echo 'fetched python'"
+description = "Fetch python"
+details = "Downloads or locates the python package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-python]
+cmd = "echo 'installing python' && sleep 0.1 && echo 'installed python'"
+description = "Install python"
+details = "Installs python onto the server and verifies the binary."
+depends_on = ["fetch-python"]
+
+[tasks.configure-python]
+cmd = "echo 'configuring python' && sleep 0.1 && echo 'configured python'"
+description = "Configure python"
+details = "Writes the default configuration for python."
+depends_on = ["install-python"]
+
+[tasks.smoke-python]
+cmd = "echo 'smoke testing python' && sleep 0.1 && echo 'smoke python ok'"
+description = "Smoke test python"
+details = "Runs a quick check that python works."
+depends_on = ["configure-python"]
+
+[tasks.fetch-uv]
+cmd = "echo 'fetching uv' && sleep 0.1 && echo 'fetched uv'"
+description = "Fetch uv"
+details = "Downloads or locates the uv package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-uv]
+cmd = "echo 'installing uv' && sleep 0.1 && echo 'installed uv'"
+description = "Install uv"
+details = "Installs uv onto the server and verifies the binary."
+depends_on = ["fetch-uv"]
+
+[tasks.configure-uv]
+cmd = "echo 'configuring uv' && sleep 0.1 && echo 'configured uv'"
+description = "Configure uv"
+details = "Writes the default configuration for uv."
+depends_on = ["install-uv"]
+
+[tasks.smoke-uv]
+cmd = "echo 'smoke testing uv' && sleep 0.1 && echo 'smoke uv ok'"
+description = "Smoke test uv"
+details = "Runs a quick check that uv works."
+depends_on = ["configure-uv"]
+
+[tasks.fetch-bun]
+cmd = "echo 'fetching bun' && sleep 0.1 && echo 'fetched bun'"
+description = "Fetch bun"
+details = "Downloads or locates the bun package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-bun]
+cmd = "echo 'installing bun' && sleep 0.1 && echo 'installed bun'"
+description = "Install bun"
+details = "Installs bun onto the server and verifies the binary."
+depends_on = ["fetch-bun"]
+
+[tasks.configure-bun]
+cmd = "echo 'configuring bun' && sleep 0.1 && echo 'configured bun'"
+description = "Configure bun"
+details = "Writes the default configuration for bun."
+depends_on = ["install-bun"]
+
+[tasks.smoke-bun]
+cmd = "echo 'smoke testing bun' && sleep 0.1 && echo 'smoke bun ok'"
+description = "Smoke test bun"
+details = "Runs a quick check that bun works."
+depends_on = ["configure-bun"]
+
+[tasks.fetch-pnpm]
+cmd = "echo 'fetching pnpm' && sleep 0.1 && echo 'fetched pnpm'"
+description = "Fetch pnpm"
+details = "Downloads or locates the pnpm package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-pnpm]
+cmd = "echo 'installing pnpm' && sleep 0.1 && echo 'installed pnpm'"
+description = "Install pnpm"
+details = "Installs pnpm onto the server and verifies the binary."
+depends_on = ["fetch-pnpm"]
+
+[tasks.configure-pnpm]
+cmd = "echo 'configuring pnpm' && sleep 0.1 && echo 'configured pnpm'"
+description = "Configure pnpm"
+details = "Writes the default configuration for pnpm."
+depends_on = ["install-pnpm"]
+
+[tasks.smoke-pnpm]
+cmd = "echo 'smoke testing pnpm' && sleep 0.1 && echo 'smoke pnpm ok'"
+description = "Smoke test pnpm"
+details = "Runs a quick check that pnpm works."
+depends_on = ["configure-pnpm"]
+
+[tasks.fetch-psql]
+cmd = "echo 'fetching psql' && sleep 0.1 && echo 'fetched psql'"
+description = "Fetch psql"
+details = "Downloads or locates the psql package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-psql]
+cmd = "echo 'installing psql' && sleep 0.1 && echo 'installed psql'"
+description = "Install psql"
+details = "Installs psql onto the server and verifies the binary."
+depends_on = ["fetch-psql"]
+
+[tasks.configure-psql]
+cmd = "echo 'configuring psql' && sleep 0.1 && echo 'configured psql'"
+description = "Configure psql"
+details = "Writes the default configuration for psql."
+depends_on = ["install-psql"]
+
+[tasks.smoke-psql]
+cmd = "echo 'smoke testing psql' && sleep 0.1 && echo 'smoke psql ok'"
+description = "Smoke test psql"
+details = "Runs a quick check that psql works."
+depends_on = ["configure-psql"]
+
+[tasks.fetch-redis-cli]
+cmd = "echo 'fetching redis-cli' && sleep 0.1 && echo 'fetched redis-cli'"
+description = "Fetch redis-cli"
+details = "Downloads or locates the redis-cli package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-redis-cli]
+cmd = "echo 'installing redis-cli' && sleep 0.1 && echo 'installed redis-cli'"
+description = "Install redis-cli"
+details = "Installs redis-cli onto the server and verifies the binary."
+depends_on = ["fetch-redis-cli"]
+
+[tasks.configure-redis-cli]
+cmd = "echo 'configuring redis-cli' && sleep 0.1 && echo 'configured redis-cli'"
+description = "Configure redis-cli"
+details = "Writes the default configuration for redis-cli."
+depends_on = ["install-redis-cli"]
+
+[tasks.smoke-redis-cli]
+cmd = "echo 'smoke testing redis-cli' && sleep 0.1 && echo 'smoke redis-cli ok'"
+description = "Smoke test redis-cli"
+details = "Runs a quick check that redis-cli works."
+depends_on = ["configure-redis-cli"]
+
+[tasks.fetch-sqlite3]
+cmd = "echo 'fetching sqlite3' && sleep 0.1 && echo 'fetched sqlite3'"
+description = "Fetch sqlite3"
+details = "Downloads or locates the sqlite3 package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-sqlite3]
+cmd = "echo 'installing sqlite3' && sleep 0.1 && echo 'installed sqlite3'"
+description = "Install sqlite3"
+details = "Installs sqlite3 onto the server and verifies the binary."
+depends_on = ["fetch-sqlite3"]
+
+[tasks.configure-sqlite3]
+cmd = "echo 'configuring sqlite3' && sleep 0.1 && echo 'configured sqlite3'"
+description = "Configure sqlite3"
+details = "Writes the default configuration for sqlite3."
+depends_on = ["install-sqlite3"]
+
+[tasks.smoke-sqlite3]
+cmd = "echo 'smoke testing sqlite3' && sleep 0.1 && echo 'smoke sqlite3 ok'"
+description = "Smoke test sqlite3"
+details = "Runs a quick check that sqlite3 works."
+depends_on = ["configure-sqlite3"]
+
+[tasks.fetch-mongosh]
+cmd = "echo 'fetching mongosh' && sleep 0.1 && echo 'fetched mongosh'"
+description = "Fetch mongosh"
+details = "Downloads or locates the mongosh package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-mongosh]
+cmd = "echo 'installing mongosh' && sleep 0.1 && echo 'installed mongosh'"
+description = "Install mongosh"
+details = "Installs mongosh onto the server and verifies the binary."
+depends_on = ["fetch-mongosh"]
+
+[tasks.configure-mongosh]
+cmd = "echo 'configuring mongosh' && sleep 0.1 && echo 'configured mongosh'"
+description = "Configure mongosh"
+details = "Writes the default configuration for mongosh."
+depends_on = ["install-mongosh"]
+
+[tasks.smoke-mongosh]
+cmd = "echo 'smoke testing mongosh' && sleep 0.1 && echo 'smoke mongosh ok'"
+description = "Smoke test mongosh"
+details = "Runs a quick check that mongosh works."
+depends_on = ["configure-mongosh"]
+
+[tasks.fetch-nmap]
+cmd = "echo 'fetching nmap' && sleep 0.1 && echo 'fetched nmap'"
+description = "Fetch nmap"
+details = "Downloads or locates the nmap package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-nmap]
+cmd = "echo 'installing nmap' && sleep 0.1 && echo 'installed nmap'"
+description = "Install nmap"
+details = "Installs nmap onto the server and verifies the binary."
+depends_on = ["fetch-nmap"]
+
+[tasks.configure-nmap]
+cmd = "echo 'configuring nmap' && sleep 0.1 && echo 'configured nmap'"
+description = "Configure nmap"
+details = "Writes the default configuration for nmap."
+depends_on = ["install-nmap"]
+
+[tasks.smoke-nmap]
+cmd = "echo 'smoke testing nmap' && sleep 0.1 && echo 'smoke nmap ok'"
+description = "Smoke test nmap"
+details = "Runs a quick check that nmap works."
+depends_on = ["configure-nmap"]
+
+[tasks.fetch-mtr]
+cmd = "echo 'fetching mtr' && sleep 0.1 && echo 'fetched mtr'"
+description = "Fetch mtr"
+details = "Downloads or locates the mtr package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-mtr]
+cmd = "echo 'installing mtr' && sleep 0.1 && echo 'installed mtr'"
+description = "Install mtr"
+details = "Installs mtr onto the server and verifies the binary."
+depends_on = ["fetch-mtr"]
+
+[tasks.configure-mtr]
+cmd = "echo 'configuring mtr' && sleep 0.1 && echo 'configured mtr'"
+description = "Configure mtr"
+details = "Writes the default configuration for mtr."
+depends_on = ["install-mtr"]
+
+[tasks.smoke-mtr]
+cmd = "echo 'smoke testing mtr' && sleep 0.1 && echo 'smoke mtr ok'"
+description = "Smoke test mtr"
+details = "Runs a quick check that mtr works."
+depends_on = ["configure-mtr"]
+
+[tasks.fetch-iperf3]
+cmd = "echo 'fetching iperf3' && sleep 0.1 && echo 'fetched iperf3'"
+description = "Fetch iperf3"
+details = "Downloads or locates the iperf3 package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-iperf3]
+cmd = "echo 'installing iperf3' && sleep 0.1 && echo 'installed iperf3'"
+description = "Install iperf3"
+details = "Installs iperf3 onto the server and verifies the binary."
+depends_on = ["fetch-iperf3"]
+
+[tasks.configure-iperf3]
+cmd = "echo 'configuring iperf3' && sleep 0.1 && echo 'configured iperf3'"
+description = "Configure iperf3"
+details = "Writes the default configuration for iperf3."
+depends_on = ["install-iperf3"]
+
+[tasks.smoke-iperf3]
+cmd = "echo 'smoke testing iperf3' && sleep 0.1 && echo 'smoke iperf3 ok'"
+description = "Smoke test iperf3"
+details = "Runs a quick check that iperf3 works."
+depends_on = ["configure-iperf3"]
+
+[tasks.fetch-socat]
+cmd = "echo 'fetching socat' && sleep 0.1 && echo 'fetched socat'"
+description = "Fetch socat"
+details = "Downloads or locates the socat package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-socat]
+cmd = "echo 'installing socat' && sleep 0.1 && echo 'installed socat'"
+description = "Install socat"
+details = "Installs socat onto the server and verifies the binary."
+depends_on = ["fetch-socat"]
+
+[tasks.configure-socat]
+cmd = "echo 'configuring socat' && sleep 0.1 && echo 'configured socat'"
+description = "Configure socat"
+details = "Writes the default configuration for socat."
+depends_on = ["install-socat"]
+
+[tasks.smoke-socat]
+cmd = "echo 'smoke testing socat' && sleep 0.1 && echo 'smoke socat ok'"
+description = "Smoke test socat"
+details = "Runs a quick check that socat works."
+depends_on = ["configure-socat"]
+
+[tasks.fetch-make]
+cmd = "echo 'fetching make' && sleep 0.1 && echo 'fetched make'"
+description = "Fetch make"
+details = "Downloads or locates the make package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-make]
+cmd = "echo 'installing make' && sleep 0.1 && echo 'installed make'"
+description = "Install make"
+details = "Installs make onto the server and verifies the binary."
+depends_on = ["fetch-make"]
+
+[tasks.configure-make]
+cmd = "echo 'configuring make' && sleep 0.1 && echo 'configured make'"
+description = "Configure make"
+details = "Writes the default configuration for make."
+depends_on = ["install-make"]
+
+[tasks.smoke-make]
+cmd = "echo 'smoke testing make' && sleep 0.1 && echo 'smoke make ok'"
+description = "Smoke test make"
+details = "Runs a quick check that make works."
+depends_on = ["configure-make"]
+
+[tasks.fetch-cmake]
+cmd = "echo 'fetching cmake' && sleep 0.1 && echo 'fetched cmake'"
+description = "Fetch cmake"
+details = "Downloads or locates the cmake package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-cmake]
+cmd = "echo 'installing cmake' && sleep 0.1 && echo 'installed cmake'"
+description = "Install cmake"
+details = "Installs cmake onto the server and verifies the binary."
+depends_on = ["fetch-cmake"]
+
+[tasks.configure-cmake]
+cmd = "echo 'configuring cmake' && sleep 0.1 && echo 'configured cmake'"
+description = "Configure cmake"
+details = "Writes the default configuration for cmake."
+depends_on = ["install-cmake"]
+
+[tasks.smoke-cmake]
+cmd = "echo 'smoke testing cmake' && sleep 0.1 && echo 'smoke cmake ok'"
+description = "Smoke test cmake"
+details = "Runs a quick check that cmake works."
+depends_on = ["configure-cmake"]
+
+[tasks.fetch-ninja]
+cmd = "echo 'fetching ninja' && sleep 0.1 && echo 'fetched ninja'"
+description = "Fetch ninja"
+details = "Downloads or locates the ninja package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-ninja]
+cmd = "echo 'installing ninja' && sleep 0.1 && echo 'installed ninja'"
+description = "Install ninja"
+details = "Installs ninja onto the server and verifies the binary."
+depends_on = ["fetch-ninja"]
+
+[tasks.configure-ninja]
+cmd = "echo 'configuring ninja' && sleep 0.1 && echo 'configured ninja'"
+description = "Configure ninja"
+details = "Writes the default configuration for ninja."
+depends_on = ["install-ninja"]
+
+[tasks.smoke-ninja]
+cmd = "echo 'smoke testing ninja' && sleep 0.1 && echo 'smoke ninja ok'"
+description = "Smoke test ninja"
+details = "Runs a quick check that ninja works."
+depends_on = ["configure-ninja"]
+
+[tasks.fetch-gcc]
+cmd = "echo 'fetching gcc' && sleep 0.1 && echo 'fetched gcc'"
+description = "Fetch gcc"
+details = "Downloads or locates the gcc package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-gcc]
+cmd = "echo 'installing gcc' && sleep 0.1 && echo 'installed gcc'"
+description = "Install gcc"
+details = "Installs gcc onto the server and verifies the binary."
+depends_on = ["fetch-gcc"]
+
+[tasks.configure-gcc]
+cmd = "echo 'configuring gcc' && sleep 0.1 && echo 'configured gcc'"
+description = "Configure gcc"
+details = "Writes the default configuration for gcc."
+depends_on = ["install-gcc"]
+
+[tasks.smoke-gcc]
+cmd = "echo 'smoke testing gcc' && sleep 0.1 && echo 'smoke gcc ok'"
+description = "Smoke test gcc"
+details = "Runs a quick check that gcc works."
+depends_on = ["configure-gcc"]
+
+[tasks.fetch-clang]
+cmd = "echo 'fetching clang' && sleep 0.1 && echo 'fetched clang'"
+description = "Fetch clang"
+details = "Downloads or locates the clang package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-clang]
+cmd = "echo 'installing clang' && sleep 0.1 && echo 'installed clang'"
+description = "Install clang"
+details = "Installs clang onto the server and verifies the binary."
+depends_on = ["fetch-clang"]
+
+[tasks.configure-clang]
+cmd = "echo 'configuring clang' && sleep 0.1 && echo 'configured clang'"
+description = "Configure clang"
+details = "Writes the default configuration for clang."
+depends_on = ["install-clang"]
+
+[tasks.smoke-clang]
+cmd = "echo 'smoke testing clang' && sleep 0.1 && echo 'smoke clang ok'"
+description = "Smoke test clang"
+details = "Runs a quick check that clang works."
+depends_on = ["configure-clang"]
+
+[tasks.fetch-gdb]
+cmd = "echo 'fetching gdb' && sleep 0.1 && echo 'fetched gdb'"
+description = "Fetch gdb"
+details = "Downloads or locates the gdb package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-gdb]
+cmd = "echo 'installing gdb' && sleep 0.1 && echo 'installed gdb'"
+description = "Install gdb"
+details = "Installs gdb onto the server and verifies the binary."
+depends_on = ["fetch-gdb"]
+
+[tasks.configure-gdb]
+cmd = "echo 'configuring gdb' && sleep 0.1 && echo 'configured gdb'"
+description = "Configure gdb"
+details = "Writes the default configuration for gdb."
+depends_on = ["install-gdb"]
+
+[tasks.smoke-gdb]
+cmd = "echo 'smoke testing gdb' && sleep 0.1 && echo 'smoke gdb ok'"
+description = "Smoke test gdb"
+details = "Runs a quick check that gdb works."
+depends_on = ["configure-gdb"]
+
+[tasks.fetch-strace]
+cmd = "echo 'fetching strace' && sleep 0.1 && echo 'fetched strace'"
+description = "Fetch strace"
+details = "Downloads or locates the strace package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-strace]
+cmd = "echo 'installing strace' && sleep 0.1 && echo 'installed strace'"
+description = "Install strace"
+details = "Installs strace onto the server and verifies the binary."
+depends_on = ["fetch-strace"]
+
+[tasks.configure-strace]
+cmd = "echo 'configuring strace' && sleep 0.1 && echo 'configured strace'"
+description = "Configure strace"
+details = "Writes the default configuration for strace."
+depends_on = ["install-strace"]
+
+[tasks.smoke-strace]
+cmd = "echo 'smoke testing strace' && sleep 0.1 && echo 'smoke strace ok'"
+description = "Smoke test strace"
+details = "Runs a quick check that strace works."
+depends_on = ["configure-strace"]
+
+[tasks.fetch-ltrace]
+cmd = "echo 'fetching ltrace' && sleep 0.1 && echo 'fetched ltrace'"
+description = "Fetch ltrace"
+details = "Downloads or locates the ltrace package so it can be installed."
+depends_on = ["bootstrap"]
+
+[tasks.install-ltrace]
+cmd = "echo 'installing ltrace' && sleep 0.1 && echo 'installed ltrace'"
+description = "Install ltrace"
+details = "Installs ltrace onto the server and verifies the binary."
+depends_on = ["fetch-ltrace"]
+
+[tasks.configure-ltrace]
+cmd = "echo 'configuring ltrace' && sleep 0.1 && echo 'configured ltrace'"
+description = "Configure ltrace"
+details = "Writes the default configuration for ltrace."
+depends_on = ["install-ltrace"]
+
+[tasks.smoke-ltrace]
+cmd = "echo 'smoke testing ltrace' && sleep 0.1 && echo 'smoke ltrace ok'"
+description = "Smoke test ltrace"
+details = "Runs a quick check that ltrace works."
+depends_on = ["configure-ltrace"]
+
+[tasks.integration-dev-env]
+description = "integration-dev-env"
+details = "Runs the integration-dev-env step of the recipe."
+cmd = "echo 'integration: dev environment ready' && sleep 0.2"
+depends_on = ["smoke-ca-certificates", "smoke-tzdata", "smoke-sudo", "smoke-bash", "smoke-zsh", "smoke-curl", "smoke-wget", "smoke-jq", "smoke-yq", "smoke-fzf", "smoke-ripgrep", "smoke-fd", "smoke-bat", "smoke-eza", "smoke-htop", "smoke-btop", "smoke-ncdu", "smoke-duf", "smoke-tmux", "smoke-starship", "smoke-tldr", "smoke-httpie", "smoke-git", "smoke-git-lfs", "smoke-git-delta", "smoke-gh", "smoke-jj", "smoke-lazygit", "smoke-neovim", "smoke-vim", "smoke-helix", "smoke-docker", "smoke-compose", "smoke-lazydocker", "smoke-podman", "smoke-go", "smoke-rust", "smoke-node", "smoke-python", "smoke-uv", "smoke-bun", "smoke-pnpm", "smoke-psql", "smoke-redis-cli", "smoke-sqlite3", "smoke-mongosh", "smoke-nmap", "smoke-mtr", "smoke-iperf3", "smoke-socat", "smoke-make", "smoke-cmake", "smoke-ninja", "smoke-gcc", "smoke-clang", "smoke-gdb", "smoke-strace", "smoke-ltrace"]
+
+[tasks.package-manifest]
+description = "package-manifest"
+details = "Runs the package-manifest step of the recipe."
+cmd = "echo 'packaging manifest' && sleep 0.1"
+depends_on = ["integration-dev-env"]
+
+[tasks.package-configs]
+description = "package-configs"
+details = "Runs the package-configs step of the recipe."
+cmd = "echo 'packaging configs' && sleep 0.1"
+depends_on = ["integration-dev-env"]
+
+[tasks.checksums]
+description = "checksums"
+details = "Runs the checksums step of the recipe."
+cmd = "echo 'checksums ok' && sleep 0.1"
+depends_on = ["package-manifest", "package-configs"]
+
+[tasks.verify-all]
+description = "verify-all"
+details = "Runs the verify-all step of the recipe."
+cmd = "echo 'verify-all ok'"
+depends_on = ["integration-dev-env", "checksums"]
+
+[tasks.cleanup]
+description = "cleanup"
+details = "Runs the cleanup step of the recipe."
+cmd = "rm -rf /tmp/devserver && echo 'cleaned up'"
+depends_on = ["verify-all"]
+
+[tasks.server-info]
+cmd_template = "echo '{{.Name}}: tags={{range .Tags}}{{.}} {{end}}'"
+description = "Print the host tags"
+details = "Shows the resolved tags for the host."
+rerun = "safe"
+
+[bundles.base-configure]
+description = "Configure base tools"
+tasks = ["configure-ca-certificates", "configure-tzdata", "configure-sudo", "configure-bash", "configure-zsh"]
+
+[bundles.base-smoke]
+description = "Smoke test base tools"
+tasks = ["smoke-ca-certificates", "smoke-tzdata", "smoke-sudo", "smoke-bash", "smoke-zsh"]
+
+[bundles.cli-configure]
+description = "Configure cli tools"
+tasks = ["configure-curl", "configure-wget", "configure-jq", "configure-yq", "configure-fzf", "configure-ripgrep", "configure-fd", "configure-bat", "configure-eza", "configure-htop", "configure-btop", "configure-ncdu", "configure-duf", "configure-tmux", "configure-starship", "configure-tldr", "configure-httpie"]
+
+[bundles.cli-smoke]
+description = "Smoke test cli tools"
+tasks = ["smoke-curl", "smoke-wget", "smoke-jq", "smoke-yq", "smoke-fzf", "smoke-ripgrep", "smoke-fd", "smoke-bat", "smoke-eza", "smoke-htop", "smoke-btop", "smoke-ncdu", "smoke-duf", "smoke-tmux", "smoke-starship", "smoke-tldr", "smoke-httpie"]
+
+[bundles.vcs-configure]
+description = "Configure vcs tools"
+tasks = ["configure-git", "configure-git-lfs", "configure-git-delta", "configure-gh", "configure-jj", "configure-lazygit"]
+
+[bundles.vcs-smoke]
+description = "Smoke test vcs tools"
+tasks = ["smoke-git", "smoke-git-lfs", "smoke-git-delta", "smoke-gh", "smoke-jj", "smoke-lazygit"]
+
+[bundles.editors-configure]
+description = "Configure editors tools"
+tasks = ["configure-neovim", "configure-vim", "configure-helix"]
+
+[bundles.editors-smoke]
+description = "Smoke test editors tools"
+tasks = ["smoke-neovim", "smoke-vim", "smoke-helix"]
+
+[bundles.containers-configure]
+description = "Configure containers tools"
+tasks = ["configure-docker", "configure-compose", "configure-lazydocker", "configure-podman"]
+
+[bundles.containers-smoke]
+description = "Smoke test containers tools"
+tasks = ["smoke-docker", "smoke-compose", "smoke-lazydocker", "smoke-podman"]
+
+[bundles.languages-configure]
+description = "Configure languages tools"
+tasks = ["configure-go", "configure-rust", "configure-node", "configure-python", "configure-uv", "configure-bun", "configure-pnpm"]
+
+[bundles.languages-smoke]
+description = "Smoke test languages tools"
+tasks = ["smoke-go", "smoke-rust", "smoke-node", "smoke-python", "smoke-uv", "smoke-bun", "smoke-pnpm"]
+
+[bundles.db-configure]
+description = "Configure db tools"
+tasks = ["configure-psql", "configure-redis-cli", "configure-sqlite3", "configure-mongosh"]
+
+[bundles.db-smoke]
+description = "Smoke test db tools"
+tasks = ["smoke-psql", "smoke-redis-cli", "smoke-sqlite3", "smoke-mongosh"]
+
+[bundles.network-configure]
+description = "Configure network tools"
+tasks = ["configure-nmap", "configure-mtr", "configure-iperf3", "configure-socat"]
+
+[bundles.network-smoke]
+description = "Smoke test network tools"
+tasks = ["smoke-nmap", "smoke-mtr", "smoke-iperf3", "smoke-socat"]
+
+[bundles.toolchain-configure]
+description = "Configure toolchain tools"
+tasks = ["configure-make", "configure-cmake", "configure-ninja", "configure-gcc", "configure-clang", "configure-gdb", "configure-strace", "configure-ltrace"]
+
+[bundles.toolchain-smoke]
+description = "Smoke test toolchain tools"
+tasks = ["smoke-make", "smoke-cmake", "smoke-ninja", "smoke-gcc", "smoke-clang", "smoke-gdb", "smoke-strace", "smoke-ltrace"]
+
+[bundles.fetch-all]
+description = "Fetch every tool"
+tasks = ["fetch-ca-certificates", "fetch-tzdata", "fetch-sudo", "fetch-bash", "fetch-zsh", "fetch-curl", "fetch-wget", "fetch-jq", "fetch-yq", "fetch-fzf", "fetch-ripgrep", "fetch-fd", "fetch-bat", "fetch-eza", "fetch-htop", "fetch-btop", "fetch-ncdu", "fetch-duf", "fetch-tmux", "fetch-starship", "fetch-tldr", "fetch-httpie", "fetch-git", "fetch-git-lfs", "fetch-git-delta", "fetch-gh", "fetch-jj", "fetch-lazygit", "fetch-neovim", "fetch-vim", "fetch-helix", "fetch-docker", "fetch-compose", "fetch-lazydocker", "fetch-podman", "fetch-go", "fetch-rust", "fetch-node", "fetch-python", "fetch-uv", "fetch-bun", "fetch-pnpm", "fetch-psql", "fetch-redis-cli", "fetch-sqlite3", "fetch-mongosh", "fetch-nmap", "fetch-mtr", "fetch-iperf3", "fetch-socat", "fetch-make", "fetch-cmake", "fetch-ninja", "fetch-gcc", "fetch-clang", "fetch-gdb", "fetch-strace", "fetch-ltrace"]
+
+[bundles.install-all]
+description = "Install every tool"
+tasks = ["install-ca-certificates", "install-tzdata", "install-sudo", "install-bash", "install-zsh", "install-curl", "install-wget", "install-jq", "install-yq", "install-fzf", "install-ripgrep", "install-fd", "install-bat", "install-eza", "install-htop", "install-btop", "install-ncdu", "install-duf", "install-tmux", "install-starship", "install-tldr", "install-httpie", "install-git", "install-git-lfs", "install-git-delta", "install-gh", "install-jj", "install-lazygit", "install-neovim", "install-vim", "install-helix", "install-docker", "install-compose", "install-lazydocker", "install-podman", "install-go", "install-rust", "install-node", "install-python", "install-uv", "install-bun", "install-pnpm", "install-psql", "install-redis-cli", "install-sqlite3", "install-mongosh", "install-nmap", "install-mtr", "install-iperf3", "install-socat", "install-make", "install-cmake", "install-ninja", "install-gcc", "install-clang", "install-gdb", "install-strace", "install-ltrace"]
+
+[bundles.configure-all]
+description = "Configure every tool"
+tasks = ["configure-ca-certificates", "configure-tzdata", "configure-sudo", "configure-bash", "configure-zsh", "configure-curl", "configure-wget", "configure-jq", "configure-yq", "configure-fzf", "configure-ripgrep", "configure-fd", "configure-bat", "configure-eza", "configure-htop", "configure-btop", "configure-ncdu", "configure-duf", "configure-tmux", "configure-starship", "configure-tldr", "configure-httpie", "configure-git", "configure-git-lfs", "configure-git-delta", "configure-gh", "configure-jj", "configure-lazygit", "configure-neovim", "configure-vim", "configure-helix", "configure-docker", "configure-compose", "configure-lazydocker", "configure-podman", "configure-go", "configure-rust", "configure-node", "configure-python", "configure-uv", "configure-bun", "configure-pnpm", "configure-psql", "configure-redis-cli", "configure-sqlite3", "configure-mongosh", "configure-nmap", "configure-mtr", "configure-iperf3", "configure-socat", "configure-make", "configure-cmake", "configure-ninja", "configure-gcc", "configure-clang", "configure-gdb", "configure-strace", "configure-ltrace"]
+
+[bundles.smoke-all]
+description = "Smoke test every tool"
+tasks = ["smoke-ca-certificates", "smoke-tzdata", "smoke-sudo", "smoke-bash", "smoke-zsh", "smoke-curl", "smoke-wget", "smoke-jq", "smoke-yq", "smoke-fzf", "smoke-ripgrep", "smoke-fd", "smoke-bat", "smoke-eza", "smoke-htop", "smoke-btop", "smoke-ncdu", "smoke-duf", "smoke-tmux", "smoke-starship", "smoke-tldr", "smoke-httpie", "smoke-git", "smoke-git-lfs", "smoke-git-delta", "smoke-gh", "smoke-jj", "smoke-lazygit", "smoke-neovim", "smoke-vim", "smoke-helix", "smoke-docker", "smoke-compose", "smoke-lazydocker", "smoke-podman", "smoke-go", "smoke-rust", "smoke-node", "smoke-python", "smoke-uv", "smoke-bun", "smoke-pnpm", "smoke-psql", "smoke-redis-cli", "smoke-sqlite3", "smoke-mongosh", "smoke-nmap", "smoke-mtr", "smoke-iperf3", "smoke-socat", "smoke-make", "smoke-cmake", "smoke-ninja", "smoke-gcc", "smoke-clang", "smoke-gdb", "smoke-strace", "smoke-ltrace"]
+
+[bundles.devserver]
+description = "Full massive dev server setup"
+tasks = ["@fetch-all", "@install-all", "@configure-all", "@smoke-all", "integration-dev-env", "package-manifest", "package-configs", "checksums", "verify-all", "cleanup"]
+
+[server_groups.lab]
+tags = ["lab"]
+    [server_groups.lab.ssh]
+    username = "testuser"
+    identityfile = "../ssh-keys/id_ecdsa"
+
+[server_groups.prod]
+tags = ["prod"]
+envvars = { APP_ENV = "production" }
+tasks = ["server-info"]
+
+[server_groups.staging]
+tags = ["staging"]
+log_level = "debug"
+envvars = { APP_ENV = "staging" }
+tasks = ["server-info"]
+
+[server_groups.eu]
+tags = ["eu"]
+tasks = ["server-info"]
+envvars = { REGION = "eu-west-1" }
+
+[server_groups.build]
+tags = ["build"]
+tasks = ["server-info"]
+
+[server_groups.docker]
+tags = ["docker"]
+tasks = ["server-info"]
+
+[servers]
+tasks = ["cleanup"]
+
+[servers.hosts.server1]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server1.ssh]
+    port = 2221
+
+[servers.hosts.server2]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server2.ssh]
+    port = 2222
+
+[servers.hosts.server3]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server3.ssh]
+    port = 2223
+
+[servers.hosts.server4]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server4.ssh]
+    port = 2224
+
+[servers.hosts.server5]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server5.ssh]
+    port = 2225
+
+[servers.hosts.server6]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server6.ssh]
+    port = 2226
+
+[servers.hosts.server7]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server7.ssh]
+    port = 2227
+
+[servers.hosts.server8]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server8.ssh]
+    port = 2228
+
+[servers.hosts.server9]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server9.ssh]
+    port = 2229
+
+[servers.hosts.server10]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server10.ssh]
+    port = 2230
+
+[servers.hosts.server11]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server11.ssh]
+    port = 2231
+
+[servers.hosts.server12]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server12.ssh]
+    port = 2232
+
+[servers.hosts.server13]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server13.ssh]
+    port = 2233
+
+[servers.hosts.server14]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server14.ssh]
+    port = 2234
+
+[servers.hosts.server15]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server15.ssh]
+    port = 2235
+
+[servers.hosts.server16]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server16.ssh]
+    port = 2236
+
+[servers.hosts.server17]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server17.ssh]
+    port = 2237
+
+[servers.hosts.server18]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server18.ssh]
+    port = 2238
+
+[servers.hosts.server19]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server19.ssh]
+    port = 2239
+
+[servers.hosts.server20]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server20.ssh]
+    port = 2240
+
+[servers.hosts.server21]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server21.ssh]
+    port = 2241
+
+[servers.hosts.server22]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server22.ssh]
+    port = 2242
+
+[servers.hosts.server23]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server23.ssh]
+    port = 2243
+
+[servers.hosts.server24]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server24.ssh]
+    port = 2244
+
+[servers.hosts.server25]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server25.ssh]
+    port = 2245
+
+[servers.hosts.server26]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server26.ssh]
+    port = 2246
+
+[servers.hosts.server27]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server27.ssh]
+    port = 2247
+
+[servers.hosts.server28]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server28.ssh]
+    port = 2248
+
+[servers.hosts.server29]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server29.ssh]
+    port = 2249
+
+[servers.hosts.server30]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server30.ssh]
+    port = 2250
+
+[servers.hosts.server31]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server31.ssh]
+    port = 2251
+
+[servers.hosts.server32]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server32.ssh]
+    port = 2252
+
+[servers.hosts.server33]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server33.ssh]
+    port = 2253
+
+[servers.hosts.server34]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server34.ssh]
+    port = 2254
+
+[servers.hosts.server35]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server35.ssh]
+    port = 2255
+
+[servers.hosts.server36]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server36.ssh]
+    port = 2256
+
+[servers.hosts.server37]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server37.ssh]
+    port = 2257
+
+[servers.hosts.server38]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server38.ssh]
+    port = 2258
+
+[servers.hosts.server39]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server39.ssh]
+    port = 2259
+
+[servers.hosts.server40]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server40.ssh]
+    port = 2260
+
+[servers.hosts.server41]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server41.ssh]
+    port = 2261
+
+[servers.hosts.server42]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server42.ssh]
+    port = 2262
+
+[servers.hosts.server43]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server43.ssh]
+    port = 2263
+
+[servers.hosts.server44]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server44.ssh]
+    port = 2264
+
+[servers.hosts.server45]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server45.ssh]
+    port = 2265
+
+[servers.hosts.server46]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server46.ssh]
+    port = 2266
+
+[servers.hosts.server47]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server47.ssh]
+    port = 2267
+
+[servers.hosts.server48]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server48.ssh]
+    port = 2268
+
+[servers.hosts.server49]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server49.ssh]
+    port = 2269
+
+[servers.hosts.server50]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server50.ssh]
+    port = 2270
+
+[servers.hosts.server51]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server51.ssh]
+    port = 2271
+
+[servers.hosts.server52]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server52.ssh]
+    port = 2272
+
+[servers.hosts.server53]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server53.ssh]
+    port = 2273
+
+[servers.hosts.server54]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server54.ssh]
+    port = 2274
+
+[servers.hosts.server55]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server55.ssh]
+    port = 2275
+
+[servers.hosts.server56]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server56.ssh]
+    port = 2276
+
+[servers.hosts.server57]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server57.ssh]
+    port = 2277
+
+[servers.hosts.server58]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server58.ssh]
+    port = 2278
+
+[servers.hosts.server59]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server59.ssh]
+    port = 2279
+
+[servers.hosts.server60]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server60.ssh]
+    port = 2280
+
+[servers.hosts.server61]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server61.ssh]
+    port = 2281
+
+[servers.hosts.server62]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server62.ssh]
+    port = 2282
+
+[servers.hosts.server63]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server63.ssh]
+    port = 2283
+
+[servers.hosts.server64]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server64.ssh]
+    port = 2284
+
+[servers.hosts.server65]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server65.ssh]
+    port = 2285
+
+[servers.hosts.server66]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server66.ssh]
+    port = 2286
+
+[servers.hosts.server67]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server67.ssh]
+    port = 2287
+
+[servers.hosts.server68]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server68.ssh]
+    port = 2288
+
+[servers.hosts.server69]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server69.ssh]
+    port = 2289
+
+[servers.hosts.server70]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server70.ssh]
+    port = 2290
+
+[servers.hosts.server71]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server71.ssh]
+    port = 2291
+
+[servers.hosts.server72]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server72.ssh]
+    port = 2292
+
+[servers.hosts.server73]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server73.ssh]
+    port = 2293
+
+[servers.hosts.server74]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server74.ssh]
+    port = 2294
+
+[servers.hosts.server75]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server75.ssh]
+    port = 2295
+
+[servers.hosts.server76]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server76.ssh]
+    port = 2296
+
+[servers.hosts.server77]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server77.ssh]
+    port = 2297
+
+[servers.hosts.server78]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server78.ssh]
+    port = 2298
+
+[servers.hosts.server79]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server79.ssh]
+    port = 2299
+
+[servers.hosts.server80]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server80.ssh]
+    port = 2300
+
+[servers.hosts.server81]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server81.ssh]
+    port = 2301
+
+[servers.hosts.server82]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server82.ssh]
+    port = 2302
+
+[servers.hosts.server83]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server83.ssh]
+    port = 2303
+
+[servers.hosts.server84]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server84.ssh]
+    port = 2304
+
+[servers.hosts.server85]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server85.ssh]
+    port = 2305
+
+[servers.hosts.server86]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server86.ssh]
+    port = 2306
+
+[servers.hosts.server87]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server87.ssh]
+    port = 2307
+
+[servers.hosts.server88]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server88.ssh]
+    port = 2308
+
+[servers.hosts.server89]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server89.ssh]
+    port = 2309
+
+[servers.hosts.server90]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server90.ssh]
+    port = 2310
+
+[servers.hosts.server91]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server91.ssh]
+    port = 2311
+
+[servers.hosts.server92]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server92.ssh]
+    port = 2312
+
+[servers.hosts.server93]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server93.ssh]
+    port = 2313
+
+[servers.hosts.server94]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server94.ssh]
+    port = 2314
+
+[servers.hosts.server95]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server95.ssh]
+    port = 2315
+
+[servers.hosts.server96]
+hostname = "localhost"
+groups = ["lab", "docker"]
+tags = ["docker", "dev"]
+    [servers.hosts.server96.ssh]
+    port = 2316
+
+[servers.hosts.server97]
+hostname = "localhost"
+groups = ["lab", "build"]
+tags = ["build", "dev"]
+    [servers.hosts.server97.ssh]
+    port = 2317
+
+[servers.hosts.server98]
+hostname = "localhost"
+groups = ["lab", "eu"]
+tags = ["worker", "eu"]
+    [servers.hosts.server98.ssh]
+    port = 2318
+
+[servers.hosts.server99]
+hostname = "localhost"
+groups = ["lab", "staging"]
+tags = ["api", "staging"]
+    [servers.hosts.server99.ssh]
+    port = 2319
+
+[servers.hosts.server100]
+hostname = "localhost"
+groups = ["lab", "prod"]
+tags = ["web", "prod"]
+    [servers.hosts.server100.ssh]
+    port = 2320

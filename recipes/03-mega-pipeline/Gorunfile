@@ -1,0 +1,152 @@
+title = "Recipe 3: mega pipeline"
+log_level = "info"
+max_task_parallel = -1
+
+# Tier 0
+[tasks.bootstrap]
+description = "bootstrap"
+details = "Runs the bootstrap step of the recipe."
+cmd = "rm -rf /tmp/recipe3 && mkdir -p /tmp/recipe3/bin /tmp/recipe3/cfg /tmp/recipe3/test && echo bootstrap ok"
+
+# Tier 1: three independent installs
+[tasks.install-a]
+description = "install-a"
+details = "Runs the install-a step of the recipe."
+cmd = "sleep 1; echo 'a' > /tmp/recipe3/bin/a; echo install-a ok"
+depends_on = ["bootstrap"]
+
+[tasks.install-b]
+description = "install-b"
+details = "Runs the install-b step of the recipe."
+cmd = "sleep 1; echo 'b' > /tmp/recipe3/bin/b; echo install-b ok"
+depends_on = ["bootstrap"]
+
+[tasks.install-c]
+description = "install-c"
+details = "Runs the install-c step of the recipe."
+cmd = "sleep 1; echo 'c' > /tmp/recipe3/bin/c; echo install-c ok"
+depends_on = ["bootstrap"]
+
+# Tier 2: configs, some depending on one install, one on two
+[tasks.config-a]
+description = "config-a"
+details = "Runs the config-a step of the recipe."
+cmd = "echo cfg-a > /tmp/recipe3/cfg/a; echo config-a ok"
+depends_on = ["install-a"]
+
+[tasks.config-b]
+description = "config-b"
+details = "Runs the config-b step of the recipe."
+cmd = "echo cfg-b > /tmp/recipe3/cfg/b; echo config-b ok"
+depends_on = ["install-b"]
+
+[tasks.config-c]
+description = "config-c"
+details = "Runs the config-c step of the recipe."
+cmd = "echo cfg-c > /tmp/recipe3/cfg/c; echo config-c ok"
+depends_on = ["install-c"]
+
+[tasks.config-ab]
+description = "config-ab"
+details = "Runs the config-ab step of the recipe."
+cmd = "cat /tmp/recipe3/bin/a /tmp/recipe3/bin/b > /tmp/recipe3/cfg/ab; echo config-ab ok"
+depends_on = ["install-a", "install-b"]
+
+# Tier 3: tests
+[tasks.test-a]
+description = "test-a"
+details = "Runs the test-a step of the recipe."
+cmd = "sleep 1; test -f /tmp/recipe3/cfg/a && echo test-a ok"
+depends_on = ["config-a"]
+
+[tasks.test-b]
+description = "test-b"
+details = "Runs the test-b step of the recipe."
+cmd = "sleep 1; test -f /tmp/recipe3/cfg/b && echo test-b ok"
+depends_on = ["config-b"]
+
+[tasks.test-c]
+description = "test-c"
+details = "Runs the test-c step of the recipe."
+cmd = "sleep 1; test -f /tmp/recipe3/cfg/c && echo test-c ok"
+depends_on = ["config-c"]
+
+[tasks.integration]
+description = "integration"
+details = "Runs the integration step of the recipe."
+cmd = "sleep 1; cat /tmp/recipe3/cfg/* > /tmp/recipe3/cfg/all && echo integration ok"
+depends_on = ["config-a", "config-b", "config-c", "config-ab"]
+
+# Tier 4: packaging and deploy
+[tasks.package]
+description = "package"
+details = "Runs the package step of the recipe."
+cmd = "tar -czf /tmp/recipe3/app.tgz -C /tmp/recipe3 bin cfg && echo packaged"
+depends_on = ["integration"]
+
+[tasks.deploy]
+description = "deploy"
+details = "Runs the deploy step of the recipe."
+cmd = "mkdir -p /tmp/recipe3/deploy && cp /tmp/recipe3/app.tgz /tmp/recipe3/deploy/ && echo deployed"
+depends_on = ["package"]
+
+[tasks.docs]
+description = "docs"
+details = "Runs the docs step of the recipe."
+cmd = "echo 'docs generated' > /tmp/recipe3/docs.txt && echo docs ok"
+depends_on = ["config-c"]
+
+# Tier 5: final verification fan-in
+[tasks.verify-all]
+description = "verify-all"
+details = "Runs the verify-all step of the recipe."
+cmd = "test -f /tmp/recipe3/deploy/app.tgz && test -f /tmp/recipe3/docs.txt && echo 'verify-all ok'"
+depends_on = ["deploy", "docs", "test-a", "test-b", "test-c"]
+
+[tasks.cleanup]
+description = "cleanup"
+details = "Runs the cleanup step of the recipe."
+cmd = "rm -rf /tmp/recipe3 && echo cleaned up"
+depends_on = ["verify-all"]
+
+# Bundles to show reuse
+[bundles.install-all]
+description = "All three installs"
+tasks = ["install-a", "install-b", "install-c"]
+
+[bundles.tests]
+description = "All tests"
+tasks = ["test-a", "test-b", "test-c", "integration"]
+
+[server_groups.lab]
+tags = ["lab"]
+    [server_groups.lab.ssh]
+    username = "testuser"
+    identityfile = "../ssh-keys/id_ecdsa"
+
+[servers]
+tasks = ["cleanup"]
+
+[servers.hosts.server1]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.server1.ssh]
+    port = 2221
+
+[servers.hosts.server2]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.server2.ssh]
+    port = 2222
+
+[servers.hosts.web-prod-1]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.web-prod-1.ssh]
+    port = 2223
+
+[servers.hosts.web-prod-2]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.web-prod-2.ssh]
+    port = 2224

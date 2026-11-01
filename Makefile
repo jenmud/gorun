@@ -33,7 +33,7 @@ web-dev:
 	$(TEMPL) generate -watch -cmd "go run ./cmd -web" -proxy http://localhost:8080 ./cmd/web/...
 
 
--include ./example/Makefile
+-include ./recipes/Makefile
 # up:   is imported from the examples Makefile above
 # down: is imported from the examples Makefile above
 # run:  is imported from the examples Makefile above

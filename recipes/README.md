@@ -1,0 +1,43 @@
+# Recipes
+
+A set of example Gorunfiles that push gorun to its limits. Each one runs against
+the demo docker lab in `recipes/docker-compose.yml`.
+
+## Order
+
+1. `recipes/Gorunfile` - start the docker-compose lab (a hundred SSH servers + NATS) locally with `gorun recipes/Gorunfile -r`.
+2. `01-parallel-basics` - ten independent tasks that finish together.
+3. `02-dependency-dag` - a diamond DAG: fan out, run in parallel, fan back in.
+4. `03-mega-pipeline` - ~20 tasks across six tiers, bundles and fan-in.
+5. `04-dev-server` - ~230 tasks across fetch/install/configure/smoke tiers, bundles and fan-in.
+
+## One-time: allow docker access
+
+Set your sudo password in the environment (never in the Gorunfile):
+
+```sh
+export SUDO_PASSWORD='your sudo password'
+gorun recipes/Gorunfile -r -task setup-user
+```
+
+Log out and back in afterwards. If you prefer, run `sudo usermod -aG docker $USER` by hand instead.
+
+## Run everything
+
+From the repository root:
+
+```sh
+gorun recipes/Gorunfile -r            # up
+gorun recipes/Gorunfile -r -task down  # down
+gorun recipes/01-parallel-basics/Gorunfile -r
+gorun recipes/02-dependency-dag/Gorunfile -r
+gorun recipes/03-mega-pipeline/Gorunfile -r
+gorun recipes/04-dev-server/Gorunfile -r
+```
+
+## Tear down
+
+```sh
+gorun recipes/Gorunfile -r -task down
+```
+EOF

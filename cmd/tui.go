@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
-	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"charm.land/bubbles/v2/progress"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/internal/store"
+	_ "net/http/pprof"
 )
 
 var (
@@ -55,13 +57,21 @@ type taskView struct {
 }
 
 type serverView struct {
-	name    string
-	address string
-	tasks   []*taskView
-	err     error
+	name         string
+	address      string
+	tasks        []*taskView
+	taskMap      map[string]*taskView
+	err          error
+	doneCount    int
+	failedCount  int
+	skippedCount int
+	runningCount int
 }
 
 func (s *serverView) task(name string) *taskView {
+	if s.taskMap != nil {
+		return s.taskMap[name]
+	}
 	for _, t := range s.tasks {
 		if t.name == name {
 			return t
@@ -71,11 +81,23 @@ func (s *serverView) task(name string) *taskView {
 }
 
 func (s *serverView) count(states ...gorun.TaskState) int {
-	n := 0
-	for _, t := range s.tasks {
-		if slices.Contains(states, t.state) {
-			n++
+	if len(states) == 1 {
+		switch states[0] {
+		case gorun.TaskDone:
+			return s.doneCount
+		case gorun.TaskFailed:
+			return s.failedCount
+		case gorun.TaskSkipped:
+			return s.skippedCount
+		case gorun.TaskRunning:
+			return s.runningCount
+		case gorun.TaskPending:
+			return len(s.tasks) - s.doneCount - s.failedCount - s.skippedCount - s.runningCount
 		}
+	}
+	n := 0
+	for _, st := range states {
+		n += s.count(st)
 	}
 	return n
 }
@@ -84,14 +106,22 @@ func (s *serverView) finished() bool {
 	return s.err != nil || s.count(gorun.TaskPending, gorun.TaskRunning) == 0
 }
 
+// tuiBatchMsg carries a batch of gorun events applied in a single Update, so the
+// TUI stays responsive when a run emits thousands of events.
+type tuiBatchMsg struct {
+	events []any
+}
+
 // tuiModel is the bubbletea model for a gorun deployment.
 type tuiModel struct {
-	title   string
-	servers []*serverView
-	spinner spinner.Model
-	okBar   progress.Model
-	failBar progress.Model
-	cancel  context.CancelFunc
+	title          string
+	servers        []*serverView
+	serverMap      map[string]*serverView
+	flatTasksCache []*taskView
+	spinner        spinner.Model
+	okBar          progress.Model
+	failBar        progress.Model
+	cancel         context.CancelFunc
 
 	runErr   error // the run failed before any server started
 	verbose  bool
@@ -108,16 +138,17 @@ type tuiModel struct {
 
 func newTUIModel(title string, verbose bool, cancel context.CancelFunc) tuiModel {
 	return tuiModel{
-		title:   title,
-		verbose: verbose,
-		cancel:  cancel,
-		follow:  true,
-		started: time.Now(),
-		width:   80,
-		height:  24,
-		spinner: spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(cursorStyle)),
-		okBar:   progress.New(progress.WithColors(colorAccent, colorOK), progress.WithFillCharacters('█', '░'), progress.WithoutPercentage()),
-		failBar: progress.New(progress.WithColors(colorFail), progress.WithFillCharacters('█', '░'), progress.WithoutPercentage()),
+		title:     title,
+		serverMap: make(map[string]*serverView),
+		verbose:   verbose,
+		cancel:    cancel,
+		follow:    false,
+		started:   time.Now(),
+		width:     80,
+		height:    24,
+		spinner:   spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(cursorStyle)),
+		okBar:     progress.New(progress.WithColors(colorAccent, colorOK), progress.WithFillCharacters('█', '░'), progress.WithoutPercentage()),
+		failBar:   progress.New(progress.WithColors(colorFail), progress.WithFillCharacters('█', '░'), progress.WithoutPercentage()),
 	}
 }
 
@@ -126,6 +157,9 @@ func (m tuiModel) Init() tea.Cmd {
 }
 
 func (m tuiModel) server(name string) *serverView {
+	if m.serverMap != nil {
+		return m.serverMap[name]
+	}
 	for _, s := range m.servers {
 		if s.name == name {
 			return s
@@ -136,6 +170,9 @@ func (m tuiModel) server(name string) *serverView {
 
 // flatTasks returns every task across all servers in display order.
 func (m tuiModel) flatTasks() []*taskView {
+	if m.flatTasksCache != nil {
+		return m.flatTasksCache
+	}
 	tasks := []*taskView{}
 	for _, s := range m.servers {
 		tasks = append(tasks, s.tasks...)
@@ -155,7 +192,80 @@ func (m tuiModel) failed() bool {
 	return false
 }
 
+// applyEvent folds a single gorun event into the model. It is called for every
+// event in a tuiBatchMsg, so the model is updated in bulk instead of per event.
+func (m tuiModel) applyEvent(event any) tuiModel {
+	switch msg := event.(type) {
+	case gorun.PlanEvent:
+		s := &serverView{name: msg.Server, address: msg.Address, taskMap: make(map[string]*taskView, len(msg.Tasks))}
+		meta := make(map[string]gorun.TaskMeta, len(msg.TaskMeta))
+		for _, tm := range msg.TaskMeta {
+			meta[tm.Name] = tm
+		}
+		for _, name := range msg.Tasks {
+			tv := &taskView{name: name}
+			if tm, ok := meta[name]; ok {
+				tv.description = tm.Description
+				tv.details = tm.Details
+				tv.rerun = tm.Rerun
+			}
+			s.tasks = append(s.tasks, tv)
+			s.taskMap[name] = tv
+		}
+		m.servers = append(m.servers, s)
+		if m.serverMap == nil {
+			m.serverMap = make(map[string]*serverView)
+		}
+		m.serverMap[s.name] = s
+		m.flatTasksCache = append(m.flatTasksCache, s.tasks...)
+
+	case gorun.TaskEvent:
+		if s := m.server(msg.Server); s != nil {
+			if t := s.task(msg.Task); t != nil {
+				// keep cached counters in sync
+				switch t.state {
+				case gorun.TaskRunning:
+					if s.runningCount > 0 {
+						s.runningCount--
+					}
+				}
+				t.state = msg.State
+				t.event = msg
+				if msg.State == gorun.TaskRunning {
+					t.started = time.Now()
+					s.runningCount++
+				}
+				switch msg.State {
+				case gorun.TaskDone:
+					s.doneCount++
+				case gorun.TaskFailed:
+					s.failedCount++
+					t.expanded = true
+				case gorun.TaskSkipped:
+					s.skippedCount++
+					t.expanded = true
+				}
+			}
+		}
+
+	case gorun.ServerErrorEvent:
+		if s := m.server(msg.Server); s != nil {
+			s.err = msg.Err
+		}
+	}
+	return m
+}
+
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Once the user has asked to quit, drop incoming event batches instead of
+	// applying them, so a backlog of queued events can't keep the UI stuck.
+	if m.quitting {
+		switch msg.(type) {
+		case tuiBatchMsg, gorun.TaskEvent, gorun.PlanEvent, gorun.ServerErrorEvent, gorun.ProcessFinishedEvent:
+			return m, nil
+		}
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -164,14 +274,10 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
-			if !m.done && !m.quitting {
-				m.cancel()
-				m.quitting = true
-				// Don't quit immediately: wait for cfg.Run to finish so that
-				// the ProcessFinishedEvent is published (and flushed) first.
-				return m, nil
-			}
+			m.cancel()
 			m.quitting = true
+			// Quit right away so the UI never blocks on a run that is slow to
+			// wind down; cfg.Run keeps finishing in the background.
 			return m, tea.Quit
 		case "v":
 			m.verbose = !m.verbose
@@ -187,7 +293,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor = min(m.cursor+1, len(m.flatTasks())-1)
 			} else {
 				m.scroll = min(m.compactMaxScroll(), m.scroll+1)
-				m.follow = m.scroll >= m.compactMaxScroll()
+				m.follow = false
 			}
 		case "pgup":
 			if m.verbose {
@@ -201,15 +307,21 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor = min(len(m.flatTasks())-1, m.cursor+5)
 			} else {
 				m.scroll = min(m.compactMaxScroll(), m.scroll+5)
-				m.follow = m.scroll >= m.compactMaxScroll()
+				m.follow = false
 			}
 		case "home", "g":
-			if !m.verbose {
+			if m.verbose {
+				m.cursor = 0
+			} else {
 				m.scroll = 0
 				m.follow = false
 			}
 		case "end", "G":
-			if !m.verbose {
+			if m.verbose {
+				if tasks := m.flatTasks(); len(tasks) > 0 {
+					m.cursor = len(tasks) - 1
+				}
+			} else {
 				m.scroll = m.compactMaxScroll()
 				m.follow = true
 			}
@@ -225,43 +337,9 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 
-	case gorun.PlanEvent:
-		s := &serverView{name: msg.Server, address: msg.Address}
-		meta := make(map[string]gorun.TaskMeta, len(msg.TaskMeta))
-		for _, tm := range msg.TaskMeta {
-			meta[tm.Name] = tm
-		}
-		for _, name := range msg.Tasks {
-			tv := &taskView{name: name}
-			if tm, ok := meta[name]; ok {
-				tv.description = tm.Description
-				tv.details = tm.Details
-				tv.rerun = tm.Rerun
-			}
-			s.tasks = append(s.tasks, tv)
-		}
-		m.servers = append(m.servers, s)
-		return m, nil
-
-	case gorun.TaskEvent:
-		if s := m.server(msg.Server); s != nil {
-			if t := s.task(msg.Task); t != nil {
-				t.state = msg.State
-				t.event = msg
-				if msg.State == gorun.TaskRunning {
-					t.started = time.Now()
-				}
-				// failures and skips always open so the reason is visible straight away
-				if msg.State == gorun.TaskFailed || msg.State == gorun.TaskSkipped {
-					t.expanded = true
-				}
-			}
-		}
-		return m, nil
-
-	case gorun.ServerErrorEvent:
-		if s := m.server(msg.Server); s != nil {
-			s.err = msg.Err
+	case tuiBatchMsg:
+		for _, ev := range msg.events {
+			m = m.applyEvent(ev)
 		}
 		return m, nil
 
@@ -424,31 +502,67 @@ func (m tuiModel) verboseView() string {
 	if m.runErr != nil {
 		lines = append(lines, strings.Split(m.runErrorBox(), "\n")...)
 	}
-	cursorLine := 0
+
+	tasks := m.flatTasks()
+	total := len(tasks)
+	if total == 0 {
+		return strings.Join(lines, "\n") + "\n" + m.footer()
+	}
+
+	cursor := m.cursor
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= total {
+		cursor = total - 1
+	}
+
+	height := max(m.height-2, 5)
+	windowSize := max(5, height-4)
+	startIdx := cursor - windowSize/3
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	endIdx := startIdx + windowSize
+	if endIdx > total {
+		endIdx = total
+		startIdx = max(0, endIdx-windowSize)
+	}
+
+	if startIdx > 0 {
+		lines = append(lines, mutedStyle.Render(fmt.Sprintf("… %d tasks above", startIdx)))
+	}
+
 	i := 0
-
 	for _, s := range m.servers {
-		lines = append(lines, strings.Split(m.serverSummary(s), "\n")...)
+		serverStart := i
+		serverEnd := i + len(s.tasks)
+		if serverEnd <= startIdx || serverStart >= endIdx {
+			i = serverEnd
+			continue
+		}
 
+		lines = append(lines, strings.Split(m.serverSummary(s), "\n")...)
 		if s.err != nil {
 			lines = append(lines, strings.Split(indent(m.serverErrorBox(s), 2), "\n")...)
 		}
 
 		for _, t := range s.tasks {
-			pointer := "  "
-			if i == m.cursor {
-				pointer = cursorStyle.Render("▸ ")
-				cursorLine = len(lines)
-			}
-			lines = append(lines, pointer+m.taskRow(t))
-
-			if t.expanded {
-				box := m.outputBox(t)
-				if t.state == gorun.TaskFailed {
-					box = m.failureBox(s, t)
+			if i >= startIdx && i < endIdx {
+				pointer := "  "
+				if i == cursor {
+					pointer = cursorStyle.Render("▸ ")
 				}
-				if box != "" {
-					lines = append(lines, strings.Split(indent(box, 4), "\n")...)
+				lines = append(lines, pointer+m.taskRow(t))
+
+				if t.expanded {
+					box := m.outputBox(t)
+					if t.state == gorun.TaskFailed {
+						box = m.failureBox(s, t)
+					}
+					if box != "" {
+						lines = append(lines, strings.Split(indent(box, 4), "\n")...)
+					}
 				}
 			}
 			i++
@@ -456,12 +570,8 @@ func (m tuiModel) verboseView() string {
 		lines = append(lines, "")
 	}
 
-	// scroll so the cursor stays on screen, keeping some context above it
-	height := max(m.height-2, 5)
-	offset := 0
-	if len(lines) > height {
-		offset = min(max(cursorLine-height/3, 0), len(lines)-height)
-		lines = lines[offset : offset+height]
+	if endIdx < total {
+		lines = append(lines, mutedStyle.Render(fmt.Sprintf("… %d tasks below", total-endIdx)))
 	}
 
 	return strings.Join(lines, "\n") + "\n" + m.footer()
@@ -655,13 +765,13 @@ func (m tuiModel) footer() string {
 		if m.quitting {
 			return summary + "\n"
 		}
-		return summary + "\n" + mutedStyle.Render("↑/↓ move · enter details/output · v compact · q quit")
+		return summary + "\n" + mutedStyle.Render("↑/↓/pgup/pgdown/home/end move · enter details/output · v compact · q quit")
 	}
 
 	if m.verbose {
-		return mutedStyle.Render("↑/↓ move · enter details/output · v compact · q quit")
+		return mutedStyle.Render("↑/↓/pgup/pgdown/home/end move · enter details/output · v compact · q quit")
 	}
-	return mutedStyle.Render("↑/↓ scroll · v verbose · q quit")
+	return mutedStyle.Render("↑/↓/pgup/pgdown/home/end scroll · v verbose · q quit")
 }
 
 // tail returns the last n lines of s, noting how many were cut.
@@ -719,17 +829,65 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 		}
 	}()
 
+	recordCh := make(chan any, 4096)
+	go func() {
+		for ev := range recordCh {
+			recordEvent(ctx, st, ev)
+		}
+	}()
+
+	// Batch events instead of forwarding every one to the TUI: a large run can
+	// emit tens of thousands of events, and handling them one at a time (with a
+	// render after each) freezes input. Events are coalesced over a short window
+	// and applied in a single Update.
+	var (
+		batchMu   sync.Mutex
+		batch     []any
+		scheduled bool
+	)
+	flushBatch := func() {
+		batchMu.Lock()
+		events := batch
+		batch = nil
+		scheduled = false
+		batchMu.Unlock()
+		if len(events) > 0 {
+			p.Send(tuiBatchMsg{events: events})
+		}
+	}
+	scheduleFlush := func() {
+		batchMu.Lock()
+		if scheduled {
+			batchMu.Unlock()
+			return
+		}
+		scheduled = true
+		batchMu.Unlock()
+		time.AfterFunc(100*time.Millisecond, flushBatch)
+	}
+
 	cfg.OnEvent = func(event any) {
-		recordEvent(ctx, st, event)
-		p.Send(event)
+		select {
+		case recordCh <- event:
+		default:
+		}
+		batchMu.Lock()
+		batch = append(batch, event)
+		batchMu.Unlock()
+		scheduleFlush()
 	}
 
 	done := make(chan error, 1)
 	go func() {
 		err := cfg.Run(ctx)
 		done <- err
+		close(recordCh)
+		// flush any events still pending so the final state lands before RunDone
+		flushBatch()
 		p.Send(gorun.RunDoneEvent{Type: "run_done", GorunUUID: cfg.GorunUUID, Err: err})
 	}()
+
+	go func() { _ = http.ListenAndServe("localhost:6060", nil) }()
 
 	final, err := p.Run()
 	if err != nil {

@@ -1,0 +1,33 @@
+title = "Recipe lab (local commands)"
+log_level = "info"
+
+# These tasks run on your own machine (no ssh block): gorun is just as happy
+# orchestrating local commands as remote ones.
+[tasks.up]
+description = "up"
+details = "Runs the up step of the recipe."
+cmd = "docker compose -f recipes/docker-compose.yml up -d && echo 'lab started'"
+
+[tasks.setup-user]
+description = "Add the current user to the docker group"
+details = "Uses sudo -S with SUDO_PASSWORD from the environment. Log out and back in afterwards, or run 'newgrp docker' in your shell."
+cmd = "if id -nG | grep -qw docker; then echo 'already in docker group'; else printf '%s\\n' \"$SUDO_PASSWORD\" | sudo -S usermod -aG docker \"$USER\" && echo 'added to docker group; log out and back in'; fi"
+envvars = { SUDO_PASSWORD = "${SUDO_PASSWORD}" }
+
+[tasks.down]
+description = "down"
+details = "Runs the down step of the recipe."
+cmd = "docker compose -f recipes/docker-compose.yml down && echo 'lab stopped'"
+
+[tasks.status]
+description = "status"
+details = "Runs the status step of the recipe."
+cmd = "docker compose -f recipes/docker-compose.yml ps"
+depends_on = ["up"]
+
+# Default setup: ensure docker access, then bring the lab up.
+[servers]
+tasks = ["setup-user", "up"]
+
+[servers.hosts.local]
+hostname = "localhost"

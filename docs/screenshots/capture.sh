@@ -5,8 +5,8 @@
 #
 #   docs/screenshots/capture.sh
 #
-# The picker shots use example/Gorunfile (for its real addresses); the run and history
-# shots use the demo Gorunfile in this directory, which only echoes and sleeps locally.
+# The picker shots use recipes/04-dev-server/Gorunfile (for its addresses); the run and
+# history shots use the demo Gorunfile in this directory, which only echoes and sleeps locally.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -64,7 +64,7 @@ shot() {
 }
 
 # the picker: groups and tags selected, one server expanded with a task left out
-start 112 58 "$repo/example" Gorunfile
+start 112 58 "$repo/recipes/04-dev-server" Gorunfile
 keys Down Space         # the eu group
 down 13; keys Space     # the web tag
 down 9; keys Right      # expand worker-eu-a
@@ -72,7 +72,7 @@ down 5; keys Space      # leave out neovim-install (and the tasks that need it)
 shot screenshot-picker
 
 # the picker's fuzzy filter
-start 100 26 "$repo/example" Gorunfile
+start 100 26 "$repo/recipes/04-dev-server" Gorunfile
 keys w p
 shot screenshot-picker-filter
 

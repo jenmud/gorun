@@ -1,0 +1,82 @@
+title = "Recipe 1: parallel basics"
+log_level = "info"
+max_task_parallel = -1   # run every independent task at once
+
+# Ten completely independent tasks. With max_task_parallel = -1 they all start
+# together, so ten servers finish ten tasks in roughly the time of the slowest one.
+[tasks.hostname]
+description = "hostname"
+details = "Runs the hostname step of the recipe."
+cmd = "hostname"
+
+[tasks.uptime]
+description = "uptime"
+details = "Runs the uptime step of the recipe."
+cmd = "uptime"
+
+[tasks.kernel]
+description = "kernel"
+details = "Runs the kernel step of the recipe."
+cmd = "uname -a"
+
+[tasks.disk]
+description = "disk"
+details = "Runs the disk step of the recipe."
+cmd = "df -h / | tail -1"
+
+[tasks.memory]
+description = "memory"
+details = "Runs the memory step of the recipe."
+cmd = "free -h | head -2 | tail -1"
+
+[tasks.whoami]
+description = "whoami"
+details = "Runs the whoami step of the recipe."
+cmd = "whoami; id"
+
+[tasks.date]
+description = "date"
+details = "Runs the date step of the recipe."
+cmd = "date -u"
+
+[tasks.loadavg]
+description = "loadavg"
+details = "Runs the loadavg step of the recipe."
+cmd = "cat /proc/loadavg"
+
+[tasks.cpus]
+description = "cpus"
+details = "Runs the cpus step of the recipe."
+cmd = "nproc"
+
+[tasks.oss]
+description = "oss"
+details = "Runs the oss step of the recipe."
+cmd = "cat /etc/os-release | head -2"
+
+[server_groups.lab]
+tags = ["lab"]
+    [server_groups.lab.ssh]
+    username = "testuser"
+    identityfile = "../ssh-keys/id_ecdsa"
+
+[servers]
+tasks = ["hostname", "uptime", "kernel", "disk", "memory", "whoami", "date", "loadavg", "cpus", "oss"]
+
+[servers.hosts.server1]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.server1.ssh]
+    port = 2221
+
+[servers.hosts.server2]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.server2.ssh]
+    port = 2222
+
+[servers.hosts.web-prod-1]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.web-prod-1.ssh]
+    port = 2223

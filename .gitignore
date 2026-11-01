@@ -44,3 +44,4 @@ example/nats
 /nats
 
 dist/
+gorun_bin

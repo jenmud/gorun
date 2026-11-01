@@ -1,0 +1,67 @@
+title = "Recipe 2: dependency DAG"
+log_level = "info"
+max_task_parallel = -1
+
+# A small diamond: one prepare step fans out into three independent branches
+# that all run at the same time, then a merge step waits for all of them.
+[tasks.prepare]
+description = "prepare"
+details = "Runs the prepare step of the recipe."
+cmd = "rm -rf /tmp/recipe2 && mkdir -p /tmp/recipe2 && echo prepared"
+
+[tasks.branch-a]
+description = "branch-a"
+details = "Runs the branch-a step of the recipe."
+cmd = "sleep 1; echo alpha > /tmp/recipe2/a.txt; echo branch-a done"
+depends_on = ["prepare"]
+
+[tasks.branch-b]
+description = "branch-b"
+details = "Runs the branch-b step of the recipe."
+cmd = "sleep 1; echo beta > /tmp/recipe2/b.txt; echo branch-b done"
+depends_on = ["prepare"]
+
+[tasks.branch-c]
+description = "branch-c"
+details = "Runs the branch-c step of the recipe."
+cmd = "sleep 1; echo gamma > /tmp/recipe2/c.txt; echo branch-c done"
+depends_on = ["prepare"]
+
+[tasks.merge]
+description = "merge"
+details = "Runs the merge step of the recipe."
+cmd = "cat /tmp/recipe2/a.txt /tmp/recipe2/b.txt /tmp/recipe2/c.txt > /tmp/recipe2/merged.txt && echo merged: $(cat /tmp/recipe2/merged.txt | tr '\\n' ' ')"
+depends_on = ["branch-a", "branch-b", "branch-c"]
+
+[tasks.verify]
+description = "verify"
+details = "Runs the verify step of the recipe."
+cmd = "test \"$(wc -l < /tmp/recipe2/merged.txt)\" -eq 3 && echo verify ok"
+depends_on = ["merge"]
+
+[tasks.cleanup]
+description = "cleanup"
+details = "Runs the cleanup step of the recipe."
+cmd = "rm -rf /tmp/recipe2 && echo cleaned up"
+depends_on = ["verify"]
+
+[server_groups.lab]
+tags = ["lab"]
+    [server_groups.lab.ssh]
+    username = "testuser"
+    identityfile = "../ssh-keys/id_ecdsa"
+
+[servers]
+tasks = ["cleanup"]
+
+[servers.hosts.server1]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.server1.ssh]
+    port = 2221
+
+[servers.hosts.server2]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.server2.ssh]
+    port = 2222

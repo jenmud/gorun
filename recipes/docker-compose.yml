@@ -1,0 +1,739 @@
+# shared settings for every test SSH server
+x-ssh-server: &ssh-server
+  image: lscr.io/linuxserver/openssh-server:latest
+  environment:
+    - PUID=1000
+    - PGID=1000
+    - TZ=Etc/UTC
+    - PUBLIC_KEY_DIR=/ssh-keys
+    - SUDO_ACCESS=true
+    - PASSWORD_ACCESS=true
+    - USER_NAME=testuser
+  volumes:
+    - ./ssh-keys:/ssh-keys:ro
+  restart: unless-stopped
+  networks:
+    - gorun-network
+
+services:
+  ssh-server-1:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-1
+    hostname: ssh-server-1
+    ports:
+      - "2221:2222"
+
+  ssh-server-2:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-2
+    hostname: ssh-server-2
+    ports:
+      - "2222:2222"
+
+  ssh-server-3:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-3
+    hostname: ssh-server-3
+    ports:
+      - "2223:2222"
+
+  ssh-server-4:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-4
+    hostname: ssh-server-4
+    ports:
+      - "2224:2222"
+
+  ssh-server-5:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-5
+    hostname: ssh-server-5
+    ports:
+      - "2225:2222"
+
+  ssh-server-6:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-6
+    hostname: ssh-server-6
+    ports:
+      - "2226:2222"
+
+  ssh-server-7:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-7
+    hostname: ssh-server-7
+    ports:
+      - "2227:2222"
+
+  ssh-server-8:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-8
+    hostname: ssh-server-8
+    ports:
+      - "2228:2222"
+
+  ssh-server-9:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-9
+    hostname: ssh-server-9
+    ports:
+      - "2229:2222"
+
+  ssh-server-10:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-10
+    hostname: ssh-server-10
+    ports:
+      - "2230:2222"
+
+  ssh-server-11:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-11
+    hostname: ssh-server-11
+    ports:
+      - "2231:2222"
+
+  ssh-server-12:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-12
+    hostname: ssh-server-12
+    ports:
+      - "2232:2222"
+
+  ssh-server-13:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-13
+    hostname: ssh-server-13
+    ports:
+      - "2233:2222"
+
+  ssh-server-14:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-14
+    hostname: ssh-server-14
+    ports:
+      - "2234:2222"
+
+  ssh-server-15:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-15
+    hostname: ssh-server-15
+    ports:
+      - "2235:2222"
+
+  ssh-server-16:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-16
+    hostname: ssh-server-16
+    ports:
+      - "2236:2222"
+
+  ssh-server-17:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-17
+    hostname: ssh-server-17
+    ports:
+      - "2237:2222"
+
+  ssh-server-18:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-18
+    hostname: ssh-server-18
+    ports:
+      - "2238:2222"
+
+  ssh-server-19:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-19
+    hostname: ssh-server-19
+    ports:
+      - "2239:2222"
+
+  ssh-server-20:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-20
+    hostname: ssh-server-20
+    ports:
+      - "2240:2222"
+
+  ssh-server-21:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-21
+    hostname: ssh-server-21
+    ports:
+      - "2241:2222"
+
+  ssh-server-22:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-22
+    hostname: ssh-server-22
+    ports:
+      - "2242:2222"
+
+  ssh-server-23:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-23
+    hostname: ssh-server-23
+    ports:
+      - "2243:2222"
+
+  ssh-server-24:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-24
+    hostname: ssh-server-24
+    ports:
+      - "2244:2222"
+
+  ssh-server-25:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-25
+    hostname: ssh-server-25
+    ports:
+      - "2245:2222"
+
+  ssh-server-26:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-26
+    hostname: ssh-server-26
+    ports:
+      - "2246:2222"
+
+  ssh-server-27:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-27
+    hostname: ssh-server-27
+    ports:
+      - "2247:2222"
+
+  ssh-server-28:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-28
+    hostname: ssh-server-28
+    ports:
+      - "2248:2222"
+
+  ssh-server-29:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-29
+    hostname: ssh-server-29
+    ports:
+      - "2249:2222"
+
+  ssh-server-30:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-30
+    hostname: ssh-server-30
+    ports:
+      - "2250:2222"
+
+  ssh-server-31:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-31
+    hostname: ssh-server-31
+    ports:
+      - "2251:2222"
+
+  ssh-server-32:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-32
+    hostname: ssh-server-32
+    ports:
+      - "2252:2222"
+
+  ssh-server-33:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-33
+    hostname: ssh-server-33
+    ports:
+      - "2253:2222"
+
+  ssh-server-34:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-34
+    hostname: ssh-server-34
+    ports:
+      - "2254:2222"
+
+  ssh-server-35:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-35
+    hostname: ssh-server-35
+    ports:
+      - "2255:2222"
+
+  ssh-server-36:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-36
+    hostname: ssh-server-36
+    ports:
+      - "2256:2222"
+
+  ssh-server-37:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-37
+    hostname: ssh-server-37
+    ports:
+      - "2257:2222"
+
+  ssh-server-38:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-38
+    hostname: ssh-server-38
+    ports:
+      - "2258:2222"
+
+  ssh-server-39:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-39
+    hostname: ssh-server-39
+    ports:
+      - "2259:2222"
+
+  ssh-server-40:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-40
+    hostname: ssh-server-40
+    ports:
+      - "2260:2222"
+
+  ssh-server-41:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-41
+    hostname: ssh-server-41
+    ports:
+      - "2261:2222"
+
+  ssh-server-42:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-42
+    hostname: ssh-server-42
+    ports:
+      - "2262:2222"
+
+  ssh-server-43:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-43
+    hostname: ssh-server-43
+    ports:
+      - "2263:2222"
+
+  ssh-server-44:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-44
+    hostname: ssh-server-44
+    ports:
+      - "2264:2222"
+
+  ssh-server-45:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-45
+    hostname: ssh-server-45
+    ports:
+      - "2265:2222"
+
+  ssh-server-46:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-46
+    hostname: ssh-server-46
+    ports:
+      - "2266:2222"
+
+  ssh-server-47:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-47
+    hostname: ssh-server-47
+    ports:
+      - "2267:2222"
+
+  ssh-server-48:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-48
+    hostname: ssh-server-48
+    ports:
+      - "2268:2222"
+
+  ssh-server-49:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-49
+    hostname: ssh-server-49
+    ports:
+      - "2269:2222"
+
+  ssh-server-50:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-50
+    hostname: ssh-server-50
+    ports:
+      - "2270:2222"
+
+  ssh-server-51:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-51
+    hostname: ssh-server-51
+    ports:
+      - "2271:2222"
+
+  ssh-server-52:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-52
+    hostname: ssh-server-52
+    ports:
+      - "2272:2222"
+
+  ssh-server-53:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-53
+    hostname: ssh-server-53
+    ports:
+      - "2273:2222"
+
+  ssh-server-54:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-54
+    hostname: ssh-server-54
+    ports:
+      - "2274:2222"
+
+  ssh-server-55:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-55
+    hostname: ssh-server-55
+    ports:
+      - "2275:2222"
+
+  ssh-server-56:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-56
+    hostname: ssh-server-56
+    ports:
+      - "2276:2222"
+
+  ssh-server-57:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-57
+    hostname: ssh-server-57
+    ports:
+      - "2277:2222"
+
+  ssh-server-58:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-58
+    hostname: ssh-server-58
+    ports:
+      - "2278:2222"
+
+  ssh-server-59:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-59
+    hostname: ssh-server-59
+    ports:
+      - "2279:2222"
+
+  ssh-server-60:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-60
+    hostname: ssh-server-60
+    ports:
+      - "2280:2222"
+
+  ssh-server-61:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-61
+    hostname: ssh-server-61
+    ports:
+      - "2281:2222"
+
+  ssh-server-62:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-62
+    hostname: ssh-server-62
+    ports:
+      - "2282:2222"
+
+  ssh-server-63:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-63
+    hostname: ssh-server-63
+    ports:
+      - "2283:2222"
+
+  ssh-server-64:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-64
+    hostname: ssh-server-64
+    ports:
+      - "2284:2222"
+
+  ssh-server-65:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-65
+    hostname: ssh-server-65
+    ports:
+      - "2285:2222"
+
+  ssh-server-66:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-66
+    hostname: ssh-server-66
+    ports:
+      - "2286:2222"
+
+  ssh-server-67:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-67
+    hostname: ssh-server-67
+    ports:
+      - "2287:2222"
+
+  ssh-server-68:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-68
+    hostname: ssh-server-68
+    ports:
+      - "2288:2222"
+
+  ssh-server-69:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-69
+    hostname: ssh-server-69
+    ports:
+      - "2289:2222"
+
+  ssh-server-70:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-70
+    hostname: ssh-server-70
+    ports:
+      - "2290:2222"
+
+  ssh-server-71:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-71
+    hostname: ssh-server-71
+    ports:
+      - "2291:2222"
+
+  ssh-server-72:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-72
+    hostname: ssh-server-72
+    ports:
+      - "2292:2222"
+
+  ssh-server-73:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-73
+    hostname: ssh-server-73
+    ports:
+      - "2293:2222"
+
+  ssh-server-74:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-74
+    hostname: ssh-server-74
+    ports:
+      - "2294:2222"
+
+  ssh-server-75:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-75
+    hostname: ssh-server-75
+    ports:
+      - "2295:2222"
+
+  ssh-server-76:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-76
+    hostname: ssh-server-76
+    ports:
+      - "2296:2222"
+
+  ssh-server-77:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-77
+    hostname: ssh-server-77
+    ports:
+      - "2297:2222"
+
+  ssh-server-78:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-78
+    hostname: ssh-server-78
+    ports:
+      - "2298:2222"
+
+  ssh-server-79:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-79
+    hostname: ssh-server-79
+    ports:
+      - "2299:2222"
+
+  ssh-server-80:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-80
+    hostname: ssh-server-80
+    ports:
+      - "2300:2222"
+
+  ssh-server-81:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-81
+    hostname: ssh-server-81
+    ports:
+      - "2301:2222"
+
+  ssh-server-82:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-82
+    hostname: ssh-server-82
+    ports:
+      - "2302:2222"
+
+  ssh-server-83:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-83
+    hostname: ssh-server-83
+    ports:
+      - "2303:2222"
+
+  ssh-server-84:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-84
+    hostname: ssh-server-84
+    ports:
+      - "2304:2222"
+
+  ssh-server-85:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-85
+    hostname: ssh-server-85
+    ports:
+      - "2305:2222"
+
+  ssh-server-86:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-86
+    hostname: ssh-server-86
+    ports:
+      - "2306:2222"
+
+  ssh-server-87:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-87
+    hostname: ssh-server-87
+    ports:
+      - "2307:2222"
+
+  ssh-server-88:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-88
+    hostname: ssh-server-88
+    ports:
+      - "2308:2222"
+
+  ssh-server-89:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-89
+    hostname: ssh-server-89
+    ports:
+      - "2309:2222"
+
+  ssh-server-90:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-90
+    hostname: ssh-server-90
+    ports:
+      - "2310:2222"
+
+  ssh-server-91:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-91
+    hostname: ssh-server-91
+    ports:
+      - "2311:2222"
+
+  ssh-server-92:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-92
+    hostname: ssh-server-92
+    ports:
+      - "2312:2222"
+
+  ssh-server-93:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-93
+    hostname: ssh-server-93
+    ports:
+      - "2313:2222"
+
+  ssh-server-94:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-94
+    hostname: ssh-server-94
+    ports:
+      - "2314:2222"
+
+  ssh-server-95:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-95
+    hostname: ssh-server-95
+    ports:
+      - "2315:2222"
+
+  ssh-server-96:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-96
+    hostname: ssh-server-96
+    ports:
+      - "2316:2222"
+
+  ssh-server-97:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-97
+    hostname: ssh-server-97
+    ports:
+      - "2317:2222"
+
+  ssh-server-98:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-98
+    hostname: ssh-server-98
+    ports:
+      - "2318:2222"
+
+  ssh-server-99:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-99
+    hostname: ssh-server-99
+    ports:
+      - "2319:2222"
+
+  ssh-server-100:
+    <<: *ssh-server
+    container_name: gorun-ssh-server-100
+    hostname: ssh-server-100
+    ports:
+      - "2320:2222"
+
+  nats:
+    image: nats:2.10-alpine
+    container_name: gorun-nats
+    hostname: nats
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"   # client
+      - "8222:8222"   # monitoring
+      - "6222:6222"   # cluster
+    restart: unless-stopped
+    networks:
+      - gorun-network
+    volumes:
+      - nats-data:/data
+
+volumes:
+  nats-data:
+
+networks:
+  gorun-network:
+    driver: bridge

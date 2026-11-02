@@ -796,192 +796,201 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			results := make(map[string]error, len(tasks))
 
 			var taskWg sync.WaitGroup
-			for _, task := range tasks {
-				taskWg.Add(1)
-				go func(task *TaskExec) {
-					defer taskWg.Done()
-					name := task.task.Name
-					tlogger := logger.With(slog.String("task", name))
+			runOne := func(task *TaskExec) {
+				defer taskWg.Done()
+				name := task.task.Name
+				tlogger := logger.With(slog.String("task", name))
 
-					// wait for every dependency to finish first
-					for _, dep := range task.task.DependsOn {
-						if ch, ok := done[dep]; ok {
-							select {
-							case <-ch:
-							case <-ctx.Done():
-							}
+				// wait for every dependency to finish first
+				for _, dep := range task.task.DependsOn {
+					if ch, ok := done[dep]; ok {
+						select {
+						case <-ch:
+						case <-ctx.Done():
 						}
 					}
+				}
 
-					finish := func(runErr error) {
-						resultsMu.Lock()
-						results[name] = runErr
-						resultsMu.Unlock()
-						close(done[name])
-					}
-
-					if ctx.Err() != nil {
-						err := ctx.Err()
-						tlogger.Warn("task skipped due to cancellation", slog.String("reason", err.Error()))
-						skippedCmd, _ := task.task.CommandFor(&server)
-						c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err})
-						skippedCount.Add(1)
-						taskSkipped.Add(ctx, 1, metric.WithAttributes(
-							attribute.String("task.name", name),
-							attribute.String("server.name", server.Name),
-						))
-						finish(err)
-						return
-					}
-
-					// a failed (or skipped) dependency, or any earlier failure,
-					// means this task can't run
+				finish := func(runErr error) {
 					resultsMu.Lock()
-					depFailed := false
-					var depName string
-					for _, dep := range task.task.DependsOn {
-						if r, ok := results[dep]; ok && r != nil {
-							depFailed = true
-							depName = dep
-							break
-						}
-					}
+					results[name] = runErr
 					resultsMu.Unlock()
+					close(done[name])
+				}
 
-					if depFailed {
-						var err error
-						if depName != "" {
-							if slices.Contains(task.task.DependsOn, depName) {
-								err = fmt.Errorf("dependent task (%s) failed, aborting task (%s)", depName, name)
-							} else {
-								err = fmt.Errorf("task %s failed, aborting task (%s)", depName, name)
-							}
+				if ctx.Err() != nil {
+					err := ctx.Err()
+					tlogger.Warn("task skipped due to cancellation", slog.String("reason", err.Error()))
+					skippedCmd, _ := task.task.CommandFor(&server)
+					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err})
+					skippedCount.Add(1)
+					taskSkipped.Add(ctx, 1, metric.WithAttributes(
+						attribute.String("task.name", name),
+						attribute.String("server.name", server.Name),
+					))
+					finish(err)
+					return
+				}
+
+				// a failed (or skipped) dependency, or any earlier failure,
+				// means this task can't run
+				resultsMu.Lock()
+				depFailed := false
+				var depName string
+				for _, dep := range task.task.DependsOn {
+					if r, ok := results[dep]; ok && r != nil {
+						depFailed = true
+						depName = dep
+						break
+					}
+				}
+				resultsMu.Unlock()
+
+				if depFailed {
+					var err error
+					if depName != "" {
+						if slices.Contains(task.task.DependsOn, depName) {
+							err = fmt.Errorf("dependent task (%s) failed, aborting task (%s)", depName, name)
 						} else {
-							err = fmt.Errorf("a previous task failed, aborting task (%s)", name)
+							err = fmt.Errorf("task %s failed, aborting task (%s)", depName, name)
 						}
-						tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
-						skippedCmd, _ := task.task.CommandFor(&server)
-						c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err})
-						skippedCount.Add(1)
-						taskSkipped.Add(ctx, 1, metric.WithAttributes(
-							attribute.String("task.name", name),
-							attribute.String("server.name", server.Name),
-						))
-						finish(err)
-						return
+					} else {
+						err = fmt.Errorf("a previous task failed, aborting task (%s)", name)
+					}
+					tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
+					skippedCmd, _ := task.task.CommandFor(&server)
+					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err})
+					skippedCount.Add(1)
+					taskSkipped.Add(ctx, 1, metric.WithAttributes(
+						attribute.String("task.name", name),
+						attribute.String("server.name", server.Name),
+					))
+					finish(err)
+					return
+				}
+
+				// wait for a task slot so a server can opt out of
+				// running its tasks in parallel (max_task_parallel = 1)
+				select {
+				case taskSlots <- struct{}{}:
+				case <-ctx.Done():
+					err := ctx.Err()
+					tlogger.Warn("task skipped due to cancellation", slog.String("reason", err.Error()))
+					skippedCmd, _ := task.task.CommandFor(&server)
+					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err})
+					skippedCount.Add(1)
+					taskSkipped.Add(ctx, 1, metric.WithAttributes(
+						attribute.String("task.name", name),
+						attribute.String("server.name", server.Name),
+					))
+					finish(err)
+					return
+				}
+				defer func() { <-taskSlots }()
+
+				attempts := task.task.Attempts()
+				var (
+					attempt int
+					runErr  error
+					started = time.Now()
+				)
+
+				for attempt = 1; attempt <= attempts; attempt++ {
+					// Retry events only carry attempt numbers when retries are configured.
+					evAttempt, evAttempts := 0, 0
+					if attempts > 1 {
+						evAttempt, evAttempts = attempt, attempts
 					}
 
-					// wait for a task slot so a server can opt out of
-					// running its tasks in parallel (max_task_parallel = 1)
-					select {
-					case taskSlots <- struct{}{}:
-					case <-ctx.Done():
-						err := ctx.Err()
-						tlogger.Warn("task skipped due to cancellation", slog.String("reason", err.Error()))
-						skippedCmd, _ := task.task.CommandFor(&server)
-						c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err})
-						skippedCount.Add(1)
-						taskSkipped.Add(ctx, 1, metric.WithAttributes(
-							attribute.String("task.name", name),
-							attribute.String("server.name", server.Name),
-						))
-						finish(err)
-						return
+					runningCmd, _ := task.task.CommandFor(&server)
+					runningEvent := TaskEvent{
+						Type:      "task",
+						GorunUUID: c.GorunUUID,
+						Server:    server.Name,
+						Task:      name,
+						State:     TaskRunning,
+						Command:   runningCmd,
+						Attempt:   evAttempt,
+						Attempts:  evAttempts,
 					}
-					defer func() { <-taskSlots }()
 
-					attempts := task.task.Attempts()
-					var (
-						attempt int
-						runErr  error
-						started = time.Now()
-					)
+					if attempt > 1 {
+						// Carry the previous attempt's failure so consumers can
+						// explain why the task is running again.
+						runningEvent.ExitCode = task.exitCode
+						runningEvent.Stderr = string(task.stderr)
+						runningEvent.Err = runErr
+						task.resetForRetry()
+					}
 
-					for attempt = 1; attempt <= attempts; attempt++ {
-						// Retry events only carry attempt numbers when retries are configured.
-						evAttempt, evAttempts := 0, 0
-						if attempts > 1 {
-							evAttempt, evAttempts = attempt, attempts
-						}
+					c.emit(runningEvent)
 
-						runningCmd, _ := task.task.CommandFor(&server)
-						runningEvent := TaskEvent{
-							Type:      "task",
-							GorunUUID: c.GorunUUID,
-							Server:    server.Name,
-							Task:      name,
-							State:     TaskRunning,
-							Command:   runningCmd,
-							Attempt:   evAttempt,
-							Attempts:  evAttempts,
-						}
+					runErr = task.Execute(ctx)
+					if runErr == nil || task.stopped || ctx.Err() != nil || attempt == attempts {
+						break
+					}
 
-						if attempt > 1 {
-							// Carry the previous attempt's failure so consumers can
-							// explain why the task is running again.
-							runningEvent.ExitCode = task.exitCode
-							runningEvent.Stderr = string(task.stderr)
-							runningEvent.Err = runErr
-							task.resetForRetry()
-						}
-
-						c.emit(runningEvent)
-
-						runErr = task.Execute(ctx)
-						if runErr == nil || task.stopped || ctx.Err() != nil || attempt == attempts {
-							break
-						}
-
-						if !task.task.CanRetry() {
-							task.appendStderr("not retried: task is marked unsafe to rerun (set retry_unsafe = true to override)")
-							tlogger.Warn("task failed; not retrying because it is marked unsafe to rerun",
-								slog.Int("attempt", attempt),
-								slog.Int("attempts", attempts),
-								slog.String("reason", runErr.Error()),
-							)
-							break
-						}
-
-						tlogger.Warn("task failed, retrying",
+					if !task.task.CanRetry() {
+						task.appendStderr("not retried: task is marked unsafe to rerun (set retry_unsafe = true to override)")
+						tlogger.Warn("task failed; not retrying because it is marked unsafe to rerun",
 							slog.Int("attempt", attempt),
 							slog.Int("attempts", attempts),
-							slog.Duration("delay", task.task.RetryDelayDuration()),
 							slog.String("reason", runErr.Error()),
 						)
-
-						if !task.waitForRetry(ctx) {
-							break
-						}
+						break
 					}
 
-					event := TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskDone}
-					if attempts > 1 {
-						event.Attempt = attempt
-						event.Attempts = attempts
-					}
-					if runErr != nil {
-						failed.Store(true)
-						failedCount.Add(1)
-						event.State = TaskFailed
-						event.Err = runErr
-					}
+					tlogger.Warn("task failed, retrying",
+						slog.Int("attempt", attempt),
+						slog.Int("attempts", attempts),
+						slog.Duration("delay", task.task.RetryDelayDuration()),
+						slog.String("reason", runErr.Error()),
+					)
 
-					event.Command = task.command
-					if event.Command == "" {
-						if ccmd, err := task.task.CommandFor(&server); err == nil {
-							event.Command = ccmd
-						}
+					if !task.waitForRetry(ctx) {
+						break
 					}
-					event.Stdout = string(task.stdout)
-					event.Stderr = string(task.stderr)
-					event.ExitCode = task.exitCode
-					event.Duration = time.Since(started)
-					c.emit(event)
+				}
 
-					finish(runErr)
-				}(task)
+				event := TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskDone}
+				if attempts > 1 {
+					event.Attempt = attempt
+					event.Attempts = attempts
+				}
+				if runErr != nil {
+					failed.Store(true)
+					failedCount.Add(1)
+					event.State = TaskFailed
+					event.Err = runErr
+				}
+
+				event.Command = task.command
+				if event.Command == "" {
+					if ccmd, err := task.task.CommandFor(&server); err == nil {
+						event.Command = ccmd
+					}
+				}
+				event.Stdout = string(task.stdout)
+				event.Stderr = string(task.stderr)
+				event.ExitCode = task.exitCode
+				event.Duration = time.Since(started)
+				c.emit(event)
+
+				finish(runErr)
 			}
 
+			if taskLimit == 1 {
+				for _, task := range tasks {
+					taskWg.Add(1)
+					runOne(task)
+				}
+			} else {
+				for _, task := range tasks {
+					taskWg.Add(1)
+					go runOne(task)
+				}
+				taskWg.Wait()
+			}
 			taskWg.Wait()
 		})
 	}

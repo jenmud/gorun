@@ -32,6 +32,10 @@ type historyItem struct {
 type historyModel struct {
 	expanded    map[string]bool
 	loadedTasks map[string]bool
+	pendingCopy bool
+	listCursor  int
+	status      string
+	helpOpen    bool
 	state       historyState
 	st          *store.Store
 	runs        []store.RunSummary
@@ -71,6 +75,8 @@ type historyTaskMsg struct {
 	task store.TaskDetail
 	err  error
 }
+
+type historyCopyClearMsg struct{}
 
 // Aliases for callers that use other names.
 type historyTaskDetailMsg = historyTaskMsg
@@ -187,6 +193,18 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 }
 
 func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.helpOpen {
+		if kmsg, ok := msg.(tea.KeyPressMsg); ok {
+			switch kmsg.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			default:
+				m.helpOpen = false
+				return m, nil
+			}
+		}
+		return m, nil
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -220,6 +238,8 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.run = msg.run
 		m.err = msg.err
 		if m.run != nil {
+			m.listCursor = m.cursor
+			m.status = ""
 			m.buildItemsForRun(m.run)
 			m.state = historyDetail
 		}
@@ -229,6 +249,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = msg.err
 			return m, nil
 		}
+		cmdToCopy := ""
 		if m.run != nil {
 			for i := range m.run.Tasks {
 				if m.run.Tasks[i].Server == msg.task.Server && m.run.Tasks[i].Name == msg.task.Name {
@@ -238,12 +259,25 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.run.Tasks[i].ExitCode = msg.task.ExitCode
 					m.run.Tasks[i].Duration = msg.task.Duration
 					m.run.Tasks[i].State = msg.task.State
+					if m.pendingCopy {
+						cmdToCopy = msg.task.Command
+					}
 					break
 				}
 			}
 			key := msg.task.Server + "\x00" + msg.task.Name
 			m.loadedTasks[key] = true
+			if m.pendingCopy {
+				m.pendingCopy = false
+			}
 		}
+		if cmdToCopy != "" {
+			m.status = "copied command to clipboard"
+			return m, tea.Batch(tea.SetClipboard(cmdToCopy), tea.Tick(2*time.Second, func(time.Time) tea.Msg { return historyCopyClearMsg{} }))
+		}
+		return m, nil
+	case historyCopyClearMsg:
+		m.status = ""
 		return m, nil
 	case tea.KeyPressMsg:
 		if m.askKeep {
@@ -278,11 +312,19 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		switch msg.String() {
+		case "ctrl+k":
+			m.helpOpen = !m.helpOpen
+			return m, nil
 		case "ctrl+c", "q":
 			if m.state == historyDetail {
 				m.state = historyList
 				m.run = nil
 				m.items = nil
+				m.status = ""
+				m.cursor = m.listCursor
+				if m.cursor >= len(m.runs) {
+					m.cursor = max(len(m.runs)-1, 0)
+				}
 				return m, nil
 			}
 			return m, tea.Quit
@@ -291,6 +333,11 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = historyList
 				m.run = nil
 				m.items = nil
+				m.status = ""
+				m.cursor = m.listCursor
+				if m.cursor >= len(m.runs) {
+					m.cursor = max(len(m.runs)-1, 0)
+				}
 				return m, nil
 			}
 			return m, tea.Quit
@@ -371,6 +418,24 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, nil
+		case "y", "c":
+			if m.state == historyDetail && m.cursor >= 0 && m.cursor < len(m.items) {
+				it := &m.items[m.cursor]
+				if !it.isServer && m.run != nil && it.taskIdx >= 0 && it.taskIdx < len(m.run.Tasks) {
+					td := m.run.Tasks[it.taskIdx]
+					key := td.Server + "\x00" + td.Name
+					if !m.loadedTasks[key] {
+						m.pendingCopy = true
+						it.expanded = true
+						return m, func() tea.Msg { return m.loadTask(m.run.ID, td.Server, td.Name) }
+					}
+					if td.Command != "" {
+						m.status = "copied command to clipboard"
+						return m, tea.Batch(tea.SetClipboard(td.Command), tea.Tick(2*time.Second, func(time.Time) tea.Msg { return historyCopyClearMsg{} }))
+					}
+				}
+			}
+			return m, nil
 		case "d":
 			if m.state == historyList && m.cursor < len(m.runs) {
 				id := m.runs[m.cursor].ID
@@ -425,6 +490,24 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m historyModel) View() tea.View {
+	if m.helpOpen {
+		var b strings.Builder
+		b.WriteString(titleStyle.Render("gorun history") + "\n\n")
+		b.WriteString("Keyboard shortcuts (ctrl-k to close)\n\n")
+		for _, line := range []string{
+			"↑/↓, j/k       move",
+			"enter, space   expand/collapse task",
+			"y, c           yank/copy command to clipboard",
+			"d              delete run",
+			"t              keep N runs",
+			"esc, q         back / quit",
+			"ctrl-k         show/hide this help",
+		} {
+			b.WriteString(mutedStyle.Render(line) + "\n")
+		}
+		v := tea.NewView(b.String())
+		return v
+	}
 	var b strings.Builder
 	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#7C3AED")).Padding(0, 1)
 	mutedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280"))
@@ -648,6 +731,7 @@ func (m historyModel) View() tea.View {
 					}
 					lines = append(lines, prefix+strings.ReplaceAll(strings.TrimRight(l, "\r"), "\t", "    "))
 				}
+				lines = append(lines, mutedStyle.Render("        (y or c to copy)"))
 			}
 			if t.Stdout != "" {
 				lines = append(lines, mutedStyle.Render("      stdout"))
@@ -695,9 +779,12 @@ func (m historyModel) View() tea.View {
 		b.WriteString(mutedStyle.Render(fmt.Sprintf("    [%d/%d lines]", cursorLine+1, len(lines))) + "\n")
 	}
 	b.WriteString("\n")
-	help := "↑/↓ move · enter expand task · d delete run · esc back · q quit"
+	help := "↑/↓ move · enter expand task · y/c copy command · d delete run · ctrl-k help · esc back · q quit"
 	if m.embedded {
 		help = "↑/↓ move · enter expand task · d delete run · esc/q back to runs"
+	}
+	if m.status != "" {
+		b.WriteString(okStyle.Render(m.status) + "\n")
 	}
 	b.WriteString("\n" + mutedStyle.Render(help))
 	v := tea.NewView(b.String())

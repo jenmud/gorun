@@ -82,6 +82,9 @@ type Task struct {
 	Details string `toml:"details,omitempty"`
 	// Rerun is RerunSafe or RerunUnsafe. Empty means unspecified.
 	Rerun string `toml:"rerun,omitempty"`
+	// Local, when true, restricts the task to local servers: it is skipped on any
+	// server that connects over SSH.
+	Local bool `toml:"local,omitempty"`
 	// Retries is how many extra times to run a failed task. Zero means run once.
 	Retries int `toml:"retries,omitempty"`
 	// RetryDelay is how long to wait before each retry. Unset uses
@@ -474,6 +477,11 @@ func (t *TaskExec) Completed(ctx context.Context) error {
 	)
 
 	return nil
+}
+
+// NewLocalTaskExec creates TaskExecs that run on the local machine (no SSH).
+func NewLocalTaskExec(task ...Task) ([]*TaskExec, error) {
+	return NewTaskExec(nil, task...)
 }
 
 // NewTaskExec creates and sets up a task to be executed on the remote session.

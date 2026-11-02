@@ -693,7 +693,10 @@ if err := cfg.Run(context.Background(), servers...); err != nil {
 ```
 
 `ServersPipeline` returns every server's resolved task list, and `RunTask` runs a single task
-(with its dependencies) on some or all servers.
+(with its dependencies) on some or all servers. `AllServers` returns every configured server,
+`LocalServer` (and the package-level `gorun.LocalServer`) give a server that runs on this
+machine, and `RunLocal` runs tasks locally without needing an SSH server. `NewLocalTaskExec`
+creates task executors that run locally, and `Server.IsLocal` reports whether a server has no SSH.
 
 ## Shell completion
 
@@ -838,6 +841,7 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | `timeout` | Go duration, default `30m` |
 | `retries`, `retry_delay`, `retry_unsafe` | [retries](#retries) |
 | `description`, `details`, `rerun` | [descriptions and rerun safety](#descriptions-and-rerun-safety) |
+| `local` | only run this task on local (no-SSH) servers |
 
 **`[bundles.<name>]`**: `tasks` (task names and `@bundles`) and `description`.
 

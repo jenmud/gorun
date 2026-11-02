@@ -1,0 +1,21 @@
+title = "Local run recipe"
+
+[tasks.hello]
+cmd = "echo hello from local"
+rerun = "safe"
+local = true
+
+[tasks.show-env]
+cmd = 'echo "APP_ENV=$APP_ENV"'
+depends_on = ["hello"]
+
+[servers]
+tasks = ["show-env"]
+
+[servers.hosts.local]
+# no ssh: runs on this machine
+
+[servers.hosts.remote]
+hostname = "example.com"
+    [servers.hosts.remote.ssh]
+    username = "deploy"

@@ -10,6 +10,7 @@ the demo docker lab in `recipes/docker-compose.yml`.
 3. `02-dependency-dag` - a diamond DAG: fan out, run in parallel, fan back in.
 4. `03-mega-pipeline` - ~20 tasks across six tiers, bundles and fan-in.
 5. `04-dev-server` - ~230 tasks across fetch/install/configure/smoke tiers, bundles and fan-in.
+6. `local-run` - Go library example: run tasks on the local machine with `RunLocal`.
 
 ## One-time: allow docker access
 

@@ -34,6 +34,11 @@ type Server struct {
 	Tasks []Task `toml:"-"`
 }
 
+// IsLocal reports whether the server runs on the local machine (no SSH configured).
+func (s Server) IsLocal() bool {
+	return s.SSH == (SSH{})
+}
+
 // Address formats a server's connection address for display ("local" when no SSH is configured).
 func (s Server) Address() string {
 	if s.SSH == (SSH{}) {
@@ -47,3 +52,6 @@ func (s Server) Address() string {
 
 	return fmt.Sprintf("%s:%d", s.Hostname, port)
 }
+
+// LocalServer is a ready-to-use Server that runs tasks on the local machine.
+var LocalServer = Server{Name: "local"}

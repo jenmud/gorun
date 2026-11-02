@@ -380,8 +380,95 @@ func (c *Config) ServerPipeline(server Server) (Server, error) {
 		return Server{}, err
 	}
 
+	// Local-only tasks never run on a remote (SSH) server, and anything that
+	// depends on them is dropped too.
+	if !server.IsLocal() {
+		pipeline = c.filterLocalTasks(pipeline)
+	}
+
 	server.Tasks = pipeline
 	return server, nil
+}
+
+// filterLocalTasks removes local-only tasks (and tasks that transitively depend
+// on them) from a non-local server's pipeline.
+func (c *Config) filterLocalTasks(tasks []Task) []Task {
+	removed := map[string]bool{}
+	changed := true
+	out := append([]Task(nil), tasks...)
+	for changed {
+		changed = false
+		next := out[:0]
+		for _, t := range out {
+			if t.Local {
+				removed[t.Name] = true
+				changed = true
+				continue
+			}
+			depRemoved := false
+			for _, dep := range t.DependsOn {
+				if removed[dep] {
+					depRemoved = true
+					break
+				}
+			}
+			if depRemoved {
+				removed[t.Name] = true
+				changed = true
+				continue
+			}
+			next = append(next, t)
+		}
+		out = next
+	}
+	return out
+}
+
+// AllServers returns a copy of every server in the config, in config order. Use it to
+// browse or filter the full inventory (e.g. for a picker or a "run on local" toggle).
+func (c *Config) AllServers() []Server {
+	return slices.Clone(c.Servers)
+}
+
+// LocalServer returns a server that runs on this machine. If the config already
+// defines a server with no SSH configured, that server is returned; otherwise a
+// new "local" server is returned.
+func (c *Config) LocalServer() Server {
+	for _, name := range []string{"local", "localhost"} {
+		for _, s := range c.Servers {
+			if s.Name == name && s.IsLocal() {
+				return s
+			}
+		}
+	}
+	for _, s := range c.Servers {
+		if s.IsLocal() {
+			return s
+		}
+	}
+	return Server{Name: "local"}
+}
+
+// RunLocal runs the named tasks (or every task when none are given) on the local
+// machine. Task names may be globs or bundle references ("@name"), just like --task.
+func (c *Config) RunLocal(ctx context.Context, names ...string) error {
+	var taskNames []string
+	if len(names) > 0 {
+		expanded, err := c.ExpandTaskPatterns(names...)
+		if err != nil {
+			return err
+		}
+		taskNames = expanded
+	} else {
+		taskNames = c.TaskNames()
+	}
+	if len(taskNames) == 0 {
+		return errors.New("no tasks to run")
+	}
+
+	server := c.LocalServer()
+	server.TaskNames = taskNames
+	return c.Run(ctx, server)
 }
 
 // RunTask runs a single task (and its dependencies) on one or more servers. When
@@ -405,6 +492,19 @@ func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
 	}
 	if len(targets) == 0 {
 		return errors.New("no servers to run on")
+	}
+
+	if t.Local {
+		filtered := targets[:0]
+		for _, s := range targets {
+			if s.IsLocal() {
+				filtered = append(filtered, s)
+			}
+		}
+		targets = filtered
+		if len(targets) == 0 {
+			return fmt.Errorf("task %q only runs locally", t.Name)
+		}
 	}
 
 	for i := range targets {

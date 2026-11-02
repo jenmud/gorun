@@ -53,6 +53,7 @@ rerun = "safe"
 # retries = 2                     # extra attempts after a failure (default 0)
 # retry_delay = "5s"              # wait before each retry (default 50ms, "0s" = immediately)
 # retry_unsafe = false            # allow retries of a rerun = "unsafe" task
+# local = true                   # only run this task on local (no-SSH) servers
 # envvars = { NGINX_PORT = "8080" }
 #
 # [[tasks.example.copy]]          # copies run before the command

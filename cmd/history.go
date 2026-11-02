@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/jenmud/gorun"
 	inats "github.com/jenmud/gorun/internal/nats"
 	"github.com/jenmud/gorun/internal/store"
 )
@@ -15,6 +16,17 @@ import (
 // history doesn't stay stuck on "running".
 func recordEvent(ctx context.Context, st *store.Store, event any) {
 	if st == nil {
+		return
+	}
+
+	// a server error's message doesn't survive JSON (an error marshals as {}), so it
+	// is stored directly
+	if e, ok := event.(gorun.ServerErrorEvent); ok {
+		if e.Err != nil {
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+			defer cancel()
+			_ = st.SetServerError(ctx, e.GorunUUID, e.Server, e.Err.Error())
+		}
 		return
 	}
 

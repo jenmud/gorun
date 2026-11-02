@@ -39,6 +39,10 @@ type RunDetail struct {
 	RunSummary
 	Servers []string
 	Tasks   []TaskDetail
+
+	// ServerErrors holds, by server name, why a server couldn't run its tasks at
+	// all (e.g. its SSH connection failed). Such servers have no tasks recorded.
+	ServerErrors map[string]string
 }
 
 type Store struct {
@@ -103,26 +107,33 @@ func (s *Store) migrate() error {
 		}
 	}
 
-	// Ensure the command column exists on databases created before it was added.
-	rows, err := s.db.Query("PRAGMA table_info(tasks)")
-	if err == nil {
-		defer func() { _ = rows.Close() }()
-		hasCommand := false
-		for rows.Next() {
-			var cid int
-			var name, ctype string
-			var notnull, pk int
-			var dflt sql.NullString
-			if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err == nil && name == "command" {
-				hasCommand = true
-			}
-		}
-		if !hasCommand {
-			_, _ = s.db.Exec("ALTER TABLE tasks ADD COLUMN command TEXT")
-		}
-	}
+	// Ensure columns added later exist on databases created before them.
+	s.addColumn("tasks", "command")
+	s.addColumn("servers", "error")
 
 	return nil
+}
+
+// addColumn adds a TEXT column to table unless it is there already.
+func (s *Store) addColumn(table, column string) {
+	rows, err := s.db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return
+	}
+	has := false
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err == nil && name == column {
+			has = true
+		}
+	}
+	_ = rows.Close()
+	if !has {
+		_, _ = s.db.Exec("ALTER TABLE " + table + " ADD COLUMN " + column + " TEXT")
+	}
 }
 
 func (s *Store) Close() error { return s.db.Close() }
@@ -138,6 +149,15 @@ func (s *Store) AddServer(ctx context.Context, runID, name, address string) erro
 	_, err := s.db.ExecContext(ctx,
 		`INSERT OR REPLACE INTO servers (run_id,name,address) VALUES (?,?,?)`,
 		runID, name, address)
+	return err
+}
+
+// SetServerError records why a server couldn't run its tasks at all.
+func (s *Store) SetServerError(ctx context.Context, runID, name, message string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO servers (run_id,name,address,error) VALUES (?,?,'',?)
+		 ON CONFLICT(run_id,name) DO UPDATE SET error=excluded.error`,
+		runID, name, message)
 	return err
 }
 
@@ -234,17 +254,22 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	r.Duration = time.Duration(dur.Int64)
 
 	// servers
-	srows, err := s.db.QueryContext(ctx, `SELECT name,address FROM servers WHERE run_id=?`, id)
+	srows, err := s.db.QueryContext(ctx, `SELECT name,address,error FROM servers WHERE run_id=?`, id)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = srows.Close() }()
+	r.ServerErrors = map[string]string{}
 	for srows.Next() {
 		var name, addr string
-		if err := srows.Scan(&name, &addr); err != nil {
+		var serverErr sql.NullString
+		if err := srows.Scan(&name, &addr, &serverErr); err != nil {
 			return nil, err
 		}
 		r.Servers = append(r.Servers, name)
+		if serverErr.String != "" {
+			r.ServerErrors[name] = serverErr.String
+		}
 	}
 	if err := srows.Err(); err != nil {
 		return nil, err

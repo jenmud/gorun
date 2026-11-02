@@ -669,7 +669,7 @@ func (m historyModel) View() tea.View {
 			total := a.total
 			done := a.done
 			dur := a.dur
-			serverFailed := a.failed
+			serverFailed := a.failed || run.ServerErrors[it.server] != ""
 			serverStyle := lipgloss.NewStyle().Bold(true)
 			if serverFailed {
 				serverStyle = serverStyle.Foreground(lipgloss.Color("#EF4444"))
@@ -682,6 +682,9 @@ func (m historyModel) View() tea.View {
 				srvLine += timeStyle.Render(fmt.Sprintf(" %.1fs", dur.Seconds()))
 			}
 			lines = append(lines, srvLine)
+			if msg := run.ServerErrors[it.server]; msg != "" && it.expanded {
+				lines = append(lines, "  "+failStyle.Render("✗ "+msg))
+			}
 			continue
 		}
 		vis := m.isServerExpanded(it.server)

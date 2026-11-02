@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/jenmud/gorun"
@@ -109,5 +111,37 @@ func TestHistoryShowsMultiLineCommands(t *testing.T) {
 	}, "\n")
 	if !strings.Contains(view, want) {
 		t.Errorf("the command should be shown line by line, as written; got:\n%s", view)
+	}
+}
+
+// TestHistoryShowsServerError checks that a server which couldn't run at all (no
+// task events, just a server error) shows why when it is expanded in the history.
+func TestHistoryShowsServerError(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "history.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	ctx := context.Background()
+	recordEvent(ctx, st, gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "r1", Title: "run", Servers: []string{"web-1"}, StartedAt: time.Now()})
+	recordEvent(ctx, st, gorun.ServerErrorEvent{Type: "server_error", GorunUUID: "r1", Server: "web-1", Err: errors.New("error creating SSH connection: connection refused")})
+
+	run, err := st.GetRun(ctx, "r1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := run.ServerErrors["web-1"]; got != "error creating SSH connection: connection refused" {
+		t.Fatalf("the server's error should be recorded, got %q", got)
+	}
+
+	m := newHistoryModel(st)
+	m.width, m.height = 120, 30
+	next, _ := m.Update(historyRunMsg{run: run})
+	m = next.(historyModel)
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(historyModel)
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "✗ error creating SSH connection: connection refused") {
+		t.Errorf("expanding the server should show its error, got:\n%s", view)
 	}
 }

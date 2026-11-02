@@ -36,12 +36,13 @@ go.work.sum
 # .idea/
 # .vscode/
 .otelc-build
-builds
 Gorun-local-only
 
 # nats cli binary installed by example/scripts/install-nats-cli.sh
 example/nats
 /nats
 
+bin
+builds
 dist/
 gorun_bin

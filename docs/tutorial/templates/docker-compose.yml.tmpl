@@ -1,0 +1,18 @@
+services:
+  app:
+    image: ghcr.io/example/myapp:{{index .EnvVars "APP_VERSION"}}
+    restart: unless-stopped
+    environment:
+      APP_ENV: {{index .EnvVars "APP_ENV"}}
+    volumes:
+      - /opt/myapp/data:/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /opt/myapp/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/myapp/caddy-data:/data

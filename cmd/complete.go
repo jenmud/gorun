@@ -12,7 +12,7 @@ import (
 
 // completionNames returns the names a shell can complete for kind, which is
 // "tasks" (including "@bundle" references), "servers", "tags" or "groups". It is
-// used by the bash completion function documented in the README.
+// used by the bash completion function documented in docs/integrations.md.
 func completionNames(kind, filename string) ([]string, error) {
 	if filename == "" {
 		filename = "Gorunfile"

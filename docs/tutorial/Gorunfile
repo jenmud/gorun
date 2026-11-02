@@ -1,0 +1,176 @@
+# The finished Gorunfile from the tutorial (docs/tutorial.md).
+#
+# Sets up Ubuntu servers from scratch and runs a web app behind Caddy with docker compose.
+# Every task is safe to rerun, so the whole file is safe to rerun.
+#
+#   gorun Gorunfile                                  # pick servers and tasks, then run
+#   gorun Gorunfile --run                            # deploy and check every server
+#   gorun Gorunfile --run --server web-eu-1          # just one server
+#   gorun Gorunfile --run --task @check              # only check, change nothing
+#   gorun Gorunfile --run --task compose-up --tag us # redeploy the stack in the US
+#   gorun Gorunfile --list-servers                   # what each server will run
+#
+# Secrets come from your environment or a .env file next to where you run gorun:
+#
+#   REGISTRY_USER=me
+#   REGISTRY_TOKEN=ghp_...
+
+title = "Deploy myapp"
+
+#
+# Setup tasks.
+#
+
+[tasks.docker-install]
+description = "Install docker and the compose plugin, if missing"
+cmd_file = "./scripts/docker-install.sh"
+sudo = true
+rerun = "safe"
+timeout = "20m"
+retries = 2
+retry_delay = "15s"
+
+[tasks.docker-enable]
+description = "Start docker and enable it at boot"
+cmd = "systemctl enable --now docker containerd"
+sudo = true
+rerun = "safe"
+timeout = "2m"
+depends_on = ["docker-install"]
+
+[tasks.app-dirs]
+description = "Create the /opt/myapp directories"
+cmd = "mkdir -p /opt/myapp/data /opt/myapp/caddy-data"
+sudo = true
+rerun = "safe"
+timeout = "30s"
+
+[tasks.caddyfile]
+description = "Render the Caddyfile for this server and install it"
+cmd = "cp /tmp/myapp.Caddyfile /opt/myapp/Caddyfile"
+sudo = true
+rerun = "safe"
+timeout = "1m"
+depends_on = ["app-dirs"]
+[[tasks.caddyfile.copy]]
+src_template = "./templates/Caddyfile.tmpl"
+dst = "/tmp/myapp.Caddyfile"
+
+[tasks.compose-file]
+description = "Render docker-compose.yml for this server and install it"
+cmd = "cp /tmp/myapp.docker-compose.yml /opt/myapp/docker-compose.yml"
+sudo = true
+rerun = "safe"
+timeout = "1m"
+depends_on = ["app-dirs"]
+[[tasks.compose-file.copy]]
+src_template = "./templates/docker-compose.yml.tmpl"
+dst = "/tmp/myapp.docker-compose.yml"
+
+[tasks.registry-login]
+description = "Log docker in to the registry, so it can pull the private image"
+cmd_file = "./scripts/registry-login.sh"
+sudo = true
+rerun = "safe"
+timeout = "1m"
+retries = 2
+retry_delay = "10s"
+depends_on = ["docker-enable"]
+[tasks.registry-login.envvars]
+REGISTRY_USER = "${REGISTRY_USER}"
+REGISTRY_TOKEN = "${REGISTRY_TOKEN}"
+
+[tasks.compose-up]
+description = "Start or update the stack, then reload caddy"
+cmd_file = "./scripts/compose-up.sh"
+sudo = true
+rerun = "safe"
+timeout = "10m"
+retries = 2
+retry_delay = "15s"
+depends_on = ["registry-login", "caddyfile", "compose-file"]
+
+#
+# Checks: read-only, and they don't depend on any setup task.
+#
+
+[tasks.check-docker]
+description = "Check docker is running"
+cmd = "systemctl is-active docker"
+rerun = "safe"
+timeout = "30s"
+
+[tasks.check-containers]
+description = "Check the app and caddy containers are running"
+cmd = "cd /opt/myapp && test $(docker compose ps --status running --quiet | wc -l) -eq 2"
+sudo = true
+rerun = "safe"
+timeout = "1m"
+retries = 3
+retry_delay = "5s"
+
+[tasks.check-https]
+description = "Check the site answers over HTTPS"
+cmd_template = "curl -fsS -o /dev/null https://{{.Hostname}}/"
+rerun = "safe"
+timeout = "3m"
+retries = 5
+retry_delay = "20s"
+depends_on = ["check-containers"]
+
+#
+# Bundles: named task lists, used as @name.
+#
+
+[bundles.docker]
+description = "Docker installed, running and logged in"
+tasks = ["docker-install", "docker-enable", "registry-login"]
+
+[bundles.files]
+description = "The app's directories and config files"
+tasks = ["app-dirs", "caddyfile", "compose-file"]
+
+[bundles.deploy]
+description = "Set up a server from scratch and start or update the stack"
+tasks = ["@docker", "@files", "compose-up"]
+
+[bundles.check]
+description = "Read-only checks of a deployed server"
+tasks = ["check-docker", "check-containers", "check-https"]
+
+#
+# Server groups: app is what every server runs and how it logs in; eu and us tag the region.
+#
+
+[server_groups.app]
+tags = ["app"]
+tasks = ["@deploy", "@check"]
+envvars = { APP_ENV = "production", APP_VERSION = "1.4.2" }
+    [server_groups.app.ssh]
+    username = "ubuntu"
+    identityfile = "~/.ssh/id_ed25519"
+
+[server_groups.eu]
+tags = ["eu"]
+
+[server_groups.us]
+tags = ["us"]
+
+#
+# Servers.
+#
+
+[servers.hosts.web-eu-1]
+hostname = "eu-1.example.com"
+groups = ["app", "eu"]
+
+[servers.hosts.web-us-1]
+hostname = "us-1.example.com"
+groups = ["app", "us"]
+
+[servers.hosts.staging]
+hostname = "staging.example.com"
+groups = ["app"]
+tags = ["staging"]
+envvars = { APP_ENV = "staging", APP_VERSION = "1.5.0-rc1" }   # the host wins over its groups
+skip_tasks = ["check-https"]                                   # no public certificate here

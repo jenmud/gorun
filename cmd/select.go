@@ -25,7 +25,7 @@ var (
 	runAllButtonStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorAccent).Padding(0, 2)
 	offButtonStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#D1D5DB")).Background(lipgloss.Color("#374151")).Padding(0, 2)
 	headerStyle       = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
-	activeTabStyle    = lipgloss.NewStyle().Foreground(colorAccent).Bold(true).Underline(true)
+	activeTabStyle    = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
 )
 
 // serverMatch is a server that matches the current filter.
@@ -80,9 +80,12 @@ type serverSelectionModel struct {
 
 	groups *treeModel
 
-	selected map[string]bool
-	expanded map[string]bool
-	skipped  map[string]map[string]bool // server name -> task names left out of the run
+	selected   map[string]bool
+	expanded   map[string]bool
+	groupsOpen bool
+	tagsOpen   bool
+	helpOpen   bool
+	skipped    map[string]map[string]bool // server name -> task names left out of the run
 
 	query        string
 	matches      []serverMatch
@@ -212,12 +215,46 @@ func (m serverSelectionModel) treeTab() *treeModel {
 
 // updateTree handles input while the Tasks or Bundles tab is shown.
 func (m serverSelectionModel) updateTree(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.helpOpen {
+		if kmsg, ok := msg.(tea.KeyPressMsg); ok {
+			switch kmsg.String() {
+			case "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			default:
+				m.helpOpen = false
+				return m, nil
+			}
+		}
+		return m, nil
+	}
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
+		case "ctrl+s":
+			return m.showTab(tabServers)
+		case "ctrl+t":
+			if slices.Contains(m.tabs(), tabTasks) {
+				return m.showTab(tabTasks)
+			}
+		case "ctrl+b":
+			if slices.Contains(m.tabs(), tabBundles) {
+				return m.showTab(tabBundles)
+			}
+		case "ctrl+g":
+			if slices.Contains(m.tabs(), tabGroups) {
+				return m.showTab(tabGroups)
+			}
+		case "ctrl+h":
+			if slices.Contains(m.tabs(), tabHistory) {
+				return m.showTab(tabHistory)
+			}
 		case "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
+		case "ctrl+k":
+			m.helpOpen = !m.helpOpen
+			return m, nil
 		case "shift+tab":
 			return m.switchTab()
 		case "esc", "q":
@@ -253,14 +290,59 @@ func (m serverSelectionModel) treeContent() string {
 
 // updateHistory handles input while the History tab is shown.
 func (m serverSelectionModel) updateHistory(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.helpOpen {
+		if kmsg, ok := msg.(tea.KeyPressMsg); ok {
+			switch kmsg.String() {
+			case "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			default:
+				m.helpOpen = false
+				return m, nil
+			}
+		}
+		return m, nil
+	}
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		if m.query != "" {
+			key := msg.Key()
+			if key.Text != "" && !key.Mod.Contains(tea.ModCtrl) && !key.Mod.Contains(tea.ModAlt) {
+				r := []rune(key.Text)
+				if len(r) == 1 && unicode.IsLetter(r[0]) {
+					m.query += key.Text
+					m.filter()
+					return m, nil
+				}
+			}
+		}
 		switch msg.String() {
+		case "ctrl+k":
+			m.helpOpen = !m.helpOpen
+			return m, nil
 		case "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
 		case "shift+tab":
 			return m.switchTab()
+		case "ctrl+s":
+			return m.showTab(tabServers)
+		case "ctrl+t":
+			if slices.Contains(m.tabs(), tabTasks) {
+				return m.showTab(tabTasks)
+			}
+		case "ctrl+b":
+			if slices.Contains(m.tabs(), tabBundles) {
+				return m.showTab(tabBundles)
+			}
+		case "ctrl+g":
+			if slices.Contains(m.tabs(), tabGroups) {
+				return m.showTab(tabGroups)
+			}
+		case "ctrl+h":
+			if slices.Contains(m.tabs(), tabHistory) {
+				return m.showTab(tabHistory)
+			}
 		case "esc", "q":
 			// on the runs list these quit the history view; here they go back
 			if m.history.state == historyList && !m.history.askKeep {
@@ -319,10 +401,15 @@ func (m serverSelectionModel) titleLine() string {
 }
 
 func (m serverSelectionModel) tabLabel(name string, tab int) string {
-	if m.tab == tab {
-		return activeTabStyle.Render(name)
+	if name == "" {
+		return ""
 	}
-	return mutedStyle.Render(name)
+	underlined := lipgloss.NewStyle().Underline(true).Render(string(name[0]))
+	rest := name[1:]
+	if m.tab == tab {
+		return activeTabStyle.Render(underlined) + activeTabStyle.Render(rest)
+	}
+	return mutedStyle.Render(underlined) + mutedStyle.Render(rest)
 }
 
 // tabAt returns the tab whose label is at screen position x, y.
@@ -378,6 +465,12 @@ func newServerSelectionModel(title string, servers []gorun.Server) serverSelecti
 	m.tags = slices.Sorted(maps.Keys(tags))
 
 	m.filter()
+	for i, row := range m.rows {
+		if row.kind == rowServer {
+			m.cursor = i
+			break
+		}
+	}
 	return m
 }
 
@@ -420,17 +513,20 @@ func (m serverSelectionModel) cursorKey() *rowKey {
 func (m *serverSelectionModel) rebuildRows(keep *rowKey) {
 	m.rows = m.rows[:0]
 
-	section := func(title string, kind int, items []itemMatch) {
+	section := func(title string, kind int, items []itemMatch, open bool) {
 		if len(items) == 0 {
 			return
 		}
 		m.rows = append(m.rows, selectionRow{kind: rowHeader, item: itemMatch{name: title}})
+		if !open {
+			return
+		}
 		for _, item := range items {
 			m.rows = append(m.rows, selectionRow{kind: kind, item: item})
 		}
 	}
-	section("Groups", rowGroup, m.groupMatches)
-	section("Tags", rowTag, m.tagMatches)
+	section("Groups", rowGroup, m.groupMatches, m.groupsOpen)
+	section("Tags", rowTag, m.tagMatches, m.tagsOpen)
 	if len(m.rows) > 0 && len(m.matches) > 0 {
 		m.rows = append(m.rows, selectionRow{kind: rowHeader, item: itemMatch{name: "Servers"}})
 	}
@@ -484,7 +580,7 @@ func (m *serverSelectionModel) moveCursor(delta int) {
 	}
 	from := m.cursor
 	m.cursor = max(min(m.cursor+delta, len(m.rows)-1), 0)
-	for m.rows[m.cursor].kind == rowHeader {
+	for m.rows[m.cursor].kind == rowHeader && m.rows[m.cursor].item.name == "Servers" {
 		next := m.cursor + step
 		if next < 0 || next >= len(m.rows) {
 			// nothing selectable that way: stay put, or for a fresh list look the other way
@@ -649,6 +745,14 @@ func (m *serverSelectionModel) setAllTasks(s gorun.Server, on bool) {
 // toggleRow toggles whatever is under the given row.
 func (m *serverSelectionModel) toggleRow(row selectionRow) {
 	switch row.kind {
+	case rowHeader:
+		if row.item.name == "Groups" {
+			m.groupsOpen = !m.groupsOpen
+			m.buildRows()
+		} else if row.item.name == "Tags" {
+			m.tagsOpen = !m.tagsOpen
+			m.buildRows()
+		}
 	case rowServer:
 		s, _ := m.serverOfRow(row)
 		m.toggleServer(s)
@@ -777,6 +881,20 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	if m.helpOpen {
+		if kmsg, ok := msg.(tea.KeyPressMsg); ok {
+			switch kmsg.String() {
+			case "ctrl+c":
+				m.quitting = true
+				return m, tea.Quit
+			default:
+				m.helpOpen = false
+				return m, nil
+			}
+		}
+		return m, nil
+	}
+
 	if m.tab == tabHistory {
 		return m.updateHistory(msg)
 	}
@@ -822,6 +940,8 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if i := l.offset + msg.Y - l.listTop; msg.Y >= l.listTop && i < min(l.offset+l.rows, len(m.rows)) {
 			row := m.rows[i]
 			if row.kind == rowHeader {
+				m.cursor = i
+				m.toggleRow(row)
 				return m, nil
 			}
 			m.cursor = i
@@ -845,6 +965,27 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		switch msg.String() {
+		case "ctrl+s":
+			return m.showTab(tabServers)
+		case "ctrl+t":
+			if slices.Contains(m.tabs(), tabTasks) {
+				return m.showTab(tabTasks)
+			}
+		case "ctrl+b":
+			if slices.Contains(m.tabs(), tabBundles) {
+				return m.showTab(tabBundles)
+			}
+		case "ctrl+g":
+			if slices.Contains(m.tabs(), tabGroups) {
+				return m.showTab(tabGroups)
+			}
+		case "ctrl+h":
+			if slices.Contains(m.tabs(), tabHistory) {
+				return m.showTab(tabHistory)
+			}
+		case "ctrl+k":
+			m.helpOpen = !m.helpOpen
+			return m, nil
 		case "ctrl+c":
 			m.quitting = true
 			return m, tea.Quit
@@ -858,25 +999,43 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case "enter", "ctrl+r":
+			if row, ok := m.currentRow(); ok && row.kind == rowHeader && (row.item.name == "Groups" || row.item.name == "Tags") {
+				m.toggleRow(row)
+				return m, nil
+			}
 			return m.run()
 		case "shift+tab":
 			if len(m.tabs()) > 1 {
 				return m.switchTab()
 			}
-		case "up", "ctrl+p", "ctrl+k":
+		case "up":
 			m.moveCursor(-1)
-		case "down", "ctrl+n", "ctrl+j":
+		case "down":
 			m.moveCursor(1)
 		case "right":
-			// show the server's tasks
-			if row, ok := m.currentRow(); ok && row.kind == rowServer {
-				if s, _ := m.serverOfRow(row); len(s.Tasks) > 0 {
-					m.expanded[s.Name] = true
-					m.buildRows()
+			// show the server's tasks, or expand a collapsed group/tag section
+			if row, ok := m.currentRow(); ok {
+				if row.kind == rowHeader && (row.item.name == "Groups" || row.item.name == "Tags") {
+					if (row.item.name == "Groups" && !m.groupsOpen) || (row.item.name == "Tags" && !m.tagsOpen) {
+						m.toggleRow(row)
+					}
+					return m, nil
+				}
+				if row.kind == rowServer {
+					if s, _ := m.serverOfRow(row); len(s.Tasks) > 0 {
+						m.expanded[s.Name] = true
+						m.buildRows()
+					}
 				}
 			}
 		case "left":
-			// hide the server's tasks, moving the cursor from a task up to its server
+			// hide the server's tasks, or collapse an expanded group/tag section
+			if row, ok := m.currentRow(); ok && row.kind == rowHeader && (row.item.name == "Groups" || row.item.name == "Tags") {
+				if (row.item.name == "Groups" && m.groupsOpen) || (row.item.name == "Tags" && m.tagsOpen) {
+					m.toggleRow(row)
+				}
+				return m, nil
+			}
 			if s, ok := m.current(); ok && m.expanded[s.Name] {
 				m.expanded[s.Name] = false
 				for m.cursor > 0 && m.rows[m.cursor].kind == rowTask {
@@ -884,19 +1043,19 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.buildRows()
 			}
-		case "e":
+		case "alt+e":
 			if row, ok := m.currentRow(); ok && row.kind == rowServer {
 				if s, _ := m.serverOfRow(row); len(s.Tasks) > 0 {
 					m.expanded[s.Name] = true
 					m.buildRows()
 				}
 			}
-		case "E":
+		case "alt+E", "alt+shift+e":
 			for _, s := range m.servers {
 				m.expanded[s.Name] = true
 			}
 			m.buildRows()
-		case "c":
+		case "alt+c":
 			if s, ok := m.current(); ok && m.expanded[s.Name] {
 				m.expanded[s.Name] = false
 				for m.cursor > 0 && m.rows[m.cursor].kind == rowTask {
@@ -904,7 +1063,7 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.buildRows()
 			}
-		case "C":
+		case "alt+C", "alt+shift+c":
 			for _, s := range m.servers {
 				m.expanded[s.Name] = false
 			}
@@ -916,7 +1075,7 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.moveCursor(1)
 				}
 			}
-		case "a", "A":
+		case "alt+a", "alt+A", "alt+shift+a":
 			return m.runAll()
 		case "ctrl+a":
 			// select every visible server, or deselect them if they are all selected already
@@ -938,7 +1097,7 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if s, ok := m.current(); ok {
 				m.setAllTasks(s, false)
 			}
-		case "ctrl+t":
+		case "alt+t":
 			// tick every task of the server under the cursor
 			if s, ok := m.current(); ok {
 				m.setAllTasks(s, true)
@@ -1002,12 +1161,18 @@ func (m serverSelectionModel) View() tea.View {
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
 	switch {
+	case m.helpOpen:
+		v.SetContent(m.helpContent())
 	case m.tab == tabHistory:
 		v.SetContent(m.historyContent())
 	case m.treeTab() != nil:
 		v.SetContent(m.treeContent())
 	default:
-		v.SetContent(m.viewContent())
+		if m.helpOpen {
+			v.SetContent(m.helpContent())
+		} else {
+			v.SetContent(m.viewContent())
+		}
 	}
 	return v
 }
@@ -1105,7 +1270,19 @@ func (m serverSelectionModel) viewContent() string {
 
 		switch row.kind {
 		case rowHeader:
-			lines = append(lines, "  "+headerStyle.Render(row.item.name)+mutedStyle.Render("  "+sectionHints[row.item.name]))
+			title := row.item.name
+			arrow := ""
+			if title == "Groups" || title == "Tags" {
+				arrow = "▶ "
+				if (title == "Groups" && m.groupsOpen) || (title == "Tags" && m.tagsOpen) {
+					arrow = "▼ "
+				}
+			}
+			pointer := "  "
+			if i == m.cursor {
+				pointer = cursorStyle.Render("▸ ")
+			}
+			lines = append(lines, pointer+headerStyle.Render(arrow+title)+mutedStyle.Render("  "+sectionHints[title]))
 			continue
 		case rowGroup, rowTag:
 			lines = append(lines, pointer+m.itemLine(row))
@@ -1162,8 +1339,8 @@ func (m serverSelectionModel) viewContent() string {
 		lines = append(lines, line)
 	}
 
-	lines = append(lines, "", m.runButton()+"  "+m.runAllButton()+mutedStyle.Render("  enter / a"), "")
-	lines = append(lines, mutedStyle.Render("↑/↓ move · →/← show/hide tasks · e/E expand all · c/C collapse all · space/tab select · ctrl+t/ctrl+x tick/clear a server's tasks · ctrl+a select all shown · a run all · ctrl+d clear · esc clear/quit · click to select or run"))
+	lines = append(lines, "", m.runButton()+"  "+m.runAllButton()+mutedStyle.Render("  enter / alt+a"), "")
+	lines = append(lines, mutedStyle.Render("↑/↓ move · space select · →/← tasks · ctrl-k help · enter run · esc quit"))
 	return strings.Join(lines, "\n")
 }
 
@@ -1255,4 +1432,51 @@ func runServerSelectionTUI(cfg *gorun.Config, servers []gorun.Server) ([]gorun.S
 	}
 
 	return m.chosen(), nil
+}
+
+// helpContent renders the ctrl-k help dialog.
+func (m serverSelectionModel) helpContent() string {
+	lines := []string{m.titleLine(), "", "Keyboard shortcuts (ctrl-k to close)", ""}
+	sections := []struct {
+		title string
+		keys  [][2]string
+	}{
+		{"Navigation", [][2]string{
+			{"↑/↓", "move cursor"},
+			{"→ / ←", "show/hide a server's tasks; expand/collapse groups & tags"},
+			{"enter", "run (or expand a group/tag section)"},
+			{"shift+tab", "next tab"},
+			{"ctrl+s/t/b/g/h", "jump to Servers/Tasks/Bundles/Groups/History"},
+		}},
+		{"Selection", [][2]string{
+			{"space, tab", "select/toggle the row under the cursor"},
+			{"alt+e / alt+E", "expand one/all servers"},
+			{"alt+c / alt+C", "collapse one/all servers"},
+			{"alt+a", "select all servers and run"},
+			{"ctrl+a", "select all shown servers"},
+			{"ctrl+d", "clear selection"},
+			{"ctrl+x", "clear a server's tasks"},
+			{"alt+t", "tick all of a server's tasks"},
+		}},
+		{"Filter", [][2]string{
+			{"type", "filter servers, groups and tags"},
+			{"backspace", "delete one character"},
+			{"ctrl+w / ctrl+u", "delete word / clear filter"},
+			{"esc", "clear filter, then quit"},
+		}},
+		{"Other", [][2]string{
+			{"ctrl+k", "show/hide this help"},
+			{"ctrl+c", "quit"},
+			{"click", "select, expand, or run"},
+		}},
+	}
+	for _, sec := range sections {
+		lines = append(lines, headerStyle.Render(sec.title))
+		for _, kv := range sec.keys {
+			lines = append(lines, fmt.Sprintf("  %-28s %s", kv[0], mutedStyle.Render(kv[1])))
+		}
+		lines = append(lines, "")
+	}
+	lines = append(lines, mutedStyle.Render("press any key to close"))
+	return strings.Join(lines, "\n")
 }

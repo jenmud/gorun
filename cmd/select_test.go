@@ -57,6 +57,8 @@ func press(m serverSelectionModel, keys ...string) serverSelectionModel {
 			msg = tea.KeyPressMsg{Code: tea.KeyEnter}
 		case "esc":
 			msg = tea.KeyPressMsg{Code: tea.KeyEscape}
+		case "alt+t":
+			msg = tea.KeyPressMsg{Code: 't', Mod: tea.ModAlt}
 		}
 		next, _ := m.Update(msg)
 		m = next.(serverSelectionModel)
@@ -231,7 +233,7 @@ func cursorTo(t *testing.T, m serverSelectionModel, kind int, name string) serve
 func TestServerSelectionModel_Sections(t *testing.T) {
 	m, _ := sectionModel(t)
 
-	// rows: Groups, prod, Tags, prod, web, Servers, web-1, web-2, db-1
+	// groups and tags are collapsed by default: only their headers and the servers
 	got := []string{}
 	for _, row := range m.rows {
 		switch row.kind {
@@ -244,22 +246,17 @@ func TestServerSelectionModel_Sections(t *testing.T) {
 			got = append(got, row.item.name)
 		}
 	}
-	want := []string{"=Groups", "prod", "=Tags", "prod", "web", "=Servers", "web-1", "web-2", "db-1"}
+	want := []string{"=Groups", "=Tags", "=Servers", "web-1", "web-2", "db-1"}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("rows mismatch (-want +got):\n%s", diff)
 	}
 
-	// the cursor starts on the first selectable row and skips titles
-	if m.rows[m.cursor].kind != rowGroup {
-		t.Errorf("cursor should start on the prod group, got row %+v", m.rows[m.cursor])
+	// the cursor starts on the first server
+	if m.rows[m.cursor].kind != rowServer {
+		t.Errorf("cursor should start on the first server, got row %+v", m.rows[m.cursor])
 	}
-	m = press(m, "down")
-	if row := m.rows[m.cursor]; row.kind != rowTag || row.item.name != "prod" {
-		t.Errorf("down should skip the Tags title, got row %+v", row)
-	}
-	m = press(m, "up", "up")
-	if m.rows[m.cursor].kind != rowGroup {
-		t.Errorf("up at the top should stay on the first group, got row %+v", m.rows[m.cursor])
+	if s, _ := m.serverOfRow(m.rows[m.cursor]); s.Name != "web-1" {
+		t.Errorf("cursor should start on web-1, got %s", s.Name)
 	}
 
 	// typing filters every section; titles of empty sections go away
@@ -279,6 +276,9 @@ func TestServerSelectionModel_Sections(t *testing.T) {
 func TestServerSelectionModel_GroupsAndTags(t *testing.T) {
 	m, _ := sectionModel(t)
 
+	// expand the Groups section first (collapsed by default)
+	m = cursorTo(t, m, rowHeader, "Groups")
+	m = press(m, "space")
 	// the cursor on a group doesn't choose it: nothing is selected, so nothing runs
 	m = cursorTo(t, m, rowGroup, "prod")
 	if got := chosenTasks(m); len(got) != 0 {
@@ -288,6 +288,9 @@ func TestServerSelectionModel_GroupsAndTags(t *testing.T) {
 		t.Errorf("run button should ask for a selection, got %q", m.runButton())
 	}
 
+	// expand the Tags section first (collapsed by default)
+	m = cursorTo(t, m, rowHeader, "Tags")
+	m = press(m, "space")
 	// selecting the web tag selects both web servers
 	m = cursorTo(t, m, rowTag, "web")
 	m = press(m, "space")
@@ -382,14 +385,14 @@ func TestServerSelectionModel_AllTasks(t *testing.T) {
 	}
 
 	// ctrl+t ticks them all again and selects web-1
-	m = ctrl(m, 't')
+	m = press(m, "alt+t")
 	if m.countTasks(m.servers[0]) != 5 || !m.selected["web-1"] {
 		t.Errorf("web-1 should have all 5 tasks and be selected, got %d tasks, selected=%v", m.countTasks(m.servers[0]), m.selected["web-1"])
 	}
 
 	// on web-2's row, ctrl+t brings back the task left out there
 	m = cursorTo(t, m, rowServer, "web-2")
-	m = ctrl(m, 't')
+	m = press(m, "alt+t")
 	if diff := cmp.Diff(map[string][]string{
 		"web-1": {"greet", "timezone", "deploy-user"},
 		"web-2": {"greet", "timezone", "deploy-user"},
@@ -573,5 +576,20 @@ func TestServerSelectionModel_LongTitleKeepsTabs(t *testing.T) {
 	x := lipgloss.Width(plain[:strings.Index(plain, "History")])
 	if tab, ok := m.tabAt(x, 0); !ok || tab != tabHistory {
 		t.Errorf("clicking History at x=%d should find the History tab, got %d %v", x, tab, ok)
+	}
+}
+
+func TestServerSelectionModel_TypeLetters(t *testing.T) {
+	for _, query := range []string{"docker", "aAeEcCT"} {
+		m := newServerSelectionModel("test", pipelineServers())
+		for _, r := range query {
+			m, _ = send(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+		}
+		if m.query != query {
+			t.Errorf("typing %q should reach the filter, got query %q", query, m.query)
+		}
+		if len(m.chosen()) != 0 {
+			t.Errorf("typing %q must not select or run anything, got %v", query, chosenTasks(m))
+		}
 	}
 }

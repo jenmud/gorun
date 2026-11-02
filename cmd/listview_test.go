@@ -243,7 +243,7 @@ func TestPickerListTabs(t *testing.T) {
 		t.Fatalf("shift+tab order (-want +got):\n%s", diff)
 	}
 
-	m = press(m, "shift+tab", "shift+tab", "down", "enter") // Bundles, expand @full
+	m = press(m, "shift+tab", "shift+tab") // Bundles, which starts fully expanded
 	view := ansi.Strip(m.View().Content)
 	for _, want := range []string{"▾ @full", "└──   = packages, timezone, verify", "esc/q back to servers"} {
 		if !strings.Contains(view, want) {

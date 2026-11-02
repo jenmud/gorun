@@ -53,6 +53,10 @@ func press(m serverSelectionModel, keys ...string) serverSelectionModel {
 			msg = tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl}
 		case "shift+tab":
 			msg = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+		case "tab":
+			msg = tea.KeyPressMsg{Code: tea.KeyTab}
+		case "alt+v":
+			msg = tea.KeyPressMsg{Code: 'v', Mod: tea.ModAlt}
 		case "enter":
 			msg = tea.KeyPressMsg{Code: tea.KeyEnter}
 		case "esc":
@@ -74,39 +78,125 @@ func chosenTasks(m serverSelectionModel) map[string][]string {
 	return got
 }
 
-func TestServerSelectionModel_ExpandTasks(t *testing.T) {
+func TestServerSelectionModel_TasksPaneFollowsCursor(t *testing.T) {
 	m := newServerSelectionModel("test", pipelineServers())
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = next.(serverSelectionModel)
 
-	m = press(m, "right")
-	if len(m.rows) != 2+5 {
-		t.Fatalf("expanding web-1 should list its 5 tasks, got %d rows", len(m.rows))
-	}
-	view := m.viewContent()
-	for _, want := range []string{"▾", "deploy-user", "Create the deploy user", "(needs docker)"} {
+	view := ansi.Strip(m.viewContent())
+	for _, want := range []string{"Tasks · web-1 · 5/5", "deploy-user", "Create the deploy user", "(needs docker)"} {
 		if !strings.Contains(view, want) {
-			t.Errorf("view should contain %q, got:\n%s", want, view)
+			t.Errorf("the tasks pane should show %q, got:\n%s", want, view)
 		}
 	}
 
-	// left on a task collapses the server and moves the cursor back to it
-	m = press(m, "down", "down", "left")
-	if len(m.rows) != 2 || m.cursor != 0 {
+	m = press(m, "down")
+	if view := ansi.Strip(m.viewContent()); !strings.Contains(view, "Tasks · web-2 · 5/5") {
+		t.Errorf("the tasks pane should follow the cursor to web-2, got:\n%s", view)
+	}
+}
+
+func TestServerSelectionModel_ExpandDetails(t *testing.T) {
+	m := newServerSelectionModel("test", pipelineServers())
+
+	m = press(m, "right")
+	if !m.expanded["web-1"] {
+		t.Fatal("right should show web-1's details")
+	}
+	view := ansi.Strip(m.viewContent())
+	for _, want := range []string{"▾ web-1", "Hostname", "none, runs locally", "Groups", "Tags", "Env vars"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the details should contain %q, got:\n%s", want, view)
+		}
+	}
+
+	// the cursor steps over the details to the next server
+	m = press(m, "down")
+	if s, ok := m.current(); !ok || s.Name != "web-2" || m.rows[m.cursor].kind != rowServer {
+		t.Fatalf("down should go to web-2, got row %+v", m.rows[m.cursor])
+	}
+
+	// left hides the details again
+	m = press(m, "up", "left")
+	if m.expanded["web-1"] || len(m.rows) != 2 || m.cursor != 0 {
 		t.Fatalf("expected collapsed list with the cursor on web-1, got %d rows, cursor %d", len(m.rows), m.cursor)
 	}
 
-	// right on a server without tasks does nothing
-	empty := press(newServerSelectionModel("test", []gorun.Server{{Name: "bare"}}), "right")
-	if len(empty.rows) != 1 {
-		t.Errorf("a server without tasks can't expand, got %d rows", len(empty.rows))
+	// a server without tasks still has details
+	bare := press(newServerSelectionModel("test", []gorun.Server{{Name: "bare"}}), "right")
+	if len(bare.rows) < 2 {
+		t.Errorf("a server without tasks should still show its details, got %d rows", len(bare.rows))
+	}
+	if view := ansi.Strip(bare.viewContent()); !strings.Contains(view, "bare has no tasks") {
+		t.Errorf("the tasks pane should say there are no tasks, got:\n%s", view)
+	}
+}
+
+func TestServerSelectionModel_SSHDetails(t *testing.T) {
+	m := newServerSelectionModel("test", []gorun.Server{{
+		Name:     "web-1",
+		Hostname: "10.0.0.11",
+		SSH:      gorun.SSH{User: "deploy", Password: "hunter2", Port: 2222, Identityfile: "~/.ssh/id_ed25519"},
+		Groups:   []string{"prod"},
+		Tags:     []string{"web"},
+		EnvVars:  map[string]string{"TOKEN": "abc", "APP_ENV": "prod"},
+	}})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = next.(serverSelectionModel)
+
+	m = press(m, "right")
+	view := ansi.Strip(m.viewContent())
+	for _, want := range []string{"10.0.0.11", "deploy", "2222", "********", "~/.ssh/id_ed25519", "prod", "#web", "▸ Env vars (2)"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the details should contain %q, got:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "hunter2") {
+		t.Error("the password must never be shown")
+	}
+	if strings.Contains(view, "APP_ENV") {
+		t.Error("the env vars table should start closed")
+	}
+
+	// the cursor goes to the env vars toggle; space opens the table, sorted by name
+	m = press(m, "down")
+	if row := m.rows[m.cursor]; row.kind != rowEnv {
+		t.Fatalf("down should go to the env vars, got row %+v", row)
+	}
+	m = press(m, "space")
+	view = ansi.Strip(m.viewContent())
+	for _, want := range []string{"▾ Env vars (2)", "NAME", "VALUE", "│ APP_ENV │ prod  │", "│ TOKEN   │ abc   │"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("the env vars table should contain %q, got:\n%s", want, view)
+		}
+	}
+
+	// left closes the table, enter opens it again, and a second left hides the details
+	m = press(m, "left")
+	if m.envOpen["web-1"] {
+		t.Error("left should close the env vars table")
+	}
+	m = press(m, "enter")
+	if !m.envOpen["web-1"] || m.confirmed {
+		t.Error("enter on the env vars should open the table, not run")
+	}
+	m = press(m, "left", "left")
+	if m.expanded["web-1"] || m.rows[m.cursor].kind != rowServer {
+		t.Errorf("left should hide the details and put the cursor on the server, got row %+v", m.rows[m.cursor])
 	}
 }
 
 func TestServerSelectionModel_SelectTasks(t *testing.T) {
 	m := newServerSelectionModel("test", pipelineServers())
-	m = press(m, "right") // rows: web-1, greet, packages, timezone, docker, deploy-user, web-2
+
+	// tab moves to web-1's tasks: greet, packages, timezone, docker, deploy-user
+	m = press(m, "tab")
+	if m.focus != paneTasks {
+		t.Fatal("tab should focus the tasks pane")
+	}
 
 	// leaving out docker also leaves out deploy-user, which needs it, and selects web-1
-	m = press(m, "down", "down", "down", "down", "space")
+	m = press(m, "down", "down", "down", "space")
 	if diff := cmp.Diff(map[string][]string{"web-1": {"greet", "packages", "timezone"}}, chosenTasks(m)); diff != "" {
 		t.Errorf("chosen mismatch (-want +got):\n%s", diff)
 	}
@@ -132,13 +222,12 @@ func TestServerSelectionModel_SelectTasks(t *testing.T) {
 		t.Errorf("with no tasks left web-1 should be deselected and nothing chosen, got %v", chosenTasks(m))
 	}
 
-	// with web-1 deselected and nothing else selected, the cursor on it doesn't run it
-	if got := chosenTasks(m); len(got) != 0 {
-		t.Errorf("nothing is selected, so nothing should run, got %v", got)
+	// back in the servers pane, selecting the server again brings all its tasks back
+	m = press(m, "tab")
+	if m.focus != paneServers {
+		t.Fatal("tab should focus the servers pane again")
 	}
-
-	// selecting the server again brings all its tasks back
-	m = press(m, "up", "space")
+	m = press(m, "space")
 	if diff := cmp.Diff(map[string][]string{"web-1": {"greet", "timezone", "deploy-user"}}, chosenTasks(m)); diff != "" {
 		t.Errorf("chosen mismatch (-want +got):\n%s", diff)
 	}
@@ -153,6 +242,79 @@ func TestServerSelectionModel_SelectTasks(t *testing.T) {
 	}
 }
 
+func TestServerSelectionModel_PaneFocus(t *testing.T) {
+	m := newServerSelectionModel("test", pipelineServers())
+
+	// right shows the details, a second right moves to the tasks, left comes back
+	m = press(m, "right", "right")
+	if !m.expanded["web-1"] || m.focus != paneTasks {
+		t.Fatalf("right, right should expand web-1 and focus its tasks, got expanded=%v focus=%d", m.expanded["web-1"], m.focus)
+	}
+	m = press(m, "left")
+	if m.focus != paneServers || !m.expanded["web-1"] {
+		t.Fatalf("left in the tasks pane should go back to the servers, got focus=%d", m.focus)
+	}
+
+	// typing in the tasks pane still filters
+	m = press(m, "tab")
+	next, _ := m.Update(tea.KeyPressMsg{Code: 'w', Text: "w"})
+	if m = next.(serverSelectionModel); m.query != "w" {
+		t.Errorf("typing in the tasks pane should filter, got query %q", m.query)
+	}
+
+	// with no server under the cursor there are no tasks to focus
+	s, _ := sectionModel(t)
+	s = cursorTo(t, s, rowHeader, "Groups")
+	s = press(s, "tab")
+	if s.focus != paneServers {
+		t.Error("tab should stay in the servers pane when there are no tasks to show")
+	}
+	if view := ansi.Strip(s.viewContent()); !strings.Contains(view, "move to a server to see its tasks") {
+		t.Errorf("the tasks pane should explain it is empty, got:\n%s", view)
+	}
+}
+
+func TestServerSelectionModel_AllTasksView(t *testing.T) {
+	m := newServerSelectionModel("test", pipelineServers())
+
+	m = press(m, "alt+v")
+	if rows := m.taskRows(); len(rows) != 2*(1+5) {
+		t.Fatalf("the all tasks view should list both servers' headings and tasks, got %d rows", len(rows))
+	}
+	view := ansi.Strip(m.viewContent())
+	if !strings.Contains(view, "All tasks") || !strings.Contains(view, "[x] web-2  5/5 tasks") {
+		t.Errorf("the tasks pane should show every server, got:\n%s", view)
+	}
+
+	// space on a heading clears and then restores all of that server's tasks
+	m = press(m, "tab", "space")
+	if m.countTasks(m.servers[0]) != 0 || m.selected["web-1"] {
+		t.Errorf("space on web-1's heading should clear its tasks")
+	}
+	m = press(m, "space")
+	if m.countTasks(m.servers[0]) != 5 || !m.selected["web-1"] {
+		t.Errorf("space again should tick all of web-1's tasks")
+	}
+
+	// tasks of another server can be toggled without leaving the pane
+	m = press(m, "down", "down", "down", "down", "down", "down", "down", "space")
+	if diff := cmp.Diff([]string{"packages", "timezone", "docker", "deploy-user"}, chosenTasks(m)["web-2"]); diff != "" {
+		t.Errorf("web-2 should have greet left out (-want +got):\n%s", diff)
+	}
+
+	// moving the servers cursor jumps the tasks pane to that server's heading
+	m = press(m, "tab", "down")
+	if row := m.taskRows()[m.taskCursor]; row.task != -1 || m.servers[row.server].Name != "web-2" {
+		t.Errorf("the task cursor should be on web-2's heading, got %+v", row)
+	}
+
+	// alt+v goes back to the server under the cursor
+	m = press(m, "alt+v")
+	if rows := m.taskRows(); len(rows) != 5 || m.servers[rows[0].server].Name != "web-2" {
+		t.Errorf("alt+v should show only web-2's tasks again, got %d rows", len(rows))
+	}
+}
+
 func TestServerSelectionModel_ClickToggle(t *testing.T) {
 	m := newServerSelectionModel("test", pipelineServers())
 	l := m.layout()
@@ -163,11 +325,45 @@ func TestServerSelectionModel_ClickToggle(t *testing.T) {
 		t.Fatalf("clicking ▸ should expand web-1 without selecting it, expanded=%v selected=%v", m.expanded, m.selected)
 	}
 
-	// clicking a task row toggles the task
-	next, _ = m.Update(tea.MouseClickMsg{X: 10, Y: l.listTop + 1, Button: tea.MouseLeft})
+	// clicking a task in the tasks pane focuses it and toggles the task
+	next, _ = m.Update(tea.MouseClickMsg{X: l.leftWidth + 5, Y: l.listTop, Button: tea.MouseLeft})
 	m = next.(serverSelectionModel)
-	if m.taskSelected("web-1", "greet") || !m.selected["web-1"] {
-		t.Errorf("clicking greet should leave it out and select web-1")
+	if m.focus != paneTasks || m.taskSelected("web-1", "greet") || !m.selected["web-1"] {
+		t.Errorf("clicking greet should focus the tasks, leave greet out and select web-1")
+	}
+}
+
+func TestServerSelectionModel_EnvTableScrollsIntoView(t *testing.T) {
+	env := map[string]string{}
+	for i := range 10 {
+		env[fmt.Sprintf("VAR_%02d", i)] = "x"
+	}
+	m := newServerSelectionModel("test", []gorun.Server{{Name: "web-1", EnvVars: env}})
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = press(next.(serverSelectionModel), "right", "down", "space")
+
+	view := ansi.Strip(m.viewContent())
+	if !strings.Contains(view, "VAR_09") || !strings.Contains(view, "▾ Env vars") {
+		t.Errorf("opening the env vars should scroll the table into view with its toggle, got:\n%s", view)
+	}
+}
+
+func TestServerSelectionModel_PanesFitTheScreen(t *testing.T) {
+	m, _ := sectionModel(t)
+	m.servers[0].EnvVars = map[string]string{"A_RATHER_LONG_VARIABLE_NAME": strings.Repeat("v", 200)}
+	m.envOpen["web-1"] = true
+	for _, size := range [][2]int{{40, 20}, {80, 24}, {200, 50}} {
+		next, _ := m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
+		m := press(next.(serverSelectionModel), "right", "alt+v")
+		lines := strings.Split(m.viewContent(), "\n")
+		if len(lines) > size[1] {
+			t.Errorf("%dx%d: the view is %d lines", size[0], size[1], len(lines))
+		}
+		for _, line := range lines {
+			if w := lipgloss.Width(line); w > size[0] {
+				t.Errorf("%dx%d: line is %d wide: %q", size[0], size[1], w, ansi.Strip(line))
+			}
+		}
 	}
 }
 
@@ -317,6 +513,7 @@ func TestServerSelectionModel_GroupsAndTags(t *testing.T) {
 
 func TestServerSelectionModel_SectionHints(t *testing.T) {
 	m, _ := sectionModel(t)
+	m.width = 160
 	view := m.viewContent()
 	for title, hint := range sectionHints {
 		if !strings.Contains(view, title) || !strings.Contains(view, hint) {
@@ -336,8 +533,10 @@ func TestServerSelectionModel_CursorKeepsItsRow(t *testing.T) {
 		t.Errorf("cursor should stay on web-2, got %+v", m.rows[m.cursor])
 	}
 
-	// collapsing web-1 while on one of its tasks moves the cursor to web-1
-	m = cursorTo(t, m, rowTask, "web-1")
+	// collapsing web-1 while on its env vars moves the cursor to web-1
+	m.servers[0].EnvVars = map[string]string{"A": "1"}
+	m.buildRows()
+	m = cursorTo(t, m, rowEnv, "web-1")
 	m.expanded["web-1"] = false
 	m.buildRows()
 	if row := m.rows[m.cursor]; row.kind != rowServer {
@@ -371,8 +570,8 @@ func TestServerSelectionModel_AllTasks(t *testing.T) {
 	m = press(m, "ctrl+a")
 	m.toggleTask(m.servers[1], "greet")
 
-	// ctrl+x on one of web-1's task rows clears only web-1's tasks
-	m = press(m, "right", "down", "down")
+	// ctrl+x in web-1's tasks clears only web-1's tasks
+	m = press(m, "tab", "down")
 	m = ctrl(m, 'x')
 	if m.countTasks(m.servers[0]) != 0 || m.selected["web-1"] {
 		t.Errorf("web-1 should have no tasks and be deselected, got %d tasks, selected=%v", m.countTasks(m.servers[0]), m.selected["web-1"])
@@ -384,13 +583,14 @@ func TestServerSelectionModel_AllTasks(t *testing.T) {
 		t.Errorf("web-1 should show 0/5 tasks, got:\n%s", m.viewContent())
 	}
 
-	// ctrl+t ticks them all again and selects web-1
+	// alt+t ticks them all again and selects web-1
 	m = press(m, "alt+t")
 	if m.countTasks(m.servers[0]) != 5 || !m.selected["web-1"] {
 		t.Errorf("web-1 should have all 5 tasks and be selected, got %d tasks, selected=%v", m.countTasks(m.servers[0]), m.selected["web-1"])
 	}
 
-	// on web-2's row, ctrl+t brings back the task left out there
+	// on web-2's row, alt+t brings back the task left out there
+	m = press(m, "tab")
 	m = cursorTo(t, m, rowServer, "web-2")
 	m = press(m, "alt+t")
 	if diff := cmp.Diff(map[string][]string{

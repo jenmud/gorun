@@ -47,10 +47,12 @@ const (
 // the kinds of row in the list
 const (
 	rowServer = iota
-	rowTask   // a task of an expanded server
+	rowDetail // a line of an expanded server's details
 	rowHeader // a section title
 	rowGroup
 	rowTag
+	rowEnv    // the env vars toggle of an expanded server
+	rowEnvVar // a line of an expanded server's env vars table
 )
 
 // itemMatch is a group or tag that matches the current filter.
@@ -63,15 +65,17 @@ type itemMatch struct {
 // selectionRow is one line of the list.
 type selectionRow struct {
 	kind  int
-	match int       // rowServer, rowTask: index into serverSelectionModel.matches
-	task  int       // rowTask: index into the server's Tasks
+	match int       // rowServer, rowDetail, rowEnv, rowEnvVar: index into serverSelectionModel.matches
 	item  itemMatch // rowGroup, rowTag: the item; rowHeader: the title
+	label string    // rowDetail: the field name
+	value string    // rowDetail: the field value; rowEnvVar: the rendered table line
 }
 
 // serverSelectionModel is the bubbletea model for picking which servers to deploy to.
 // Typing filters the list with a fuzzy match on the server name (or hostname, or tags).
-// Expanding a server lists its task pipeline, so individual tasks can be left out.
-// Groups and tags select all their servers at once.
+// The servers are on the left, where expanding one shows its details; the tasks of the
+// server under the cursor (or of every server) are on the right, where they can be left
+// out. Groups and tags select all their servers at once.
 type serverSelectionModel struct {
 	title      string
 	servers    []gorun.Server // with Tasks resolved, so they can be listed
@@ -81,7 +85,8 @@ type serverSelectionModel struct {
 	groups *treeModel
 
 	selected   map[string]bool
-	expanded   map[string]bool
+	expanded   map[string]bool // server name -> details shown
+	envOpen    map[string]bool // server name -> env vars table shown
 	groupsOpen bool
 	tagsOpen   bool
 	helpOpen   bool
@@ -93,6 +98,9 @@ type serverSelectionModel struct {
 	tagMatches   []itemMatch
 	rows         []selectionRow
 	cursor       int // index into rows
+	focus        int // paneServers or paneTasks
+	allTasks     bool
+	taskCursor   int // index into taskRows()
 	width        int
 	height       int
 
@@ -125,11 +133,13 @@ var tabNames = map[int]string{tabServers: "Servers", tabTasks: "Tasks", tabBundl
 // --list-tasks and --list-bundles do.
 func (m serverSelectionModel) withLists(cfg *gorun.Config) serverSelectionModel {
 	if nodes := taskTreeNodes(cfg, nil); len(nodes) > 0 {
+		expandAll(nodes)
 		t := newTreeModel(m.title, "tasks", nodes)
 		t.embedded = true
 		m.tasks = &t
 	}
 	if nodes := bundleTreeNodes(cfg); len(nodes) > 0 {
+		expandAll(nodes)
 		t := newTreeModel(m.title, "bundles", nodes)
 		t.embedded = true
 		m.bundles = &t
@@ -447,6 +457,7 @@ func newServerSelectionModel(title string, servers []gorun.Server) serverSelecti
 		servers:  servers,
 		selected: map[string]bool{},
 		expanded: map[string]bool{},
+		envOpen:  map[string]bool{},
 		skipped:  map[string]map[string]bool{},
 		width:    80,
 		height:   24,
@@ -484,17 +495,14 @@ func (m serverSelectionModel) keyOf(row selectionRow) rowKey {
 	key := rowKey{kind: row.kind, name: row.item.name}
 	if s, ok := m.serverOfRow(row); ok {
 		key.server = s.Name
-		key.name = ""
-		if row.kind == rowTask {
-			key.name = s.Tasks[row.task].Name
-		}
+		key.name = row.label
 	}
 	return key
 }
 
 // buildRows lays out the matching groups and tags, each under a title, then the
-// matching servers with the tasks of expanded servers under them. The cursor stays on the
-// same row (or a gone task's server) when the rows around it change.
+// matching servers with the details of expanded servers under them. The cursor stays on
+// the same row (or a gone detail's server) when the rows around it change.
 func (m *serverSelectionModel) buildRows() {
 	m.rebuildRows(m.cursorKey())
 }
@@ -535,9 +543,7 @@ func (m *serverSelectionModel) rebuildRows(keep *rowKey) {
 		m.rows = append(m.rows, selectionRow{kind: rowServer, match: i})
 		s := m.servers[match.index]
 		if m.expanded[s.Name] {
-			for t := range s.Tasks {
-				m.rows = append(m.rows, selectionRow{kind: rowTask, match: i, task: t})
-			}
+			m.rows = append(m.rows, m.detailRows(s, i)...)
 		}
 	}
 
@@ -549,7 +555,7 @@ func (m *serverSelectionModel) rebuildRows(keep *rowKey) {
 }
 
 // findRow returns the index of the row with key, falling back to its server's row for a
-// task that is no longer listed, or the current cursor if neither is found.
+// detail that is no longer listed, or the current cursor if neither is found.
 func (m serverSelectionModel) findRow(key rowKey) int {
 	serverRow := -1
 	for i, row := range m.rows {
@@ -567,8 +573,10 @@ func (m serverSelectionModel) findRow(key rowKey) int {
 	return m.cursor
 }
 
-// moveCursor moves the cursor by delta rows, stepping over section titles.
+// moveCursor moves the cursor by delta rows, stepping over section titles and details.
+// The tasks pane follows the server the cursor lands on.
 func (m *serverSelectionModel) moveCursor(delta int) {
+	defer m.followServer()
 	if len(m.rows) == 0 {
 		m.cursor = 0
 		return
@@ -580,7 +588,7 @@ func (m *serverSelectionModel) moveCursor(delta int) {
 	}
 	from := m.cursor
 	m.cursor = max(min(m.cursor+delta, len(m.rows)-1), 0)
-	for m.rows[m.cursor].kind == rowHeader && m.rows[m.cursor].item.name == "Servers" {
+	for !selectable(m.rows[m.cursor]) {
 		next := m.cursor + step
 		if next < 0 || next >= len(m.rows) {
 			// nothing selectable that way: stay put, or for a fresh list look the other way
@@ -606,9 +614,20 @@ func (m serverSelectionModel) currentRow() (selectionRow, bool) {
 	return m.rows[m.cursor], true
 }
 
-// serverOfRow returns the server of a server or task row.
+// selectable reports whether the cursor can stop on row.
+func selectable(row selectionRow) bool {
+	switch row.kind {
+	case rowDetail, rowEnvVar:
+		return false
+	case rowHeader:
+		return row.item.name != "Servers"
+	}
+	return true
+}
+
+// serverOfRow returns the server of a server row or of one of its detail rows.
 func (m serverSelectionModel) serverOfRow(row selectionRow) (gorun.Server, bool) {
-	if row.kind != rowServer && row.kind != rowTask {
+	if row.kind != rowServer && row.kind != rowDetail && row.kind != rowEnv && row.kind != rowEnvVar {
 		return gorun.Server{}, false
 	}
 	return m.servers[m.matches[row.match].index], true
@@ -756,9 +775,10 @@ func (m *serverSelectionModel) toggleRow(row selectionRow) {
 	case rowServer:
 		s, _ := m.serverOfRow(row)
 		m.toggleServer(s)
-	case rowTask:
+	case rowEnv:
 		s, _ := m.serverOfRow(row)
-		m.toggleTask(s, s.Tasks[row.task].Name)
+		m.envOpen[s.Name] = !m.envOpen[s.Name]
+		m.buildRows()
 	case rowGroup, rowTag:
 		m.toggleMembers(row)
 	}
@@ -874,6 +894,7 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.resizeTabs()
+		m.buildRows() // the env vars tables fit the pane width
 		return m, nil
 	case historyRunsMsg, historyRunMsg:
 		next, cmd := m.history.Update(msg)
@@ -934,18 +955,32 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m.runAll()
 			}
 		}
+		if msg.Y < l.listTop || msg.Y >= l.listTop+l.rows {
+			return m, nil
+		}
 
-		// clicking a server or task moves the cursor to it and toggles it; clicking a
-		// server's ▸ shows or hides its tasks
-		if i := l.offset + msg.Y - l.listTop; msg.Y >= l.listTop && i < min(l.offset+l.rows, len(m.rows)) {
+		// clicking a task focuses the tasks pane and toggles it
+		if msg.X >= l.leftWidth {
+			m.focus = paneTasks
+			rows := m.taskRows()
+			if j := m.taskOffset(l.rows) + msg.Y - l.listTop; j < len(rows) {
+				m.taskCursor = j
+				m.toggleTaskRow(rows[j])
+			}
+			return m, nil
+		}
+
+		// clicking a server moves the cursor to it and toggles it; clicking its ▸ shows
+		// or hides its details
+		m.focus = paneServers
+		if i := l.offset + msg.Y - l.listTop; i < min(l.offset+l.rows, len(m.rows)) {
 			row := m.rows[i]
-			if row.kind == rowHeader {
-				m.cursor = i
-				m.toggleRow(row)
+			if !selectable(row) {
 				return m, nil
 			}
 			m.cursor = i
-			if s, ok := m.serverOfRow(row); ok && row.kind == rowServer && msg.X == toggleColumn && len(s.Tasks) > 0 {
+			m.followServer()
+			if s, ok := m.serverOfRow(row); ok && row.kind == rowServer && msg.X == toggleColumn {
 				m.expanded[s.Name] = !m.expanded[s.Name]
 				m.buildRows()
 				return m, nil
@@ -955,15 +990,25 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseWheelMsg:
-		switch msg.Button {
-		case tea.MouseWheelUp:
-			m.moveCursor(-1)
-		case tea.MouseWheelDown:
-			m.moveCursor(1)
+		delta := 1
+		if msg.Button == tea.MouseWheelUp {
+			delta = -1
+		} else if msg.Button != tea.MouseWheelDown {
+			return m, nil
+		}
+		if msg.X >= m.layout().leftWidth {
+			m.moveTaskCursor(delta)
+		} else {
+			m.moveCursor(delta)
 		}
 		return m, nil
 
 	case tea.KeyPressMsg:
+		if m.focus == paneTasks {
+			if next, ok := m.updateTasksPane(msg); ok {
+				return next, nil
+			}
+		}
 		switch msg.String() {
 		case "ctrl+s":
 			return m.showTab(tabServers)
@@ -999,7 +1044,7 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.quitting = true
 			return m, tea.Quit
 		case "enter", "ctrl+r":
-			if row, ok := m.currentRow(); ok && row.kind == rowHeader && (row.item.name == "Groups" || row.item.name == "Tags") {
+			if row, ok := m.currentRow(); ok && (row.kind == rowEnv || row.kind == rowHeader && (row.item.name == "Groups" || row.item.name == "Tags")) {
 				m.toggleRow(row)
 				return m, nil
 			}
@@ -1008,47 +1053,61 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.tabs()) > 1 {
 				return m.switchTab()
 			}
+		case "tab":
+			if len(m.taskRows()) > 0 {
+				m.focus = paneTasks
+			}
+		case "alt+v":
+			m.allTasks = !m.allTasks
+			m.followServer()
 		case "up":
 			m.moveCursor(-1)
 		case "down":
 			m.moveCursor(1)
 		case "right":
-			// show the server's tasks, or expand a collapsed group/tag section
-			if row, ok := m.currentRow(); ok {
-				if row.kind == rowHeader && (row.item.name == "Groups" || row.item.name == "Tags") {
-					if (row.item.name == "Groups" && !m.groupsOpen) || (row.item.name == "Tags" && !m.tagsOpen) {
-						m.toggleRow(row)
-					}
-					return m, nil
+			// show the server's details, then move to its tasks; open the env vars table;
+			// or expand a collapsed group/tag section
+			row, ok := m.currentRow()
+			if !ok {
+				break
+			}
+			switch {
+			case row.kind == rowHeader && (row.item.name == "Groups" && !m.groupsOpen || row.item.name == "Tags" && !m.tagsOpen):
+				m.toggleRow(row)
+			case row.kind == rowEnv:
+				if s, _ := m.serverOfRow(row); !m.envOpen[s.Name] {
+					m.toggleRow(row)
 				}
-				if row.kind == rowServer {
-					if s, _ := m.serverOfRow(row); len(s.Tasks) > 0 {
-						m.expanded[s.Name] = true
-						m.buildRows()
-					}
+			case row.kind == rowServer:
+				if s, _ := m.serverOfRow(row); !m.expanded[s.Name] {
+					m.expanded[s.Name] = true
+					m.buildRows()
+				} else if len(m.taskRows()) > 0 {
+					m.focus = paneTasks
 				}
 			}
 		case "left":
-			// hide the server's tasks, or collapse an expanded group/tag section
-			if row, ok := m.currentRow(); ok && row.kind == rowHeader && (row.item.name == "Groups" || row.item.name == "Tags") {
-				if (row.item.name == "Groups" && m.groupsOpen) || (row.item.name == "Tags" && m.tagsOpen) {
-					m.toggleRow(row)
-				}
-				return m, nil
+			// close the env vars table, hide the server's details, or collapse an expanded
+			// group/tag section
+			row, ok := m.currentRow()
+			if !ok {
+				break
 			}
-			if s, ok := m.current(); ok && m.expanded[s.Name] {
-				m.expanded[s.Name] = false
-				for m.cursor > 0 && m.rows[m.cursor].kind == rowTask {
-					m.cursor--
-				}
-				m.buildRows()
-			}
-		case "alt+e":
-			if row, ok := m.currentRow(); ok && row.kind == rowServer {
-				if s, _ := m.serverOfRow(row); len(s.Tasks) > 0 {
-					m.expanded[s.Name] = true
+			switch {
+			case row.kind == rowHeader && (row.item.name == "Groups" && m.groupsOpen || row.item.name == "Tags" && m.tagsOpen):
+				m.toggleRow(row)
+			case row.kind == rowEnv && m.envOpen[m.servers[m.matches[row.match].index].Name]:
+				m.toggleRow(row)
+			default:
+				if s, ok := m.serverOfRow(row); ok && m.expanded[s.Name] {
+					m.expanded[s.Name] = false
 					m.buildRows()
 				}
+			}
+		case "alt+e":
+			if s, ok := m.current(); ok {
+				m.expanded[s.Name] = true
+				m.buildRows()
 			}
 		case "alt+E", "alt+shift+e":
 			for _, s := range m.servers {
@@ -1058,9 +1117,6 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "alt+c":
 			if s, ok := m.current(); ok && m.expanded[s.Name] {
 				m.expanded[s.Name] = false
-				for m.cursor > 0 && m.rows[m.cursor].kind == rowTask {
-					m.cursor--
-				}
 				m.buildRows()
 			}
 		case "alt+C", "alt+shift+c":
@@ -1068,12 +1124,9 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.expanded[s.Name] = false
 			}
 			m.buildRows()
-		case "space", "tab":
+		case "space":
 			if row, ok := m.currentRow(); ok {
 				m.toggleRow(row)
-				if msg.String() == "tab" {
-					m.moveCursor(1)
-				}
 			}
 		case "alt+a", "alt+A", "alt+shift+a":
 			return m.runAll()
@@ -1093,13 +1146,13 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			clear(m.selected)
 			clear(m.skipped)
 		case "ctrl+x":
-			// untick every task of the server under the cursor
-			if s, ok := m.current(); ok {
+			// untick every task of the focused server
+			if s, ok := m.focusServer(); ok {
 				m.setAllTasks(s, false)
 			}
 		case "alt+t":
-			// tick every task of the server under the cursor
-			if s, ok := m.current(); ok {
+			// tick every task of the focused server
+			if s, ok := m.focusServer(); ok {
 				m.setAllTasks(s, true)
 			}
 		case "backspace":
@@ -1181,32 +1234,40 @@ func (m serverSelectionModel) View() tea.View {
 var sectionHints = map[string]string{
 	"Groups":  "select all servers in a group",
 	"Tags":    "select all servers with a tag",
-	"Servers": "→ to pick tasks",
+	"Servers": "→ for details",
 }
 
-// toggleColumn is the screen column of a server's ▸/▾, after the pointer and checkbox.
-const toggleColumn = 6
+// toggleColumn is the screen column of a server's ▸/▾, after the pane border, the pointer
+// and the checkbox.
+const toggleColumn = 7
 
 // selectionLayout is where things are drawn on screen, so mouse clicks can be mapped back.
 type selectionLayout struct {
-	listTop int // screen row of the first row
-	offset  int // index into rows of the first row shown
-	rows    int // how many rows fit
-	buttonY int // screen row of the run button
+	listTop   int // screen row of the first row of both panes
+	offset    int // index into rows of the first row shown
+	rows      int // how many rows fit in a pane
+	leftWidth int // width of the servers pane, borders included; the tasks pane is the rest
+	buttonY   int // screen row of the run button
 }
 
 func (m serverSelectionModel) layout() selectionLayout {
-	// title, blank, search box (3), count, blank | list | blank, button, blank, help
-	const above, below = 7, 4
+	// title, blank, search box (3), count, blank, pane top border | panes | pane bottom
+	// border, blank, button, blank, help
+	const above, below = 8, 5
 
-	l := selectionLayout{listTop: above, rows: max(m.height-above-below, 3)}
+	l := selectionLayout{listTop: above, rows: max(m.height-above-below, 3), leftWidth: m.width / 2}
 
-	// keep the cursor in view
+	// keep the cursor in view, with the details and env vars under it that it can't
+	// step onto, as far as they fit
 	if len(m.rows) > l.rows {
-		l.offset = min(max(m.cursor-l.rows+1, 0), len(m.rows)-l.rows)
+		end := m.cursor
+		for end+1 < len(m.rows) && !selectable(m.rows[end+1]) {
+			end++
+		}
+		l.offset = min(max(end-l.rows+1, 0), m.cursor, len(m.rows)-l.rows)
 	}
 
-	l.buttonY = l.listTop + max(min(l.rows, len(m.rows)), 1) + 1
+	l.buttonY = l.listTop + l.rows + 2
 	return l
 }
 
@@ -1251,8 +1312,25 @@ func (m serverSelectionModel) viewContent() string {
 	lines = append(lines, strings.Split(m.searchBox(), "\n")...)
 	lines = append(lines, mutedStyle.Render(fmt.Sprintf("  %d/%d servers · %d selected", len(m.matches), len(m.servers), m.countSelected())), "")
 
+	left := paneBox("Servers", m.serverPaneLines(l, l.leftWidth-2), l.leftWidth, l.rows, m.focus == paneServers)
+	right := paneBox(m.tasksPaneTitle(), m.tasksPaneLines(l.rows, m.width-l.leftWidth-2), m.width-l.leftWidth, l.rows, m.focus == paneTasks)
+	for i := range left {
+		lines = append(lines, left[i]+right[i])
+	}
+
+	help := "↑/↓ move · space select · →/← details · tab tasks · alt+v all tasks · ctrl-k help · enter run · esc quit"
+	if m.focus == paneTasks {
+		help = "↑/↓ move · space toggle task · tab/← servers · alt+v all tasks · ctrl-k help · enter run · esc quit"
+	}
+	lines = append(lines, "", truncateANSI(m.runButton()+"  "+m.runAllButton()+mutedStyle.Render("  enter / alt+a"), m.width), "")
+	lines = append(lines, truncateANSI(mutedStyle.Render(help), m.width))
+	return strings.Join(lines, "\n")
+}
+
+// serverPaneLines renders the visible rows of the servers pane, width cells wide at most.
+func (m serverSelectionModel) serverPaneLines(l selectionLayout, width int) []string {
 	if len(m.rows) == 0 {
-		lines = append(lines, mutedStyle.Render("  nothing matches"))
+		return []string{mutedStyle.Render("  nothing matches")}
 	}
 
 	nameWidth := 0
@@ -1260,14 +1338,21 @@ func (m serverSelectionModel) viewContent() string {
 		nameWidth = max(nameWidth, len([]rune(s.Name)))
 	}
 
+	lines := []string{}
 	for i := l.offset; i < min(l.offset+l.rows, len(m.rows)); i++ {
 		row := m.rows[i]
 
+		// the pointer stays on the server whose tasks are shown, dimmed while the tasks
+		// pane has the focus
 		pointer := "  "
 		if i == m.cursor {
 			pointer = cursorStyle.Render("▸ ")
+			if m.focus != paneServers {
+				pointer = mutedStyle.Render("▸ ")
+			}
 		}
 
+		var line string
 		switch row.kind {
 		case rowHeader:
 			title := row.item.name
@@ -1278,70 +1363,70 @@ func (m serverSelectionModel) viewContent() string {
 					arrow = "▼ "
 				}
 			}
-			pointer := "  "
-			if i == m.cursor {
-				pointer = cursorStyle.Render("▸ ")
-			}
-			lines = append(lines, pointer+headerStyle.Render(arrow+title)+mutedStyle.Render("  "+sectionHints[title]))
-			continue
+			line = pointer + headerStyle.Render(arrow+title) + mutedStyle.Render("  "+sectionHints[title])
 		case rowGroup, rowTag:
-			lines = append(lines, pointer+m.itemLine(row))
-			continue
-		}
-
-		match := m.matches[row.match]
-		s := m.servers[match.index]
-
-		if row.kind == rowTask {
-			lines = append(lines, pointer+m.taskLine(s, s.Tasks[row.task]))
-			continue
-		}
-
-		check := mutedStyle.Render("[ ]")
-		if m.selected[s.Name] {
-			check = okStyle.Render("[x]")
-		}
-
-		name := serverStyle.Render(s.Name)
-		host := mutedStyle.Render(s.Address())
-		switch match.field {
-		case matchName:
-			name = highlight(s.Name, match.positions, serverStyle)
-		case matchHost:
-			host = highlight(s.Address(), match.positions, mutedStyle)
-		}
-		name += strings.Repeat(" ", nameWidth-len([]rune(s.Name)))
-
-		toggle := " "
-		if len(s.Tasks) > 0 {
-			toggle = mutedStyle.Render("▸")
-			if m.expanded[s.Name] {
-				toggle = mutedStyle.Render("▾")
+			line = pointer + m.itemLine(row)
+		case rowDetail:
+			line = detailIndent + mutedStyle.Render(fmt.Sprintf("%-*s", detailLabelWidth, row.label)) + row.value
+		case rowEnv:
+			s, _ := m.serverOfRow(row)
+			toggle := "▸"
+			if m.envOpen[s.Name] {
+				toggle = "▾"
 			}
+			line = pointer + detailIndent[2:] + mutedStyle.Render(toggle+" ") + "Env vars" + mutedStyle.Render(fmt.Sprintf(" (%d)", len(s.EnvVars)))
+		case rowEnvVar:
+			line = detailIndent + "  " + row.value
+		default:
+			line = pointer + m.serverLine(row, nameWidth)
 		}
+		lines = append(lines, truncateANSI(line, width))
+	}
+	return lines
+}
 
-		tags := make([]string, 0, len(s.Tags))
-		for t, tag := range s.Tags {
-			if match.field == matchTag && t == match.tag {
-				tags = append(tags, mutedStyle.Render("#")+highlight(tag, match.positions, mutedStyle))
-			} else {
-				tags = append(tags, mutedStyle.Render("#"+tag))
-			}
-		}
+// serverLine renders a server row, after the pointer.
+func (m serverSelectionModel) serverLine(row selectionRow, nameWidth int) string {
+	match := m.matches[row.match]
+	s := m.servers[match.index]
 
-		line := fmt.Sprintf("%s%s %s %s  %s", pointer, check, toggle, name, host)
-		if n := m.countTasks(s); n < len(s.Tasks) {
-			line += "  " + skipStyle.Render(fmt.Sprintf("%d/%d tasks", n, len(s.Tasks)))
-		}
-		if len(tags) > 0 {
-			line += "  " + strings.Join(tags, " ")
-		}
-		lines = append(lines, line)
+	check := mutedStyle.Render("[ ]")
+	if m.selected[s.Name] {
+		check = okStyle.Render("[x]")
 	}
 
-	lines = append(lines, "", m.runButton()+"  "+m.runAllButton()+mutedStyle.Render("  enter / alt+a"), "")
-	lines = append(lines, mutedStyle.Render("↑/↓ move · space select · →/← tasks · ctrl-k help · enter run · esc quit"))
-	return strings.Join(lines, "\n")
+	name := serverStyle.Render(s.Name)
+	host := mutedStyle.Render(s.Address())
+	switch match.field {
+	case matchName:
+		name = highlight(s.Name, match.positions, serverStyle)
+	case matchHost:
+		host = highlight(s.Address(), match.positions, mutedStyle)
+	}
+	name += strings.Repeat(" ", nameWidth-len([]rune(s.Name)))
+
+	toggle := mutedStyle.Render("▸")
+	if m.expanded[s.Name] {
+		toggle = mutedStyle.Render("▾")
+	}
+
+	tags := make([]string, 0, len(s.Tags))
+	for t, tag := range s.Tags {
+		if match.field == matchTag && t == match.tag {
+			tags = append(tags, mutedStyle.Render("#")+highlight(tag, match.positions, mutedStyle))
+		} else {
+			tags = append(tags, mutedStyle.Render("#"+tag))
+		}
+	}
+
+	line := fmt.Sprintf("%s %s %s  %s", check, toggle, name, host)
+	if n := m.countTasks(s); n < len(s.Tasks) {
+		line += "  " + skipStyle.Render(fmt.Sprintf("%d/%d tasks", n, len(s.Tasks)))
+	}
+	if len(tags) > 0 {
+		line += "  " + strings.Join(tags, " ")
+	}
+	return line
 }
 
 // itemLine renders a group or tag, with how many of its servers are selected:
@@ -1372,7 +1457,7 @@ func plural(n int, noun string) string {
 	return fmt.Sprintf("%d %ss", n, noun)
 }
 
-// taskLine renders one of an expanded server's tasks.
+// taskLine renders one of a server's tasks in the tasks pane, after the pointer.
 func (m serverSelectionModel) taskLine(s gorun.Server, t gorun.Task) string {
 	check := mutedStyle.Render("[ ]")
 	name := mutedStyle.Render(t.Name)
@@ -1381,7 +1466,7 @@ func (m serverSelectionModel) taskLine(s gorun.Server, t gorun.Task) string {
 		name = t.Name
 	}
 
-	line := "      " + check + " " + name
+	line := check + " " + name
 	if t.Description != "" {
 		line += mutedStyle.Render(" — " + t.Description)
 	}
@@ -1443,15 +1528,17 @@ func (m serverSelectionModel) helpContent() string {
 	}{
 		{"Navigation", [][2]string{
 			{"↑/↓", "move cursor"},
-			{"→ / ←", "show/hide a server's tasks; expand/collapse groups & tags"},
+			{"→ / ←", "show/hide a server's details and env vars; expand/collapse groups & tags"},
+			{"tab", "switch between the servers and tasks panes"},
 			{"enter", "run (or expand a group/tag section)"},
 			{"shift+tab", "next tab"},
 			{"ctrl+s/t/b/g/h", "jump to Servers/Tasks/Bundles/Groups/History"},
 		}},
 		{"Selection", [][2]string{
-			{"space, tab", "select/toggle the row under the cursor"},
-			{"alt+e / alt+E", "expand one/all servers"},
-			{"alt+c / alt+C", "collapse one/all servers"},
+			{"space", "select/toggle the row under the cursor"},
+			{"alt+v", "tasks pane: the server under the cursor / every server"},
+			{"alt+e / alt+E", "show details of one/all servers"},
+			{"alt+c / alt+C", "hide details of one/all servers"},
 			{"alt+a", "select all servers and run"},
 			{"ctrl+a", "select all shown servers"},
 			{"ctrl+d", "clear selection"},

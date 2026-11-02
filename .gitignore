@@ -46,3 +46,4 @@ bin
 builds
 dist/
 gorun_bin
+.superpowers/

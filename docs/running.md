@@ -29,14 +29,19 @@ Unless you pass `--run`, every run starts in the picker. **Nothing runs until yo
 1. **Select servers** with **space** (or a click). Selecting a **group** or **tag** selects all of
    its servers.
 2. **Type to filter.** The match is fuzzy: `wp` finds `web-prod-1`.
-3. **Press → on a server** to see its tasks. Untick a task to leave it out of this run; tasks that
-   need it are unticked too.
+3. **Check the tasks.** The right-hand pane lists the tasks of the server under the cursor. Press
+   **tab** to move into it, then untick a task to leave it out of this run; tasks that need it are
+   unticked too. **alt+v** lists every server's tasks at once instead.
 4. **Press enter** to run.
 
 ![the picker filtered to the web servers](screenshot-picker-filter.png)
 
 A checkbox shows `[x]` when all of a group's servers are selected, `[-]` when some are, and `[ ]`
 when none are. A server's row shows how many of its tasks are ticked, e.g. `11/15 tasks`.
+
+Press **→** on a server to see its details: hostname, SSH user, port, identity file, groups and
+tags. A password shows as `********`. Env vars are listed in a table that opens with space or
+enter.
 
 The other tabs, **Tasks**, **Bundles** and **Groups**, let you browse what's in the Gorunfile.
 **History** shows [past runs](#history). Press **shift+tab** to move between tabs, and
@@ -49,11 +54,12 @@ opens a picker with just those servers and tasks.
 |---|---|
 | type, backspace | edit the filter (ctrl+w deletes a word, ctrl+u clears it) |
 | ↑ / ↓, mouse wheel | move |
-| space, click | select the row under the cursor |
-| tab | select, then move down |
-| → / ← | show / hide a server's tasks |
-| alt+e / alt+E | show the tasks of this server / every server |
-| alt+c / alt+C | hide the tasks of this server / every server |
+| space, click | select the row under the cursor (in the tasks pane, tick or untick a task) |
+| tab | switch between the servers and tasks panes |
+| → / ← | show / hide a server's details; open / close its env vars |
+| alt+v | tasks pane: the server under the cursor / every server |
+| alt+e / alt+E | show the details of this server / every server |
+| alt+c / alt+C | hide the details of this server / every server |
 | alt+t / ctrl+x | tick / untick all of this server's tasks |
 | ctrl+a | select every server shown (again to deselect) |
 | ctrl+d | clear the whole selection |

@@ -1,15 +1,92 @@
-// Package gorun runs tasks defined in a Gorunfile across one or more servers over SSH.
+// Package gorun runs plain shell commands, defined in a Gorunfile, on one or more servers
+// over SSH or on the local machine, in parallel.
 //
-// A Gorunfile is TOML: a library of named tasks (a command, a command file or template,
-// and optional file copies, sudo, envvars and dependencies) and the servers that run them.
-// The gorun command in ./cmd drives this package with a TUI or plain output; use the package
-// directly to run deployments from your own code:
+// The gorun command (in ./cmd) is a thin layer over this package: it adds the picker, the live
+// view and the history. Use the package directly to run Gorunfiles from your own code.
 //
-//	cfg := gorun.Config{}
-//	if err := cfg.Load(r); err != nil {
+// To learn how to write a Gorunfile, start with the tutorial:
+// https://github.com/jenmud/gorun/blob/master/docs/tutorial.md
+//
+// # Gorunfiles
+//
+// A Gorunfile is TOML. It has a library of named tasks ([Task]): a shell command, script or
+// template, with optional file copies, sudo, env vars, dependencies, a timeout and retries. Servers
+// ([Server]) pick tasks from the library by name, directly or through named task lists ([Bundle])
+// and shared settings ([ServerGroup]). A server with SSH settings runs its tasks over SSH; one
+// without them runs on the local machine.
+//
+//	title = "Provision app servers"
+//
+//	[tasks.hello]
+//	cmd_template = "echo hello from {{.Name}}"
+//
+//	[servers]
+//	tasks = ["hello"]
+//
+//	[servers.hosts.web-01]
+//	hostname = "web-01.example.com"
+//	    [servers.hosts.web-01.ssh]
+//	    username = "deploy"
+//
+// Every option is described in
+// https://github.com/jenmud/gorun/blob/master/docs/gorunfile.md.
+//
+// # Loading and running
+//
+// [Config.Load] reads and validates a Gorunfile, and [Config.ResolvePaths] makes its relative
+// paths relative to the file. [Config.Run] then runs every server's tasks, or just the servers
+// you pass it:
+//
+//	f, err := os.Open("Gorunfile")
+//	if err != nil {
 //		return err
 //	}
-//	cfg.ResolvePaths(filepath.Dir(path))
-//	cfg.OnEvent = func(event any) { /* PlanEvent, TaskEvent, ... */ }
+//	defer f.Close()
+//
+//	var cfg gorun.Config
+//	if err := cfg.Load(f); err != nil {
+//		return err
+//	}
+//	cfg.ResolvePaths(filepath.Dir(f.Name()))
 //	return cfg.Run(ctx)
+//
+// # Choosing servers and tasks
+//
+// [Config.SelectServers] picks servers the way the --server, --tag and --group flags do, and
+// [Config.ExpandTaskPatterns] expands task names, globs and "@bundle" references the way --task
+// does:
+//
+//	servers, err := cfg.SelectServers(gorun.ServerFilter{Tags: []string{"web"}})
+//	if err != nil {
+//		return err
+//	}
+//	tasks, err := cfg.ExpandTaskPatterns("@baseline")
+//	if err != nil {
+//		return err
+//	}
+//	for i := range servers {
+//		servers[i].TaskNames = tasks
+//	}
+//	return cfg.Run(ctx, servers...)
+//
+// [Config.ServersPipeline] returns every server with its task list resolved, as
+// gorun --list-servers shows it.
+//
+// # Running single tasks and running locally
+//
+// [Config.RunTask] runs one task (with its dependencies) on some or all servers, whether or not
+// they normally run it. [Config.RunLocal] runs tasks on this machine without any SSH server, and
+// [LocalServer] and [Config.LocalServer] give a [Server] that runs locally.
+//
+// # Events
+//
+// Set [Config.OnEvent] to follow a run as it happens. It receives a [ProcessStartedEvent], a
+// [PlanEvent] per server, a [TaskEvent] for every change in a task's [TaskState], a
+// [ServerErrorEvent] when a server can't run, and a [ProcessFinishedEvent] at the end:
+//
+//	cfg.OnEvent = func(event any) {
+//		if ev, ok := event.(gorun.TaskEvent); ok && ev.State != gorun.TaskRunning {
+//			fmt.Printf("%s: %s exit %d\n", ev.Server, ev.Task, ev.ExitCode)
+//		}
+//	}
 package gorun

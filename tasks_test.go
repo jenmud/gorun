@@ -748,3 +748,25 @@ func TestTaskEventCommandIsAsWritten(t *testing.T) {
 		}
 	}
 }
+
+func TestTaskVarsInTemplates(t *testing.T) {
+	task := Task{
+		Name:        "sites",
+		CmdTemplate: "{{.Name}} {{range .vars.sites}}{{.host}}:{{.port}} {{end}}{{.Vars.region}}",
+		Vars: map[string]any{
+			"region": "eu-west-1",
+			"sites": []map[string]any{
+				{"host": "a.example.com", "port": 8080},
+				{"host": "b.example.com", "port": 9090},
+			},
+		},
+	}
+
+	got, err := task.CommandFor(&Server{Name: "web-1"})
+	if err != nil {
+		t.Fatalf("CommandFor: %v", err)
+	}
+	if want := "web-1 a.example.com:8080 b.example.com:9090 eu-west-1"; got != want {
+		t.Errorf("CommandFor() = %q, want %q", got, want)
+	}
+}

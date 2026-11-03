@@ -69,6 +69,7 @@ type Config struct {
 	MaxParallel     int               `toml:"max_parallel"`      // 0 means run every selected host at once
 	MaxTaskParallel int               `toml:"max_task_parallel"` // 0 (default) = one at a time; -1 = all at once
 	EnvVars         map[string]string `toml:"envvars"`
+	Vars            map[string]any    `toml:"vars,omitempty"`
 	SSH             SSH               `toml:"ssh"`
 
 	// Tasks is the task library, keyed by task name. Servers pick tasks from it by name.
@@ -103,6 +104,18 @@ type configFile struct {
 	} `toml:"servers"`
 }
 
+// isVarsNestedKey reports whether key sits inside any free-form vars table
+// ([...vars] or a nested key beneath it). BurntSushi/toml fills the Vars map but
+// still lists the nested keys as undecoded, so they must not be reported as typos.
+func isVarsNestedKey(key toml.Key) bool {
+	for i, seg := range key {
+		if seg == "vars" && i < len(key)-1 {
+			return true
+		}
+	}
+	return false
+}
+
 // Load reads and updates the config.
 func (c *Config) Load(r io.Reader) error {
 	f := configFile{Config: *c}
@@ -116,9 +129,14 @@ func (c *Config) Load(r io.Reader) error {
 	if undecoded := md.Undecoded(); len(undecoded) > 0 {
 		keys := []string{}
 		for _, key := range undecoded {
+			if isVarsNestedKey(key) {
+				continue
+			}
 			keys = append(keys, key.String())
 		}
-		return fmt.Errorf("error with loading config: unknown keys: %s", strings.Join(keys, ", "))
+		if len(keys) > 0 {
+			return fmt.Errorf("error with loading config: unknown keys: %s", strings.Join(keys, ", "))
+		}
 	}
 
 	*c = f.Config
@@ -606,6 +624,17 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 	// values expand $VAR from gorun's environment. Tasks share their library map
 	// between servers, so each one gets a fresh map.
 	for name, server := range pipeline {
+		// global vars are the lowest layer for server vars, mirroring envvars
+		if len(c.Vars) > 0 {
+			if server.Vars == nil {
+				server.Vars = map[string]any{}
+			}
+			for k, v := range c.Vars {
+				if _, ok := server.Vars[k]; !ok {
+					server.Vars[k] = v
+				}
+			}
+		}
 		for i := range server.Tasks {
 			env := map[string]string{}
 			for _, layer := range []map[string]string{c.EnvVars, server.EnvVars, server.Tasks[i].EnvVars} {

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"sync"
 	"text/template"
@@ -72,6 +73,7 @@ type Task struct {
 	Upload          []Copy            `toml:"upload,omitempty"`
 	Files           []Copy            `toml:"files,omitempty"`
 	EnvVars         map[string]string `toml:"envvars"`
+	Vars            map[string]any    `toml:"vars,omitempty"`
 	DependsOn       []string          `toml:"depends_on"`
 	Shell           string            `toml:"shell"`
 	Timeout         time.Duration     `toml:"timeout,omitempty"`
@@ -141,7 +143,7 @@ func (t *Task) CommandFor(server any) (string, error) {
 			return "", fmt.Errorf("failed to parse command template for task %s: %w", t.Name, err)
 		}
 		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, server); err != nil {
+		if err := tmpl.Execute(&buf, t.templateData(server)); err != nil {
 			return "", fmt.Errorf("failed to execute command template for task %s: %w", t.Name, err)
 		}
 		return buf.String(), nil
@@ -157,7 +159,7 @@ func (t *Task) CommandFor(server any) (string, error) {
 			return "", fmt.Errorf("failed to parse command template file %s: %w", t.CmdTemplateFile, err)
 		}
 		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, server); err != nil {
+		if err := tmpl.Execute(&buf, t.templateData(server)); err != nil {
 			return "", fmt.Errorf("failed to execute command template file %s: %w", t.CmdTemplateFile, err)
 		}
 		return buf.String(), nil
@@ -177,6 +179,50 @@ func (t *Task) CommandFor(server any) (string, error) {
 	}
 
 	return "", fmt.Errorf("task %s has no command specified", t.Name)
+}
+
+// templateData is the value handed to cmd_template and copy templates. It keeps the
+// server's fields at the top level (so existing templates keep working) and adds
+// the task's vars under both "Vars" and "vars".
+func (t *Task) templateData(server any) map[string]any {
+	data := map[string]any{}
+	switch v := server.(type) {
+	case *Server:
+		if v != nil {
+			rv := reflect.ValueOf(*v)
+			rt := rv.Type()
+			for i := 0; i < rt.NumField(); i++ {
+				f := rt.Field(i)
+				if !f.IsExported() {
+					continue
+				}
+				data[f.Name] = rv.Field(i).Interface()
+			}
+			data["Server"] = v
+			data["IsLocal"] = v.IsLocal()
+			data["Address"] = v.Address()
+		}
+	case Server:
+		rv := reflect.ValueOf(v)
+		rt := rv.Type()
+		for i := 0; i < rt.NumField(); i++ {
+			f := rt.Field(i)
+			if !f.IsExported() {
+				continue
+			}
+			data[f.Name] = rv.Field(i).Interface()
+		}
+		data["Server"] = v
+		data["IsLocal"] = v.IsLocal()
+		data["Address"] = v.Address()
+	}
+	vars := t.Vars
+	if vars == nil {
+		vars = map[string]any{}
+	}
+	data["Vars"] = vars
+	data["vars"] = vars
+	return data
 }
 
 // hasCommand reports whether the task runs a command (as opposed to only copying files).

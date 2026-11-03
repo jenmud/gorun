@@ -8,15 +8,16 @@ New to gorun? Start with the [tutorial](tutorial.md). This page explains every o
 
 - [The shape of a Gorunfile](#the-shape-of-a-gorunfile)
 - [Tasks](#tasks)
-  - [Commands](#commands) · [Templates](#templates) · [Copying files](#copying-files) · [Dependencies](#dependencies)
+  - [Commands](#commands) · [Templates](#templates) · [Task variables](#task-variables) · [Copying files](#copying-files) · [Dependencies](#dependencies)
   - [Environment variables and secrets](#environment-variables-and-secrets) · [Timeouts](#timeouts) · [Retries](#retries) · [Descriptions and rerun safety](#descriptions-and-rerun-safety) · [Local-only tasks](#local-only-tasks)
 - [Servers](#servers)
-  - [SSH or local](#ssh-or-local) · [Choosing a server's tasks](#choosing-a-servers-tasks)
+  - [SSH or local](#ssh-or-local) · [Choosing a server's tasks](#choosing-a-servers-tasks) · [Server variables](#server-variables)
 - [Bundles](#bundles)
 - [Server groups and tags](#server-groups-and-tags)
 - [How settings combine](#how-settings-combine)
 - [Parallelism](#parallelism)
 - [Paths and mistakes](#paths-and-mistakes)
+- [Appendix: keys by section](#appendix-keys-by-section)
 
 ## The shape of a Gorunfile
 
@@ -86,11 +87,72 @@ Templates are [Go templates](https://pkg.go.dev/text/template) that see the serv
 | `{{.SSH.Port}}` | its SSH port |
 | `{{.Tags}}` | its tags, e.g. `{{range .Tags}}{{.}} {{end}}` |
 | `{{index .EnvVars "REGION"}}` | one of its [env vars](#environment-variables-and-secrets), including its groups' |
+| `{{.Vars}}` / `{{.vars}}` | the task's own [variables](#task-variables), e.g. `{{.vars.port}}` |
 
 ```toml
 [tasks.greet]
 cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}'"
 ```
+
+### Task variables
+
+A task can carry its own data in `[tasks.<name>.vars]` (or inline as `vars = { ... }`), which its
+templates read as `{{.vars}}` or `{{.Vars}}`. A value can be a string, a number, a boolean, a
+nested table or a list of tables, so a template can loop over a structure:
+
+```toml
+[tasks.caddyfile]
+cmd = "cp /tmp/myapp.Caddyfile /opt/myapp/Caddyfile"
+sudo = true
+[[tasks.caddyfile.copy]]
+src_template = "./templates/Caddyfile.tmpl"
+dst = "/tmp/myapp.Caddyfile"
+
+[tasks.caddyfile.vars]
+port = 8080
+
+[[tasks.caddyfile.vars.redirects]]
+from = "/docs"
+to = "https://docs.example.com"
+```
+
+`templates/Caddyfile.tmpl`:
+
+```
+{{.Hostname}} {
+	reverse_proxy app:{{.vars.port}}
+{{- range .vars.redirects}}
+	redir {{.from}} {{.to}}
+{{- end}}
+}
+```
+
+Inside a `range`, `.` is the item being looped over and `$` is still the whole template data, so
+`{{$.vars.port}}` reaches the port from inside the loop.
+
+`vars` belong to the task, so they are the same wherever it runs, and they reach that task's
+templates only — `cmd_template`, `cmd_template_file` and a copy's `src_template` — never the
+command's environment. For a value the command needs, a secret, or anything that differs per
+server or group, use [envvars](#environment-variables-and-secrets) and read it in a template with
+`{{index .EnvVars "NAME"}}`.
+
+**Server vars.** Templates can also read data that belongs to the host rather than the task. Put it
+in `vars` on the global config, a server group, a server, or a bundle, and read it as
+`{{.Server.Vars.KEY}}`:
+
+```toml
+[servers.hosts.web-01]
+vars = { port = 8080 }
+```
+
+```
+{{.Hostname}} listens on {{.Server.Vars.port}}
+```
+
+These layers merge the same way [envvars](#environment-variables-and-secrets) do — global, then
+each group, then the bundle, then the host, later ones winning — and a task's own `vars`
+(`{{.vars}}`) stay separate, so the two never clash. Use server vars for host-specific template
+data; use task vars for data that belongs to the task and is the same everywhere it runs.
 
 ### Copying files
 
@@ -268,6 +330,57 @@ hostname = "db-01.internal"
 `gorun Gorunfile --list-servers` shows every server's final list. The exact rules are under
 [how settings combine](#how-settings-combine).
 
+### Server variables
+
+A server, its group, the bundle it pulls tasks from, or the whole Gorunfile can carry template
+data that belongs to the host rather than to a task. Put it in `vars` and read it in any template
+as `{{.Server.Vars.KEY}}`:
+
+```toml
+vars = { region = "eu-west-1" }          # global: every server
+
+[server_groups.app]
+vars = { port = 8080 }                  # group: its members
+
+[bundles.base]
+vars = { tier = "web" }                  # bundle: servers that pull it in
+
+[servers.hosts.web-01]
+vars = { port = 9090, redirects = ["docs"] }   # host: wins over the group
+```
+
+```toml
+[tasks.show]
+cmd_template = "echo {{.Hostname}} {{.Server.Vars.region}} {{.Server.Vars.port}}"
+```
+
+The layers merge the same way [envvars](#environment-variables-and-secrets) do — global, then each
+group in order, then the bundle, then the host, later ones winning — so a host overrides its
+group. A value can be a string, a number, a boolean, a nested table or a list of tables, and it
+can be nested the same way task vars can:
+
+```toml
+[servers.hosts.web-01.vars]
+port = 9090
+
+[[servers.hosts.web-01.vars.redirects]]
+from = "/docs"
+to = "https://docs.example.com"
+```
+
+```
+{{range .Server.Vars.redirects}}
+redir {{.from}} {{.to}}
+{{end}}
+```
+
+Server vars are read-only template data: they reach `cmd_template`, `cmd_template_file` and a copy's
+`src_template`, never the command's environment, and they never override a task's own `vars`
+(`{{.vars}}`), which is a separate namespace. Use them for host-specific template data; use
+[task vars](#task-variables) for data that belongs to the task and is the same everywhere it
+runs, and [envvars](#environment-variables-and-secrets) for anything the command itself needs or
+that is a secret.
+
 ## Bundles
 
 A bundle is a name for a list of tasks. Use it as `@name` anywhere a task list goes: `[servers]
@@ -354,3 +467,87 @@ Both can be set at the top of the file; `max_task_parallel` can also be set per 
   tasks depends on.
 - An unknown task in a server's own list is only reported for the servers you're running on, so
   `--server` can still run the others.
+
+## Appendix: keys by section
+
+Every key, grouped by the table it belongs to. `gorun -dump` prints the same list in place.
+
+### Top level
+
+| Key | Description |
+|---|---|
+| `title` | shown in the picker, the TUI and the history |
+| `log_level` | `debug`, `info`, `warn` or `error`; servers and tasks inherit it |
+| `max_parallel` | servers at once; `0` (default) means all |
+| `max_task_parallel` | tasks at once per host; `0` (default) means one at a time, `-1` means all |
+| `envvars` | env vars for every task |
+| `vars` | template variables for every task on this run (a task's own vars win) |
+| `[ssh]` | only `config_file` (or `config`) is used |
+
+### `[tasks.<name>]`
+
+| Key | Description |
+|---|---|
+| `cmd`, `cmd_file`, `cmd_template`, `cmd_template_file` | the command (pick one) |
+| `copy` (also `copies`, `upload`, `files`) | file copies |
+| `depends_on` | tasks that must run first |
+| `sudo` | run with `sudo -n` |
+| `shell` | shell for local hosts (default `sh -c`) |
+| `envvars` | env vars for this task |
+| `vars` | template variables for this task (map, may nest) |
+| `log_level` | log level for this task |
+| `timeout` | Go duration, default `30m` |
+| `retries`, `retry_delay`, `retry_unsafe` | retries |
+| `description`, `details`, `rerun` | descriptions and rerun safety |
+| `local` | only run this task on local (no-SSH) servers |
+
+### `[tasks.<name>.copy]` / `[[tasks.<name>.copy]]`
+
+| Key | Description |
+|---|---|
+| `src` | a file, or a directory copied recursively |
+| `src_file` | alias for `src` |
+| `src_template` (also `src_tmpl`, `template`) | a template rendered for each server |
+| `content` | inline text written to `dst` |
+| `dst` (also `dst_path`, `dest`) | destination path on the server |
+| `dir` | destination directory (keeps the source file name) |
+| `mode` (also `perm`) | file mode, e.g. `0644` |
+
+### `[bundles.<name>]`
+
+| Key | Description |
+|---|---|
+| `description` | one line, shown in lists |
+| `tasks` | task names and `@bundles` |
+| `vars` | template variables for the tasks it pulls in |
+
+### `[server_groups.<name>]`
+
+| Key | Description |
+|---|---|
+| `tags` | tags for selection |
+| `tasks` | tasks for members |
+| `envvars` | env vars for every task |
+| `vars` | template variables (merged into the server) |
+| `log_level` | log level |
+| `[ssh]` | `username`, `port`, `identityfile`, `password`, `config_file` |
+
+### `[servers]`
+
+| Key | Description |
+|---|---|
+| `tasks` | tasks every host runs |
+
+### `[servers.hosts.<name>]`
+
+| Key | Description |
+|---|---|
+| `hostname` | address to connect to (the name is used when unset) |
+| `groups` | server groups to join, in order |
+| `tags` | tags for selection |
+| `tasks` | replaces the global and group task lists |
+| `add_tasks`, `skip_tasks` | append to / remove from the task list |
+| `envvars` | env vars for every task on this host |
+| `vars` | template variables for this host (read as `{{.Server.Vars.KEY}}`) |
+| `log_level` | log level for this host |
+| `[ssh]` | `username`, `port`, `identityfile`, `password`, `config_file` |

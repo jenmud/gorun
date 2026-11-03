@@ -1,3 +1,6 @@
 {{.Hostname}} {
-	reverse_proxy app:8080
+	reverse_proxy app:{{.vars.port}}
+{{- range .vars.redirects}}
+	redir {{.from}} {{.to}}
+{{- end}}
 }

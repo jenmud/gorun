@@ -76,6 +76,7 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | `max_parallel` | servers at once; `0` (default) means all |
 | `max_task_parallel` | tasks at once per host; `0` (default) means one at a time, `-1` means all |
 | `envvars` | env vars for every task |
+| `vars` | template variables for every task on this run (a task's own vars win) |
 | `[ssh]` | only `config_file` (or `config`) is used: the SSH config every host reads (and it makes every host use SSH) |
 
 **`[tasks.<name>]`**
@@ -88,15 +89,16 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | `sudo` | run with `sudo -n` |
 | `shell` | shell for local hosts (default `sh -c`) |
 | `envvars` | env vars for this task |
+| `vars` | [template variables](gorunfile.md#task-variables) for this task: a map, which may hold nested tables and lists |
 | `log_level` | log level for this task |
 | `timeout` | Go duration, default `30m` |
 | `retries`, `retry_delay`, `retry_unsafe` | [retries](gorunfile.md#retries) |
 | `description`, `details`, `rerun` | [descriptions and rerun safety](gorunfile.md#descriptions-and-rerun-safety) |
 | `local` | only run this task on local (no-SSH) servers |
 
-**`[bundles.<name>]`**: `tasks` (task names and `@bundles`) and `description`.
+**`[bundles.<name>]`**: `tasks` (task names and `@bundles`), `description` and `vars` (template variables for the tasks it pulls in).
 
-**`[server_groups.<name>]`**: `tags`, `tasks`, `envvars`, `log_level` and an `ssh` table.
+**`[server_groups.<name>]`**: `tags`, `tasks`, `envvars`, `vars`, `log_level` and an `ssh` table.
 
 **`[servers]`**: `tasks`, the list every host runs.
 
@@ -110,6 +112,7 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | `tasks` | replaces the global and group task lists |
 | `add_tasks`, `skip_tasks` | append to / remove from the task list |
 | `envvars` | env vars for every task on this host |
+| `vars` | template variables for this host (read as `{{.Server.Vars.KEY}}`) |
 | `log_level` | log level for this host |
 | `ssh` | `username`, `port`, `identityfile`, `password`, `config_file` |
 

@@ -15,9 +15,10 @@ const BundlePrefix = "@"
 // Bundle is a named list of tasks, defined as [bundles.<name>]. Task lists refer to it
 // as "@<name>", and it expands to its tasks in order. A bundle may include other bundles.
 type Bundle struct {
-	Name        string   `toml:"-"` // the <name> in [bundles.<name>]
-	Description string   `toml:"description"`
-	Tasks       []string `toml:"tasks"`
+	Name        string         `toml:"-"` // the <name> in [bundles.<name>]
+	Description string         `toml:"description"`
+	Tasks       []string       `toml:"tasks"`
+	Vars        map[string]any `toml:"vars,omitempty"`
 }
 
 // ServerGroup holds defaults shared by the servers that join it, defined as
@@ -28,6 +29,7 @@ type ServerGroup struct {
 	Tags     []string          `toml:"tags"`
 	Tasks    []string          `toml:"tasks"`
 	EnvVars  map[string]string `toml:"envvars"`
+	Vars     map[string]any    `toml:"vars,omitempty"`
 	SSH      SSH               `toml:"ssh"`
 }
 
@@ -188,12 +190,16 @@ func (c *Config) composeServer(s *Server, globalTasks []string, ownTasks bool) e
 		tags := []string{}
 		sshLayers := []SSH{}
 		env := map[string]string{}
+		vars := map[string]any{}
+		maps.Copy(vars, c.Vars)
 		for _, group := range groups {
 			tags = append(tags, group.Tags...)
 			sshLayers = append(sshLayers, group.SSH)
 			maps.Copy(env, group.EnvVars)
+			maps.Copy(vars, group.Vars)
 		}
 		maps.Copy(env, s.EnvVars)
+		maps.Copy(vars, s.Vars)
 
 		if s.LogLevel == "" {
 			for _, group := range slices.Backward(groups) {
@@ -209,9 +215,24 @@ func (c *Config) composeServer(s *Server, globalTasks []string, ownTasks bool) e
 		if len(env) > 0 {
 			s.EnvVars = env
 		}
+		if len(vars) > 0 {
+			s.Vars = vars
+		}
 	}
 	if len(s.Tags) > 0 {
 		s.Tags = unique(s.Tags)
+	}
+
+	// global vars apply even to servers that join no group
+	if len(c.Vars) > 0 {
+		if s.Vars == nil {
+			s.Vars = map[string]any{}
+		}
+		for k, v := range c.Vars {
+			if _, ok := s.Vars[k]; !ok {
+				s.Vars[k] = v
+			}
+		}
 	}
 
 	refs := []string{}
@@ -239,6 +260,38 @@ func (c *Config) composeServer(s *Server, globalTasks []string, ownTasks bool) e
 	skipped, err := c.ExpandTaskRefs(s.SkipTasks...)
 	if err != nil {
 		return fmt.Errorf("skip_tasks: %w", err)
+	}
+
+	// bundle vars: any bundle a server pulls tasks from contributes its vars,
+	// lowest precedence (group/server vars win).
+	bundleVars := map[string]any{}
+	visited := map[string]bool{}
+	var collectBundleVars func(refs []string)
+	collectBundleVars = func(refs []string) {
+		for _, ref := range refs {
+			name, isBundle := strings.CutPrefix(ref, BundlePrefix)
+			if !isBundle || visited[name] {
+				continue
+			}
+			visited[name] = true
+			if b, ok := c.Bundles[name]; ok {
+				maps.Copy(bundleVars, b.Vars)
+				collectBundleVars(b.Tasks)
+			}
+		}
+	}
+	collectBundleVars(refs)
+	collectBundleVars(s.AddTasks)
+	if len(bundleVars) > 0 {
+		if s.Vars == nil {
+			s.Vars = map[string]any{}
+		}
+		// bundle vars are defaults: only fill keys the server/group did not set
+		for k, v := range bundleVars {
+			if _, ok := s.Vars[k]; !ok {
+				s.Vars[k] = v
+			}
+		}
 	}
 
 	names = unique(append(names, added...))

@@ -45,8 +45,8 @@ each server's progress live.
 - **Parallel.** Every server runs at the same time. A failure stops that server, not the others.
 - **Nothing runs by accident.** You pick servers and tasks in a picker first, and every task has a
   timeout.
-- **Grows with you.** Dependencies, bundles, server groups, tags, templates, file copies,
-  retries and secrets from your environment, when you need them.
+- **Grows with you.** Dependencies, bundles, server groups, tags, templates with per-task
+  variables, file copies, retries and secrets from your environment, when you need them.
 - **Remembers.** Every run is saved, with its commands and output, to look back on later.
 
 **When to use something else:** gorun runs commands; it doesn't enforce state. It has no modules,

@@ -451,7 +451,7 @@ func CopyFiles(client *ssh.Client, server any, task *Task) error {
 				return err
 			}
 			var buf bytes.Buffer
-			if err := tmpl.Execute(&buf, server); err != nil {
+			if err := tmpl.Execute(&buf, task.templateData(server)); err != nil {
 				return err
 			}
 			data = buf.Bytes()

@@ -177,15 +177,62 @@ dst = "/tmp/myapp.Caddyfile"
 
 ```
 {{.Hostname}} {
-	reverse_proxy app:8080
+	reverse_proxy app:{{.vars.port}}
+{{- range .vars.redirects}}
+	redir {{.from}} {{.to}}
+{{- end}}
 }
 ```
 
-On `web-1` that becomes `web-1.example.com { ... }`. Templates can use `{{.Name}}`,
-`{{.Hostname}}`, `{{.Tags}}` and `{{index .EnvVars "NAME"}}`.
+On `web-eu-1` that becomes:
+
+```
+eu-1.example.com {
+	reverse_proxy app:8080
+	redir /docs https://docs.example.com
+}
+```
+
+A template sees the server it is rendered for — `{{.Name}}`, `{{.Hostname}}`, `{{.Tags}}` and
+`{{index .EnvVars "NAME"}}` — plus the task's own **`vars`**.
+
+**vars: what the template needs that isn't the server.** `{{.Hostname}}` answers *which server is
+this?* It cannot answer *what port does the app listen on?* or *which redirects should this site
+add?* Those belong to the task: they are the same on every host that runs it, and they have
+nothing to do with the server's identity. Put them in `[tasks.<name>.vars]`:
+
+```toml
+[tasks.caddyfile.vars]
+port = 8080
+
+[[tasks.caddyfile.vars.redirects]]
+from = "/docs"
+to = "https://docs.example.com"
+```
+
+A value in `vars` can be a string, a number, a boolean, a nested table, or a list of tables (the
+`[[tasks.caddyfile.vars.redirects]]` blocks above), so a template can loop over a whole structure
+with `range`. Inside a `range`, `.` is the item being looped over, and `$` still refers to the
+whole template data — so `{{$.vars.port}}` reaches the port from inside the loop.
+
+**Which one do I want?** The three overlap, and picking the wrong one is the usual source of
+confusion:
+
+| Put it in | When | Read it as |
+|---|---|---|
+| the server | the value comes from the host: name, hostname, tags | `{{.Hostname}}`, `{{.Tags}}` |
+| `envvars` | the **command** needs it (`$APP_VERSION`), it is a secret, or it differs per server or group | `$APP_VERSION` in the command, `{{index .EnvVars "APP_VERSION"}}` in a template |
+| `vars` | only a template needs it, and it is the same wherever the task runs | `{{.vars.port}}`, `{{range .vars.redirects}}` |
+
+That is why `docker-compose.yml.tmpl` reads `{{index .EnvVars "APP_VERSION"}}` and not a var: the
+image tag differs between production and staging, and staging overrides it in
+[section 5](#5-give-each-server-its-own-settings-and-keep-secrets-out). A task's `vars` cannot
+differ per server — they belong to the task — so a per-server value has to go in `envvars`
+instead, or in the **server's** own `vars` (read as `{{.Server.Vars.KEY}}`), which merge the same
+way envvars do: global, then group, then host.
 
 The other kinds of copy: `src` copies a file, or a whole directory, as it is, and `content` writes
-inline text.
+inline text. Only `src_template` is rendered; `content` is copied literally.
 
 ## 5. Give each server its own settings, and keep secrets out
 

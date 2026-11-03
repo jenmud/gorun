@@ -55,6 +55,12 @@ depends_on = ["app-dirs"]
 [[tasks.caddyfile.copy]]
 src_template = "./templates/Caddyfile.tmpl"
 dst = "/tmp/myapp.Caddyfile"
+# vars feed the template: the app's port and the redirects every server adds
+[tasks.caddyfile.vars]
+port = 8080
+[[tasks.caddyfile.vars.redirects]]
+from = "/docs"
+to = "https://docs.example.com"
 
 [tasks.compose-file]
 description = "Render docker-compose.yml for this server and install it"

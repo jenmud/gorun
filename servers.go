@@ -26,6 +26,10 @@ type Server struct {
 	// envvars; a task's own envvars still win.
 	EnvVars map[string]string `toml:"envvars"`
 
+	// Vars are template variables for this server (and its tasks). Load merges in its
+	// groups' vars; a task's own vars still win in its templates.
+	Vars map[string]any `toml:"vars,omitempty"`
+
 	// AddTasks are appended to the server's task list and SkipTasks removed from it.
 	AddTasks  []string `toml:"add_tasks"`
 	SkipTasks []string `toml:"skip_tasks"`

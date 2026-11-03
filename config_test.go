@@ -242,3 +242,34 @@ func TestConfig_Load_Errors(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_Load_TaskVars(t *testing.T) {
+	gorunfile := `
+[tasks.sites]
+cmd_template = "echo {{range .vars.sites}}{{.host}} {{end}}"
+
+[tasks.sites.vars]
+region = "eu-west-1"
+
+[[tasks.sites.vars.sites]]
+host = "a.example.com"
+port = 8080
+
+[[tasks.sites.vars.sites]]
+host = "b.example.com"
+port = 9090
+`
+	var c Config
+	if err := c.Load(strings.NewReader(gorunfile)); err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	task := c.Tasks["sites"]
+	got, err := task.CommandFor(nil)
+	if err != nil {
+		t.Fatalf("CommandFor: %v", err)
+	}
+	if want := "echo a.example.com b.example.com "; got != want {
+		t.Errorf("rendered command = %q, want %q", got, want)
+	}
+}

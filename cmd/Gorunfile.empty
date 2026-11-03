@@ -13,6 +13,7 @@ log_level = "info"                # debug | info | warn | error; servers and tas
 # max_parallel = 4                # hosts at once; 0 (default) = all; -parallel N overrides
 # max_task_parallel = -1            # tasks at once per host; 0 (default) = one at a time, -1 = all
 envvars = { APP_ENV = "development" }   # exported to every task (a task's own envvars win)
+# vars = { region = "home" }             # template data for every task on this run (a task's own vars win)
 
 # Global SSH settings: only config_file is used. Setting it gives every host SSH settings,
 # so hosts without their own (like localhost below) would run over SSH too. Put shared
@@ -55,6 +56,8 @@ rerun = "safe"
 # retry_unsafe = false            # allow retries of a rerun = "unsafe" task
 # local = true                   # only run this task on local (no-SSH) servers
 # envvars = { NGINX_PORT = "8080" }
+# vars = { port = 8080 }          # template data for this task only: {{.vars.port}}
+#                                 # may nest: [[tasks.example.vars.sites]] is a list
 #
 # [[tasks.example.copy]]          # copies run before the command
 # src = "./files/nginx.conf"      # a file, or a directory (copied recursively)
@@ -72,6 +75,7 @@ rerun = "safe"
 [bundles.base]
 description = "What every server gets"
 tasks = ["hello", "show-env"]     # tasks and/or other "@bundles"
+# vars = { port = 8080 }              # template data for this bundle's tasks
 
 #
 # Server groups: defaults shared by the hosts that list them in `groups`. Later groups
@@ -89,6 +93,7 @@ envvars = { REGION = "home" }
 # tasks = ["@base"]
 # log_level = "warn"
 # envvars = { APP_ENV = "production" }
+# vars = { region = "eu-west-1" }
 #   [server_groups.prod.ssh]
 #   username = "deploy"
 #   identityfile = "~/.ssh/id_ed25519"
@@ -114,6 +119,7 @@ tags = ["dev"]
 # add_tasks = ["example"]         # appended to the list
 # skip_tasks = ["show-env"]       # removed from the list
 # envvars = { REGION = "eu-west-1" }
+# vars = { region = "eu-west-1" }
 # log_level = "info"
 #   [servers.hosts.web-01.ssh]    # fills in what the groups don't set
 #   username = "root"

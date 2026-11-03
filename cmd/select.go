@@ -114,6 +114,12 @@ type serverSelectionModel struct {
 	tasks   *treeModel
 	bundles *treeModel
 
+	// the Bundles tab's checked bundles, and what they replace the servers' own
+	// pipelines with while any are checked
+	cfg             *gorun.Config
+	baseServers     []gorun.Server
+	selectedBundles map[string]bool
+
 	confirmed bool
 	quitting  bool
 }
@@ -132,6 +138,11 @@ var tabNames = map[int]string{tabServers: "Servers", tabTasks: "Tasks", tabBundl
 // withLists adds Tasks and Bundles tabs browsing cfg's tasks and bundles, like
 // --list-tasks and --list-bundles do.
 func (m serverSelectionModel) withLists(cfg *gorun.Config) serverSelectionModel {
+	m.cfg = cfg
+	m.baseServers = slices.Clone(m.servers)
+	if m.selectedBundles == nil {
+		m.selectedBundles = map[string]bool{}
+	}
 	if nodes := taskTreeNodes(cfg, nil); len(nodes) > 0 {
 		expandAll(nodes)
 		t := newTreeModel(m.title, "tasks", nodes)
@@ -142,6 +153,14 @@ func (m serverSelectionModel) withLists(cfg *gorun.Config) serverSelectionModel 
 		expandAll(nodes)
 		t := newTreeModel(m.title, "bundles", nodes)
 		t.embedded = true
+		t.hint = "space checks a bundle · go back to Servers and select hosts · the tasks pane lists only that bundle's tasks"
+		t.checkbox = func(n *treeNode) (bool, bool) {
+			name, ok := strings.CutPrefix(n.label, gorun.BundlePrefix)
+			if !ok {
+				return false, false
+			}
+			return m.selectedBundles[name], true
+		}
 		m.bundles = &t
 	}
 	if nodes := groupTreeNodes(cfg, cfg.Servers, false); len(nodes) > 0 {
@@ -240,6 +259,16 @@ func (m serverSelectionModel) updateTree(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		if m.tab == tabBundles && msg.String() == "space" {
+			t := m.treeTab()
+			if t.cursor >= 0 && t.cursor < len(t.rows) && t.rows[t.cursor].depth == 0 {
+				if name, ok := strings.CutPrefix(t.rows[t.cursor].node.label, gorun.BundlePrefix); ok {
+					m.selectedBundles[name] = !m.selectedBundles[name]
+					m.applyBundles()
+					return m, nil
+				}
+			}
+		}
 		switch msg.String() {
 		case "ctrl+s":
 			return m.showTab(tabServers)
@@ -289,6 +318,55 @@ func (m serverSelectionModel) updateTree(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.groups = &t
 	}
 	return m, nil
+}
+
+// applyBundles replaces each server's pipeline with the checked bundles' tasks, or restores
+// the server's own pipeline when none are checked.
+func (m *serverSelectionModel) applyBundles() {
+	refs := []string{}
+	for _, name := range slices.Sorted(maps.Keys(m.selectedBundles)) {
+		if m.selectedBundles[name] {
+			refs = append(refs, gorun.BundlePrefix+name)
+		}
+	}
+	if m.cfg == nil || len(refs) == 0 {
+		m.servers = slices.Clone(m.baseServers)
+		m.skipped = map[string]map[string]bool{}
+		m.followServer()
+		return
+	}
+
+	tasks, err := m.cfg.ExpandTaskRefs(refs...)
+	if err != nil {
+		return
+	}
+
+	// the checked bundles replace any --task filter the run started with
+	m.cfg.SelectedTasks = nil
+
+	servers := make([]gorun.Server, 0, len(m.baseServers))
+	for _, base := range m.baseServers {
+		server := base
+		server.TaskNames = slices.Clone(tasks)
+		if pipeline, err := m.cfg.ServerPipeline(server); err == nil {
+			server = pipeline
+		}
+		servers = append(servers, server)
+	}
+	m.servers = servers
+	m.skipped = map[string]map[string]bool{}
+	m.followServer()
+}
+
+// bundleSummary names the checked bundles for the server count line.
+func (m serverSelectionModel) bundleSummary() string {
+	names := []string{}
+	for _, name := range slices.Sorted(maps.Keys(m.selectedBundles)) {
+		if m.selectedBundles[name] {
+			names = append(names, gorun.BundlePrefix+name)
+		}
+	}
+	return strings.Join(names, ", ")
 }
 
 // treeContent renders the Tasks or Bundles tab, under the picker's title line.
@@ -1310,7 +1388,11 @@ func (m serverSelectionModel) viewContent() string {
 
 	lines := []string{m.titleLine(), ""}
 	lines = append(lines, strings.Split(m.searchBox(), "\n")...)
-	lines = append(lines, mutedStyle.Render(fmt.Sprintf("  %d/%d servers · %d selected", len(m.matches), len(m.servers), m.countSelected())), "")
+	count := fmt.Sprintf("  %d/%d servers · %d selected", len(m.matches), len(m.servers), m.countSelected())
+	if bundles := m.bundleSummary(); bundles != "" {
+		count += " · " + bundles
+	}
+	lines = append(lines, mutedStyle.Render(truncate(count, m.width)), "")
 
 	left := paneBox("Servers", m.serverPaneLines(l, l.leftWidth-2), l.leftWidth, l.rows, m.focus == paneServers)
 	right := paneBox(m.tasksPaneTitle(), m.tasksPaneLines(l.rows, m.width-l.leftWidth-2), m.width-l.leftWidth, l.rows, m.focus == paneTasks)
@@ -1535,7 +1617,7 @@ func (m serverSelectionModel) helpContent() string {
 			{"ctrl+s/t/b/g/h", "jump to Servers/Tasks/Bundles/Groups/History"},
 		}},
 		{"Selection", [][2]string{
-			{"space", "select/toggle the row under the cursor"},
+			{"space", "select/toggle the row under the cursor; on Bundles, check the bundle"},
 			{"alt+v", "tasks pane: the server under the cursor / every server"},
 			{"alt+e / alt+E", "show details of one/all servers"},
 			{"alt+c / alt+C", "hide details of one/all servers"},

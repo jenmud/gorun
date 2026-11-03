@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/jenmud/gorun"
@@ -17,11 +18,12 @@ import (
 // given up front or loaded the first time the node is expanded, so trees that
 // fan out (like the task dependency DAG) are only built as far as they are opened.
 type treeNode struct {
-	label    string
-	detail   string // shown muted after the label
-	children []*treeNode
-	load     func() []*treeNode
-	expanded bool
+	label     string
+	detail    string // shown muted after the label
+	detailSep string // defaults to " — "; use " " for a label that reads as a sentence
+	children  []*treeNode
+	load      func() []*treeNode
+	expanded  bool
 }
 
 func (n *treeNode) hasChildren() bool {
@@ -58,6 +60,13 @@ type treeModel struct {
 	// embedded is set when the tree is a tab of the server picker, where esc and q
 	// go back to the servers instead of quitting
 	embedded bool
+
+	// checkbox draws a checkbox before nodes it reports on, for the picker's Bundles
+	// tab
+	checkbox func(*treeNode) (checked, ok bool)
+
+	// hint is shown under the title in an embedded view that needs instructions
+	hint string
 }
 
 func newTreeModel(title, kind string, roots []*treeNode) treeModel {
@@ -74,7 +83,9 @@ func (m *treeModel) rebuild() {
 		for i, n := range nodes {
 			last := i == len(nodes)-1
 			guide, childPrefix := "", ""
-			if depth > 0 {
+			if depth == 0 {
+				childPrefix = "  " // shift the subtree in from the top-level entries
+			} else {
 				guide, childPrefix = prefix+"├── ", prefix+"│   "
 				if last {
 					guide, childPrefix = prefix+"└── ", prefix+"    "
@@ -94,7 +105,51 @@ func (m treeModel) Init() tea.Cmd { return nil }
 
 // pageSize is how many rows fit between the header and the footer.
 func (m treeModel) pageSize() int {
-	return max(1, m.height-4)
+	header := 1
+	if hint := m.hintLines(); len(hint) > 0 {
+		header = len(hint) + 2 // blank line, box, blank line
+	}
+	return max(1, m.height-1-header-2)
+}
+
+// hintLines renders the hint as a bordered info box, wrapped to the screen width.
+func (m treeModel) hintLines() []string {
+	if m.hint == "" {
+		return nil
+	}
+	width := max(m.width, 20)
+	text := wrapText(m.hint, max(width-4, 10))
+
+	inner := width - 2
+	title := " Info "
+	box := []string{focusedBorderStyle.Render("┌") + headerStyle.Render(title) + focusedBorderStyle.Render(strings.Repeat("─", max(inner-lipgloss.Width(title), 0))+"┐")}
+	content := max(width-4, 1)
+	row := func(line string) string {
+		line = truncateANSI(line, content)
+		return focusedBorderStyle.Render("│") + " " + line + strings.Repeat(" ", max(content-lipgloss.Width(line), 0)) + " " + focusedBorderStyle.Render("│")
+	}
+	for _, line := range text {
+		box = append(box, row(line))
+	}
+	return append(box, focusedBorderStyle.Render("└"+strings.Repeat("─", inner)+"┘"))
+}
+
+// wrapText breaks s into lines of at most width cells, on word boundaries.
+func wrapText(s string, width int) []string {
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return []string{""}
+	}
+	lines := []string{words[0]}
+	for _, word := range words[1:] {
+		last := len(lines) - 1
+		if lipgloss.Width(lines[last])+1+lipgloss.Width(word) > width {
+			lines = append(lines, word)
+			continue
+		}
+		lines[last] += " " + word
+	}
+	return lines
 }
 
 func (m treeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -232,7 +287,14 @@ func (m treeModel) View() tea.View {
 	var v tea.View
 	v.AltScreen = true
 
-	lines := []string{titleStyle.Render("gorun") + " " + mutedStyle.Render(m.title+" · "+m.kind), ""}
+	lines := []string{titleStyle.Render("gorun") + " " + mutedStyle.Render(m.title+" · "+m.kind)}
+	if hint := m.hintLines(); len(hint) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, hint...)
+		lines = append(lines, "")
+	} else {
+		lines = append(lines, "")
+	}
 
 	// only the visible rows are rendered, so big lists stay responsive
 	end := min(len(m.rows), m.offset+m.pageSize())
@@ -272,7 +334,11 @@ func (m treeModel) renderRow(i int) string {
 		label = serverStyle.Render(label)
 	}
 	if n.detail != "" {
-		label += " " + mutedStyle.Render(n.detail)
+		sep := n.detailSep
+		if sep == "" {
+			sep = " — "
+		}
+		label += mutedStyle.Render(sep + n.detail)
 	}
 
 	pointer := "  "
@@ -281,7 +347,18 @@ func (m treeModel) renderRow(i int) string {
 		marker = cursorStyle.Render(marker)
 	}
 
-	line := pointer + mutedStyle.Render(row.prefix) + marker + label
+	check := ""
+	if m.checkbox != nil && row.depth == 0 {
+		if checked, ok := m.checkbox(n); ok {
+			if checked {
+				check = okStyle.Render("[x]") + " "
+			} else {
+				check = mutedStyle.Render("[ ]") + " "
+			}
+		}
+	}
+
+	line := pointer + check + mutedStyle.Render(row.prefix) + marker + label
 	return truncateANSI(line, m.width)
 }
 
@@ -339,10 +416,10 @@ func serverTreeNodes(servers map[string]gorun.Server) []*treeNode {
 		server := servers[name]
 		n := &treeNode{label: server.Name, detail: fmt.Sprintf("%s · %d tasks", server.Address(), len(server.Tasks))}
 		if len(server.Groups) > 0 {
-			n.children = append(n.children, &treeNode{label: "groups:", detail: strings.Join(server.Groups, ", ")})
+			n.children = append(n.children, &treeNode{label: "groups:", detail: strings.Join(server.Groups, ", "), detailSep: " "})
 		}
 		if len(server.Tags) > 0 {
-			n.children = append(n.children, &treeNode{label: "tags:", detail: strings.Join(server.Tags, ", ")})
+			n.children = append(n.children, &treeNode{label: "tags:", detail: strings.Join(server.Tags, ", "), detailSep: " "})
 		}
 		for _, t := range server.Tasks {
 			n.children = append(n.children, &treeNode{label: serverTaskLabel(t), detail: t.Description})
@@ -431,7 +508,7 @@ func bundleTreeNodes(cfg *gorun.Config) []*treeNode {
 		})
 		if nested {
 			if names, err := cfg.ExpandTaskRefs(gorun.BundlePrefix + name); err == nil {
-				n.children = append(n.children, &treeNode{label: "=", detail: strings.Join(names, ", ")})
+				n.children = append(n.children, &treeNode{label: "→", detail: strings.Join(names, ", "), detailSep: " "})
 			}
 		}
 		nodes = append(nodes, n)

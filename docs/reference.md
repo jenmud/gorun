@@ -119,7 +119,7 @@ Press **ctrl+k** in the picker or the history for the full list.
 
 | Screen | Keys |
 |---|---|
-| [Picker](running.md#the-picker) | space select · → / ← tasks · type to filter · enter run · alt+a run all · shift+tab next tab · ctrl+c quit |
+| [Picker](running.md#the-picker) | space select (Bundles: check bundle) · → / ← tasks · type to filter · enter run · alt+a run all · shift+tab next tab · ctrl+c quit |
 | [Live view](running.md#watching-a-run) | ↑ / ↓ move · enter, → / ← show / hide tasks · v verbose · e / E, c / C expand / collapse · q quit |
 | [Lists](running.md#checking-a-gorunfile-before-you-run-it) (`--list-*`) | enter, → / ← open / close · e / E, c / C expand / collapse · q quit |
 | [History](running.md#history) | enter open · y copy command · d delete · t keep the N newest · esc back |

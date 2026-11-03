@@ -44,8 +44,11 @@ tags. A password shows as `********`. Env vars are listed in a table that opens 
 enter.
 
 The other tabs, **Tasks**, **Bundles** and **Groups**, let you browse what's in the Gorunfile.
-**History** shows [past runs](#history). Press **shift+tab** to move between tabs, and
-**ctrl+k** for a list of every shortcut.
+On **Bundles**, press **space** to check one or more bundles, then go back to **Servers** and
+select the hosts to run them against. The tasks pane lists only the checked bundles' tasks (and
+their dependencies), and that is what runs instead of each server's own pipeline; press **space**
+on the bundle again to uncheck it. **History** shows [past runs](#history). Press
+**shift+tab** to move between tabs, and **ctrl+k** for a list of every shortcut.
 
 Command-line filters narrow what the picker offers: `gorun Gorunfile --tag prod --task @baseline`
 opens a picker with just those servers and tasks.
@@ -54,7 +57,7 @@ opens a picker with just those servers and tasks.
 |---|---|
 | type, backspace | edit the filter (ctrl+w deletes a word, ctrl+u clears it) |
 | ↑ / ↓, mouse wheel | move |
-| space, click | select the row under the cursor (in the tasks pane, tick or untick a task) |
+| space, click | select the row under the cursor (in the tasks pane, tick or untick a task; on Bundles, check a bundle) |
 | tab | switch between the servers and tasks panes |
 | → / ← | show / hide a server's details; open / close its env vars |
 | alt+v | tasks pane: the server under the cursor / every server |

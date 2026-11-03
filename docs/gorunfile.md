@@ -285,6 +285,10 @@ tasks = ["greet", "@baseline", "verify"]      # bundles can include bundles
 
 A bundle expands to its tasks in order, repeats are dropped, and `depends_on` still applies.
 
+In the picker, check a bundle on the **Bundles** tab with **space**, then go back to **Servers** and
+select the hosts to run it against. While a bundle is checked, each server's tasks pane lists only
+that bundle's tasks (and their dependencies).
+
 ## Server groups and tags
 
 A **server group** holds settings that servers share by joining it: `tags`, `tasks`, `envvars`,

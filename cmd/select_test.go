@@ -51,6 +51,10 @@ func press(m serverSelectionModel, keys ...string) serverSelectionModel {
 			msg = tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
 		case "ctrl+a":
 			msg = tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl}
+		case "ctrl+s":
+			msg = tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}
+		case "ctrl+b":
+			msg = tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl}
 		case "shift+tab":
 			msg = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 		case "tab":

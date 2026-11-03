@@ -150,7 +150,7 @@ func TestServerSelectionModel_SSHDetails(t *testing.T) {
 
 	m = press(m, "right")
 	view := ansi.Strip(m.viewContent())
-	for _, want := range []string{"10.0.0.11", "deploy", "2222", "********", "~/.ssh/id_ed25519", "prod", "#web", "▸ Env vars (2)"} {
+	for _, want := range []string{"10.0.0.11", "deploy", "2222", "********", "~/.ssh/id_ed25519", "prod", "#web", "▾ Env vars (2)", "NAME", "VALUE", "│ APP_ENV │ prod  │", "│ TOKEN   │ abc   │"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("the details should contain %q, got:\n%s", want, view)
 		}
@@ -158,28 +158,19 @@ func TestServerSelectionModel_SSHDetails(t *testing.T) {
 	if strings.Contains(view, "hunter2") {
 		t.Error("the password must never be shown")
 	}
-	if strings.Contains(view, "APP_ENV") {
-		t.Error("the env vars table should start closed")
-	}
 
-	// the cursor goes to the env vars toggle; space opens the table, sorted by name
+	// the cursor goes to the env vars toggle; space closes the table
 	m = press(m, "down")
 	if row := m.rows[m.cursor]; row.kind != rowEnv {
 		t.Fatalf("down should go to the env vars, got row %+v", row)
 	}
 	m = press(m, "space")
 	view = ansi.Strip(m.viewContent())
-	for _, want := range []string{"▾ Env vars (2)", "NAME", "VALUE", "│ APP_ENV │ prod  │", "│ TOKEN   │ abc   │"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("the env vars table should contain %q, got:\n%s", want, view)
-		}
+	if strings.Contains(view, "APP_ENV") {
+		t.Error("space should close the env vars table")
 	}
 
-	// left closes the table, enter opens it again, and a second left hides the details
-	m = press(m, "left")
-	if m.envOpen["web-1"] {
-		t.Error("left should close the env vars table")
-	}
+	// enter opens the table again, and a second left hides the details
 	m = press(m, "enter")
 	if !m.envOpen["web-1"] || m.confirmed {
 		t.Error("enter on the env vars should open the table, not run")
@@ -344,7 +335,7 @@ func TestServerSelectionModel_EnvTableScrollsIntoView(t *testing.T) {
 	}
 	m := newServerSelectionModel("test", []gorun.Server{{Name: "web-1", EnvVars: env}})
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	m = press(next.(serverSelectionModel), "right", "down", "space")
+	m = press(next.(serverSelectionModel), "right", "down")
 
 	view := ansi.Strip(m.viewContent())
 	if !strings.Contains(view, "VAR_09") || !strings.Contains(view, "▾ Env vars") {

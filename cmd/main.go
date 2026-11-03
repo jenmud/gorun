@@ -52,7 +52,7 @@ func init() {
 	// even when the binary is invoked directly (no wrapper script).
 	for _, a := range os.Args {
 		switch a {
-		case "-dump", "--dump", "-help", "--help", "-h", "-version", "--version":
+		case "-dump", "--dump", "-dump-tasks", "--dump-tasks", "-help", "--help", "-h", "-version", "--version":
 			_ = os.Setenv("OTEL_LOG_LEVEL", "error")
 			_ = os.Setenv("OTEL_SDK_DISABLED", "true")
 		}
@@ -148,6 +148,7 @@ func main() {
 	listGroups := flag.Bool("list-groups", false, "list server groups and the servers that have them and exit")
 	listServerGroups := flag.Bool("list-server-groups", false, "list server groups and the servers that have them and exit")
 	listBundles := flag.Bool("list-bundles", false, "list task bundles and what they expand to and exit")
+	dumpTasksDir := flag.String("dump-tasks", "", "dump each task as a file in DIR and exit")
 	complete := flag.String("complete", "", "print shell completion candidates (tasks, servers, tags or groups) and exit")
 
 	flag.Usage = printUsage
@@ -219,7 +220,7 @@ func main() {
 	}
 
 	slog.Info("parsing gorun file", slog.String("filename", filename))
-	if *listTasks || *listServers || *listTags || *listGroups || *listServerGroups || *listBundles {
+	if *listTasks || *listServers || *listTags || *listGroups || *listServerGroups || *listBundles || *dumpTasksDir != "" {
 		os.Setenv("GORUN_SKIP_NATS", "1")
 	}
 	gorun.StartNATS()
@@ -332,6 +333,13 @@ func main() {
 
 	if *listServers {
 		showList("servers", serverTreeNodes(servers), func() { printServers(os.Stdout, servers) })
+		return
+	}
+
+	if *dumpTasksDir != "" {
+		if err := dumpTasks(&cfg, *dumpTasksDir, servers, selectedTasks); err != nil {
+			fatal(err)
+		}
 		return
 	}
 
@@ -459,6 +467,7 @@ Options:
   -list-groups  list server groups and the servers that have them and exit (a collapsible tree in a terminal)
   -list-bundles  list task bundles and what they expand to and exit (a collapsible tree in a terminal)
   -dump     print a starting Gorunfile that works as-is and documents every option
+  -dump-tasks DIR  dump each task as a file in DIR and exit
   -version  print version and exit
   -web      start the web server
   -history  view historical runs

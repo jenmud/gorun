@@ -144,6 +144,7 @@ gorun Gorunfile --list-tasks      # every task, as a dependency tree
 gorun Gorunfile --list-bundles    # every bundle, and what it expands to
 gorun Gorunfile --list-groups     # every group, and its servers
 gorun Gorunfile --list-tags       # every tag, and its servers
+gorun Gorunfile --dump-tasks DIR  # each task as a runnable shell file in DIR
 ```
 
 In a terminal each list opens as a tree you can fold: **enter** or **→** opens an entry, **←**

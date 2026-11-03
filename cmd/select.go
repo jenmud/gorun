@@ -540,6 +540,9 @@ func newServerSelectionModel(title string, servers []gorun.Server) serverSelecti
 		width:    80,
 		height:   24,
 	}
+	for _, s := range servers {
+		m.envOpen[s.Name] = true
+	}
 
 	groups, tags := map[string]bool{}, map[string]bool{}
 	for _, s := range servers {

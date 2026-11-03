@@ -48,6 +48,8 @@ each server's progress live.
 - **Grows with you.** Dependencies, bundles, server groups, tags, templates with per-task
   variables, file copies, retries and secrets from your environment, when you need them.
 - **Remembers.** Every run is saved, with its commands and output, to look back on later.
+- **Exports.** Dump every task as a standalone, runnable shell file with `--dump-tasks`, to audit
+  or run by hand.
 
 **When to use something else:** gorun runs commands; it doesn't enforce state. It has no modules,
 facts, drift detection, dry runs, dynamic inventories or secrets vault. For that, use Ansible,
@@ -97,6 +99,10 @@ hostname = "web-01.example.com"
 ```
 
 Then check what it will run with `gorun Gorunfile --list-servers`.
+
+```bash
+gorun Gorunfile --dump-tasks ./tasks   # write each task as a runnable shell file
+```
 
 **Next:** the [tutorial](docs/tutorial.md) builds up a real deployment one step at a time.
 

@@ -635,6 +635,18 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				}
 			}
 		}
+		// global envvars are the lowest layer for server envvars too, so templates
+		// and dumps see them alongside the server's own.
+		if len(c.EnvVars) > 0 {
+			if server.EnvVars == nil {
+				server.EnvVars = map[string]string{}
+			}
+			for k, v := range c.EnvVars {
+				if _, ok := server.EnvVars[k]; !ok {
+					server.EnvVars[k] = v
+				}
+			}
+		}
 		for i := range server.Tasks {
 			env := map[string]string{}
 			for _, layer := range []map[string]string{c.EnvVars, server.EnvVars, server.Tasks[i].EnvVars} {

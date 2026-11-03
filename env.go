@@ -26,6 +26,11 @@ func expandEnv(value string) string {
 	})
 }
 
+// ExpandEnv is the exported form of expandEnv.
+func ExpandEnv(value string) string {
+	return expandEnv(value)
+}
+
 // envStdin returns the stdin that feeds envPrelude, or nil when there are no vars.
 // The values travel over stdin rather than the command line, so they stay out of
 // logs, events and the process list, and survive sudo, which resets the environment.
@@ -42,6 +47,12 @@ func envStdin(vars map[string]string) (io.Reader, error) {
 	}
 
 	return strings.NewReader(line + "\n"), nil
+}
+
+// EnvLine renders vars as a single `export KEY='value' ...` shell line, keys
+// upper-cased and sorted. It is the exported form of envLine.
+func EnvLine(vars map[string]string) (string, error) {
+	return envLine(vars)
 }
 
 // envLine renders vars as a single `export KEY='value' ...` shell line, keys

@@ -222,6 +222,40 @@ func (t *Task) templateData(server any) map[string]any {
 	}
 	data["Vars"] = vars
 	data["vars"] = vars
+
+	// Envvars are expanded from gorun's own environment, so templates see the
+	// resolved values rather than the raw "$VAR" references.
+	if env, ok := data["EnvVars"].(map[string]string); ok && env != nil {
+		expanded := make(map[string]string, len(env))
+		for k, v := range env {
+			expanded[k] = expandEnv(v)
+		}
+		data["EnvVars"] = expanded
+	}
+
+	// Keep the server exposed to templates consistent with the expanded envvars.
+	if s, ok := data["Server"].(*Server); ok && s != nil {
+		cp := *s
+		if cp.EnvVars != nil {
+			expanded := make(map[string]string, len(cp.EnvVars))
+			for k, v := range cp.EnvVars {
+				expanded[k] = expandEnv(v)
+			}
+			cp.EnvVars = expanded
+		}
+		data["Server"] = &cp
+	}
+	if s, ok := data["Server"].(Server); ok {
+		cp := s
+		if cp.EnvVars != nil {
+			expanded := make(map[string]string, len(cp.EnvVars))
+			for k, v := range cp.EnvVars {
+				expanded[k] = expandEnv(v)
+			}
+			cp.EnvVars = expanded
+		}
+		data["Server"] = cp
+	}
 	return data
 }
 

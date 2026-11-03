@@ -36,6 +36,7 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 | `-list-groups` | list server groups and their servers (a collapsible tree in a terminal) |
 | `-list-bundles` | list bundles and what they expand to (a collapsible tree in a terminal) |
 | `-dump` | print a starting Gorunfile |
+| `-dump-tasks DIR` | dump each task as a runnable shell file in DIR |
 | `-history` | browse past runs |
 | `-web` | start the web UI |
 | `-complete <kind>` | print shell completion candidates |

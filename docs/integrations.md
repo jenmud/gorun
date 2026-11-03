@@ -167,7 +167,7 @@ _gorun_complete() {
     esac
 
     if [[ $cur == -* ]]; then
-        COMPREPLY=($(compgen -W "-v -plain -run -r -task -server -exclude-server -tag -group -parallel -list-tasks -list-servers -list-tags -list-groups -list-bundles -dump -version -web -history -h --task --server --exclude-server --tag --group --parallel --run --plain --list-tasks --list-servers --list-tags --list-groups --list-bundles --dump --version --web --history --help" -- "$cur"))
+        COMPREPLY=($(compgen -W "-v -plain -run -r -task -server -exclude-server -tag -group -parallel -list-tasks -list-servers -list-tags -list-groups -list-bundles -dump -dump-tasks -version -web -history -h --task --server --exclude-server --tag --group --parallel --run --plain --list-tasks --list-servers --list-tags --list-groups --list-bundles --dump --dump-tasks --version --web --history --help" -- "$cur"))
     else
         COMPREPLY=($(compgen -f -- "$cur"))
     fi

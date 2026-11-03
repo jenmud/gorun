@@ -73,3 +73,69 @@ tests execute tasks locally.
 `docs/tutorial.md` (step by step), `docs/gorunfile.md` (every option), `docs/running.md` (picker,
 live view, CI mode, history), `docs/integrations.md` (web UI, OpenTelemetry, NATS, Go library,
 completion), `docs/reference.md` (flags/keys/env), `recipes/README.md` (demo lab).
+
+# Agent Instructions: Go Development
+
+This file provides system-level instructions for AI coding agents operating on this Go project. Follow these guidelines for all code generation, refactoring, and testing.
+
+## Project Core Philosophy
+* **Keep changes simple and lean:** Do not over-engineer. Avoid adding unrequested abstractions, layers, or external dependencies.
+* **Write concise, purposeful documentation:** Comments and docstrings must be short, clear, and direct. Explain *why* something is done, not *what* the code visibly does.
+
+## Coding Standards
+
+### 1. Simplicity & Idiomatic Go
+* Prefer clear, flat logic over deeply nested conditions.
+* Use early returns and guard clauses to handle errors or edge cases first.
+* Stick strictly to standard library patterns unless third-party packages are explicitly requested or already heavily utilized in the module.
+
+### 2. OpenTelemetry (OTEL) Observability
+Integrate tracing, metrics, and structured logging using official `go.opentelemetry.io` packages. Keep instrumentation minimal and tightly scoped.
+
+* **Context Propagation:** Always accept and pass a `context.Context` as the first argument in functions executing I/O, database queries, or external requests.
+* **Tracing:** Start a span only for major logical boundaries or heavy operations. Always defer the `span.End()` call immediately after creation.
+  ```go
+  ctx, span := tracer.Start(ctx, "OperationName")
+  defer span.End()
+  ```
+* **Metrics:** Use standard counters and histograms. Prefer registering instruments once at the package or struct initialization level rather than recreating them inside functions.
+* **Structured Logging:** Use OTEL-compliant structured logging or `slog` mapped to OTEL trace contexts. Pass key-value attributes instead of formatting variables directly into log messages.
+  ```go
+  // Good: Structured with context
+  slog.InfoContext(ctx, "processed order", "order_id", id, "amount", total)
+  // Avoid: Unstructured string formatting
+  slog.Info(fmt.Sprintf("processed order %s with amount %d", id, total))
+  ```
+
+### 3. Documentation Style
+* **Package documentation:** Keep it to a single, concise paragraph at the top of the primary file.
+* **Function docstrings:** Format as a short sentence starting with the function name.
+  ```go
+  // FetchUser retrieves a user profile by ID from the datastore.
+  func FetchUser(ctx context.Context, id string) (*User, error) { ... }
+  ```
+* **Inline comments:** Use only for non-obvious logic or critical workarounds. Limit to a single line. Do not comment on self-explanatory code.
+
+### 4. Error Handling
+* Return errors early and wrap them with helpful, brief contextual strings if it aids debugging.
+  ```go
+  if err != nil {
+      span.RecordError(err) // Record to active OTEL span before returning
+      return nil, fmt.Errorf("read config: %w", err)
+  }
+  ```
+
+## Critical CLI Commands
+
+Always use the following standard toolchains for validation before declaring a task complete:
+
+* **Build:** `go build ./...`
+* **Test:** `go test -v -race ./...`
+* **Format:** `go fmt ./...`
+* **Lint / Vet:** `go vet ./...`
+
+## Definition of Done
+Before returning code or finishing a task:
+1. Ensure all new code matches the existing style and contains trace context awareness.
+2. Run format, vet, and test commands to verify no regressions or race conditions exist.
+3. Keep public API changes minimal and cleanly documented.

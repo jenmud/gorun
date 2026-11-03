@@ -13,6 +13,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/internal/store"
@@ -26,14 +27,15 @@ var (
 	colorMuted  = lipgloss.Color("#6B7280")
 	colorTime   = lipgloss.Color("#38BDF8")
 
-	titleStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorAccent).Padding(0, 1)
-	serverStyle = lipgloss.NewStyle().Bold(true)
-	mutedStyle  = lipgloss.NewStyle().Foreground(colorMuted)
-	timeStyle   = lipgloss.NewStyle().Foreground(colorTime).Bold(true)
-	okStyle     = lipgloss.NewStyle().Foreground(colorOK)
-	failStyle   = lipgloss.NewStyle().Foreground(colorFail).Bold(true)
-	skipStyle   = lipgloss.NewStyle().Foreground(colorSkip)
-	cursorStyle = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
+	titleStyle       = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(colorAccent).Padding(0, 1)
+	serverStyle      = lipgloss.NewStyle().Bold(true)
+	mutedStyle       = lipgloss.NewStyle().Foreground(colorMuted)
+	timeStyle        = lipgloss.NewStyle().Foreground(colorTime).Bold(true)
+	okStyle          = lipgloss.NewStyle().Foreground(colorOK)
+	failStyle        = lipgloss.NewStyle().Foreground(colorFail).Bold(true)
+	skipStyle        = lipgloss.NewStyle().Foreground(colorSkip)
+	cursorStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#DDD6FE")).Bold(true)
+	selectedRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#3B2A66")).Bold(true)
 
 	outputBoxStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colorMuted).Padding(0, 1)
 	failBoxStyle   = outputBoxStyle.BorderForeground(colorFail)
@@ -160,8 +162,8 @@ func newTUIModel(title string, verbose bool, cancel context.CancelFunc) tuiModel
 		width:     80,
 		height:    24,
 		spinner:   spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(cursorStyle)),
-		okBar:     progress.New(progress.WithColors(colorAccent, colorOK), progress.WithFillCharacters('█', '░'), progress.WithoutPercentage()),
-		failBar:   progress.New(progress.WithColors(colorFail), progress.WithFillCharacters('█', '░'), progress.WithoutPercentage()),
+		okBar:     progress.New(progress.WithColors(colorAccent, colorOK), progress.WithFillCharacters('■', '□'), progress.WithoutPercentage()),
+		failBar:   progress.New(progress.WithColors(colorFail), progress.WithFillCharacters('■', '□'), progress.WithoutPercentage()),
 	}
 }
 
@@ -491,7 +493,7 @@ func (m tuiModel) serverSummary(s *serverView) string {
 	if s.err != nil || s.count(gorun.TaskFailed) > 0 {
 		bar = m.failBar
 	}
-	bar.SetWidth(min(40, max(10, m.width-50)))
+	bar.SetWidth(min(38, max(8, m.width-52)))
 
 	var status string
 	switch {
@@ -537,7 +539,7 @@ func (m tuiModel) serverSummary(s *serverView) string {
 		"%s %s\n%s %s  %s",
 		serverNameStyle.Render(s.name),
 		mutedStyle.Render(s.address),
-		bar.ViewAs(percent),
+		mutedStyle.Render("[")+bar.ViewAs(percent)+mutedStyle.Render("]"),
 		mutedStyle.Render(fmt.Sprintf("%2d/%d", finished, total)),
 		status,
 	)
@@ -588,11 +590,15 @@ func (m tuiModel) serverBlock(i, from, to int) []string {
 	lines := make([]string, 0, max(0, to-from))
 	if from < 2 {
 		pointer := "  "
-		if i == m.selectedServer() && !m.quitting {
-			pointer = cursorStyle.Render("❯ ")
+		selected := i == m.selectedServer() && !m.quitting
+		if selected {
+			pointer = cursorStyle.Render("▶ ")
 		}
 		summary := strings.SplitN(m.serverSummary(s), "\n", 2)
 		summary[0], summary[1] = pointer+summary[0], "  "+summary[1]
+		if selected {
+			summary[0] = highlightSelectedRow(summary[0], m.width)
+		}
 		lines = append(lines, summary[from:min(to, 2)]...)
 	}
 	for j := max(from, 2); j < min(to, n-1); j++ {
@@ -869,10 +875,14 @@ func (m tuiModel) verboseView() string {
 			if i >= startIdx && i < endIdx {
 				pointer := "  "
 				if i == cursor {
-					pointer = cursorStyle.Render("▸ ")
+					pointer = cursorStyle.Render("▶ ")
 					cursorLine = len(body)
 				}
-				add(i, pointer+m.taskRow(t))
+				line := pointer + m.taskRow(t)
+				if i == cursor {
+					line = highlightSelectedRow(line, m.width)
+				}
+				add(i, line)
 
 				if t.expanded {
 					box := m.outputBox(t)
@@ -1168,6 +1178,14 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fs", d.Seconds())
 	}
 	return d.Round(time.Second).String()
+}
+
+func highlightSelectedRow(line string, width int) string {
+	if width > 0 {
+		line = truncateANSI(line, width)
+		return selectedRowStyle.Width(width).Render(ansi.Strip(line))
+	}
+	return selectedRowStyle.Render(ansi.Strip(line))
 }
 
 // runTUI runs the deployment with the interactive TUI and returns an error if anything failed.

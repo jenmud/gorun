@@ -1431,9 +1431,9 @@ func (m serverSelectionModel) serverPaneLines(l selectionLayout, width int) []st
 		// pane has the focus
 		pointer := "  "
 		if i == m.cursor {
-			pointer = cursorStyle.Render("▸ ")
+			pointer = cursorStyle.Render("▶ ")
 			if m.focus != paneServers {
-				pointer = mutedStyle.Render("▸ ")
+				pointer = mutedStyle.Render("▶ ")
 			}
 		}
 
@@ -1465,7 +1465,11 @@ func (m serverSelectionModel) serverPaneLines(l selectionLayout, width int) []st
 		default:
 			line = pointer + m.serverLine(row, nameWidth)
 		}
-		lines = append(lines, truncateANSI(line, width))
+		line = truncateANSI(line, width)
+		if i == m.cursor && m.focus == paneServers {
+			line = highlightSelectedRow(line, width)
+		}
+		lines = append(lines, line)
 	}
 	return lines
 }

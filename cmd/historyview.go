@@ -541,8 +541,9 @@ func (m historyModel) View() tea.View {
 			for i := start; i < end; i++ {
 				r := m.runs[i]
 				cursor := "  "
-				if i == m.cursor {
-					cursor = "> "
+				selected := i == m.cursor
+				if selected {
+					cursor = cursorStyle.Render("▶ ")
 				}
 				status := mutedStyle.Render("● running")
 				if r.Finished {
@@ -573,6 +574,9 @@ func (m historyModel) View() tea.View {
 					line += mutedStyle.Render("  [local]")
 				} else if r.Hostname != "" {
 					line += skipStyle.Render(fmt.Sprintf("  [%s]", r.Hostname))
+				}
+				if selected {
+					line = highlightSelectedRow(line, m.width)
 				}
 				b.WriteString(line + "\n")
 				b.WriteString("    " + mutedStyle.Render(r.StartedAt.Format("2006-01-02 15:04:05")) + "\n\n")
@@ -658,8 +662,9 @@ func (m historyModel) View() tea.View {
 	for idx, it := range m.items {
 		if it.isServer {
 			cursor := "  "
-			if idx == m.cursor {
-				cursor = "> "
+			selected := idx == m.cursor
+			if selected {
+				cursor = cursorStyle.Render("▶ ")
 			}
 			arrow := "▶"
 			if it.expanded {
@@ -681,6 +686,9 @@ func (m historyModel) View() tea.View {
 			if dur > 0 {
 				srvLine += timeStyle.Render(fmt.Sprintf(" %.1fs", dur.Seconds()))
 			}
+			if selected {
+				srvLine = highlightSelectedRow(srvLine, m.width)
+			}
 			lines = append(lines, srvLine)
 			if msg := run.ServerErrors[it.server]; msg != "" && it.expanded {
 				lines = append(lines, "  "+failStyle.Render("✗ "+msg))
@@ -696,8 +704,9 @@ func (m historyModel) View() tea.View {
 		}
 		t := run.Tasks[it.taskIdx]
 		cursor := "  "
-		if idx == m.cursor {
-			cursor = "> "
+		selected := idx == m.cursor
+		if selected {
+			cursor = cursorStyle.Render("▶ ")
 		}
 		var mark string
 		if t.State == 2 {
@@ -720,6 +729,9 @@ func (m historyModel) View() tea.View {
 		}
 		if !it.expanded {
 			line += mutedStyle.Render(" [expand]")
+		}
+		if selected {
+			line = highlightSelectedRow(line, m.width)
 		}
 		lines = append(lines, line)
 		if it.expanded {

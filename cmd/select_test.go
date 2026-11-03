@@ -745,7 +745,7 @@ func TestHistoryListFitsTheScreen(t *testing.T) {
 		if len(lines) > height {
 			t.Errorf("height %d: the runs list is %d lines", height, len(lines))
 		}
-		if !strings.Contains(view, "> ") || !strings.Contains(view, "run 19") {
+		if !strings.Contains(view, "▶ ") || !strings.Contains(view, "run 19") {
 			t.Errorf("height %d: the selected run should be on screen, got:\n%s", height, view)
 		}
 		if !strings.Contains(lines[len(lines)-1], "esc/q back to servers") {

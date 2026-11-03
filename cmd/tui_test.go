@@ -148,10 +148,13 @@ func TestCompactWindow(t *testing.T) {
 		for i, s := range m.servers {
 			pointer := "  "
 			if i == 0 {
-				pointer = cursorStyle.Render("❯ ")
+				pointer = cursorStyle.Render("▶ ")
 			}
 			summary := strings.Split(m.serverSummary(s), "\n")
 			full = append(full, pointer+summary[0], "  "+summary[1])
+			if i == 0 {
+				full[len(full)-2] = highlightSelectedRow(full[len(full)-2], m.width)
+			}
 			if s.open {
 				for _, t := range s.tasks {
 					full = append(full, "    "+m.taskStatus(t))
@@ -199,7 +202,7 @@ func TestCompactServerTasks(t *testing.T) {
 	}
 
 	update("down", "down")
-	if m.selectedServer() != 2 || !strings.Contains(plain(), "❯ server3 ") {
+	if m.selectedServer() != 2 || !strings.Contains(plain(), "▶ server3 ") {
 		t.Fatalf("cursor is on server %d, want server3:\n%s", m.selectedServer(), plain())
 	}
 	if strings.Contains(plain(), "task-000") {
@@ -208,7 +211,7 @@ func TestCompactServerTasks(t *testing.T) {
 
 	update("enter")
 	view := plain()
-	if !m.servers[2].open || !strings.Contains(view, "❯ server3 ") || !strings.Contains(view, "    ✗ task-000") {
+	if !m.servers[2].open || !strings.Contains(view, "▶ server3 ") || !strings.Contains(view, "    ✗ task-000") {
 		t.Fatalf("enter did not list server3's tasks:\n%s", view)
 	}
 	if lines := strings.Count(view, "\n") + 1; lines > m.height {
@@ -217,7 +220,7 @@ func TestCompactServerTasks(t *testing.T) {
 
 	// moving on past the open server scrolls its tasks out of the way
 	update("down")
-	if view := plain(); !strings.Contains(view, "❯ server4 ") {
+	if view := plain(); !strings.Contains(view, "▶ server4 ") {
 		t.Fatalf("the selected server4 is off screen:\n%s", view)
 	}
 
@@ -247,7 +250,7 @@ func TestVerboseViewFitsScreen(t *testing.T) {
 		if n := len(strings.Split(view, "\n")); n > m.height {
 			t.Errorf("cursor %d: view is %d lines, screen is %d", cursor, n, m.height)
 		}
-		if !strings.Contains(view, "▸ ") {
+		if !strings.Contains(view, "▶ ") {
 			t.Errorf("cursor %d: selected task is not on screen", cursor)
 		}
 		if !strings.Contains(view, "q quit") {

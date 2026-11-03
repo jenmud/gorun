@@ -343,7 +343,7 @@ func (m treeModel) renderRow(i int) string {
 
 	pointer := "  "
 	if i == m.cursor {
-		pointer = cursorStyle.Render("❯ ")
+		pointer = cursorStyle.Render("▶ ")
 		marker = cursorStyle.Render(marker)
 	}
 
@@ -359,7 +359,11 @@ func (m treeModel) renderRow(i int) string {
 	}
 
 	line := pointer + check + mutedStyle.Render(row.prefix) + marker + label
-	return truncateANSI(line, m.width)
+	line = truncateANSI(line, m.width)
+	if i == m.cursor {
+		line = highlightSelectedRow(line, m.width)
+	}
+	return line
 }
 
 // truncateANSI cuts a styled line to width cells so it never wraps.

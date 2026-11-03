@@ -287,7 +287,7 @@ func (m serverSelectionModel) tasksPaneLines(height, width int) []string {
 
 		pointer := "  "
 		if m.focus == paneTasks && j == m.taskCursor {
-			pointer = cursorStyle.Render("▸ ")
+			pointer = cursorStyle.Render("▶ ")
 		}
 
 		var line string
@@ -308,7 +308,11 @@ func (m serverSelectionModel) tasksPaneLines(height, width int) []string {
 			}
 			line = pointer + indent + m.taskLine(s, s.Tasks[row.task])
 		}
-		lines = append(lines, truncateANSI(line, width))
+		line = truncateANSI(line, width)
+		if m.focus == paneTasks && j == m.taskCursor {
+			line = highlightSelectedRow(line, width)
+		}
+		lines = append(lines, line)
 	}
 	return lines
 }

@@ -29,7 +29,7 @@ func visible(m treeModel) []string {
 	for i := range m.rows {
 		row := ansi.Strip(m.renderRow(i))
 		if i == m.cursor {
-			row = strings.TrimPrefix(row, "❯ ")
+			row = strings.TrimPrefix(row, "▶ ")
 		} else {
 			row = strings.TrimPrefix(row, "  ")
 		}

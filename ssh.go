@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -57,6 +58,7 @@ func NewSSHClient(ctx context.Context, server Server) (*ssh.Client, error) {
 	}
 	alias := host
 	resolvedHost := host
+	var configKeys []string
 	if configPath != "" {
 		if f, err := os.Open(configPath); err == nil {
 			if cfg, err := sshconfig.Decode(f); err == nil {
@@ -77,15 +79,8 @@ func NewSSHClient(ctx context.Context, server Server) (*ssh.Client, error) {
 					}
 				}
 				if server.SSH.Identityfile == "" {
-					if v, err := cfg.Get(alias, "IdentityFile"); err == nil && v != "" {
-						// ssh_config may return a path with a leading ~
-						if strings.HasPrefix(v, "~/") {
-							if home, err := os.UserHomeDir(); err == nil {
-								v = filepath.Join(home, v[2:])
-							}
-						}
-						server.SSH.Identityfile = v
-					}
+					// every match, not just the first: a global IdentityFile must not hide the host's own
+					configKeys, _ = cfg.GetAll(alias, "IdentityFile")
 				}
 			} else {
 				_ = f.Close()
@@ -102,21 +97,12 @@ func NewSSHClient(ctx context.Context, server Server) (*ssh.Client, error) {
 	address := fmt.Sprintf("%s:%d", host, port)
 	auth := []ssh.AuthMethod{}
 
-	// Create the Signer for this private key.
-	if server.SSH.Identityfile != "" {
-		key, err := os.ReadFile(server.SSH.Identityfile)
-		if err != nil {
-			err = fmt.Errorf("error reading SSH IdentityFile %q: %w", server.SSH.Identityfile, err)
-			return nil, err
-		}
-
-		signer, err := ssh.ParsePrivateKey(key)
-		if err != nil {
-			err = fmt.Errorf("error parsing SSH IdentityFile %q: %w", server.SSH.Identityfile, err)
-			return nil, err
-		}
-
-		auth = append(auth, ssh.PublicKeys(signer))
+	signers, err := identitySigners(server.SSH.Identityfile, configKeys)
+	if err != nil {
+		return nil, err
+	}
+	if len(signers) > 0 {
+		auth = append(auth, ssh.PublicKeys(signers...))
 	}
 
 	// if we have a SSH password, add it to the list of auths
@@ -138,6 +124,60 @@ func NewSSHClient(ctx context.Context, server Server) (*ssh.Client, error) {
 	}
 
 	return client, nil
+}
+
+// identitySigners returns the keys to offer, in order. An explicit Gorunfile identityfile is the only key
+// and must load. Keys from the SSH config are all offered, like OpenSSH, skipping any that are missing or
+// can't be parsed without a passphrase.
+func identitySigners(explicit string, fromConfig []string) ([]ssh.Signer, error) {
+	if explicit != "" {
+		signer, err := readSigner(explicit)
+		if err != nil {
+			return nil, err
+		}
+		return []ssh.Signer{signer}, nil
+	}
+
+	signers := []ssh.Signer{}
+	seen := map[string]bool{}
+	for _, path := range fromConfig {
+		path = expandHome(path)
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+		signer, err := readSigner(path)
+		if err != nil {
+			slog.Debug("skipping SSH IdentityFile", "path", path, "error", err)
+			continue
+		}
+		signers = append(signers, signer)
+	}
+	return signers, nil
+}
+
+func readSigner(path string) (ssh.Signer, error) {
+	key, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("error reading SSH IdentityFile %q: %w", path, err)
+	}
+	signer, err := ssh.ParsePrivateKey(key)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing SSH IdentityFile %q: %w", path, err)
+	}
+	return signer, nil
+}
+
+// expandHome expands the leading ~/ that ssh_config values may have.
+func expandHome(path string) string {
+	if !strings.HasPrefix(path, "~/") {
+		return path
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+	return filepath.Join(home, path[2:])
 }
 
 // maxSessions is how many sessions gorun opens at once on one SSH connection.

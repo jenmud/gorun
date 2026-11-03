@@ -312,6 +312,9 @@ hostname = "db-01.internal"
 
 - Anything missing (`username`, `port`, `identityfile`, and the real hostname of an alias) is
   read from your SSH config: `config_file` if set, otherwise `~/.ssh/config`.
+- Without an `identityfile`, gorun offers every `IdentityFile` your SSH config lists for the host, in
+  order, like `ssh` does. Keys that are missing or need a passphrase are skipped. An `identityfile`
+  in the Gorunfile is the only key offered.
 - Share logins through a [server group](#server-groups-and-tags).
 - The global `[ssh]` table only uses `config_file`, and setting it gives **every** server SSH
   settings, so servers that would have run locally then use SSH too.

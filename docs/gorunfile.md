@@ -282,7 +282,7 @@ It's a label, not a guard: gorun still runs unsafe tasks when you ask.
 ### Local-only tasks
 
 > [!WARNING]
-> **Upgrading to v0.9.0:** tasks without `local = true` no longer run on local servers. Before,
+> **Upgrading to v0.10.0:** tasks without `local = true` no longer run on local servers. Before,
 > a server without SSH settings ran every task it was given; now it runs only tasks marked
 > `local = true`. If a local server's list in `gorun Gorunfile --list-servers` is empty, add
 > `local = true` to the tasks it should run.

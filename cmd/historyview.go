@@ -30,24 +30,27 @@ type historyItem struct {
 }
 
 type historyModel struct {
-	expanded    map[string]bool
-	loadedTasks map[string]bool
-	pendingCopy bool
-	listCursor  int
-	status      string
-	helpOpen    bool
-	state       historyState
-	st          *store.Store
-	runs        []store.RunSummary
-	cursor      int
-	offset      int
-	width       int
-	height      int
-	run         *store.RunDetail
-	items       []historyItem
-	err         error
-	askKeep     bool
-	keepInput   string
+	expanded         map[string]bool
+	loadedTasks      map[string]bool
+	pendingCopy      bool
+	listCursor       int
+	status           string
+	helpOpen         bool
+	state            historyState
+	st               *store.Store
+	runs             []store.RunSummary
+	cursor           int
+	offset           int
+	detailScroll     int
+	detailCursorLine *int
+	detailLineCount  *int
+	width            int
+	height           int
+	run              *store.RunDetail
+	items            []historyItem
+	err              error
+	askKeep          bool
+	keepInput        string
 
 	// embedded is set when the history is a tab of the server picker, where esc and q
 	// on the runs list go back to the servers instead of quitting
@@ -55,7 +58,9 @@ type historyModel struct {
 }
 
 func newHistoryModel(st *store.Store) historyModel {
-	return historyModel{state: historyList, st: st, width: 80, height: 24, expanded: map[string]bool{}, loadedTasks: map[string]bool{}}
+	dcl := new(int)
+	dlc := new(int)
+	return historyModel{state: historyList, st: st, width: 80, height: 24, expanded: map[string]bool{}, loadedTasks: map[string]bool{}, detailScroll: -1, detailCursorLine: dcl, detailLineCount: dlc}
 }
 
 func (m historyModel) Init() tea.Cmd {
@@ -195,6 +200,7 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 	m.items = items
 	m.cursor = 0
 	m.offset = 0
+	m.detailScroll = -1
 	m.expanded = map[string]bool{}
 	m.loadedTasks = map[string]bool{}
 }
@@ -359,6 +365,31 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.state == historyDetail {
+				// scroll the expanded output when possible; otherwise move the cursor
+				if m.cursor >= 0 && m.cursor < len(m.items) && !m.items[m.cursor].isServer {
+					it := m.items[m.cursor]
+					if it.expanded {
+						visible := m.height - 12
+						if visible < 3 {
+							visible = 3
+						}
+						curStart := m.detailScroll
+						if curStart < 0 {
+							cl := 0
+							if m.detailCursorLine != nil {
+								cl = *m.detailCursorLine
+							}
+							curStart = cl - visible/2
+						}
+						if curStart > 0 {
+							m.detailScroll = curStart - 1
+							if m.detailScroll < 0 {
+								m.detailScroll = 0
+							}
+							return m, nil
+						}
+					}
+				}
 				for m.cursor > 0 {
 					m.cursor--
 					if m.cursor < 0 {
@@ -373,6 +404,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						break
 					}
 				}
+				m.detailScroll = -1
 			}
 			return m, nil
 		case "down", "j":
@@ -387,6 +419,34 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.state == historyDetail {
+				if m.cursor >= 0 && m.cursor < len(m.items) && !m.items[m.cursor].isServer {
+					it := m.items[m.cursor]
+					if it.expanded {
+						visible := m.height - 12
+						if visible < 3 {
+							visible = 3
+						}
+						curStart := m.detailScroll
+						total := 0
+						if m.detailLineCount != nil {
+							total = *m.detailLineCount
+						}
+						if curStart < 0 {
+							cl := 0
+							if m.detailCursorLine != nil {
+								cl = *m.detailCursorLine
+							}
+							curStart = cl - visible/2
+						}
+						if curStart+visible < total {
+							m.detailScroll = curStart + 1
+							if m.detailScroll > total-visible {
+								m.detailScroll = total - visible
+							}
+							return m, nil
+						}
+					}
+				}
 				for m.cursor < len(m.items)-1 {
 					m.cursor++
 					it := m.items[m.cursor]
@@ -398,6 +458,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						break
 					}
 				}
+				m.detailScroll = -1
 			}
 			return m, nil
 		case "enter", " ":
@@ -412,9 +473,11 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if it.isServer {
 					it.expanded = !it.expanded
 					m.expanded[it.server] = it.expanded
+					m.detailScroll = -1
 					return m, nil
 				}
 				it.expanded = !it.expanded
+				m.detailScroll = -1
 				if it.expanded && m.run != nil && it.taskIdx >= 0 && it.taskIdx < len(m.run.Tasks) {
 					td := m.run.Tasks[it.taskIdx]
 					key := td.Server + "\x00" + td.Name
@@ -477,9 +540,11 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if it.isServer {
 					it.expanded = !it.expanded
 					m.expanded[it.server] = it.expanded
+					m.detailScroll = -1
 					return m, nil
 				}
 				it.expanded = !it.expanded
+				m.detailScroll = -1
 				if it.expanded && m.run != nil && it.taskIdx >= 0 && it.taskIdx < len(m.run.Tasks) {
 					td := m.run.Tasks[it.taskIdx]
 					key := td.Server + "\x00" + td.Name
@@ -666,6 +731,7 @@ func (m historyModel) View() tea.View {
 		agg[t.Server] = a
 	}
 
+	cursorLine := 0
 	for idx, it := range m.items {
 		if it.isServer {
 			cursor := "  "
@@ -697,6 +763,9 @@ func (m historyModel) View() tea.View {
 				srvLine = highlightSelectedRow(srvLine, m.width)
 			}
 			lines = append(lines, srvLine)
+			if selected {
+				cursorLine = len(lines) - 1
+			}
 			if msg := run.ServerErrors[it.server]; msg != "" && it.expanded {
 				lines = append(lines, "  "+failStyle.Render("✗ "+msg))
 			}
@@ -739,6 +808,7 @@ func (m historyModel) View() tea.View {
 		}
 		if selected {
 			line = highlightSelectedRow(line, m.width)
+			cursorLine = len(lines)
 		}
 		lines = append(lines, line)
 		if it.expanded {
@@ -778,15 +848,19 @@ func (m historyModel) View() tea.View {
 	if visible < 3 {
 		visible = 3
 	}
-	cursorLine := 0
-	for idx, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), ">") {
-			cursorLine = idx
-		}
+	if m.detailCursorLine != nil {
+		*m.detailCursorLine = cursorLine
+	}
+	if m.detailLineCount != nil {
+		*m.detailLineCount = len(lines)
 	}
 	start := 0
-	if len(lines) > visible {
+	if m.detailScroll >= 0 {
+		start = m.detailScroll
+	} else if len(lines) > visible {
 		start = cursorLine - visible/2
+	}
+	if len(lines) > visible {
 		if start < 0 {
 			start = 0
 		}

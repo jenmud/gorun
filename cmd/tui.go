@@ -212,6 +212,9 @@ func (m tuiModel) failed() bool {
 func (m tuiModel) applyEvent(event any) tuiModel {
 	switch msg := event.(type) {
 	case gorun.PlanEvent:
+		if len(msg.Tasks) == 0 {
+			return m
+		}
 		s := &serverView{name: msg.Server, address: msg.Address, taskMap: make(map[string]*taskView, len(msg.Tasks))}
 		meta := make(map[string]gorun.TaskMeta, len(msg.TaskMeta))
 		for _, tm := range msg.TaskMeta {

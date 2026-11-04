@@ -116,6 +116,22 @@ func keyPress(k string) tea.KeyPressMsg {
 	return tea.KeyPressMsg{Code: rune(k[0]), Text: k}
 }
 
+func TestTUIHidesServersWithoutTasks(t *testing.T) {
+	m := newTUIModel("test", false, func() {})
+	m = m.applyEvent(gorun.PlanEvent{Server: "empty", Address: "empty:22"})
+	m = m.applyEvent(gorun.PlanEvent{Server: "worker", Address: "worker:22", Tasks: []string{"build"}})
+
+	if len(m.servers) != 1 || m.servers[0].name != "worker" {
+		t.Fatalf("servers = %v, want only worker", m.servers)
+	}
+	if m.server("empty") != nil {
+		t.Fatal("server without tasks should not be in the server map")
+	}
+	if view := ansi.Strip(m.View().Content); strings.Contains(view, "empty") {
+		t.Fatalf("server without tasks appeared in the TUI:\n%s", view)
+	}
+}
+
 func BenchmarkTUICompactView(b *testing.B) {
 	m := bigTUIModel(b)
 	b.ResetTimer()

@@ -275,10 +275,16 @@ func UpdateDatabase(ctx context.Context, st *store.Store, ev *Event) {
 				slog.Error("gorun nats: failed to add server", "server", server, "error", err)
 			}
 		}
+		if err := st.SetRunEnvVars(ctx, ev.GorunUUID, ev.EnvVars, ev.Vars); err != nil {
+			slog.Error("gorun nats: failed to set run env vars", "error", err)
+		}
 	case "plan":
 		if ev.Server != "" {
 			if err := st.AddServer(ctx, ev.GorunUUID, ev.Server, ev.Address); err != nil {
 				slog.Error("gorun nats: failed to add server", "server", ev.Server, "error", err)
+			}
+			if err := st.SetServerEnvVars(ctx, ev.GorunUUID, ev.Server, ev.EnvVars, ev.Vars); err != nil {
+				slog.Error("gorun nats: failed to set server env vars", "server", ev.Server, "error", err)
 			}
 		}
 	case "task":
@@ -288,6 +294,12 @@ func UpdateDatabase(ctx context.Context, st *store.Store, ev *Event) {
 		duration := time.Duration(ev.Duration)
 		if err := st.UpsertTask(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.State, ev.Command, ev.Stdout, ev.Stderr, ev.ExitCode, duration); err != nil {
 			slog.Error("gorun nats: failed to upsert task", "error", err)
+		}
+		if err := st.SetTaskEnvVars(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.EnvVars, ev.Vars); err != nil {
+			slog.Error("gorun nats: failed to set task env vars", "error", err)
+		}
+		if err := st.SetTaskEnvVars(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.EnvVars, ev.Vars); err != nil {
+			slog.Error("gorun nats: failed to set task env vars", "error", err)
 		}
 	case "process_finished":
 		duration := time.Duration(ev.Duration)
@@ -334,6 +346,9 @@ func (h *eventHandler) updateProcessStarted(ctx context.Context, ev *Event) {
 			slog.Error("gorun nats: failed to add server", "server", server, "error", err)
 		}
 	}
+	if err := h.store.SetRunEnvVars(ctx, ev.GorunUUID, ev.EnvVars, ev.Vars); err != nil {
+		slog.Error("gorun nats: failed to set run env vars", "error", err)
+	}
 }
 
 func (h *eventHandler) updatePlan(ctx context.Context, ev *Event) {
@@ -343,6 +358,9 @@ func (h *eventHandler) updatePlan(ctx context.Context, ev *Event) {
 	if ev.Server != "" {
 		if err := h.store.AddServer(ctx, ev.GorunUUID, ev.Server, ev.Address); err != nil {
 			slog.Error("gorun nats: failed to add server", "server", ev.Server, "error", err)
+		}
+		if err := h.store.SetServerEnvVars(ctx, ev.GorunUUID, ev.Server, ev.EnvVars, ev.Vars); err != nil {
+			slog.Error("gorun nats: failed to set server env vars", "server", ev.Server, "error", err)
 		}
 	}
 }

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -33,6 +34,8 @@ type TaskDetail struct {
 	Stderr   string
 	ExitCode int
 	Duration time.Duration
+	EnvVars  map[string]string
+	Vars     map[string]any
 }
 
 type RunDetail struct {
@@ -43,6 +46,12 @@ type RunDetail struct {
 	// ServerErrors holds, by server name, why a server couldn't run its tasks at
 	// all (e.g. its SSH connection failed). Such servers have no tasks recorded.
 	ServerErrors map[string]string
+
+	// EnvVars holds the merged env vars per server, and at run level under "".
+	ServerEnvVars map[string]map[string]string
+	ServerVars    map[string]map[string]any
+	RunEnvVars    map[string]string
+	RunVars       map[string]any
 }
 
 type Store struct {
@@ -110,6 +119,12 @@ func (s *Store) migrate() error {
 	// Ensure columns added later exist on databases created before them.
 	s.addColumn("tasks", "command")
 	s.addColumn("servers", "error")
+	s.addColumn("servers", "envvars")
+	s.addColumn("servers", "vars")
+	s.addColumn("tasks", "envvars")
+	s.addColumn("tasks", "vars")
+	s.addColumn("runs", "envvars")
+	s.addColumn("runs", "vars")
 
 	return nil
 }
@@ -149,6 +164,38 @@ func (s *Store) AddServer(ctx context.Context, runID, name, address string) erro
 	_, err := s.db.ExecContext(ctx,
 		`INSERT OR REPLACE INTO servers (run_id,name,address) VALUES (?,?,?)`,
 		runID, name, address)
+	return err
+}
+
+// SetServerEnvVars stores the merged env vars and vars for a server.
+func (s *Store) SetServerEnvVars(ctx context.Context, runID, name string, envvars map[string]string, vars map[string]any) error {
+	envJSON, _ := json.Marshal(envvars)
+	varJSON, _ := json.Marshal(vars)
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE servers SET envvars=?, vars=? WHERE run_id=? AND name=?`,
+		string(envJSON), string(varJSON), runID, name)
+	return err
+}
+
+// SetRunEnvVars stores the global env vars and vars for a run.
+func (s *Store) SetRunEnvVars(ctx context.Context, runID string, envvars map[string]string, vars map[string]any) error {
+	envJSON, _ := json.Marshal(envvars)
+	varJSON, _ := json.Marshal(vars)
+	// store on first server row? Instead, we add columns to runs. But runs table has no envvars/vars column yet.
+	// We'll add migration. For now, no-op if columns missing handled by migrate.
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE runs SET envvars=?, vars=? WHERE id=?`,
+		string(envJSON), string(varJSON), runID)
+	return err
+}
+
+// SetTaskEnvVars stores the merged env vars and vars for a task.
+func (s *Store) SetTaskEnvVars(ctx context.Context, runID, server, name string, envvars map[string]string, vars map[string]any) error {
+	envJSON, _ := json.Marshal(envvars)
+	varJSON, _ := json.Marshal(vars)
+	_, err := s.db.ExecContext(ctx,
+		`UPDATE tasks SET envvars=?, vars=? WHERE run_id=? AND server=? AND name=?`,
+		string(envJSON), string(varJSON), runID, server, name)
 	return err
 }
 
@@ -225,14 +272,15 @@ func (s *Store) ListRuns(ctx context.Context) ([]RunSummary, error) {
 
 func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns FROM runs WHERE id=?`, id)
+		`SELECT id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns,envvars,vars FROM runs WHERE id=?`, id)
 	var r RunDetail
 	var started, finished sql.NullString
 	var succ sql.NullInt64
 	var pid sql.NullInt64
 	var total, failed, skipped sql.NullInt64
 	var dur sql.NullInt64
-	if err := row.Scan(&r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &succ, &total, &failed, &skipped, &dur); err != nil {
+	var runEnv, runVars sql.NullString
+	if err := row.Scan(&r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &succ, &total, &failed, &skipped, &dur, &runEnv, &runVars); err != nil {
 		return nil, err
 	}
 	r.PID = int(pid.Int64)
@@ -252,23 +300,50 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 		r.Success = r.Failed == 0 && r.Skipped == 0
 	}
 	r.Duration = time.Duration(dur.Int64)
+	if runEnv.Valid && runEnv.String != "" {
+		var ev map[string]string
+		if json.Unmarshal([]byte(runEnv.String), &ev) == nil {
+			r.RunEnvVars = ev
+		}
+	}
+	if runVars.Valid && runVars.String != "" {
+		var vv map[string]any
+		if json.Unmarshal([]byte(runVars.String), &vv) == nil {
+			r.RunVars = vv
+		}
+	}
 
 	// servers
-	srows, err := s.db.QueryContext(ctx, `SELECT name,address,error FROM servers WHERE run_id=?`, id)
+	srows, err := s.db.QueryContext(ctx, `SELECT name,address,error,envvars,vars FROM servers WHERE run_id=?`, id)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = srows.Close() }()
 	r.ServerErrors = map[string]string{}
+	r.ServerEnvVars = map[string]map[string]string{}
+	r.ServerVars = map[string]map[string]any{}
 	for srows.Next() {
 		var name, addr string
 		var serverErr sql.NullString
-		if err := srows.Scan(&name, &addr, &serverErr); err != nil {
+		var envJSON, varJSON sql.NullString
+		if err := srows.Scan(&name, &addr, &serverErr, &envJSON, &varJSON); err != nil {
 			return nil, err
 		}
 		r.Servers = append(r.Servers, name)
 		if serverErr.String != "" {
 			r.ServerErrors[name] = serverErr.String
+		}
+		if envJSON.Valid && envJSON.String != "" {
+			var ev map[string]string
+			if json.Unmarshal([]byte(envJSON.String), &ev) == nil {
+				r.ServerEnvVars[name] = ev
+			}
+		}
+		if varJSON.Valid && varJSON.String != "" {
+			var vv map[string]any
+			if json.Unmarshal([]byte(varJSON.String), &vv) == nil {
+				r.ServerVars[name] = vv
+			}
 		}
 	}
 	if err := srows.Err(); err != nil {
@@ -299,14 +374,27 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 // GetTask loads the full detail (command, stdout, stderr) for a single task.
 func (s *Store) GetTask(ctx context.Context, runID, server, name string) (TaskDetail, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT server,name,state,command,stdout,stderr,exit_code,duration_ns FROM tasks WHERE run_id=? AND server=? AND name=?`,
+		`SELECT server,name,state,command,stdout,stderr,exit_code,duration_ns,envvars,vars FROM tasks WHERE run_id=? AND server=? AND name=?`,
 		runID, server, name)
 	var td TaskDetail
 	var dur sql.NullInt64
-	if err := row.Scan(&td.Server, &td.Name, &td.State, &td.Command, &td.Stdout, &td.Stderr, &td.ExitCode, &dur); err != nil {
+	var envJSON, varJSON sql.NullString
+	if err := row.Scan(&td.Server, &td.Name, &td.State, &td.Command, &td.Stdout, &td.Stderr, &td.ExitCode, &dur, &envJSON, &varJSON); err != nil {
 		return TaskDetail{}, err
 	}
 	td.Duration = time.Duration(dur.Int64)
+	if envJSON.Valid && envJSON.String != "" {
+		var ev map[string]string
+		if json.Unmarshal([]byte(envJSON.String), &ev) == nil {
+			td.EnvVars = ev
+		}
+	}
+	if varJSON.Valid && varJSON.String != "" {
+		var vv map[string]any
+		if json.Unmarshal([]byte(varJSON.String), &vv) == nil {
+			td.Vars = vv
+		}
+	}
 	return td, nil
 }
 

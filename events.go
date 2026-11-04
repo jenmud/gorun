@@ -52,13 +52,15 @@ const (
 
 // ProcessStartedEvent is published when a gorun process starts running.
 type ProcessStartedEvent struct {
-	Type      string    `json:"type"`
-	GorunUUID string    `json:"gorun_uuid"`
-	Title     string    `json:"title"`
-	Servers   []string  `json:"servers"`
-	StartedAt time.Time `json:"started_at"`
-	Hostname  string    `json:"hostname"`
-	PID       int       `json:"pid"`
+	Type      string            `json:"type"`
+	GorunUUID string            `json:"gorun_uuid"`
+	Title     string            `json:"title"`
+	Servers   []string          `json:"servers"`
+	StartedAt time.Time         `json:"started_at"`
+	Hostname  string            `json:"hostname"`
+	PID       int               `json:"pid"`
+	EnvVars   map[string]string `json:"envvars,omitempty"`
+	Vars      map[string]any    `json:"vars,omitempty"`
 }
 
 // ProcessFinishedEvent is published when a gorun process finishes running.
@@ -75,12 +77,14 @@ type ProcessFinishedEvent struct {
 
 // PlanEvent is sent once per server, before any task runs, with the tasks in execution order.
 type PlanEvent struct {
-	Type      string     `json:"type"`
-	GorunUUID string     `json:"gorun_uuid"`
-	Server    string     `json:"server"`
-	Address   string     `json:"address"`
-	Tasks     []string   `json:"tasks"`
-	TaskMeta  []TaskMeta `json:"task_meta,omitempty"`
+	Type      string            `json:"type"`
+	GorunUUID string            `json:"gorun_uuid"`
+	Server    string            `json:"server"`
+	Address   string            `json:"address"`
+	Tasks     []string          `json:"tasks"`
+	TaskMeta  []TaskMeta        `json:"task_meta,omitempty"`
+	EnvVars   map[string]string `json:"envvars,omitempty"`
+	Vars      map[string]any    `json:"vars,omitempty"`
 }
 
 // TaskMeta carries the documentation attached to a task in a PlanEvent, so
@@ -95,17 +99,19 @@ type TaskMeta struct {
 
 // TaskEvent is sent when a task changes state.
 type TaskEvent struct {
-	Type      string        `json:"type"`
-	GorunUUID string        `json:"gorun_uuid"`
-	Server    string        `json:"server"`
-	Task      string        `json:"task"`
-	State     TaskState     `json:"state"`
-	Stdout    string        `json:"stdout,omitempty"`
-	Stderr    string        `json:"stderr,omitempty"`
-	Command   string        `json:"command,omitempty"`
-	ExitCode  int           `json:"exit_code"`
-	Err       error         `json:"error,omitempty"`
-	Duration  time.Duration `json:"duration"`
+	Type      string            `json:"type"`
+	GorunUUID string            `json:"gorun_uuid"`
+	Server    string            `json:"server"`
+	Task      string            `json:"task"`
+	State     TaskState         `json:"state"`
+	Stdout    string            `json:"stdout,omitempty"`
+	Stderr    string            `json:"stderr,omitempty"`
+	Command   string            `json:"command,omitempty"`
+	EnvVars   map[string]string `json:"envvars,omitempty"`
+	Vars      map[string]any    `json:"vars,omitempty"`
+	ExitCode  int               `json:"exit_code"`
+	Err       error             `json:"error,omitempty"`
+	Duration  time.Duration     `json:"duration"`
 	// Attempt and Attempts are set when a task has retries configured. A
 	// running event with Attempt greater than one means the previous attempt
 	// failed and the task is being retried.

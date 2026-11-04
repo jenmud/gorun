@@ -731,6 +731,19 @@ func (m historyModel) View() tea.View {
 		agg[t.Server] = a
 	}
 
+	if len(run.RunEnvVars) > 0 {
+		lines = append(lines, mutedStyle.Render("  run env vars"))
+		for _, l := range envTableLines(run.RunEnvVars, m.width-4) {
+			lines = append(lines, "  "+l)
+		}
+	}
+	if len(run.RunVars) > 0 {
+		lines = append(lines, mutedStyle.Render("  run vars"))
+		for _, l := range varsTableLines(run.RunVars, m.width-4) {
+			lines = append(lines, "  "+l)
+		}
+	}
+
 	cursorLine := 0
 	for idx, it := range m.items {
 		if it.isServer {
@@ -768,6 +781,20 @@ func (m historyModel) View() tea.View {
 			}
 			if msg := run.ServerErrors[it.server]; msg != "" && it.expanded {
 				lines = append(lines, "  "+failStyle.Render("✗ "+msg))
+			}
+			if it.expanded {
+				if ev := run.ServerEnvVars[it.server]; len(ev) > 0 {
+					lines = append(lines, mutedStyle.Render("  env vars"))
+					for _, l := range envTableLines(ev, m.width-4) {
+						lines = append(lines, "  "+l)
+					}
+				}
+				if vv := run.ServerVars[it.server]; len(vv) > 0 {
+					lines = append(lines, mutedStyle.Render("  vars"))
+					for _, l := range varsTableLines(vv, m.width-4) {
+						lines = append(lines, "  "+l)
+					}
+				}
 			}
 			continue
 		}
@@ -834,6 +861,19 @@ func (m historyModel) View() tea.View {
 			if t.Stderr != "" {
 				lines = append(lines, failStyle.Render("      stderr"))
 				for _, l := range strings.Split(strings.TrimRight(t.Stderr, "\r\n"), "\n") {
+					lines = append(lines, "        "+l)
+				}
+			}
+			if len(t.EnvVars) > 0 {
+				lines = append(lines, mutedStyle.Render("      env vars"))
+				width := m.width - 8
+				for _, l := range envTableLines(t.EnvVars, width) {
+					lines = append(lines, "        "+l)
+				}
+			}
+			if len(t.Vars) > 0 {
+				lines = append(lines, mutedStyle.Render("      vars"))
+				for _, l := range varsTableLines(t.Vars, m.width-8) {
 					lines = append(lines, "        "+l)
 				}
 			}

@@ -561,7 +561,7 @@ func newServerSelectionModel(title string, servers []gorun.Server) serverSelecti
 	}
 	for _, s := range servers {
 		m.envOpen[s.Name] = true
-		m.varsOpen[s.Name] = true
+		m.varsOpen[s.Name] = false
 	}
 
 	groups, tags := map[string]bool{}, map[string]bool{}

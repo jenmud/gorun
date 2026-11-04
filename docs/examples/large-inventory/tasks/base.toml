@@ -1,0 +1,14 @@
+# ≈ roles/common
+[tasks.timezone]
+description = "Set the timezone"
+cmd = "timedatectl set-timezone UTC"
+sudo = true
+
+[tasks.packages]
+description = "Refresh package lists"
+cmd = "apt-get update -q"
+sudo = true
+
+[bundles.base]
+description = "Minimal setup every box gets"
+tasks = ["timezone", "packages"]

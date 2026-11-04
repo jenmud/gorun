@@ -1,0 +1,5 @@
+# ≈ inventory [web]: one line per host
+[servers.hosts]
+web-01 = { hostname = "web-01.example.com", groups = ["web"] }
+web-02 = { hostname = "web-02.example.com", groups = ["web"] }
+web-03 = { hostname = "web-03.example.com", groups = ["web"], vars = { nginx_workers = "8" } }

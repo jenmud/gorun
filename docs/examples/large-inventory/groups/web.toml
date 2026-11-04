@@ -1,0 +1,8 @@
+# ≈ group_vars/web
+[server_groups.web]
+tags = ["web", "prod"]
+tasks = ["@nginx"]
+vars = { nginx_workers = "4" }
+    [server_groups.web.ssh]
+    username = "deploy"
+    identityfile = "~/.ssh/id_ed25519"

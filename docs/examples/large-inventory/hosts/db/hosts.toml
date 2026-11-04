@@ -1,0 +1,5 @@
+# ≈ inventory [db]
+[servers.hosts]
+db-01 = { hostname = "db-01.example.com", groups = ["db"] }
+db-02 = { hostname = "db-02.example.com", groups = ["db"] }
+db-03 = { hostname = "db-03.example.com", groups = ["db"] }

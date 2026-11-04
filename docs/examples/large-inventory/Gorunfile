@@ -1,0 +1,14 @@
+# Root of the split inventory. `include` is proposed, not yet implemented.
+include = [
+  "tasks/*.toml",
+  "groups/*.toml",
+  "hosts/*/*.toml",
+]
+
+title = "Large inventory"
+
+[envvars]
+TZ = "UTC"
+
+[servers]
+tasks = ["@base"]

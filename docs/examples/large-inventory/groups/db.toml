@@ -1,0 +1,6 @@
+# ≈ group_vars/db
+[server_groups.db]
+tags = ["db", "prod"]
+    [server_groups.db.ssh]
+    username = "deploy"
+    identityfile = "~/.ssh/id_ed25519"

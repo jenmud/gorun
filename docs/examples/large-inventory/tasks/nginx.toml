@@ -1,0 +1,14 @@
+# ≈ roles/nginx
+[tasks.nginx-install]
+description = "Install nginx"
+cmd = "apt-get install -y -q nginx"
+sudo = true
+
+[tasks.nginx-reload]
+description = "Reload nginx after a config change"
+cmd = "systemctl reload nginx"
+sudo = true
+
+[bundles.nginx]
+description = "Web server"
+tasks = ["nginx-install", "nginx-reload"]

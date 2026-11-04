@@ -188,3 +188,11 @@ func inputClass() string {
 func addButtonClass() string {
 	return "w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 transition hover:bg-zinc-700"
 }
+
+// navClass styles a navigation tab, highlighting the current page.
+func navClass(on bool) string {
+	if on {
+		return "rounded-md bg-zinc-800 px-3 py-1.5 font-medium text-zinc-100"
+	}
+	return "rounded-md px-3 py-1.5 text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-200"
+}

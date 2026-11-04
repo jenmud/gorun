@@ -160,7 +160,7 @@ templ addGroupForm(files []FileOption) {
 templ addBundleForm(files []FileOption) {
 	<section class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
 		<h2 class="text-sm font-semibold text-zinc-100">Add a bundle</h2>
-		<p class="mt-1 text-xs text-zinc-500">A named list of tasks. Use it as <span class="font-mono">@name</span> anywhere a task list goes.</p>
+		<p class="mt-1 text-xs text-zinc-500">A named list of tasks. Use it as <span class="font-mono">{ "@name" }</span> anywhere a task list goes.</p>
 		<form method="post" action="/config/add" class="mt-3 space-y-2">
 			<input type="hidden" name="kind" value="bundle"/>
 			<input name="name" required placeholder="name, e.g. baseline" class={ inputClass() }/>

@@ -120,6 +120,11 @@ if err := cfg.Run(context.Background(), servers...); err != nil {
 machine, and `RunLocal` runs tasks locally without needing an SSH server. `NewLocalTaskExec`
 creates task executors that run locally, and `Server.IsLocal` reports whether a server has no SSH.
 
+A local server runs only tasks marked [`local = true`](gorunfile.md#local-only-tasks), and every
+other task runs only over SSH. This holds for `Run`, `RunLocal` and the pipelines
+(`ServersPipeline`, `ServerPipeline`): tasks of the wrong kind, and tasks that depend on them, are
+dropped. `RunTask` returns an error when none of its servers can run the task.
+
 ## Shell completion
 
 Bash can complete gorun's flags, Gorunfile paths, and the task, bundle, server, tag and group

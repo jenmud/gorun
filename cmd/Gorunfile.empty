@@ -16,8 +16,8 @@ envvars = { APP_ENV = "development" }   # exported to every task (a task's own e
 # vars = { region = "home" }             # template data for every task on this run (a task's own vars win)
 
 # Global SSH settings: only config_file is used. Setting it gives every host SSH settings,
-# so hosts without their own (like localhost below) would run over SSH too. Put shared
-# logins on a server group instead (see below).
+# so hosts without their own (like localhost below) would run over SSH too and skip their
+# local = true tasks. Put shared logins on a server group instead (see below).
 # [ssh]
 # config_file = "~/.ssh/config"   # fills in user/port/key/hostname a host doesn't set
 
@@ -29,12 +29,14 @@ envvars = { APP_ENV = "development" }   # exported to every task (a task's own e
 description = "Say hello"         # one line, shown in lists, the picker and the TUI
 cmd_template = "echo 'hello from {{.Name}}, tags:{{range .Tags}} #{{.}}{{end}}'"
 rerun = "safe"                    # safe | unsafe; omit if you don't know
+local = true                      # runs on localhost below; tasks without it only run over SSH
 
 [tasks.show-env]
 description = "Print the environment this server runs with"
 cmd = 'echo "APP_ENV=$APP_ENV REGION=$REGION"'
 depends_on = ["hello"]            # always pulled in and run first
 rerun = "safe"
+local = true
 
 # Every task option (pick one command source: cmd, cmd_file, cmd_template or
 # cmd_template_file; a task can also be copies only):
@@ -54,7 +56,7 @@ rerun = "safe"
 # retries = 2                     # extra attempts after a failure (default 0)
 # retry_delay = "5s"              # wait before each retry (default 50ms, "0s" = immediately)
 # retry_unsafe = false            # allow retries of a rerun = "unsafe" task
-# local = true                   # only run this task on local (no-SSH) servers
+# local = true                    # only on local (no-SSH) servers; without it, only over SSH
 # envvars = { NGINX_PORT = "8080" }
 # vars = { port = 8080 }          # template data for this task only: {{.vars.port}}
 #                                 # may nest: [[tasks.example.vars.sites]] is a list
@@ -107,7 +109,7 @@ envvars = { REGION = "home" }
 [servers]
 tasks = ["@base"]
 
-[servers.hosts.localhost]         # no hostname and no ssh: runs on this machine
+[servers.hosts.localhost]         # no hostname and no ssh: runs local = true tasks on this machine
 groups = ["local"]
 tags = ["dev"]
 

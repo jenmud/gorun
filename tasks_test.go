@@ -126,6 +126,7 @@ func TestRunEmitsTaskMetadataInPlan(t *testing.T) {
 			"deploy": {
 				Name:        "deploy",
 				Cmd:         "true",
+				Local:       true,
 				Description: "Deploy the app",
 				Details:     "Replaces the running binary.",
 				Rerun:       RerunUnsafe,
@@ -162,7 +163,7 @@ func TestRunEmitsTimeout(t *testing.T) {
 	var failed *TaskEvent
 	cfg := Config{
 		Tasks: map[string]Task{
-			"slow": {Name: "slow", Cmd: "echo working >&2; sleep 5", Timeout: 50 * time.Millisecond},
+			"slow": {Name: "slow", Cmd: "echo working >&2; sleep 5", Local: true, Timeout: 50 * time.Millisecond},
 		},
 		Servers: []Server{{Name: "local", TaskNames: []string{"slow"}}},
 		OnEvent: func(event any) {
@@ -295,7 +296,7 @@ func TestRunRetriesUntilSuccess(t *testing.T) {
 	)
 	cfg := Config{
 		Tasks: map[string]Task{
-			"flaky": {Name: "flaky", Cmd: cmd, Retries: 2},
+			"flaky": {Name: "flaky", Cmd: cmd, Local: true, Retries: 2},
 		},
 		Servers: []Server{{Name: "local", TaskNames: []string{"flaky"}}},
 		OnEvent: func(event any) {
@@ -350,7 +351,7 @@ func TestRunRetriesExhaustedCountsOneFailure(t *testing.T) {
 	)
 	cfg := Config{
 		Tasks: map[string]Task{
-			"broken": {Name: "broken", Cmd: "exit 7", Retries: 2},
+			"broken": {Name: "broken", Cmd: "exit 7", Local: true, Retries: 2},
 		},
 		Servers: []Server{{Name: "local", TaskNames: []string{"broken"}}},
 		OnEvent: func(event any) {
@@ -399,7 +400,7 @@ func TestRunDoesNotRetryTimeouts(t *testing.T) {
 	)
 	cfg := Config{
 		Tasks: map[string]Task{
-			"slow": {Name: "slow", Cmd: "sleep 5", Timeout: 50 * time.Millisecond, Retries: 3},
+			"slow": {Name: "slow", Cmd: "sleep 5", Local: true, Timeout: 50 * time.Millisecond, Retries: 3},
 		},
 		Servers: []Server{{Name: "local", TaskNames: []string{"slow"}}},
 		OnEvent: func(event any) {
@@ -439,7 +440,7 @@ func TestRunWithoutRetriesOmitsAttemptInfo(t *testing.T) {
 	var final *TaskEvent
 	cfg := Config{
 		Tasks: map[string]Task{
-			"once": {Name: "once", Cmd: "true"},
+			"once": {Name: "once", Cmd: "true", Local: true},
 		},
 		Servers: []Server{{Name: "local", TaskNames: []string{"once"}}},
 		OnEvent: func(event any) {
@@ -537,7 +538,7 @@ func TestRunWaitsBetweenRetries(t *testing.T) {
 	var starts []time.Time
 	cfg := Config{
 		Tasks: map[string]Task{
-			"broken": {Name: "broken", Cmd: "exit 1", Retries: 1, RetryDelay: &delay},
+			"broken": {Name: "broken", Cmd: "exit 1", Local: true, Retries: 1, RetryDelay: &delay},
 		},
 		Servers: []Server{{Name: "local", TaskNames: []string{"broken"}}},
 		OnEvent: func(event any) {
@@ -617,6 +618,7 @@ func TestRunDoesNotRetryUnsafeTask(t *testing.T) {
 			"rotate": {
 				Name:    "rotate",
 				Cmd:     "echo boom >&2; exit 9",
+				Local:   true,
 				Rerun:   RerunUnsafe,
 				Retries: 2,
 			},
@@ -685,6 +687,7 @@ func TestRunRetriesUnsafeWhenOverridden(t *testing.T) {
 			"rotate": {
 				Name:        "rotate",
 				Cmd:         cmd,
+				Local:       true,
 				Rerun:       RerunUnsafe,
 				Retries:     1,
 				RetryDelay:  &zero,
@@ -723,8 +726,8 @@ func TestTaskEventCommandIsAsWritten(t *testing.T) {
 	command := "set -e\nfor f in a b; do\n\techo \"it's $f\"\ndone\n"
 	cfg := Config{
 		Tasks: map[string]Task{
-			"multi":   {Name: "multi", Cmd: command},
-			"shelled": {Name: "shelled", Cmd: command, Shell: "sh -c"},
+			"multi":   {Name: "multi", Cmd: command, Local: true},
+			"shelled": {Name: "shelled", Cmd: command, Shell: "sh -c", Local: true},
 		},
 		Servers: []Server{{Name: "local", TaskNames: []string{"multi", "shelled"}}},
 	}

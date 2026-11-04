@@ -97,9 +97,15 @@ func dumpTasks(cfg *gorun.Config, dir string, servers map[string]gorun.Server, s
 
 		var server gorun.Server
 		haveServer := false
-		if len(serverNames) > 0 {
-			server = servers[serverNames[0]]
-			haveServer = true
+		// render it for a server of its own kind: local = true tasks only run locally
+		for _, sname := range serverNames {
+			if servers[sname].IsLocal() == task.Local {
+				server = servers[sname]
+				haveServer = true
+				break
+			}
+		}
+		if haveServer {
 			if len(cfg.Vars) > 0 {
 				if server.Vars == nil {
 					server.Vars = map[string]any{}

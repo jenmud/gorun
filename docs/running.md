@@ -58,9 +58,11 @@ Press **ctrl+e** on a file-backed task to open its `cmd_file` or `cmd_template_f
 The other tabs, **Bundles** and **Groups**, let you browse what's in the Gorunfile.
 On **Bundles**, press **space** to check one or more bundles, then go back to **Servers** and
 select the hosts to run them against. The tasks pane lists only the checked bundles' tasks (and
-their dependencies), and that is what runs instead of each server's own pipeline; press **space**
-on the bundle again to uncheck it. **History** shows [past runs](#history). Press
-**shift+tab** to move between tabs, and **ctrl+k** for a list of every shortcut.
+their dependencies), and that is what runs instead of each server's own pipeline. Each server
+still runs only the tasks of its kind: [`local = true`](gorunfile.md#local-only-tasks) tasks on
+local servers, the rest over SSH. Press **space** on the bundle again to uncheck it. **History**
+shows [past runs](#history). Press **shift+tab** to move between tabs, and **ctrl+k** for a list
+of every shortcut.
 
 Command-line filters narrow what the picker offers: `gorun Gorunfile --tag prod --task @baseline`
 opens a picker with just those servers and tasks.
@@ -146,7 +148,9 @@ gorun Gorunfile --task 'deploy-*'                          # every matching task
 
 > [!CAUTION]
 > `--task X` runs X on **every** selected server, even ones that don't normally run it, and
-> ignores `skip_tasks`. Aim it with `--server`, `--tag` or `--group`.
+> ignores `skip_tasks`. Aim it with `--server`, `--tag` or `--group`. Only the server kind still
+> applies: a [`local = true`](gorunfile.md#local-only-tasks) task runs only on local servers, and
+> any other task only over SSH.
 
 ## Checking a Gorunfile before you run it
 

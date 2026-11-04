@@ -8,9 +8,14 @@ local = true
 [tasks.show-env]
 cmd = 'echo "APP_ENV=$APP_ENV"'
 depends_on = ["hello"]
+local = true
+
+[tasks.uptime]
+cmd = "uptime"
+# not local: runs only over SSH
 
 [servers]
-tasks = ["show-env"]
+tasks = ["show-env", "uptime"]
 
 [servers.hosts.local]
 # no ssh: runs on this machine

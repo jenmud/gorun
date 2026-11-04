@@ -402,7 +402,11 @@ func TestPickerListTabs(t *testing.T) {
 func TestPickerBundleSelection(t *testing.T) {
 	cfg := loadList(t)
 	cfg.SelectedTasks = []string{"verify"} // as set by --task
-	m := newServerSelectionModel("t", pipelineServers()).withLists(&cfg)
+	servers := pipelineServers()
+	for i := range servers {
+		servers[i].SSH = gorun.SSH{User: "deploy"} // @base's tasks only run over SSH
+	}
+	m := newServerSelectionModel("t", servers).withLists(&cfg)
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
 	m = next.(serverSelectionModel)
 
@@ -453,5 +457,73 @@ func TestPickerBundleSelection(t *testing.T) {
 	}
 	if diff := cmp.Diff([]string{"greet", "timezone", "deploy-user"}, m.servers[0].TaskNames); diff != "" {
 		t.Errorf("web-1 should have its own pipeline back (-want +got):\n%s", diff)
+	}
+}
+
+// Checking a bundle replaces every selected server's tasks, but a local server must still
+// skip remote-only tasks, and an SSH server local-only ones.
+func TestPickerBundleSelectionKeepsLocalAndRemoteApart(t *testing.T) {
+	var cfg gorun.Config
+	if err := cfg.Load(strings.NewReader(`
+[tasks.docker]
+cmd = "true"
+
+[tasks.caddy]
+cmd = "true"
+
+[tasks.lint]
+cmd = "true"
+local = true
+
+[bundles.validate]
+tasks = ["docker", "caddy"]
+
+[bundles.check]
+tasks = ["lint"]
+
+[servers.hosts.web-1]
+hostname = "web-1.example.com"
+tasks = ["@validate"]
+  [servers.hosts.web-1.ssh]
+  username = "deploy"
+
+[servers.hosts.laptop]
+tasks = ["@check"]
+`)); err != nil {
+		t.Fatal(err)
+	}
+
+	servers := []gorun.Server{}
+	for _, s := range cfg.Servers {
+		pipeline, err := cfg.ServerPipeline(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		servers = append(servers, pipeline)
+	}
+	m := newServerSelectionModel("t", servers).withLists(&cfg)
+
+	tasksOf := func() map[string][]string {
+		got := map[string][]string{}
+		for _, s := range m.servers {
+			names := []string{}
+			for _, task := range s.Tasks {
+				names = append(names, task.Name)
+			}
+			got[s.Name] = names
+		}
+		return got
+	}
+
+	m.selectedBundles = map[string]bool{"validate": true}
+	m.applyBundles()
+	if diff := cmp.Diff(map[string][]string{"web-1": {"docker", "caddy"}, "laptop": {}}, tasksOf()); diff != "" {
+		t.Errorf("@validate should only run on the SSH server (-want +got):\n%s", diff)
+	}
+
+	m.selectedBundles = map[string]bool{"check": true}
+	m.applyBundles()
+	if diff := cmp.Diff(map[string][]string{"web-1": {}, "laptop": {"lint"}}, tasksOf()); diff != "" {
+		t.Errorf("@check should only run on the local server (-want +got):\n%s", diff)
 	}
 }

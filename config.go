@@ -384,6 +384,10 @@ func (c *Config) ServersPipeline() (map[string]Server, error) {
 	return sTasks, nil
 }
 
+// ErrNoTasks is returned by Run when no selected server has a task to run. Local
+// servers only run tasks marked local = true, and other tasks only run over SSH.
+var ErrNoTasks = errors.New("no tasks to run: local servers only run tasks marked local = true, and other tasks only run over SSH")
+
 // ServerPipeline returns the server with its tasks, and their dependencies, resolved into run order.
 func (c *Config) ServerPipeline(server Server) (Server, error) {
 	names, err := c.ExpandTaskRefs(server.TaskNames...)
@@ -398,19 +402,18 @@ func (c *Config) ServerPipeline(server Server) (Server, error) {
 		return Server{}, err
 	}
 
-	// Local-only tasks never run on a remote (SSH) server, and anything that
-	// depends on them is dropped too.
-	if !server.IsLocal() {
-		pipeline = c.filterLocalTasks(pipeline)
-	}
+	// A task runs on one kind of server: local-only tasks never run over SSH, and
+	// other tasks never run on the local machine. Anything that depends on a
+	// dropped task is dropped too.
+	local := server.IsLocal()
+	pipeline = dropTasks(pipeline, func(t Task) bool { return t.Local != local })
 
 	server.Tasks = pipeline
 	return server, nil
 }
 
-// filterLocalTasks removes local-only tasks (and tasks that transitively depend
-// on them) from a non-local server's pipeline.
-func (c *Config) filterLocalTasks(tasks []Task) []Task {
+// dropTasks removes the tasks drop reports, and tasks that transitively depend on them.
+func dropTasks(tasks []Task, drop func(Task) bool) []Task {
 	removed := map[string]bool{}
 	changed := true
 	out := append([]Task(nil), tasks...)
@@ -418,7 +421,7 @@ func (c *Config) filterLocalTasks(tasks []Task) []Task {
 		changed = false
 		next := out[:0]
 		for _, t := range out {
-			if t.Local {
+			if drop(t) {
 				removed[t.Name] = true
 				changed = true
 				continue
@@ -468,7 +471,9 @@ func (c *Config) LocalServer() Server {
 }
 
 // RunLocal runs the named tasks (or every task when none are given) on the local
-// machine. Task names may be globs or bundle references ("@name"), just like --task.
+// machine. Only tasks marked local = true run there, and ErrNoTasks is returned
+// when none of them are. Task names may be globs or bundle references ("@name"),
+// just like --task.
 func (c *Config) RunLocal(ctx context.Context, names ...string) error {
 	var taskNames []string
 	if len(names) > 0 {
@@ -512,17 +517,19 @@ func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
 		return errors.New("no servers to run on")
 	}
 
-	if t.Local {
-		filtered := targets[:0]
-		for _, s := range targets {
-			if s.IsLocal() {
-				filtered = append(filtered, s)
-			}
+	// local-only tasks run only on local servers, and other tasks only over SSH
+	filtered := targets[:0]
+	for _, s := range targets {
+		if s.IsLocal() == t.Local {
+			filtered = append(filtered, s)
 		}
-		targets = filtered
-		if len(targets) == 0 {
+	}
+	targets = filtered
+	if len(targets) == 0 {
+		if t.Local {
 			return fmt.Errorf("task %q only runs locally", t.Name)
 		}
+		return fmt.Errorf("task %q only runs over SSH; set local = true to run it on this machine", t.Name)
 	}
 
 	for i := range targets {
@@ -671,6 +678,16 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 			server.Tasks = filtered
 			pipeline[name] = server
 		}
+	}
+
+	// a server left with no tasks of its kind has nothing to do, so don't connect to it
+	for name, server := range pipeline {
+		if len(server.Tasks) == 0 {
+			delete(pipeline, name)
+		}
+	}
+	if len(pipeline) == 0 {
+		return ErrNoTasks
 	}
 
 	serverNames := slices.Sorted(maps.Keys(pipeline))

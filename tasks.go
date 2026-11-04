@@ -84,8 +84,8 @@ type Task struct {
 	Details string `toml:"details,omitempty"`
 	// Rerun is RerunSafe or RerunUnsafe. Empty means unspecified.
 	Rerun string `toml:"rerun,omitempty"`
-	// Local, when true, restricts the task to local servers: it is skipped on any
-	// server that connects over SSH.
+	// Local, when true, runs the task only on local servers and skips it on any
+	// server that connects over SSH. Tasks without it run only over SSH.
 	Local bool `toml:"local,omitempty"`
 	// Retries is how many extra times to run a failed task. Zero means run once.
 	Retries int `toml:"retries,omitempty"`

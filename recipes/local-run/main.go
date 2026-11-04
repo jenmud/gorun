@@ -23,7 +23,8 @@ func main() {
 	}
 	cfg.ResolvePaths(filepath.Dir(f.Name()))
 
-	// Show how local-only tasks are filtered per server.
+	// Show how tasks are filtered per server: local = true tasks only on the
+	// local server, the rest only over SSH.
 	pipelines, err := cfg.ServersPipeline()
 	if err != nil {
 		log.Fatal(err)

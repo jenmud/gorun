@@ -101,6 +101,7 @@ envvars = { token = "global" }
 
 [tasks.show]
 cmd = 'printf "%s" "$TOKEN"'
+local = true
 [tasks.show.envvars]
 TOKEN = "task"
 

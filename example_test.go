@@ -16,9 +16,11 @@ title = "Example"
 
 [tasks.hello]
 cmd = "echo hello"
+local = true
 
 [tasks.goodbye]
 cmd = "echo goodbye"
+local = true
 depends_on = ["hello"]
 `
 	var cfg gorun.Config

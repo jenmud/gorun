@@ -13,7 +13,9 @@
 // template, with optional file copies, sudo, env vars, dependencies, a timeout and retries. Servers
 // ([Server]) pick tasks from the library by name, directly or through named task lists ([Bundle])
 // and shared settings ([ServerGroup]). A server with SSH settings runs its tasks over SSH; one
-// without them runs on the local machine.
+// without them runs on the local machine. A task runs on one kind of server only: a task with
+// local = true ([Task.Local]) runs only on local servers, and every other task runs only over SSH.
+// Tasks of the other kind, and tasks that depend on them, are left out of a server's pipeline.
 //
 //	title = "Provision app servers"
 //
@@ -75,8 +77,9 @@
 // # Running single tasks and running locally
 //
 // [Config.RunTask] runs one task (with its dependencies) on some or all servers, whether or not
-// they normally run it. [Config.RunLocal] runs tasks on this machine without any SSH server, and
-// [LocalServer] and [Config.LocalServer] give a [Server] that runs locally.
+// they normally run it, and returns an error when none of them can run it (see [Task.Local]).
+// [Config.RunLocal] runs tasks on this machine without any SSH server; only tasks marked
+// local = true run there. [LocalServer] and [Config.LocalServer] give a [Server] that runs locally.
 //
 // # Events
 //

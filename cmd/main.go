@@ -385,6 +385,10 @@ func main() {
 	slog.Info("parsed config file")
 
 	for _, server := range servers {
+		// Run skips a server with no tasks of its kind, so don't list it either
+		if len(server.Tasks) == 0 {
+			continue
+		}
 		names := []string{}
 
 		for _, task := range server.Tasks {

@@ -434,6 +434,7 @@ envvars = { GLOBAL = "global", SHARED = "global", TASKWINS = "global" }
 
 [tasks.env]
 cmd = "echo $GLOBAL $SHARED $TASKWINS $GROUP"
+local = true
 envvars = { TASKWINS = "task" }
 
 [server_groups.g]
@@ -477,6 +478,12 @@ tasks = ["env"]
 
 func TestServerPipelineExpandsBundles(t *testing.T) {
 	c := loadGroups(t)
+	// x is a local server, so it only runs local tasks
+	for _, name := range []string{"packages", "timezone", "users"} {
+		task := c.Tasks[name]
+		task.Local = true
+		c.Tasks[name] = task
+	}
 
 	server, err := c.ServerPipeline(Server{Name: "x", TaskNames: []string{"@base"}})
 	if err != nil {

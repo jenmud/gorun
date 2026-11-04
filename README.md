@@ -91,8 +91,10 @@ gorun Gorunfile              # pick what to run: space selects, enter runs
 gorun Gorunfile --run        # or run everything, without the picker
 ```
 
-The starting file runs on your own machine, and documents every option in comments. To run on a
-real server, add one with an `ssh` table:
+The starting file runs on your own machine, and documents every option in comments. Its tasks are
+marked `local = true`: a server without SSH settings runs only those, and every other task runs
+only over SSH. To run on a real server, add one with an `ssh` table, and remove `local = true`
+from the tasks it should run:
 
 ```toml
 [servers.hosts.web-01]

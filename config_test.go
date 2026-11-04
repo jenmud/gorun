@@ -73,9 +73,11 @@ max_parallel = 3
 
 [tasks.packages]
 cmd = "apk add curl"
+local = true
 
 [tasks.timezone]
 cmd = "echo UTC > /etc/timezone"
+local = true
 depends_on = ["packages"]
 
 [tasks.smoke-test]
@@ -163,7 +165,7 @@ func TestRunMaxParallel(t *testing.T) {
 	cfg := Config{
 		MaxParallel: limit,
 		Tasks: map[string]Task{
-			"gate": {Name: "gate", CmdTemplate: command, Timeout: 2 * time.Second},
+			"gate": {Name: "gate", CmdTemplate: command, Local: true, Timeout: 2 * time.Second},
 		},
 		Servers: servers,
 	}

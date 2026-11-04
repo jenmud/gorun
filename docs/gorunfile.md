@@ -281,8 +281,22 @@ It's a label, not a guard: gorun still runs unsafe tasks when you ask.
 
 ### Local-only tasks
 
-`local = true` makes a task run only on [local servers](#ssh-or-local). On SSH servers it is left
-out, together with any task that depends on it.
+> [!WARNING]
+> **Upgrading to v0.9.0:** tasks without `local = true` no longer run on local servers. Before,
+> a server without SSH settings ran every task it was given; now it runs only tasks marked
+> `local = true`. If a local server's list in `gorun Gorunfile --list-servers` is empty, add
+> `local = true` to the tasks it should run.
+
+A task runs on one kind of server only:
+
+| Task | Runs on | Left out on |
+|---|---|---|
+| `local = true` | [local servers](#ssh-or-local) (no SSH settings) | SSH servers |
+| without `local` | SSH servers | local servers |
+
+A task that depends on a left-out task is left out too. This applies to every way of running
+tasks, including a bundle checked in the picker, so checking a bundle of remote checks doesn't run
+them on your own machine.
 
 ## Servers
 
@@ -299,7 +313,8 @@ tags = ["web"]
 
 > [!IMPORTANT]
 > A server runs over SSH **only when it has SSH settings**, in its own `ssh` table or from a
-> [group](#server-groups-and-tags). A server without them runs its tasks **on your own machine**.
+> [group](#server-groups-and-tags). A server without them runs on your own machine, and runs
+> **only tasks marked [`local = true`](#local-only-tasks)**; every other task runs only over SSH.
 
 ```toml
 [servers.hosts.db-01]
@@ -317,7 +332,8 @@ hostname = "db-01.internal"
   in the Gorunfile is the only key offered.
 - Share logins through a [server group](#server-groups-and-tags).
 - The global `[ssh]` table only uses `config_file`, and setting it gives **every** server SSH
-  settings, so servers that would have run locally then use SSH too.
+  settings, so servers that would have run locally then use SSH too, and skip their
+  `local = true` tasks.
 - gorun opens one SSH connection per server and reuses it for every task.
 - Host keys aren't verified, so use gorun on networks you trust.
 
@@ -502,7 +518,7 @@ Every key, grouped by the table it belongs to. `gorun -dump` prints the same lis
 | `timeout` | Go duration, default `30m` |
 | `retries`, `retry_delay`, `retry_unsafe` | retries |
 | `description`, `details`, `rerun` | descriptions and rerun safety |
-| `local` | only run this task on local (no-SSH) servers |
+| `local` | run only on local (no-SSH) servers; without it, the task runs only over SSH |
 
 ### `[tasks.<name>.copy]` / `[[tasks.<name>.copy]]`
 

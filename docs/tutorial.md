@@ -32,6 +32,7 @@ title = "My first Gorunfile"
 
 [tasks.hello]
 cmd = "echo hello from $(hostname)"
+local = true
 
 [servers]
 tasks = ["hello"]
@@ -41,9 +42,14 @@ tasks = ["hello"]
 
 That is three things:
 
-- a **task** called `hello`, which is just a shell command,
+- a **task** called `hello`, which is just a shell command. `local = true` lets it run on your
+  own machine,
 - the list of tasks **every server runs** (`[servers] tasks`),
 - one **server** called `local`. It has no SSH settings, so it runs on your own machine.
+
+> [!IMPORTANT]
+> A server without SSH settings runs **only** tasks marked `local = true`; every other task runs
+> only over SSH. Without `local = true`, `local` would run nothing.
 
 Run it:
 
@@ -69,15 +75,18 @@ title = "My first Gorunfile"
 [tasks.hello]
 description = "Say hello"
 cmd = "echo hello from $(hostname)"
+local = true
 
 [tasks.make-dir]
 description = "Create a scratch directory"
 cmd = "mkdir -p /tmp/gorun-demo"
+local = true
 
 [tasks.write-file]
 description = "Write a file into it"
 cmd = "date > /tmp/gorun-demo/last-run"
 depends_on = ["make-dir"]
+local = true
 
 [servers]
 tasks = ["hello", "write-file"]
@@ -103,7 +112,7 @@ gorun Gorunfile --list-servers    # each server and the tasks it will run, in or
 ## 3. Run on real servers
 
 A server runs over SSH as soon as it has SSH settings. Replace `[servers.hosts.local]` with your
-own servers:
+own servers, and remove `local = true` from the tasks, since tasks marked local never run over SSH:
 
 ```toml
 [servers.hosts.web-1]

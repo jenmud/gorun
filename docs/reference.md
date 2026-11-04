@@ -95,7 +95,7 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | `timeout` | Go duration, default `30m` |
 | `retries`, `retry_delay`, `retry_unsafe` | [retries](gorunfile.md#retries) |
 | `description`, `details`, `rerun` | [descriptions and rerun safety](gorunfile.md#descriptions-and-rerun-safety) |
-| `local` | only run this task on local (no-SSH) servers |
+| `local` | run only on local (no-SSH) servers; without it, the task runs only over SSH |
 
 **`[bundles.<name>]`**: `tasks` (task names and `@bundles`), `description` and `vars` (template variables for the tasks it pulls in).
 

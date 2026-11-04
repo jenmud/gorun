@@ -35,21 +35,15 @@
 //
 // # Loading and running
 //
-// [Config.Load] reads and validates a Gorunfile, and [Config.ResolvePaths] makes its relative
-// paths relative to the file. [Config.Run] then runs every server's tasks, or just the servers
-// you pass it:
-//
-//	f, err := os.Open("Gorunfile")
-//	if err != nil {
-//		return err
-//	}
-//	defer f.Close()
+// [Config.LoadFile] reads and validates a Gorunfile and the files it includes, and
+// [Config.ResolvePaths] makes its relative paths relative to the file. [Config.Run] then runs
+// every server's tasks, or just the servers you pass it:
 //
 //	var cfg gorun.Config
-//	if err := cfg.Load(f); err != nil {
+//	if err := cfg.LoadFile("Gorunfile"); err != nil {
 //		return err
 //	}
-//	cfg.ResolvePaths(filepath.Dir(f.Name()))
+//	cfg.ResolvePaths(filepath.Dir("Gorunfile"))
 //	return cfg.Run(ctx)
 //
 // # Choosing servers and tasks

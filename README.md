@@ -46,7 +46,8 @@ each server's progress live.
 - **Nothing runs by accident.** You pick servers and tasks in a picker first, and every task has a
   timeout.
 - **Grows with you.** Dependencies, bundles, server groups, tags, templates with per-task
-  variables, file copies, retries and secrets from your environment, when you need them.
+  variables, file copies, retries and secrets from your environment, when you need them. Large
+  fleets can be split across files with `include`.
 - **Remembers.** Every run is saved, with its commands and output, to look back on later.
 - **Exports.** Dump every task as a standalone, runnable shell file with `--dump-tasks`, to audit
   or run by hand.

@@ -97,6 +97,9 @@ type Config struct {
 type configFile struct {
 	Config
 
+	// Include lists files to merge into this one, as paths or globs relative to this file.
+	Include []string `toml:"include"`
+
 	Servers struct {
 		// Tasks run on every host that doesn't set its own task list.
 		Tasks []string          `toml:"tasks"`
@@ -116,72 +119,28 @@ func isVarsNestedKey(key toml.Key) bool {
 	return false
 }
 
-// Load reads and updates the config.
+// Load reads a Gorunfile from r. A Gorunfile with an include list must use LoadFile, because
+// include paths are relative to the file that names them.
 func (c *Config) Load(r io.Reader) error {
-	f := configFile{Config: *c}
+	return newLoader(c).load(r, "")
+}
 
-	md, err := toml.NewDecoder(r).Decode(&f)
+// LoadFile reads the Gorunfile at path, and every file it includes, into the config.
+func (c *Config) LoadFile(path string) error {
+	real, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return fmt.Errorf("error with loading config: %w", err)
 	}
-
-	// catch typos, which would otherwise be silently ignored
-	if undecoded := md.Undecoded(); len(undecoded) > 0 {
-		keys := []string{}
-		for _, key := range undecoded {
-			if isVarsNestedKey(key) {
-				continue
-			}
-			keys = append(keys, key.String())
-		}
-		if len(keys) > 0 {
-			return fmt.Errorf("error with loading config: unknown keys: %s", strings.Join(keys, ", "))
-		}
-	}
-
-	*c = f.Config
-
-	if c.MaxParallel < 0 {
-		return fmt.Errorf("error with loading config: max_parallel must not be negative")
-	}
-
-	// tasks, bundles, groups and servers are named by their table keys
-	for name, task := range c.Tasks {
-		task.Name = name
-		c.Tasks[name] = task
-	}
-	for name, bundle := range c.Bundles {
-		bundle.Name = name
-		c.Bundles[name] = bundle
-	}
-	for name, group := range c.Groups {
-		group.Name = name
-		c.Groups[name] = group
-	}
-
-	if err := c.validateLibrary(); err != nil {
+	abs, err := filepath.Abs(real)
+	if err != nil {
 		return fmt.Errorf("error with loading config: %w", err)
 	}
-
-	// map iteration order is random, so walk the keys to keep the servers in file order
-	c.Servers = nil
-	for _, key := range md.Keys() {
-		if len(key) != 3 || key[0] != "servers" || key[1] != "hosts" {
-			continue
-		}
-
-		server := f.Servers.Hosts[key[2]]
-		server.Name = key[2]
-
-		ownTasks := md.IsDefined("servers", "hosts", key[2], "tasks")
-		if err := c.composeServer(&server, f.Servers.Tasks, ownTasks); err != nil {
-			return fmt.Errorf("error with loading config: server %q: %w", server.Name, err)
-		}
-
-		c.Servers = append(c.Servers, server)
+	f, err := os.Open(abs)
+	if err != nil {
+		return fmt.Errorf("error with loading config: %w", err)
 	}
-
-	return nil
+	defer func() { _ = f.Close() }()
+	return newLoader(c).load(f, abs)
 }
 
 // ResolvePaths makes the relative file paths in the config (SSH identity files and task

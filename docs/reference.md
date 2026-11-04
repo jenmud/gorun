@@ -74,6 +74,7 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | Key | Description |
 |---|---|
 | `title` | shown in the picker, the TUI and the history |
+| `include` | list of files or globs to merge in, relative to the file; [splitting a large Gorunfile](gorunfile.md#splitting-a-large-gorunfile) |
 | `log_level` | `debug`, `info`, `warn` or `error`; servers and tasks inherit it |
 | `max_parallel` | servers at once; `0` (default) means all |
 | `max_task_parallel` | tasks at once per host; `0` (default) means one at a time, `-1` means all |

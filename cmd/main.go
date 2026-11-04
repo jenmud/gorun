@@ -228,12 +228,8 @@ func main() {
 	gorun.StartNATS()
 
 	cfg := gorun.Config{}
-	r, err := os.Open(filename)
+	err := cfg.LoadFile(filename)
 	if err != nil {
-		fatal(err)
-	}
-
-	if err := cfg.Load(r); err != nil {
 		fatal(fmt.Errorf("%s: %w", filename, err))
 	}
 

@@ -14,6 +14,7 @@ New to gorun? Start with the [tutorial](tutorial.md). This page explains every o
   - [SSH or local](#ssh-or-local) · [Choosing a server's tasks](#choosing-a-servers-tasks) · [Server variables](#server-variables)
 - [Bundles](#bundles)
 - [Server groups and tags](#server-groups-and-tags)
+- [Splitting a large Gorunfile](#splitting-a-large-gorunfile)
 - [How settings combine](#how-settings-combine)
 - [Parallelism](#parallelism)
 - [Paths and mistakes](#paths-and-mistakes)
@@ -453,6 +454,34 @@ envvars = { REGION = "eu-central-1" }   # the server wins over its groups
     port = 2229                         # the rest comes from the lab group
 ```
 
+## Splitting a large Gorunfile
+
+Move tasks, groups and hosts into their own files with a top-level `include` list. Paths and
+globs are relative to the file that names them:
+
+```toml
+include = [
+  "tasks/*.toml",            # shared tasks and bundles
+  "groups/*.toml",           # server groups
+  "hosts/*/*.toml",          # one folder per role, one file per fleet
+]
+```
+
+- Every file is merged into one config, so you can use names from any of them.
+- A name defined in two files is an error, and the message names both files. File order never
+  changes a value.
+- Only the root Gorunfile sets `title`, `log_level`, `max_parallel`, `max_task_parallel`, `ssh`
+  and `[servers] tasks`.
+- A pattern that matches no files is an error. `*` matches within one folder; `**` is not
+  supported.
+- A file can be included more than once and is read once. Includes that loop back are an error.
+- Included files can include other files.
+- Servers are listed in read order: the root file first, then each include in sorted order.
+- Relative paths in any file (`cmd_file`, copy sources, `identityfile`) are relative to the root
+  Gorunfile.
+
+Check the result with `gorun Gorunfile --list-servers`, or `--list-tasks` for the task library.
+
 ## How settings combine
 
 Settings are layered: global, then each group **in the order the server lists them**, then the
@@ -500,6 +529,7 @@ Every key, grouped by the table it belongs to. `gorun -dump` prints the same lis
 | Key | Description |
 |---|---|
 | `title` | shown in the picker, the TUI and the history |
+| `include` | files or globs to merge in, relative to this file; see [splitting a large Gorunfile](#splitting-a-large-gorunfile) |
 | `log_level` | `debug`, `info`, `warn` or `error`; servers and tasks inherit it |
 | `max_parallel` | servers at once; `0` (default) means all |
 | `max_task_parallel` | tasks at once per host; `0` (default) means one at a time, `-1` means all |

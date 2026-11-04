@@ -1,11 +1,15 @@
 # Large inventory (mock)
 
-A mock of a split Gorunfile for a large fleet, shaped like an Ansible inventory:
-`tasks/` are roles, `groups/` are `group_vars`, `hosts/` is the inventory.
+A split Gorunfile for a large fleet, shaped like an Ansible inventory: `tasks/` are roles,
+`groups/` are `group_vars`, `hosts/` is the inventory. The root `Gorunfile` pulls the other
+files in with [`include`](../../gorunfile.md#splitting-a-large-gorunfile).
 
-> **Proposal, not runnable.** The top-level `include` key below is not implemented yet.
-> Until it is, merge the files by hand or use them as a layout reference. Every other key
-> is current gorun syntax (see [gorunfile.md](../../gorunfile.md)).
+Check it without connecting to anything:
+
+```bash
+gorun docs/examples/large-inventory/Gorunfile --list-servers
+gorun docs/examples/large-inventory/Gorunfile --list-tasks
+```
 
 ```
 large-inventory/
@@ -15,7 +19,7 @@ large-inventory/
 └── hosts/             # ≈ inventory: one line per host
 ```
 
-Rules the mock assumes:
+Rules that apply (see the [full list](../../gorunfile.md#splitting-a-large-gorunfile)):
 
 - Paths in `include` are relative to the file that names them.
 - A name defined in two files is an error, so file order never changes a value.

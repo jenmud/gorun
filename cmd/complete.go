@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"maps"
-	"os"
 	"slices"
 	"sort"
 
@@ -18,14 +17,8 @@ func completionNames(kind, filename string) ([]string, error) {
 		filename = "Gorunfile"
 	}
 
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = f.Close() }()
-
 	cfg := gorun.Config{}
-	if err := cfg.Load(f); err != nil {
+	if err := cfg.LoadFile(filename); err != nil {
 		return nil, fmt.Errorf("%s: %w", filename, err)
 	}
 

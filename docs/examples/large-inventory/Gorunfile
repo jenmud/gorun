@@ -1,4 +1,4 @@
-# Root of the split inventory. `include` is proposed, not yet implemented.
+# Root of the split inventory. The other files are merged in by `include`.
 include = [
   "tasks/*.toml",
   "groups/*.toml",

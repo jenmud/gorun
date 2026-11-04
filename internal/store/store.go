@@ -47,9 +47,10 @@ type RunDetail struct {
 	// all (e.g. its SSH connection failed). Such servers have no tasks recorded.
 	ServerErrors map[string]string
 
-	// EnvVars holds the merged env vars per server, and at run level under "".
+	// ServerEnvVars and ServerVars hold context captured by each plan event.
 	ServerEnvVars map[string]map[string]string
 	ServerVars    map[string]map[string]any
+	ServerAddress map[string]string
 	RunEnvVars    map[string]string
 	RunVars       map[string]any
 }
@@ -322,6 +323,7 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	r.ServerErrors = map[string]string{}
 	r.ServerEnvVars = map[string]map[string]string{}
 	r.ServerVars = map[string]map[string]any{}
+	r.ServerAddress = map[string]string{}
 	for srows.Next() {
 		var name, addr string
 		var serverErr sql.NullString
@@ -330,6 +332,7 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 			return nil, err
 		}
 		r.Servers = append(r.Servers, name)
+		r.ServerAddress[name] = addr
 		if serverErr.String != "" {
 			r.ServerErrors[name] = serverErr.String
 		}

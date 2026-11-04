@@ -298,9 +298,6 @@ func UpdateDatabase(ctx context.Context, st *store.Store, ev *Event) {
 		if err := st.SetTaskEnvVars(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.EnvVars, ev.Vars); err != nil {
 			slog.Error("gorun nats: failed to set task env vars", "error", err)
 		}
-		if err := st.SetTaskEnvVars(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.EnvVars, ev.Vars); err != nil {
-			slog.Error("gorun nats: failed to set task env vars", "error", err)
-		}
 	case "process_finished":
 		duration := time.Duration(ev.Duration)
 		finishedAt := time.Now()
@@ -375,6 +372,9 @@ func (h *eventHandler) updateTask(ctx context.Context, ev *Event) {
 	duration := time.Duration(ev.Duration)
 	if err := h.store.UpsertTask(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.State, ev.Command, ev.Stdout, ev.Stderr, ev.ExitCode, duration); err != nil {
 		slog.Error("gorun nats: failed to upsert task", "error", err)
+	}
+	if err := h.store.SetTaskEnvVars(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.EnvVars, ev.Vars); err != nil {
+		slog.Error("gorun nats: failed to set task env vars", "error", err)
 	}
 }
 

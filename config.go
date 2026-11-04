@@ -860,6 +860,15 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				defer taskWg.Done()
 				name := task.task.Name
 				tlogger := logger.With(slog.String("task", name))
+				historyEnvVars := make(map[string]string, len(server.EnvVars))
+				for k, v := range server.EnvVars {
+					historyEnvVars[strings.ToUpper(k)] = v
+				}
+				if definition, ok := c.Tasks[name]; ok {
+					for k, v := range definition.EnvVars {
+						historyEnvVars[strings.ToUpper(k)] = v
+					}
+				}
 
 				// wait for every dependency to finish first
 				for _, dep := range task.task.DependsOn {
@@ -882,7 +891,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 					err := ctx.Err()
 					tlogger.Warn("task skipped due to cancellation", slog.String("reason", err.Error()))
 					skippedCmd, _ := task.task.CommandFor(&server)
-					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err, EnvVars: server.EnvVars, Vars: server.Vars})
+					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err, EnvVars: historyEnvVars, Vars: task.task.Vars})
 					skippedCount.Add(1)
 					taskSkipped.Add(ctx, 1, metric.WithAttributes(
 						attribute.String("task.name", name),
@@ -919,7 +928,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 					}
 					tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
 					skippedCmd, _ := task.task.CommandFor(&server)
-					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err, EnvVars: server.EnvVars, Vars: server.Vars})
+					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err, EnvVars: historyEnvVars, Vars: task.task.Vars})
 					skippedCount.Add(1)
 					taskSkipped.Add(ctx, 1, metric.WithAttributes(
 						attribute.String("task.name", name),
@@ -937,7 +946,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 					err := ctx.Err()
 					tlogger.Warn("task skipped due to cancellation", slog.String("reason", err.Error()))
 					skippedCmd, _ := task.task.CommandFor(&server)
-					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err, EnvVars: server.EnvVars, Vars: server.Vars})
+					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err, EnvVars: historyEnvVars, Vars: task.task.Vars})
 					skippedCount.Add(1)
 					taskSkipped.Add(ctx, 1, metric.WithAttributes(
 						attribute.String("task.name", name),
@@ -972,8 +981,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 						Command:   runningCmd,
 						Attempt:   evAttempt,
 						Attempts:  evAttempts,
-						EnvVars:   server.EnvVars,
-						Vars:      server.Vars,
+						EnvVars:   historyEnvVars,
+						Vars:      task.task.Vars,
 					}
 
 					if attempt > 1 {
@@ -1036,8 +1045,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				event.Stderr = string(task.stderr)
 				event.ExitCode = task.exitCode
 				event.Duration = time.Since(started)
-				event.EnvVars = server.EnvVars
-				event.Vars = server.Vars
+				event.EnvVars = historyEnvVars
+				event.Vars = task.task.Vars
 				c.emit(event)
 
 				finish(runErr)

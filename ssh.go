@@ -388,16 +388,25 @@ func runSCP(client *ssh.Client, flags, target string, send func(*scpSender) erro
 	return nil
 }
 
-// scpCopy copies data to remotePath. A nil client writes locally.
-func scpCopy(client *ssh.Client, data []byte, remotePath string, mode os.FileMode) error {
+// scpCopy copies r (size bytes) to remotePath. A nil client writes locally.
+func scpCopy(client *ssh.Client, r io.Reader, size int64, remotePath string, mode os.FileMode) error {
 	if mode == 0 {
 		mode = 0644
 	}
 	if client == nil {
-		return os.WriteFile(remotePath, data, mode)
+		if err := os.MkdirAll(filepath.Dir(remotePath), 0755); err != nil {
+			return err
+		}
+		f, err := os.OpenFile(remotePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(f, r)
+		return err
 	}
 	return runSCP(client, "", filepath.Dir(remotePath), func(s *scpSender) error {
-		return s.file(filepath.Base(remotePath), mode, int64(len(data)), bytes.NewReader(data))
+		return s.file(filepath.Base(remotePath), mode, size, r)
 	})
 }
 
@@ -440,11 +449,25 @@ func copyDirLocal(src, dst string) error {
 			}
 			continue
 		}
-		data, err := os.ReadFile(from)
+		in, err := os.Open(from)
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(to, data, info.Mode().Perm()); err != nil {
+		out, err := os.OpenFile(to, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode().Perm())
+		if err != nil {
+			in.Close()
+			return err
+		}
+		if _, err := io.Copy(out, in); err != nil {
+			in.Close()
+			out.Close()
+			return err
+		}
+		if err := in.Close(); err != nil {
+			out.Close()
+			return err
+		}
+		if err := out.Close(); err != nil {
 			return err
 		}
 	}
@@ -478,10 +501,14 @@ func CopyFiles(client *ssh.Client, server any, task *Task) error {
 			dst = filepath.Join(cc.Dir, filepath.Base(srcPath))
 		}
 
-		var data []byte
 		if cc.Content != "" {
-			data = []byte(cc.Content)
-		} else if cc.SrcTpl != "" {
+			data := []byte(cc.Content)
+			if err := scpCopy(client, bytes.NewReader(data), int64(len(data)), dst, 0); err != nil {
+				return err
+			}
+			continue
+		}
+		if cc.SrcTpl != "" {
 			tmplData, err := os.ReadFile(cc.SrcTpl)
 			if err != nil {
 				return err
@@ -494,8 +521,13 @@ func CopyFiles(client *ssh.Client, server any, task *Task) error {
 			if err := tmpl.Execute(&buf, task.templateData(server)); err != nil {
 				return err
 			}
-			data = buf.Bytes()
-		} else if srcPath != "" {
+			data := buf.Bytes()
+			if err := scpCopy(client, bytes.NewReader(data), int64(len(data)), dst, 0); err != nil {
+				return err
+			}
+			continue
+		}
+		if srcPath != "" {
 			info, err := os.Stat(srcPath)
 			if err != nil {
 				return err
@@ -506,17 +538,18 @@ func CopyFiles(client *ssh.Client, server any, task *Task) error {
 				}
 				continue
 			}
-			data, err = os.ReadFile(srcPath)
+			f, err := os.Open(srcPath)
 			if err != nil {
 				return err
 			}
-		} else {
-			return fmt.Errorf("no source for copy")
+			err = scpCopy(client, f, info.Size(), dst, info.Mode().Perm())
+			f.Close()
+			if err != nil {
+				return err
+			}
+			continue
 		}
-
-		if err := scpCopy(client, data, dst, 0); err != nil {
-			return err
-		}
+		return fmt.Errorf("no source for copy")
 	}
 	return nil
 }

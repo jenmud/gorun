@@ -345,6 +345,7 @@ func (m *serverSelectionModel) applyBundles() {
 	if m.cfg == nil || len(refs) == 0 {
 		m.servers = slices.Clone(m.baseServers)
 		m.skipped = map[string]map[string]bool{}
+		m.filter()
 		m.followServer()
 		return
 	}
@@ -371,6 +372,7 @@ func (m *serverSelectionModel) applyBundles() {
 	}
 	m.servers = servers
 	m.skipped = map[string]map[string]bool{}
+	m.filter()
 	m.followServer()
 }
 

@@ -22,7 +22,7 @@ go build ./... && go vet ./...             # no golangci config; keep gofmt clea
 make build                                 # builds/gorun + builds/gorun-otel-CTI (gitignored)
 make vendor                                # go mod tidy && go mod vendor — vendor/ IS committed
 make templ-gen                             # regenerate committed cmd/web/ui/*_templ.go
-make web-dev                               # templ watch + go run ./cmd -web (proxy :8080)
+make web-dev                               # templ watch + go run ./cmd -web (GORUN_ADDRESS=:8080 overridable)
 make up / make down                        # recipes lab: 100 SSH containers + NATS (docker compose)
 go run ./cmd recipes/Gorunfile -r          # run the lab's own starter recipe
 GORUN_SKIP_NATS=1 go run ./cmd cmd/Gorunfile.empty -r -plain   # smoke test: local echo tasks only

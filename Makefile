@@ -26,11 +26,16 @@ TEMPL := $(shell go env GOPATH)/bin/templ
 templ-gen:
 	$(TEMPL) generate ./cmd/web/...
 
+# Override with `make web GORUN_ADDRESS=127.0.0.1:9090`.
+GORUN_ADDRESS ?= :8080
+# templ's proxy needs a host, so a bare ":port" proxies to localhost.
+WEB_PROXY := http://$(if $(filter :%,$(GORUN_ADDRESS)),localhost)$(GORUN_ADDRESS)
+
 web:
-	go run ./cmd -web
+	GORUN_ADDRESS=$(GORUN_ADDRESS) go run ./cmd -web
 
 web-dev:
-	$(TEMPL) generate -watch -cmd "go run ./cmd -web" -proxy http://localhost:8080 ./cmd/web/...
+	GORUN_ADDRESS=$(GORUN_ADDRESS) $(TEMPL) generate -watch -cmd "go run ./cmd -web" -proxy $(WEB_PROXY) ./cmd/web/...
 
 
 -include ./recipes/Makefile

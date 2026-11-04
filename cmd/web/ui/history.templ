@@ -87,7 +87,12 @@ templ HistoryDetailPage(d RunDetailData) {
 		@statTile("Failed", itoa(d.Summary.Failed), "tasks that exited non-zero or errored")
 		@statTile("Skipped", itoa(d.Summary.Skipped), "because a dependency failed")
 	</div>
-	<p class="mb-4 text-sm text-zinc-400">Each server ran its tasks in order. Open a task to see the command it ran, what it printed, and its exit code. Errors from a server that couldn't be reached are listed at the top of its card.</p>
+	if len(d.Run.RunEnvVars) > 0 || len(d.Run.RunVars) > 0 {
+		<div class="mb-6">
+			@varsPanel("Run", d.Run.RunEnvVars, d.Run.RunVars)
+		</div>
+	}
+	<p class="mb-4 text-sm text-zinc-400">Each server ran its tasks in order. Open a task to see the command it ran, what it printed, its exit code and the variables it saw. Errors from a server that couldn't be reached are listed at the top of its card.</p>
 	<div class="space-y-4">
 		for _, srv := range d.Servers {
 			@historyServer(srv)
@@ -107,6 +112,11 @@ templ historyServer(srv ServerBlock) {
 		if srv.Error != "" {
 			<p class="border-t border-zinc-800 px-4 py-3 text-xs text-red-300">Could not run on this server: { srv.Error }</p>
 		}
+		if len(srv.EnvVars) > 0 || len(srv.Vars) > 0 {
+			<div class="border-t border-zinc-800 px-4 py-3">
+				@varsPanel("Server", srv.EnvVars, srv.Vars)
+			</div>
+		}
 		<ul class="space-y-1 border-t border-zinc-800 p-3">
 			for _, t := range srv.Tasks {
 				@historyTask(t)
@@ -115,29 +125,125 @@ templ historyServer(srv ServerBlock) {
 	</section>
 }
 
-templ historyTask(t historyTaskView) {
-	<li class="rounded-lg px-2 py-1 transition hover:bg-zinc-800/40">
-		<details open?={ t.State == 3 }>
-			<summary class="flex cursor-pointer list-none items-center gap-2 text-sm">
+templ historyTask(t TaskView) {
+	<li class="rounded-lg transition hover:bg-zinc-800/30">
+		<details open?={ t.State == 3 } data-on:toggle__once={ taskLoad(t) }>
+			<summary class="flex cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-sm">
 				<span class={ stateClass(t.State) }>{ stateIcon(t.State) }</span>
 				<span class="font-mono text-zinc-200">{ t.Name }</span>
-				<span class="ml-auto text-xs text-zinc-500">{ formatDuration(t.Duration) }</span>
-			</summary>
-			<div class="mt-2 space-y-2 border-l border-zinc-800 pl-3 text-xs">
-				<p class="text-zinc-400">{ hintFor(t.State) }</p>
-				if t.Command != "" {
-					<pre class="overflow-x-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">$ { t.Command }</pre>
-				}
-				if t.Stdout != "" {
-					<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ t.Stdout }</pre>
-				}
-				if t.Stderr != "" {
-					<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ t.Stderr }</pre>
-				}
+				<span class={ stateClass(t.State) + " text-xs" }>{ stateLabel(t.State) }</span>
 				if t.State == 3 {
-					<p class="text-red-300">exit code { itoa(t.ExitCode) }</p>
+					<span class="rounded bg-red-500/15 px-1.5 py-0.5 font-mono text-[11px] text-red-300 ring-1 ring-red-500/40">exit { itoa(t.ExitCode) }</span>
+				}
+				<span class="ml-auto font-mono text-xs text-zinc-500">{ formatDuration(t.Duration) }</span>
+			</summary>
+			<div id={ t.ID } class="px-2 pb-3">
+				if t.Loaded {
+					@taskInspector(t)
+				} else {
+					<p class="py-2 text-xs text-zinc-500">Loading…</p>
 				}
 			</div>
 		</details>
 	</li>
+}
+
+// taskInspector is everything saved about one task: its outcome, command, output and variables.
+templ taskInspector(t TaskView) {
+	<div class="mt-1 space-y-3 border-l-2 border-zinc-800 pl-3 text-xs">
+		<dl class="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+			@fact("Status") {
+				<span class={ stateClass(t.State) }>{ stateIcon(t.State) } { stateLabel(t.State) }</span>
+			}
+			@fact("Exit code") {
+				if t.State == 2 || t.State == 3 {
+					<span class={ exitClass(t.ExitCode) }>{ itoa(t.ExitCode) }</span>
+				} else {
+					<span class="text-zinc-500">—</span>
+				}
+			}
+			@fact("Duration") {
+				<span class="font-mono text-zinc-200">{ formatDuration(t.Duration) }</span>
+			}
+			@fact("Server") {
+				<span class="font-mono text-zinc-200">{ t.Server }</span>
+				if t.Address != "" {
+					<span class="font-mono text-zinc-500"> { t.Address }</span>
+				}
+			}
+		</dl>
+		<p class="text-zinc-400">{ hintFor(t.State) }</p>
+		@outputBlock("Command", "", false) {
+			if t.Command != "" {
+				<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">$ { t.Command }</pre>
+			} else {
+				<p class="text-zinc-500">Not recorded.</p>
+			}
+		}
+		@outputBlock("Stdout", t.Stdout, false) {
+			if t.Stdout != "" {
+				<pre class="max-h-96 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ t.Stdout }</pre>
+			} else {
+				<p class="text-zinc-500">No output.</p>
+			}
+		}
+		@outputBlock("Stderr", t.Stderr, true) {
+			if t.Stderr != "" {
+				<pre class="max-h-96 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ t.Stderr }</pre>
+			} else {
+				<p class="text-zinc-500">No output.</p>
+			}
+		}
+		@varsPanel("Task", t.EnvVars, t.Vars)
+	</div>
+}
+
+templ fact(label string) {
+	<div>
+		<dt class="text-[11px] uppercase tracking-wider text-zinc-500">{ label }</dt>
+		<dd class="mt-0.5">{ children... }</dd>
+	</div>
+}
+
+templ outputBlock(label, body string, bad bool) {
+	<div>
+		<div class="mb-1 flex items-baseline gap-2">
+			<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ label }</span>
+			if body != "" {
+				<span class="text-[11px] text-zinc-600">{ lineCount(body) }</span>
+			}
+		</div>
+		{ children... }
+	</div>
+}
+
+// varsPanel lists the env vars and vars captured at one scope: the run, a server or a task.
+templ varsPanel(scope string, env map[string]string, vars map[string]any) {
+	<div class="grid gap-3 md:grid-cols-2">
+		<div>
+			<div class="mb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ scope } env vars</div>
+			if len(env) == 0 {
+				<p class="text-xs text-zinc-500">None recorded.</p>
+			} else {
+				<div class="max-h-64 overflow-auto rounded-lg bg-zinc-950">
+					<table class="w-full font-mono text-xs">
+						for _, kv := range envPairs(env) {
+							<tr class="border-b border-zinc-900 last:border-0">
+								<td class="whitespace-nowrap px-2 py-1 align-top text-violet-300">{ kv.Key }</td>
+								<td class="break-all px-2 py-1 text-zinc-300">{ kv.Value }</td>
+							</tr>
+						}
+					</table>
+				</div>
+			}
+		</div>
+		<div>
+			<div class="mb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ scope } vars</div>
+			if len(vars) == 0 {
+				<p class="text-xs text-zinc-500">None recorded.</p>
+			} else {
+				<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-xs text-zinc-300">{ varsJSON(vars) }</pre>
+			}
+		</div>
+	</div>
 }

@@ -15,17 +15,19 @@ optional; without it, load one on the Config page. It has three pages:
 
 - **Run** ticks servers and tasks, as the picker does, and starts them. Stats and a live dashboard
   update as runs go. **Stop** cancels a run started from the page. Runs read the file on disk.
-- **History** lists saved runs. Open one for each server's tasks, output and exit code. **Trim
-  history** keeps the 10 newest.
-- **Config** adds, removes, loads and saves servers, groups, tasks and bundles. Changes wait until
-  you press **Save**, which writes each one into the file it came from.
+- **History** lists saved runs. Open one for each server's tasks; open a task for its status, exit
+  code, duration, command, stdout, stderr, env vars and vars. Run and server env vars and vars show
+  above them. **Trim history** keeps the 10 newest.
+- **Config** adds, removes, loads and saves servers, groups, tasks and bundles. Load a Gorunfile by
+  browsing the folders of the machine running gorun, or type its path. Changes wait until you
+  press **Save**, which writes each one into the file it came from.
 
 Runs and live updates need [NATS](#events-nats). The pages use [templ](https://templ.guide) and
 [Datastar](https://data-star.dev), with live updates over server-sent events.
 
 > **No login.** The web UI listens on all interfaces, so anyone who can reach the port can run
-> tasks and edit the Gorunfile. Keep it on a trusted network, or bind it to `127.0.0.1:8080` and
-> reach it over an SSH tunnel.
+> tasks, browse its folders and edit the Gorunfile. Keep it on a trusted network, or bind it to
+> `127.0.0.1:8080` and reach it over an SSH tunnel.
 
 ## Logs and OpenTelemetry
 

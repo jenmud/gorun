@@ -1,8 +1,15 @@
 package ui
 
 import (
+	"encoding/json"
+	"fmt"
+	"maps"
 	"net/url"
+	"slices"
+	"strings"
 	"time"
+
+	"github.com/a-h/templ"
 )
 
 // runCardClass frames a run: red when a task failed, a calm card while running.
@@ -195,4 +202,74 @@ func navClass(on bool) string {
 		return "rounded-md bg-zinc-800 px-3 py-1.5 font-medium text-zinc-100"
 	}
 	return "rounded-md px-3 py-1.5 text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-200"
+}
+
+// envPair is one environment variable, for listing them in order.
+type envPair struct{ Key, Value string }
+
+// envPairs sorts env vars by name.
+func envPairs(env map[string]string) []envPair {
+	out := make([]envPair, 0, len(env))
+	for _, k := range slices.Sorted(maps.Keys(env)) {
+		out = append(out, envPair{k, env[k]})
+	}
+	return out
+}
+
+// varsJSON shows vars as indented JSON, keys sorted.
+func varsJSON(vars map[string]any) string {
+	b, err := json.MarshalIndent(vars, "", "  ")
+	if err != nil {
+		return fmt.Sprint(vars)
+	}
+	return string(b)
+}
+
+// lineCount describes how long an output is.
+func lineCount(s string) string {
+	n := strings.Count(strings.TrimRight(s, "\n"), "\n") + 1
+	if n == 1 {
+		return "1 line"
+	}
+	return itoa(n) + " lines"
+}
+
+// taskLoad is the Datastar action that fetches a task's detail the first time it is opened.
+func taskLoad(t TaskView) string {
+	q := url.Values{"server": {t.Server}, "name": {t.Name}, "el": {t.ID}}
+	return "@get('/history/" + url.PathEscape(t.RunID) + "/task?" + q.Encode() + "')"
+}
+
+// exitClass colours an exit code: red for anything but zero.
+func exitClass(code int) string {
+	if code != 0 {
+		return "font-mono text-red-300"
+	}
+	return "font-mono text-zinc-200"
+}
+
+// browsePath opens the Gorunfile picker at dir.
+func browsePath(dir string) templ.SafeURL {
+	return templ.SafeURL("/config?" + url.Values{"dir": {dir}}.Encode() + "#load")
+}
+
+// pickerFileClass styles a file in the picker, brighter when it looks like a Gorunfile.
+func pickerFileClass(likely, current bool) string {
+	base := "flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-zinc-800/60 "
+	switch {
+	case current:
+		return base + "bg-accent/10 text-zinc-100"
+	case likely:
+		return base + "text-zinc-100"
+	default:
+		return base + "text-zinc-500"
+	}
+}
+
+// pickerIconClass colours a file's icon in the picker.
+func pickerIconClass(likely bool) string {
+	if likely {
+		return "text-accent"
+	}
+	return "text-zinc-600"
 }

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jenmud/gorun/internal/store"
 )
@@ -129,5 +130,64 @@ func TestPatchFramesEachLine(t *testing.T) {
 		"data: elements <p>two</p>\n\n"
 	if got != want {
 		t.Errorf("patch =\n%q\nwant\n%q", got, want)
+	}
+}
+
+func TestHistoryTaskDetailShowsEverythingSaved(t *testing.T) {
+	a, _ := newTestApp(t)
+	ctx := context.Background()
+	st := a.store
+	if err := st.CreateRun(ctx, "run-1", "deploy", "box", 1, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddServer(ctx, "run-1", "web-1", "10.0.0.1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertTask(ctx, "run-1", "web-1", "build", 2, "make build", "built ok", "warn: old", 0, 1500*time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetTaskEnvVars(ctx, "run-1", "web-1", "build", map[string]string{"STAGE": "prod"}, map[string]any{"release": "v1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	page := get(t, a, "/history/run-1").Body.String()
+	if !strings.Contains(page, "task-0-0") || strings.Contains(page, "built ok") {
+		t.Fatal("a passed task should load its detail on demand")
+	}
+
+	rec := get(t, a, "/history/run-1/task?server=web-1&name=build&el=task-0-0")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("task detail: status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"selector #task-0-0", "$ make build", "built ok", "warn: old", "STAGE", "prod", "&#34;release&#34;", "1.5s", "10.0.0.1"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("task detail does not contain %q", want)
+		}
+	}
+
+	if rec := get(t, a, "/history/run-1/task?server=web-1&name=build&el=x%20y"); rec.Code != http.StatusNotFound {
+		t.Errorf("bad element id: status %d, want 404", rec.Code)
+	}
+}
+
+func TestConfigPickerListsFolder(t *testing.T) {
+	a, path := newTestApp(t)
+	dir := filepath.Dir(path)
+	if err := os.Mkdir(filepath.Join(dir, "inventory"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".hidden"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	body := get(t, a, "/config?dir="+url.QueryEscape(dir)).Body.String()
+	for _, want := range []string{"inventory/", "Gorunfile", "gorun.db"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("picker does not list %q", want)
+		}
+	}
+	if strings.Contains(body, ".hidden") {
+		t.Error("picker lists a hidden file")
 	}
 }

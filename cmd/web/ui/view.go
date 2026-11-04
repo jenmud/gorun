@@ -95,7 +95,9 @@ type ServerBlock struct {
 	Error    string // why the server couldn't run its tasks at all
 	Failed   bool
 	Duration time.Duration
-	Tasks    []store.TaskDetail
+	EnvVars  map[string]string
+	Vars     map[string]any
+	Tasks    []TaskView
 }
 
 // RunDetailData is everything the run detail page shows.
@@ -119,8 +121,25 @@ type FileOption struct {
 	Label string
 }
 
+// BrowseEntry is one folder or file in the Gorunfile picker.
+type BrowseEntry struct {
+	Name   string
+	Path   string
+	Dir    bool
+	Likely bool // named like a Gorunfile
+}
+
+// Browser is one folder of the Gorunfile picker, on the machine running gorun.
+type Browser struct {
+	Dir     string
+	Parent  string // empty at the filesystem root
+	Entries []BrowseEntry
+	Err     string
+}
+
 // ConfigPageData is everything the config editor shows.
 type ConfigPageData struct {
+	Browser    Browser
 	Path       string
 	Files      []FileOption
 	Servers    []EntityRow
@@ -254,5 +273,12 @@ func hintFor(state int) string {
 	}
 }
 
-// historyTaskView is one task in a saved run.
-type historyTaskView = store.TaskDetail
+// TaskView is one task in a saved run. Its command, output and variables are only Loaded
+// when the task is opened, so large runs stay quick to show.
+type TaskView struct {
+	ID      string // element id the detail is patched into
+	RunID   string
+	Address string
+	Loaded  bool
+	store.TaskDetail
+}

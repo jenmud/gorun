@@ -4,10 +4,12 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"maps"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jenmud/gorun/cmd/web/ui"
@@ -180,8 +182,67 @@ func (a *app) historyDetail(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data := ui.RunDetailData{Run: *d, Summary: runRow(d.RunSummary), Servers: serverBlocks(d)}
+	blocks := serverBlocks(d)
+	// Failed tasks open by default, so their detail is loaded with the page.
+	for i := range blocks {
+		for j := range blocks[i].Tasks {
+			t := &blocks[i].Tasks[j]
+			if t.State != stateFailed {
+				continue
+			}
+			full, err := a.store.GetTask(r.Context(), d.ID, t.Server, t.Name)
+			if err != nil {
+				continue
+			}
+			t.TaskDetail, t.Loaded = full, true
+		}
+	}
+	data := ui.RunDetailData{Run: *d, Summary: runRow(d.RunSummary), Servers: blocks}
 	a.page(w, d.Title, "history", ui.HistoryDetailPage(data))
+}
+
+// taskDetail streams one saved task's full detail into the element the history page opened.
+func (a *app) taskDetail(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	el := q.Get("el")
+	if a.store == nil || !validElementID(el) {
+		http.NotFound(w, r)
+		return
+	}
+	runID := r.PathValue("id")
+	t, err := a.store.GetTask(r.Context(), runID, q.Get("server"), q.Get("name"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	d, err := a.store.GetRun(r.Context(), runID)
+	if err != nil || d == nil {
+		http.NotFound(w, r)
+		return
+	}
+	view := ui.TaskView{ID: el, RunID: runID, Address: d.ServerAddress[t.Server], Loaded: true, TaskDetail: t}
+
+	var b strings.Builder
+	if err := ui.TaskInspector(view).Render(r.Context(), &b); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = io.WriteString(w, patch("#"+el, b.String()))
+}
+
+// validElementID keeps a client-supplied element id safe to use as a CSS selector.
+func validElementID(id string) bool {
+	if id == "" || len(id) > 64 {
+		return false
+	}
+	for _, c := range id {
+		if !(c == '-' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 // serverBlocks groups a run's tasks by the server they ran on. A server that could not be
@@ -211,14 +272,21 @@ func serverBlocks(d *store.RunDetail) []ui.ServerBlock {
 	}
 
 	out := make([]ui.ServerBlock, 0, len(names))
-	for _, n := range names {
+	for i, n := range names {
 		b := ui.ServerBlock{
 			Name:    n,
 			Address: d.ServerAddress[n],
 			Error:   d.ServerErrors[n],
-			Tasks:   bySrv[n],
+			EnvVars: d.ServerEnvVars[n],
+			Vars:    d.ServerVars[n],
 		}
-		for _, t := range b.Tasks {
+		for j, t := range bySrv[n] {
+			b.Tasks = append(b.Tasks, ui.TaskView{
+				ID:         fmt.Sprintf("task-%d-%d", i, j),
+				RunID:      d.ID,
+				Address:    b.Address,
+				TaskDetail: t,
+			})
 			b.Duration += t.Duration
 			if t.State == stateFailed {
 				b.Failed = true

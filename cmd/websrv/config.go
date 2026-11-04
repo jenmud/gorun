@@ -67,7 +67,72 @@ func (a *app) configPage(w http.ResponseWriter, r *http.Request) {
 
 	d := configData(cfg, pending)
 	d.Flash, d.FlashBad = msg, bad
+	d.Browser = browse(pickerDir(r.URL.Query().Get("dir"), d.Path))
 	a.page(w, "Config", "config", ui.ConfigPage(d))
+}
+
+// maxBrowse caps how many entries the picker lists, so a huge folder stays usable.
+const maxBrowse = 500
+
+// pickerDir is the folder the picker opens: the one asked for, else the loaded file's, else
+// the working directory.
+func pickerDir(asked, loaded string) string {
+	switch {
+	case asked != "":
+		return filepath.Clean(expandHome(asked))
+	case loaded != "":
+		return filepath.Dir(loaded)
+	}
+	if wd, err := os.Getwd(); err == nil {
+		return wd
+	}
+	return string(filepath.Separator)
+}
+
+// browse lists dir for the picker: folders first, then files, hidden ones left out.
+func browse(dir string) ui.Browser {
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	b := ui.Browser{Dir: dir}
+	if parent := filepath.Dir(dir); parent != dir {
+		b.Parent = parent
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		b.Err = "Could not open this folder: " + err.Error()
+		return b
+	}
+	var dirs, files []ui.BrowseEntry
+	for _, e := range entries {
+		name := e.Name()
+		if strings.HasPrefix(name, ".") {
+			continue
+		}
+		path := filepath.Join(dir, name)
+		isDir := e.IsDir()
+		if e.Type()&os.ModeSymlink != 0 {
+			if fi, err := os.Stat(path); err == nil {
+				isDir = fi.IsDir()
+			}
+		}
+		if isDir {
+			dirs = append(dirs, ui.BrowseEntry{Name: name, Path: path, Dir: true})
+			continue
+		}
+		files = append(files, ui.BrowseEntry{Name: name, Path: path, Likely: likelyGorunfile(name)})
+	}
+	b.Entries = append(dirs, files...)
+	if len(b.Entries) > maxBrowse {
+		b.Entries = b.Entries[:maxBrowse]
+		b.Err = fmt.Sprintf("Showing the first %d entries.", maxBrowse)
+	}
+	return b
+}
+
+// likelyGorunfile reports whether name looks like a Gorunfile or an included TOML file.
+func likelyGorunfile(name string) bool {
+	return strings.HasPrefix(strings.ToLower(name), "gorunfile") || strings.EqualFold(filepath.Ext(name), ".toml")
 }
 
 // configData builds the editor page from the loaded file and the unsaved changes.

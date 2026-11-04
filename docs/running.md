@@ -39,10 +39,9 @@ Unless you pass `--run`, every run starts in the picker. **Nothing runs until yo
 A checkbox shows `[x]` when all of a group's servers are selected, `[-]` when some are, and `[ ]`
 when none are. A server's row shows how many of its tasks are ticked, e.g. `11/15 tasks`.
 
-Press **→** on a server to see its details: hostname, SSH user, port, identity file, groups and
-tags. A password shows as `********`. Env vars are listed in a table that opens with space or
+Press **→** on a server to see its details: hostname, SSH user, port, identity file, groups, tags
+and vars. A password shows as `********`. Env vars are listed in a table that opens with space or
 enter.
-
 The **Tasks** tab keeps the dependency tree on the left and previews the selected task on the
 right: its description, details, command (including command-file contents), execution settings,
 config/task env vars, and config/task vars. Command previews substitute configured `${NAME}` values;

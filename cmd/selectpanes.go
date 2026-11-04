@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -71,6 +72,17 @@ func (m serverSelectionModel) detailRows(s gorun.Server, match int) []selectionR
 		tags = append(tags, "#"+tag)
 	}
 	rows = append(rows, detail("Groups", orNone(strings.Join(s.Groups, ", "))), detail("Tags", orNone(strings.Join(tags, " "))))
+	if len(s.Vars) == 0 {
+		rows = append(rows, detail("Vars", none))
+	} else {
+		rows = append(rows, selectionRow{kind: rowVars, match: match})
+		if m.varsOpen[s.Name] {
+			width := m.width/2 - 2 - len(detailIndent) - 2
+			for _, line := range varsTableLines(s.Vars, width) {
+				rows = append(rows, selectionRow{kind: rowVarLine, match: match, value: line})
+			}
+		}
+	}
 	if s.LogLevel != "" {
 		rows = append(rows, detail("Log level", s.LogLevel))
 	}
@@ -315,6 +327,15 @@ func (m serverSelectionModel) tasksPaneLines(height, width int) []string {
 		lines = append(lines, line)
 	}
 	return lines
+}
+
+// varsTableLines renders server vars as pretty JSON, one indented line per row.
+func varsTableLines(vars map[string]any, width int) []string {
+	data, err := json.MarshalIndent(vars, "", "  ")
+	if err != nil {
+		return []string{fmt.Sprintf("%v", vars)}
+	}
+	return strings.Split(string(data), "\n")
 }
 
 // paneBox draws lines in a box width cells wide with height rows inside, titled on its

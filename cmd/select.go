@@ -51,8 +51,10 @@ const (
 	rowHeader // a section title
 	rowGroup
 	rowTag
-	rowEnv    // the env vars toggle of an expanded server
-	rowEnvVar // a line of an expanded server's env vars table
+	rowEnv     // the env vars toggle of an expanded server
+	rowEnvVar  // a line of an expanded server's env vars table
+	rowVars    // the vars toggle of an expanded server
+	rowVarLine // a line of an expanded server's vars table
 )
 
 // itemMatch is a group or tag that matches the current filter.
@@ -87,6 +89,7 @@ type serverSelectionModel struct {
 	selected   map[string]bool
 	expanded   map[string]bool // server name -> details shown
 	envOpen    map[string]bool // server name -> env vars table shown
+	varsOpen   map[string]bool // server name -> vars table shown
 	groupsOpen bool
 	tagsOpen   bool
 	helpOpen   bool
@@ -546,12 +549,14 @@ func newServerSelectionModel(title string, servers []gorun.Server) serverSelecti
 		selected: map[string]bool{},
 		expanded: map[string]bool{},
 		envOpen:  map[string]bool{},
+		varsOpen: map[string]bool{},
 		skipped:  map[string]map[string]bool{},
 		width:    80,
 		height:   24,
 	}
 	for _, s := range servers {
 		m.envOpen[s.Name] = true
+		m.varsOpen[s.Name] = true
 	}
 
 	groups, tags := map[string]bool{}, map[string]bool{}
@@ -708,7 +713,7 @@ func (m serverSelectionModel) currentRow() (selectionRow, bool) {
 // selectable reports whether the cursor can stop on row.
 func selectable(row selectionRow) bool {
 	switch row.kind {
-	case rowDetail, rowEnvVar:
+	case rowDetail, rowEnvVar, rowVarLine:
 		return false
 	case rowHeader:
 		return row.item.name != "Servers"
@@ -718,7 +723,7 @@ func selectable(row selectionRow) bool {
 
 // serverOfRow returns the server of a server row or of one of its detail rows.
 func (m serverSelectionModel) serverOfRow(row selectionRow) (gorun.Server, bool) {
-	if row.kind != rowServer && row.kind != rowDetail && row.kind != rowEnv && row.kind != rowEnvVar {
+	if row.kind != rowServer && row.kind != rowDetail && row.kind != rowEnv && row.kind != rowEnvVar && row.kind != rowVars && row.kind != rowVarLine {
 		return gorun.Server{}, false
 	}
 	return m.servers[m.matches[row.match].index], true
@@ -869,6 +874,10 @@ func (m *serverSelectionModel) toggleRow(row selectionRow) {
 	case rowEnv:
 		s, _ := m.serverOfRow(row)
 		m.envOpen[s.Name] = !m.envOpen[s.Name]
+		m.buildRows()
+	case rowVars:
+		s, _ := m.serverOfRow(row)
+		m.varsOpen[s.Name] = !m.varsOpen[s.Name]
 		m.buildRows()
 	case rowGroup, rowTag:
 		m.toggleMembers(row)
@@ -1475,6 +1484,15 @@ func (m serverSelectionModel) serverPaneLines(l selectionLayout, width int) []st
 			}
 			line = pointer + detailIndent[2:] + mutedStyle.Render(toggle+" ") + "Env vars" + mutedStyle.Render(fmt.Sprintf(" (%d)", len(s.EnvVars)))
 		case rowEnvVar:
+			line = detailIndent + "  " + row.value
+		case rowVars:
+			s, _ := m.serverOfRow(row)
+			toggle := "▸"
+			if m.varsOpen[s.Name] {
+				toggle = "▾"
+			}
+			line = pointer + detailIndent[2:] + mutedStyle.Render(toggle+" ") + "Vars" + mutedStyle.Render(fmt.Sprintf(" (%d)", len(s.Vars)))
+		case rowVarLine:
 			line = detailIndent + "  " + row.value
 		default:
 			line = pointer + m.serverLine(row, nameWidth)

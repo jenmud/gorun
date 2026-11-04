@@ -357,6 +357,9 @@ func main() {
 		}
 
 		selected, err := runServerSelectionTUI(&cfg, choices)
+		if errors.Is(err, errTaskCommandEditorClosed) {
+			return
+		}
 		if err != nil {
 			fatal(err)
 		}

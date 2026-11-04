@@ -2,7 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -218,6 +220,127 @@ func TestTreeLazyTaskDAG(t *testing.T) {
 		if row.node.label == "fetch-bat" && row.node.expanded {
 			t.Error("e expanded a sibling of the cursor")
 		}
+	}
+}
+
+func TestTasksTreeShowsScrollableCommandAndVariables(t *testing.T) {
+	lines := make([]string, 24)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("echo build line %02d", i)
+	}
+	lines[0] = `echo build line ${BASE} ${SHARED} ${MISSING} \${ESCAPED} $${DOUBLE}`
+	command := strings.Join(lines, "\n")
+	retryDelay := 250 * time.Millisecond
+	cfg := gorun.Config{
+		EnvVars: map[string]string{"BASE": "global", "SHARED": "global"},
+		Vars:    map[string]any{"region": "eu"},
+		Tasks: map[string]gorun.Task{
+			"alpha": {
+				Name:        "alpha",
+				Description: "Compile the application",
+				Details:     "Builds all packages and generates a binary under dist/.",
+				Cmd:         command,
+				EnvVars:     map[string]string{"SHARED": "task"},
+				Vars:        map[string]any{"port": 8080},
+				Timeout:     45 * time.Second,
+				Retries:     2,
+				RetryDelay:  &retryDelay,
+				Rerun:       gorun.RerunUnsafe,
+				RetryUnsafe: true,
+				Shell:       "bash -e",
+				Sudo:        true,
+				Local:       true,
+				LogLevel:    "debug",
+				Copy:        []gorun.Copy{{Src: "source", Dst: "destination"}},
+			},
+			"beta": {Name: "beta", Cmd: "echo beta"},
+		},
+	}
+	m := newTreeModel("test", "tasks", taskTreeNodes(&cfg, nil))
+	m.embedded = true
+	m.width, m.height = 100, 12
+
+	collapsed := strings.Join(m.taskDetailLines(80), "\n")
+	for _, want := range []string{
+		"Description", "Compile the application", "Details", "Builds all packages",
+		"▸ Command · cmd [expand]", "▸ Execution settings [expand]", "▸ Env vars · config + task (2) [expand]",
+		"▸ Config vars · server templates (1) [expand]", "▸ Task vars (1) [expand]",
+	} {
+		if !strings.Contains(collapsed, want) {
+			t.Errorf("collapsed details are missing %q:\n%s", want, collapsed)
+		}
+	}
+	for _, hidden := range []string{"echo build line", "BASE=global", `"region": "eu"`, `"port": 8080`, "Timeout: 45s"} {
+		if strings.Contains(collapsed, hidden) {
+			t.Errorf("collapsed section unexpectedly shows %q:\n%s", hidden, collapsed)
+		}
+	}
+
+	m = pressTree(m, "tab")
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "▶ ▸ Command · cmd [expand]") {
+		t.Fatalf("focused detail section should show a pointer and expand hint:\n%s", view)
+	}
+	m = pressTree(m, "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter")
+	allDetails := strings.Join(m.taskDetailLines(80), "\n")
+	for _, want := range []string{
+		"echo build line global task ${MISSING}", `\${ESCAPED}`, "$${DOUBLE}", "┌", "┬", "SETTING", "Timeout", "45s", "Retries", "2 extra · 3 attempts", "Retry delay", "250ms",
+		"Rerun", "unsafe", "Retry unsafe", "yes", "Shell", "bash -e", "Sudo", "Local only", "Log level", "debug",
+		"Depends on", "File copies", "NAME", "VALUE", "BASE", "global", "SHARED", "task", "Config vars · server templates", `"region": "eu"`, "Task vars", `"port": 8080`,
+	} {
+		if !strings.Contains(allDetails, want) {
+			t.Errorf("expanded details are missing %q:\n%s", want, allDetails)
+		}
+	}
+
+	m = pressTree(m, "end")
+	if !m.detailFocus || m.detailOffset == 0 {
+		t.Fatalf("tab/end should focus and scroll the detail pane, focus=%v offset=%d", m.detailFocus, m.detailOffset)
+	}
+	for i, line := range strings.Split(m.View().Content, "\n") {
+		if width := lipgloss.Width(line); width > m.width {
+			t.Errorf("view line %d is %d cells wide, screen is %d: %q", i, width, m.width, ansi.Strip(line))
+		}
+	}
+	view := ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "Task · alpha") || !strings.Contains(view, `"port": 8080`) {
+		t.Errorf("scrolled details should show the task and its vars:\n%s", view)
+	}
+
+	m = pressTree(m, "tab", "down")
+	if m.detailFocus || m.cursor != 1 || m.detailOffset != 0 {
+		t.Errorf("returning to the tree and moving should reset detail scroll: focus=%v cursor=%d offset=%d", m.detailFocus, m.cursor, m.detailOffset)
+	}
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "Task · beta") {
+		t.Errorf("moving the tree cursor should update the detail pane:\n%s", view)
+	}
+}
+
+func TestCtrlEEditsFileBackedTaskAndQuits(t *testing.T) {
+	const file = "scripts/deploy.sh"
+	editorCmd := taskEditorCommand("my-editor --wait", file)
+	if diff := cmp.Diff([]string{"my-editor", "--wait", file}, editorCmd.Args); diff != "" {
+		t.Fatalf("editor args mismatch (-want +got):\n%s", diff)
+	}
+	if got := taskEditorCommand("", file).Args; !slices.Equal(got, []string{"vi", file}) {
+		t.Fatalf("default editor args = %v, want [vi %s]", got, file)
+	}
+
+	cfg := gorun.Config{Tasks: map[string]gorun.Task{"deploy": {Name: "deploy", CmdFile: file}}}
+	m := newServerSelectionModel("test", nil).withLists(&cfg)
+	m.tab = tabTasks
+	next, teaCmd := m.Update(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
+	m = next.(serverSelectionModel)
+	if teaCmd == nil || !m.editorOpened {
+		t.Fatal("ctrl+e should launch the selected task's command file editor")
+	}
+
+	next, teaCmd = m.Update(editorFinishedMsg{})
+	m = next.(serverSelectionModel)
+	if !m.quitting || !m.editorOpened || teaCmd == nil {
+		t.Fatal("the picker should quit after the editor exits")
+	}
+	if _, ok := teaCmd().(tea.QuitMsg); !ok {
+		t.Error("editor completion should return a quit command")
 	}
 }
 

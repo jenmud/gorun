@@ -120,8 +120,10 @@ type serverSelectionModel struct {
 	baseServers     []gorun.Server
 	selectedBundles map[string]bool
 
-	confirmed bool
-	quitting  bool
+	confirmed    bool
+	quitting     bool
+	editorOpened bool
+	editorErr    error
 }
 
 // the picker's tabs
@@ -134,6 +136,8 @@ const (
 )
 
 var tabNames = map[int]string{tabServers: "Servers", tabTasks: "Tasks", tabBundles: "Bundles", tabGroups: "Groups", tabHistory: "History"}
+
+var errTaskCommandEditorClosed = errors.New("task command editor closed")
 
 // withLists adds Tasks and Bundles tabs browsing cfg's tasks and bundles, like
 // --list-tasks and --list-bundles do.
@@ -259,6 +263,12 @@ func (m serverSelectionModel) updateTree(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
+		if msg.String() == "ctrl+e" && m.tab == tabTasks {
+			if cmd, ok := m.treeTab().editCurrentCommandFile(); ok {
+				m.editorOpened = true
+				return m, cmd
+			}
+		}
 		if m.tab == tabBundles && msg.String() == "space" {
 			t := m.treeTab()
 			if t.cursor >= 0 && t.cursor < len(t.rows) && t.rows[t.cursor].depth == 0 {
@@ -981,6 +991,10 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		next, cmd := m.history.Update(msg)
 		m.history = next.(historyModel)
 		return m, cmd
+	case editorFinishedMsg:
+		m.editorErr = msg.err
+		m.quitting = true
+		return m, tea.Quit
 	}
 
 	if m.helpOpen {
@@ -1601,6 +1615,12 @@ func runServerSelectionTUI(cfg *gorun.Config, servers []gorun.Server) ([]gorun.S
 	}
 
 	m := final.(serverSelectionModel)
+	if m.editorOpened {
+		if m.editorErr != nil {
+			return nil, fmt.Errorf("edit task command file: %w", m.editorErr)
+		}
+		return nil, errTaskCommandEditorClosed
+	}
 	if !m.confirmed {
 		return nil, errors.New("server selection cancelled")
 	}
@@ -1611,18 +1631,33 @@ func runServerSelectionTUI(cfg *gorun.Config, servers []gorun.Server) ([]gorun.S
 // helpContent renders the ctrl-k help dialog.
 func (m serverSelectionModel) helpContent() string {
 	lines := []string{m.titleLine(), "", "Keyboard shortcuts (ctrl-k to close)", ""}
+	navigation := [][2]string{
+		{"↑/↓", "move cursor"},
+		{"→ / ←", "show/hide a server's details and env vars; expand/collapse groups & tags"},
+		{"tab", "switch between the servers and tasks panes"},
+		{"enter", "run (or expand a group/tag section)"},
+		{"shift+tab", "next tab"},
+		{"ctrl+s/t/b/g/h", "jump to Servers/Tasks/Bundles/Groups/History"},
+	}
+	if m.tab == tabTasks {
+		navigation = [][2]string{
+			{"↑/↓", "move in the tree / select a detail section"},
+			{"tab", "focus details / return to the task tree"},
+			{"enter / →", "expand / collapse the selected detail section"},
+			{"←", "collapse a section / return to the task tree"},
+			{"pgup / pgdn", "move in the tree / scroll details"},
+			{"home / end", "jump to the start/end of details"},
+			{"ctrl+e", "edit selected cmd_file / cmd_template_file, then exit"},
+			{"→ / ←", "expand / collapse a task"},
+			{"shift+tab", "next tab"},
+			{"ctrl+s/t/b/g/h", "jump to Servers/Tasks/Bundles/Groups/History"},
+		}
+	}
 	sections := []struct {
 		title string
 		keys  [][2]string
 	}{
-		{"Navigation", [][2]string{
-			{"↑/↓", "move cursor"},
-			{"→ / ←", "show/hide a server's details and env vars; expand/collapse groups & tags"},
-			{"tab", "switch between the servers and tasks panes"},
-			{"enter", "run (or expand a group/tag section)"},
-			{"shift+tab", "next tab"},
-			{"ctrl+s/t/b/g/h", "jump to Servers/Tasks/Bundles/Groups/History"},
-		}},
+		{"Navigation", navigation},
 		{"Selection", [][2]string{
 			{"space", "select/toggle the row under the cursor; on Bundles, check the bundle"},
 			{"alt+v", "tasks pane: the server under the cursor / every server"},

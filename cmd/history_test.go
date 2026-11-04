@@ -114,6 +114,31 @@ func TestHistoryShowsMultiLineCommands(t *testing.T) {
 	}
 }
 
+func TestHistoryServerTasksSortedSlowestFirst(t *testing.T) {
+	run := &store.RunDetail{
+		Servers: []string{"web-1"},
+		Tasks: []store.TaskDetail{
+			{Server: "web-1", Name: "fast", Duration: time.Second},
+			{Server: "web-1", Name: "slow", Duration: 9 * time.Second},
+			{Server: "web-1", Name: "medium", Duration: 4 * time.Second},
+			{Server: "web-1", Name: "also-fast", Duration: time.Second},
+		},
+	}
+	m := newHistoryModel(nil)
+	m.buildItemsForRun(run)
+
+	var got []string
+	for _, item := range m.items {
+		if !item.isServer {
+			got = append(got, run.Tasks[item.taskIdx].Name)
+		}
+	}
+	want := []string{"slow", "medium", "fast", "also-fast"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("tasks = %v, want %v", got, want)
+	}
+}
+
 // TestHistoryShowsServerError checks that a server which couldn't run at all (no
 // task events, just a server error) shows why when it is expanded in the history.
 func TestHistoryShowsServerError(t *testing.T) {

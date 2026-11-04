@@ -50,7 +50,11 @@ each server's progress live.
 - **Remembers.** Every run is saved, with its commands and output, to look back on later.
 - **Exports.** Dump every task as a standalone, runnable shell file with `--dump-tasks`, to audit
   or run by hand.
-
+- **Task browser.** The picker’s **Tasks** tab previews each task’s description, details, command,
+  execution settings, env vars, and vars beside the dependency tree, with collapsible sections and
+  direct editing of file-backed commands.
+- **History.** Past runs are saved with commands and output; expanded servers list tasks slowest
+  first.
 **When to use something else:** gorun runs commands; it doesn't enforce state. It has no modules,
 facts, drift detection, dry runs, dynamic inventories or secrets vault. For that, use Ansible,
 Salt, Puppet or Nix.

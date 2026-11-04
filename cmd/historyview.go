@@ -179,10 +179,17 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 	})
 	for _, srv := range servers {
 		items = append(items, historyItem{isServer: true, server: srv, expanded: false})
+		tasks := []int{}
 		for i := range run.Tasks {
 			if run.Tasks[i].Server == srv {
-				items = append(items, historyItem{isServer: false, server: srv, taskIdx: i, expanded: false})
+				tasks = append(tasks, i)
 			}
+		}
+		sort.SliceStable(tasks, func(i, j int) bool {
+			return run.Tasks[tasks[i]].Duration > run.Tasks[tasks[j]].Duration
+		})
+		for _, i := range tasks {
+			items = append(items, historyItem{isServer: false, server: srv, taskIdx: i, expanded: false})
 		}
 	}
 	m.items = items

@@ -43,7 +43,19 @@ Press **→** on a server to see its details: hostname, SSH user, port, identity
 tags. A password shows as `********`. Env vars are listed in a table that opens with space or
 enter.
 
-The other tabs, **Tasks**, **Bundles** and **Groups**, let you browse what's in the Gorunfile.
+The **Tasks** tab keeps the dependency tree on the left and previews the selected task on the
+right: its description, details, command (including command-file contents), execution settings,
+config/task env vars, and config/task vars. Command previews substitute configured `${NAME}` values;
+unresolved placeholders stay as written. Description and details stay open; the other sections
+start collapsed. Execution settings and env vars appear as tables when expanded. Press **tab** to
+focus the details pane, **↑/↓** to select a section, and **enter** or **→** to expand/collapse it.
+Use **pgup/pgdn** or **home/end** to scroll the details, then press **tab** to return to the tree.
+Press **ctrl+e** on a file-backed task to open its `cmd_file` or `cmd_template_file` in `$EDITOR`
+(`vi` if unset); gorun exits when the editor closes.
+
+![the Tasks tab with task details and execution settings beside the dependency tree](screenshot-tasks.png)
+
+The other tabs, **Bundles** and **Groups**, let you browse what's in the Gorunfile.
 On **Bundles**, press **space** to check one or more bundles, then go back to **Servers** and
 select the hosts to run them against. The tasks pane lists only the checked bundles' tasks (and
 their dependencies), and that is what runs instead of each server's own pipeline; press **space**
@@ -176,7 +188,8 @@ Open it from the picker's **History** tab (**ctrl+h**), or with `gorun -history`
 
 ![the History tab listing recent runs](screenshot-history.png)
 
-Press **enter** to open a run, then expand a server and its tasks to see exactly what ran:
+Press **enter** to open a run, then expand a server to see its tasks, slowest first. Expand a task
+to see exactly what ran:
 
 ![a run's details with a multi-line command expanded](screenshot-history-run.png)
 

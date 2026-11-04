@@ -76,6 +76,11 @@ start 100 26 "$repo/recipes/04-dev-server" Gorunfile
 keys w p
 shot screenshot-picker-filter
 
+# the Tasks tab keeps the tree on the left and shows the selected task on the right
+start 112 38 "$here" Gorunfile
+keys BTab; down 24; keys Tab Down Enter
+shot screenshot-tasks
+
 # a run: compact view part way, then the finished run with its failure
 start 110 44 "$here" Gorunfile -r
 sleep 3
@@ -98,7 +103,7 @@ shot screenshot-output
 
 # the History tab, then a run's details with a multi-line command
 start 110 40 "$here" Gorunfile
-keys BTab
+keys C-h
 shot screenshot-history
 keys Up Up Up           # the full run with the failure
 keys Enter

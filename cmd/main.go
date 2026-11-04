@@ -343,7 +343,13 @@ func main() {
 	}
 
 	if *listServers {
-		showList("servers", serverTreeNodes(servers), func() { printServers(os.Stdout, servers) })
+		filtered := make(map[string]gorun.Server, len(servers))
+		for name, server := range servers {
+			if len(server.Tasks) > 0 {
+				filtered[name] = server
+			}
+		}
+		showList("servers", serverTreeNodes(filtered), func() { printServers(os.Stdout, filtered) })
 		return
 	}
 
@@ -361,10 +367,13 @@ func main() {
 			fatal(errors.New("the server picker needs an interactive terminal; pass --run (-r) to run without it"))
 		}
 
-		// the picker lists each server's resolved pipeline, so tasks can be left out
+		// the picker lists each server's resolved pipeline, so tasks can be left out;
+		// servers with no tasks of their kind have nothing to run, so don't show them
 		choices := make([]gorun.Server, 0, len(cfg.Servers))
 		for _, s := range cfg.Servers {
-			choices = append(choices, servers[s.Name])
+			if pipeline := servers[s.Name]; len(pipeline.Tasks) > 0 {
+				choices = append(choices, pipeline)
+			}
 		}
 
 		selected, err := runServerSelectionTUI(&cfg, choices)

@@ -718,10 +718,10 @@ func (m serverSelectionModel) currentRow() (selectionRow, bool) {
 // selectable reports whether the cursor can stop on row.
 func selectable(row selectionRow) bool {
 	switch row.kind {
-	case rowDetail, rowEnvVar, rowVarLine:
-		return false
 	case rowHeader:
 		return row.item.name != "Servers"
+	case rowDetail:
+		return false
 	}
 	return true
 }

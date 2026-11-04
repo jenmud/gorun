@@ -336,11 +336,14 @@ func TestServerSelectionModel_EnvTableScrollsIntoView(t *testing.T) {
 	}
 	m := newServerSelectionModel("test", []gorun.Server{{Name: "web-1", EnvVars: env, Tasks: []gorun.Task{{Name: "run"}}}})
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	m = press(next.(serverSelectionModel), "right", "down")
+	m = press(next.(serverSelectionModel), "right")
+	for i := 0; i < 16; i++ {
+		m = press(m, "down")
+	}
 
 	view := ansi.Strip(m.viewContent())
 	if !strings.Contains(view, "VAR_09") || !strings.Contains(view, "▾ Env vars") {
-		t.Errorf("opening the env vars should scroll the table into view with its toggle, got:\n%s", view)
+		t.Errorf("the env vars table should scroll with the cursor, got:\n%s", view)
 	}
 }
 

@@ -84,6 +84,11 @@ type Config struct {
 	// Servers are the [servers.hosts.<name>] tables, in the order they appear in the file.
 	Servers []Server `toml:"-"`
 
+	// Path is the root Gorunfile, and Files every file read to build the config (the root
+	// first, then includes), all absolute. Set by LoadFile.
+	Path  string   `toml:"-"`
+	Files []string `toml:"-"`
+
 	// OnEvent, when set, receives the events in events.go as tasks run.
 	OnEvent func(event any) `toml:"-"`
 

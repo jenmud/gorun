@@ -1,0 +1,73 @@
+package ui
+
+templ Layout(title string, active string, nats bool, body templ.Component) {
+	<!doctype html>
+	<html lang="en" class="dark">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title } · gorun</title>
+			<script src="https://cdn.tailwindcss.com"></script>
+			<script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.8/bundles/datastar.js"></script>
+			<script>
+				tailwind.config = {
+					darkMode: 'class',
+					theme: {
+						extend: {
+							colors: { accent: '#7C3AED' },
+							fontFamily: {
+								sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+								mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+							},
+						},
+					},
+				}
+			</script>
+			<script>
+function gorunFilter(input, listId) {
+	var q = input.value.toLowerCase();
+	document.querySelectorAll('#' + listId + ' [data-filter]').forEach(function (row) {
+		row.style.display = row.dataset.filter.indexOf(q) === -1 ? 'none' : '';
+	});
+}
+function gorunSelect(formId, on) {
+	document.querySelectorAll('#' + formId + ' [data-filter]').forEach(function (row) {
+		if (row.style.display === 'none') { return; }
+		var box = row.querySelector('input[type=checkbox]');
+		if (box) { box.checked = on; }
+	});
+}
+			</script>
+			<link rel="preconnect" href="https://fonts.googleapis.com"/>
+			<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+			<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+		</head>
+		<body class="min-h-screen bg-zinc-950 text-zinc-100 antialiased selection:bg-accent/30">
+			<header class="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur">
+				<div class="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-6 py-3">
+					<span class="rounded bg-accent px-2 py-0.5 text-sm font-bold text-white">gorun</span>
+					<nav class="flex gap-1 text-sm">
+						@navLink("/", "Run", active == "run")
+						@navLink("/history", "History", active == "history")
+						@navLink("/config", "Config", active == "config")
+					</nav>
+					if nats {
+						<span class="ml-auto flex items-center gap-2 text-xs text-emerald-400">
+							<span class="h-2 w-2 animate-pulse rounded-full bg-emerald-400"></span>
+							live
+						</span>
+					} else {
+						<span class="ml-auto text-xs text-amber-400">NATS is not connected: runs and live updates are off</span>
+					}
+				</div>
+			</header>
+			<main class="mx-auto max-w-7xl px-6 py-6">
+				@body
+			</main>
+		</body>
+	</html>
+}
+
+templ navLink(href string, label string, on bool) {
+	<a href={ href } class={ navClass(on) }>{ label }</a>
+}

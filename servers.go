@@ -7,6 +7,7 @@ type Server struct {
 	LogLevel        string `toml:"log_level"`
 	MaxTaskParallel int    `toml:"max_task_parallel"` // 0 (default) = one at a time; -1 = all at once
 	Name            string `toml:"-"`                 // the <name> in [servers.hosts.<name>]
+	Source          string `toml:"-"`                 // the file that defines it
 	Hostname        string `toml:"hostname"`
 	SSH             SSH    `toml:"ssh"`
 

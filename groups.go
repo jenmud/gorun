@@ -16,6 +16,7 @@ const BundlePrefix = "@"
 // as "@<name>", and it expands to its tasks in order. A bundle may include other bundles.
 type Bundle struct {
 	Name        string         `toml:"-"` // the <name> in [bundles.<name>]
+	Source      string         `toml:"-"` // the file that defines it
 	Description string         `toml:"description"`
 	Tasks       []string       `toml:"tasks"`
 	Vars        map[string]any `toml:"vars,omitempty"`
@@ -25,6 +26,7 @@ type Bundle struct {
 // [server_groups.<name>]. A server joins groups by listing them in its groups key.
 type ServerGroup struct {
 	Name     string            `toml:"-"` // the <name> in [server_groups.<name>]
+	Source   string            `toml:"-"` // the file that defines it
 	LogLevel string            `toml:"log_level"`
 	Tags     []string          `toml:"tags"`
 	Tasks    []string          `toml:"tasks"`

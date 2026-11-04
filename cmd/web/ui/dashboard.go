@@ -138,17 +138,7 @@ func (s *DashboardState) Apply(ev Event) {
 		t.Stdout = ev.Stdout
 		t.Stderr = ev.Stderr
 	case "process_finished":
-		if ev.Success {
-			// successful runs are removed from the dashboard
-			delete(s.Processes, uuid)
-			for i, u := range s.ProcessOrder {
-				if u == uuid {
-					s.ProcessOrder = append(s.ProcessOrder[:i], s.ProcessOrder[i+1:]...)
-					break
-				}
-			}
-			return
-		}
+		// finished runs stay until cleared, so their output can be viewed
 		p.Finished = true
 		p.Success = ev.Success
 		p.TotalTasks = ev.TotalTasks

@@ -48,6 +48,8 @@ func (l *loader) load(r io.Reader, path string) error {
 		l.dir = filepath.Dir(path)
 		l.loaded[path] = true
 		l.stack = append(l.stack, path)
+		l.cfg.Path = path
+		l.cfg.Files = []string{path}
 	}
 	if err := l.read(r, path, true); err != nil {
 		return fmt.Errorf("error with loading config: %w", err)
@@ -66,6 +68,7 @@ func (l *loader) read(r io.Reader, path string, root bool) error {
 	if err != nil {
 		return err
 	}
+	tag(&f, path)
 
 	// catch typos, which would otherwise be silently ignored
 	if undecoded := md.Undecoded(); len(undecoded) > 0 {
@@ -143,11 +146,32 @@ func (l *loader) readFile(file string) error {
 
 	l.stack = append(l.stack, real)
 	defer func() { l.stack = l.stack[:len(l.stack)-1] }()
+	l.cfg.Files = append(l.cfg.Files, real)
 
 	if err := l.read(fh, real, false); err != nil {
 		return fmt.Errorf("%s: %w", l.rel(file), err)
 	}
 	return nil
+}
+
+// tag records in each named entity the file that defines it.
+func tag(f *configFile, path string) {
+	for name, t := range f.Tasks {
+		t.Source = path
+		f.Tasks[name] = t
+	}
+	for name, b := range f.Bundles {
+		b.Source = path
+		f.Bundles[name] = b
+	}
+	for name, g := range f.Groups {
+		g.Source = path
+		f.Groups[name] = g
+	}
+	for name, s := range f.Servers.Hosts {
+		s.Source = path
+		f.Servers.Hosts[name] = s
+	}
 }
 
 // claim records which file defines each name, and rejects a name a second file defines.

@@ -10,20 +10,22 @@
 
 ## Web UI
 
-`gorun -web` starts a web server (`GORUN_ADDRESS`, default `:8080`) with a live dashboard of
-running gorun processes and the run history. The live dashboard follows runs through
-[NATS](#events-nats). It is built with [templ](https://templ.guide), [Datastar](https://data-star.dev)
-and Tailwind CSS.
+`gorun -web Gorunfile` starts a web server on `GORUN_ADDRESS` (default `:8080`). The Gorunfile is
+optional; without it, load one on the Config page. It has three pages:
 
-![the web dashboard showing a failed run](screenshot-dashboard.png)
+- **Run** ticks servers and tasks, as the picker does, and starts them. Stats and a live dashboard
+  update as runs go. **Stop** cancels a run started from the page. Runs read the file on disk.
+- **History** lists saved runs. Open one for each server's tasks, output and exit code. **Trim
+  history** keeps the 10 newest.
+- **Config** adds, removes, loads and saves servers, groups, tasks and bundles. Changes wait until
+  you press **Save**, which writes each one into the file it came from.
 
-Each gorun process is a card with its title, progress and status, and failed runs show their
-failure box. Click a card for the per-server, per-task detail:
+Runs and live updates need [NATS](#events-nats). The pages use [templ](https://templ.guide) and
+[Datastar](https://data-star.dev), with live updates over server-sent events.
 
-![the web dashboard with a run expanded](screenshot-dashboard-verbose.png)
-
-Successful runs disappear on their own; **Clear finished** removes failed ones. `/runs` lists the
-history from the database, with a page per run, a delete button and "Keep 10 most recent".
+> **No login.** The web UI listens on all interfaces, so anyone who can reach the port can run
+> tasks and edit the Gorunfile. Keep it on a trusted network, or bind it to `127.0.0.1:8080` and
+> reach it over an SSH tunnel.
 
 ## Logs and OpenTelemetry
 

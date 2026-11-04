@@ -63,6 +63,7 @@ type Copy struct {
 type Task struct {
 	LogLevel        string            `toml:"log_level"`
 	Name            string            `toml:"-"` // the <name> in [tasks.<name>]
+	Source          string            `toml:"-"` // the file that defines it
 	Sudo            bool              `toml:"sudo"`
 	Cmd             string            `toml:"cmd,omitempty"`
 	CmdFile         string            `toml:"cmd_file,omitempty"`

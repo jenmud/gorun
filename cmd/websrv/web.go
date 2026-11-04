@@ -1,20 +1,23 @@
+// Package websrv serves the gorun web UI: the run page with a live dashboard, the history of
+// saved runs, and the config editor. Runs and live updates go through NATS, and the page
+// updates over server-sent events (SSE) using Datastar.
 package websrv
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/a-h/templ"
+	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/cmd/web/ui"
 	"github.com/jenmud/gorun/internal/envvars"
 	inats "github.com/jenmud/gorun/internal/nats"
@@ -22,273 +25,65 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-type hub struct {
+// app holds the state the handlers share. Each piece is guarded by mu.
+type app struct {
+	store *store.Store
+	nc    *inats.Client
+	topic string
+	hub   *hub
+
 	mu      sync.Mutex
-	state   ui.DashboardState
-	clients map[chan string]struct{}
+	dash    ui.DashboardState
+	cfgPath string                        // the saved Gorunfile runs and the editor use
+	cfg     *gorun.Config                 // the loaded config, for the editor
+	pending []gorun.Change                // unsaved editor changes
+	runs    map[string]context.CancelFunc // runs started from this page, by UUID
 }
 
-func newHub() *hub {
-	return &hub{clients: make(map[chan string]struct{})}
-}
-
-func (h *hub) add(c chan string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.clients[c] = struct{}{}
-}
-
-func (h *hub) remove(c chan string) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	delete(h.clients, c)
-}
-
-func (h *hub) render() string {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	var buf bytes.Buffer
-	if err := ui.Dashboard(h.state).Render(context.Background(), &buf); err != nil {
-		return ""
-	}
-	return buf.String()
-}
-
-func (h *hub) apply(ev ui.Event) {
-	h.mu.Lock()
-	h.state.Apply(ev)
-	h.mu.Unlock()
-}
-
-func (h *hub) clearFinished() {
-	h.mu.Lock()
-	h.state.ClearFinished()
-	h.mu.Unlock()
-}
-
-func (h *hub) broadcast(html string) {
-	msg := "event: datastar-patch-elements\ndata: mode inner\ndata: selector #dashboard\n"
-	for _, line := range strings.Split(html, "\n") {
-		msg += "data: elements " + line + "\n"
-	}
-	msg += "\n"
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for c := range h.clients {
-		select {
-		case c <- msg:
-		default:
-		}
-	}
-}
-
-func Run() {
-	h := newHub()
-
-	dbPath := envvars.Get("GORUN_DB_PATH")
-	if dbPath == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			dir := filepath.Join(home, ".gorun")
-			_ = os.MkdirAll(dir, 0755)
-			dbPath = filepath.Join(dir, "gorun.db")
-		} else {
-			dbPath = "gorun.db"
-		}
-	} else if len(dbPath) > 0 && dbPath[0] == '~' {
-		if home, err := os.UserHomeDir(); err == nil {
-			dbPath = filepath.Join(home, dbPath[1:])
-		}
-	}
-	st, err := store.Open(dbPath)
-	if err != nil {
-		log.Printf("gorun web: store disabled: %v", err)
-		st = nil
-	} else {
+// Run starts the web server on GORUN_ADDRESS (default :8080). configPath, when set, is the
+// Gorunfile to load; it can also be loaded from the config page.
+func Run(configPath string) {
+	st := openStore()
+	if st != nil {
 		defer func() { _ = st.Close() }()
-		log.Printf("gorun web: store opened at %s", dbPath)
 	}
 
-	url := envvars.Get("GORUN_NATS_CLIENT_URL")
-	if url == "" {
-		url = nats.DefaultURL
-	}
-	topic := envvars.Get("GORUN_EVENT_TOPIC")
-	if topic == "" {
-		topic = "gorun.events"
-	}
-
-	nc, err := nats.Connect(url)
+	gorun.StartNATS()
+	nc, err := inats.NewClient()
 	if err != nil {
 		log.Printf("gorun web: NATS disabled: %v", err)
-	} else {
+	}
+
+	a := &app{
+		store: st,
+		nc:    nc,
+		topic: topicName(),
+		hub:   &hub{clients: map[chan string]struct{}{}},
+		runs:  map[string]context.CancelFunc{},
+	}
+	if nc != nil {
 		defer nc.Close()
-		_, err := nc.Subscribe(topic, func(m *nats.Msg) {
-			var ev inats.Event
-			if err := json.Unmarshal(m.Data, &ev); err != nil {
-				return
-			}
-			h.apply(ev.UIEvent())
-			if st != nil {
-				inats.UpdateDatabase(context.Background(), st, &ev)
-			}
-			html := h.render()
-			if html != "" {
-				h.broadcast(html)
-			}
-		})
-		if err != nil {
+		if _, err := nc.Subscribe(a.topic, a.onEvent); err != nil {
 			log.Printf("gorun web: subscribe failed: %v", err)
 		} else {
-			log.Printf("gorun web: subscribed to %s on %s", topic, url)
+			log.Printf("gorun web: subscribed to %s", a.topic)
+		}
+	}
+	if configPath != "" {
+		if err := a.loadConfig(configPath); err != nil {
+			log.Printf("gorun web: %v", err)
 		}
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := ui.Index().Render(r.Context(), w); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	})
-	mux.HandleFunc("/clear", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		h.clearFinished()
-		html := h.render()
-		var msg strings.Builder
-		msg.WriteString("event: datastar-patch-elements\n")
-		msg.WriteString("data: mode inner\n")
-		msg.WriteString("data: selector #dashboard\n")
-		for _, line := range strings.Split(html, "\n") {
-			msg.WriteString("data: elements ")
-			msg.WriteString(line)
-			msg.WriteString("\n")
-		}
-		msg.WriteString("\n")
-		h.broadcast(msg.String())
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprint(w, msg.String())
-	})
-	mux.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "streaming unsupported", http.StatusInternalServerError)
-			return
-		}
-		ch := make(chan string, 64)
-		h.add(ch)
-		defer h.remove(ch)
-		if html := h.render(); html != "" {
-			msg := "event: datastar-patch-elements\ndata: mode inner\ndata: selector #dashboard\n"
-			for _, line := range strings.Split(html, "\n") {
-				msg += "data: elements " + line + "\n"
-			}
-			msg += "\n"
-			_, _ = fmt.Fprint(w, msg)
-			flusher.Flush()
-		}
-		for {
-			select {
-			case msg := <-ch:
-				_, _ = fmt.Fprint(w, msg)
-				flusher.Flush()
-			case <-r.Context().Done():
-				return
-			}
-		}
-	})
-
-	mux.HandleFunc("/runs", func(w http.ResponseWriter, r *http.Request) {
-		if st == nil {
-			http.Error(w, "store disabled", http.StatusServiceUnavailable)
-			return
-		}
-		runs, err := st.ListRuns(r.Context())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := ui.RunsList(runs).Render(r.Context(), w); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	})
-	mux.HandleFunc("/runs/{id}", func(w http.ResponseWriter, r *http.Request) {
-		if st == nil {
-			http.Error(w, "store disabled", http.StatusServiceUnavailable)
-			return
-		}
-		id := r.PathValue("id")
-		run, err := st.GetRun(r.Context(), id)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-		// hydrate task details (command, stdout, stderr) that are loaded lazily
-		for i := range run.Tasks {
-			if td, err := st.GetTask(r.Context(), id, run.Tasks[i].Server, run.Tasks[i].Name); err == nil {
-				run.Tasks[i].Command = td.Command
-				run.Tasks[i].Stdout = td.Stdout
-				run.Tasks[i].Stderr = td.Stderr
-				run.Tasks[i].ExitCode = td.ExitCode
-				run.Tasks[i].Duration = td.Duration
-				run.Tasks[i].State = td.State
-			}
-		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := ui.RunDetail(*run).Render(r.Context(), w); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-	})
-
-	mux.HandleFunc("/runs/{id}/delete", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		if st == nil {
-			http.Error(w, "store disabled", http.StatusServiceUnavailable)
-			return
-		}
-		id := r.PathValue("id")
-		if err := st.DeleteRun(r.Context(), id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		http.Redirect(w, r, "/runs", http.StatusSeeOther)
-	})
-	mux.HandleFunc("/runs/truncate", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		if st == nil {
-			http.Error(w, "store disabled", http.StatusServiceUnavailable)
-			return
-		}
-		if err := st.TruncateRuns(r.Context(), 10); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		http.Redirect(w, r, "/runs", http.StatusSeeOther)
-	})
-
-	addr := ":8080"
-	if v := envvars.Get("GORUN_ADDRESS"); v != "" {
-		addr = v
+	addr := envvars.Get("GORUN_ADDRESS")
+	if addr == "" {
+		addr = ":8080"
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	srv := &http.Server{Addr: addr, Handler: mux}
-
+	srv := &http.Server{Addr: addr, Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -296,8 +91,108 @@ func Run() {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	fmt.Printf("gorun web listening on %s\n", addr)
+	log.Printf("gorun web listening on %s", addr)
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+}
+
+// routes maps every page and action to its handler.
+func (a *app) routes() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /{$}", a.runPage)
+	mux.HandleFunc("POST /run", a.startRunHandler)
+	mux.HandleFunc("GET /events", a.events)
+	mux.HandleFunc("POST /clear", a.clearFinished)
+	mux.HandleFunc("POST /runs/{id}/cancel", a.cancelRun)
+
+	mux.HandleFunc("GET /history", a.historyPage)
+	mux.HandleFunc("GET /history/{id}", a.historyDetail)
+	mux.HandleFunc("POST /runs/{id}/delete", a.deleteRun)
+	mux.HandleFunc("POST /runs/truncate", a.truncateRuns)
+
+	mux.HandleFunc("GET /config", a.configPage)
+	mux.HandleFunc("POST /config/load", a.loadHandler)
+	mux.HandleFunc("POST /config/add", a.addHandler)
+	mux.HandleFunc("POST /config/remove", a.removeHandler)
+	mux.HandleFunc("POST /config/save", a.saveHandler)
+	mux.HandleFunc("POST /config/discard", a.discardHandler)
+	return mux
+}
+
+// topicName is the NATS subject events are published on.
+func topicName() string {
+	if t := envvars.Get("GORUN_EVENT_TOPIC"); t != "" {
+		return t
+	}
+	return "gorun.events"
+}
+
+// openStore opens the history database, or returns nil so the UI still works without it.
+func openStore() *store.Store {
+	dbPath := envvars.Get("GORUN_DB_PATH")
+	if dbPath == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			dir := home + "/.gorun"
+			_ = os.MkdirAll(dir, 0o755)
+			dbPath = dir + "/gorun.db"
+		} else {
+			dbPath = "gorun.db"
+		}
+	} else if strings.HasPrefix(dbPath, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			dbPath = home + dbPath[1:]
+		}
+	}
+	st, err := store.Open(dbPath)
+	if err != nil {
+		log.Printf("gorun web: history disabled: %v", err)
+		return nil
+	}
+	log.Printf("gorun web: history at %s", dbPath)
+	return st
+}
+
+// onEvent applies one run event from NATS to the dashboard and the history, then pushes
+// the change to every open page.
+func (a *app) onEvent(m *nats.Msg) {
+	var ev inats.Event
+	if err := json.Unmarshal(m.Data, &ev); err != nil {
+		return
+	}
+
+	a.mu.Lock()
+	a.dash.Apply(ev.UIEvent())
+	a.mu.Unlock()
+
+	if a.store != nil {
+		inats.UpdateDatabase(context.Background(), a.store, &ev)
+	}
+	if ev.Type == "process_finished" {
+		a.pushStats(context.Background())
+	}
+	a.pushDashboard()
+}
+
+// render turns a templ component into an HTML string.
+func render(c templ.Component) string {
+	var buf bytes.Buffer
+	if err := c.Render(context.Background(), &buf); err != nil {
+		log.Printf("gorun web: render: %v", err)
+		return ""
+	}
+	return buf.String()
+}
+
+// pushDashboard sends the current runs to every open page.
+func (a *app) pushDashboard() {
+	a.mu.Lock()
+	html := render(ui.Dashboard(a.dash))
+	a.mu.Unlock()
+	a.hub.broadcast(patch("#dashboard", html))
+}
+
+// pushStats recomputes the stats from the history and sends them to every open page.
+func (a *app) pushStats(ctx context.Context) {
+	a.hub.broadcast(patch("#stats", render(ui.StatsPanel(a.stats(ctx)))))
 }

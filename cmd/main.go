@@ -211,8 +211,7 @@ func main() {
 	}
 
 	if *webFlag {
-		os.Setenv("GORUN_SKIP_NATS", "1")
-		web.Run()
+		web.Run(filename)
 		return
 	}
 

@@ -1,0 +1,140 @@
+package ui
+
+templ RunPage(d RunPageData) {
+	if d.Flash != "" {
+		@flash(d.Flash, d.FlashBad)
+	}
+	<div class="grid gap-6 lg:grid-cols-[22rem_1fr]">
+		@runPicker(d)
+		<section class="min-w-0 space-y-6">
+			<div id="stats">
+				@statsPanel(d.Stats)
+			</div>
+			<div>
+				<h2 class="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-400">Live</h2>
+				<div id="dashboard" data-init="@get('/events')">
+					@Dashboard(d.Dashboard)
+				</div>
+			</div>
+		</section>
+	</div>
+}
+
+templ runPicker(d RunPageData) {
+	<form method="post" action="/run" class="space-y-5 self-start rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<div>
+			<h2 class="text-base font-semibold text-zinc-100">Pick and run</h2>
+			<p class="mt-1 text-xs text-zinc-500">Tick the servers to run on. Tick tasks to run only those; leave them all unticked to run each server's own list. Uses the saved <span class="font-mono">{ d.Path }</span>.</p>
+		</div>
+		<button type="submit" disabled?={ !d.NATSOK } class="w-full rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-40">Run selected</button>
+		<section>
+			<div class="mb-2 flex items-center justify-between gap-2">
+				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Servers</h3>
+				<div class="flex gap-1 text-xs">
+					<button type="button" onclick="gorunSelect('server-list', true)" class="rounded px-2 py-0.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">all</button>
+					<button type="button" onclick="gorunSelect('server-list', false)" class="rounded px-2 py-0.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">none</button>
+				</div>
+			</div>
+			<input type="search" placeholder="filter by name, tag or group" oninput="gorunFilter(this, 'server-list')" class="mb-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-sm placeholder:text-zinc-600 focus:border-accent focus:outline-none"/>
+			<ul id="server-list" class="max-h-96 space-y-1 overflow-y-auto pr-1">
+				for _, s := range d.Servers {
+					<li data-filter={ s.Name + " " + s.Tags + " " + s.Groups + " " + s.Address } class="rounded-lg px-2 py-1.5 hover:bg-zinc-800/50">
+						<label class="flex cursor-pointer items-start gap-2">
+							<input type="checkbox" name="server" value={ s.Name } checked?={ s.Selected } class="mt-1 accent-violet-600"/>
+							<span class="min-w-0 flex-1">
+								<span class="block truncate text-sm text-zinc-100">{ s.Name }</span>
+								<span class="block truncate font-mono text-xs text-zinc-500">{ s.Address }</span>
+								if s.Tags != "" {
+									<span class="block truncate text-xs text-zinc-500">tags: { s.Tags }</span>
+								}
+							</span>
+						</label>
+					</li>
+				}
+			</ul>
+		</section>
+		<section>
+			<div class="mb-2 flex items-center justify-between gap-2">
+				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Tasks</h3>
+				<div class="flex gap-1 text-xs">
+					<button type="button" onclick="gorunSelect('task-list', true)" class="rounded px-2 py-0.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">all</button>
+					<button type="button" onclick="gorunSelect('task-list', false)" class="rounded px-2 py-0.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">none</button>
+				</div>
+			</div>
+			<input type="search" placeholder="filter tasks" oninput="gorunFilter(this, 'task-list')" class="mb-2 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-sm placeholder:text-zinc-600 focus:border-accent focus:outline-none"/>
+			<ul id="task-list" class="max-h-96 space-y-1 overflow-y-auto pr-1">
+				for _, t := range d.Tasks {
+					<li data-filter={ t.Name + " " + t.Description } class="rounded-lg px-2 py-1.5 hover:bg-zinc-800/50">
+						<label class="flex cursor-pointer items-start gap-2" title={ t.Details }>
+							<input type="checkbox" name="task" value={ t.Name } class="mt-1 accent-violet-600"/>
+							<span class="min-w-0 flex-1">
+								<span class="block truncate font-mono text-sm text-zinc-100">{ t.Name }</span>
+								if t.Description != "" {
+									<span class="block truncate text-xs text-zinc-500">{ t.Description }</span>
+								}
+								if t.Rerun != "" {
+									<span class="block truncate text-xs text-amber-400">{ rerunLabel(t.Rerun) }</span>
+								}
+							</span>
+						</label>
+					</li>
+				}
+			</ul>
+		</section>
+	</form>
+}
+
+templ flash(msg string, bad bool) {
+	<div class={ flashClass(bad) }>{ msg }</div>
+}
+
+templ statsPanel(s StatsView) {
+	<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+		@statTile("Runs", itoa(s.Runs), "in history")
+		@statTile("Success", percent(s.SuccessRate), itoa(s.Succeeded)+" of "+itoa(s.Finished)+" finished")
+		@statTile("Average", formatDuration(s.AvgDuration), "per finished run")
+		@statTile("Tasks failed", itoa(s.TasksFailed), "of "+itoa(s.TasksRun)+" run")
+	</div>
+	<div class="mt-4 grid gap-3 md:grid-cols-2">
+		<div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+			<h3 class="text-sm font-semibold text-zinc-100">Recent runs</h3>
+			<p class="mb-3 text-xs text-zinc-500">Bar height is how long each run took, oldest on the left. Red bars failed. Hover for details.</p>
+			if len(s.Recent) == 0 {
+				<p class="py-8 text-center text-sm text-zinc-500">No runs yet. Your first run will appear here.</p>
+			} else {
+				<svg viewBox="0 0 300 120" class="h-40 w-full" preserveAspectRatio="none" role="img" aria-label="Run durations">
+					for _, r := range barRects(s.Recent) {
+						<rect x={ itoa(r.X) } y={ itoa(r.Y) } width={ itoa(r.W) } height={ itoa(r.H) } rx="2" class={ r.Class }>
+							<title>{ r.Tip }</title>
+						</rect>
+					}
+				</svg>
+			}
+		</div>
+		<div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+			<h3 class="text-sm font-semibold text-zinc-100">Slowest tasks</h3>
+			<p class="mb-3 text-xs text-zinc-500">Average time over the last few runs. Start here when a run feels slow.</p>
+			if len(s.Slowest) == 0 {
+				<p class="py-8 text-center text-sm text-zinc-500">Nothing to rank yet.</p>
+			} else {
+				<ul class="space-y-2">
+					for _, t := range s.Slowest {
+						<li class="flex items-center gap-3 text-sm">
+							<span class="min-w-0 flex-1 truncate font-mono text-zinc-200">{ t.Name }</span>
+							<span class="truncate text-xs text-zinc-500">{ t.Server }</span>
+							<span class="w-16 text-right font-mono text-xs text-zinc-300">{ formatDuration(t.Average) }</span>
+						</li>
+					}
+				</ul>
+			}
+		</div>
+	</div>
+}
+
+templ statTile(label string, value string, sub string) {
+	<div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<p class="text-xs uppercase tracking-wider text-zinc-500">{ label }</p>
+		<p class="mt-1 text-2xl font-semibold text-zinc-100">{ value }</p>
+		<p class="mt-1 truncate text-xs text-zinc-500">{ sub }</p>
+	</div>
+}

@@ -1,0 +1,143 @@
+package ui
+
+templ HistoryPage(d HistoryPageData) {
+	if d.Flash != "" {
+		@flash(d.Flash, false)
+	}
+	<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+		<div class="max-w-2xl">
+			<h1 class="text-xl font-semibold text-zinc-100">History</h1>
+			<p class="mt-1 text-sm text-zinc-400">Every run is saved here with the commands it ran and what they printed. Open a run to see each server's tasks, how long they took, and their output. Failed tasks are marked in red with their exit code.</p>
+		</div>
+		<form method="post" action="/runs/truncate" class="flex items-center gap-3 text-xs text-zinc-400">
+			<span>Keep only the newest 10 runs</span>
+			<button class="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-zinc-200 transition hover:bg-zinc-700">Trim history</button>
+		</form>
+	</div>
+	if len(d.Runs) == 0 {
+		<div class="rounded-2xl border border-dashed border-zinc-800 p-10 text-center text-sm">
+			<p class="text-zinc-200">No runs saved yet.</p>
+			<p class="mt-1 text-zinc-500">Start one from <a href="/" class="text-accent hover:underline">Run</a>. It will appear here as soon as it starts.</p>
+		</div>
+	} else {
+		<div class="overflow-hidden rounded-2xl border border-zinc-800">
+			<table class="w-full text-left text-sm">
+				<thead class="bg-zinc-900/60 text-xs uppercase tracking-wider text-zinc-500">
+					<tr>
+						<th class="px-4 py-2 font-medium">Status</th>
+						<th class="px-4 py-2 font-medium">Run</th>
+						<th class="px-4 py-2 font-medium">Started</th>
+						<th class="px-4 py-2 text-right font-medium">Took</th>
+						<th class="px-4 py-2 text-right font-medium">Servers</th>
+						<th class="px-4 py-2 text-right font-medium">Tasks</th>
+						<th class="px-4 py-2 text-right font-medium">Failed</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-zinc-800">
+					for _, r := range d.Runs {
+						@historyRow(r)
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+templ historyRow(r RunRow) {
+	<tr class="transition hover:bg-zinc-900/60">
+		<td class="px-4 py-3"><span class={ runBadgeClass(r.State) }>{ runBadgeLabel(r.State) }</span></td>
+		<td class="px-4 py-3">
+			<a href={ runPath(r.ID) } class="font-medium text-zinc-100 hover:text-accent">{ r.Title }</a>
+			<div class="font-mono text-xs text-zinc-500">{ r.Hostname }</div>
+		</td>
+		<td class="px-4 py-3 text-zinc-400">{ startedText(r) }</td>
+		<td class="px-4 py-3 text-right font-mono text-xs text-zinc-300">{ formatDuration(r.Duration) }</td>
+		<td class="px-4 py-3 text-right text-zinc-300">{ itoa(r.Servers) }</td>
+		<td class="px-4 py-3 text-right text-zinc-300">{ itoa(r.TotalTasks) }</td>
+		<td class="px-4 py-3 text-right">
+			if r.Failed > 0 {
+				<span class="text-red-400">{ itoa(r.Failed) }</span>
+			} else {
+				<span class="text-zinc-500">0</span>
+			}
+		</td>
+	</tr>
+}
+
+templ HistoryDetailPage(d RunDetailData) {
+	<div class="mb-4 text-xs">
+		<a href="/history" class="text-zinc-400 hover:text-zinc-200">← back to history</a>
+	</div>
+	<header class="mb-6 flex flex-wrap items-start justify-between gap-4">
+		<div class="min-w-0">
+			<div class="flex items-center gap-3">
+				<span class={ runBadgeClass(d.Summary.State) }>{ runBadgeLabel(d.Summary.State) }</span>
+				<h1 class="truncate text-xl font-semibold text-zinc-100">{ d.Summary.Title }</h1>
+			</div>
+			<p class="mt-1 font-mono text-xs text-zinc-500">{ d.Summary.ID }</p>
+			<p class="mt-1 text-sm text-zinc-400">Started { startedText(d.Summary) } on <span class="font-mono">{ d.Summary.Hostname }</span></p>
+		</div>
+		<form method="post" action={ deletePath(d.Summary.ID) }>
+			<button class="rounded-lg border border-red-900/60 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-950/40">Delete this run</button>
+		</form>
+	</header>
+	<div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
+		@statTile("Took", formatDuration(d.Summary.Duration), "wall clock")
+		@statTile("Tasks", itoa(d.Summary.TotalTasks), itoa(d.Summary.Servers)+" servers")
+		@statTile("Failed", itoa(d.Summary.Failed), "tasks that exited non-zero or errored")
+		@statTile("Skipped", itoa(d.Summary.Skipped), "because a dependency failed")
+	</div>
+	<p class="mb-4 text-sm text-zinc-400">Each server ran its tasks in order. Open a task to see the command it ran, what it printed, and its exit code. Errors from a server that couldn't be reached are listed at the top of its card.</p>
+	<div class="space-y-4">
+		for _, srv := range d.Servers {
+			@historyServer(srv)
+		}
+	</div>
+}
+
+templ historyServer(srv ServerBlock) {
+	<section class={ runCardClass(srv.Failed, true) }>
+		<header class="flex flex-wrap items-baseline justify-between gap-2 p-4">
+			<div>
+				<span class={ serverNameClass(srv.Failed) }>{ srv.Name }</span>
+				<span class="ml-2 font-mono text-xs text-zinc-500">{ srv.Address }</span>
+			</div>
+			<span class="text-xs text-zinc-400">{ itoa(len(srv.Tasks)) } tasks · { formatDuration(srv.Duration) }</span>
+		</header>
+		if srv.Error != "" {
+			<p class="border-t border-zinc-800 px-4 py-3 text-xs text-red-300">Could not run on this server: { srv.Error }</p>
+		}
+		<ul class="space-y-1 border-t border-zinc-800 p-3">
+			for _, t := range srv.Tasks {
+				@historyTask(t)
+			}
+		</ul>
+	</section>
+}
+
+templ historyTask(t historyTaskView) {
+	<li class="rounded-lg px-2 py-1 transition hover:bg-zinc-800/40">
+		<details open?={ t.State == 3 }>
+			<summary class="flex cursor-pointer list-none items-center gap-2 text-sm">
+				<span class={ stateClass(t.State) }>{ stateIcon(t.State) }</span>
+				<span class="font-mono text-zinc-200">{ t.Name }</span>
+				<span class="ml-auto text-xs text-zinc-500">{ formatDuration(t.Duration) }</span>
+			</summary>
+			<div class="mt-2 space-y-2 border-l border-zinc-800 pl-3 text-xs">
+				<p class="text-zinc-400">{ hintFor(t.State) }</p>
+				if t.Command != "" {
+					<pre class="overflow-x-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">$ { t.Command }</pre>
+				}
+				if t.Stdout != "" {
+					<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ t.Stdout }</pre>
+				}
+				if t.Stderr != "" {
+					<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ t.Stderr }</pre>
+				}
+				if t.State == 3 {
+					<p class="text-red-300">exit code { itoa(t.ExitCode) }</p>
+				}
+			</div>
+		</details>
+	</li>
+}

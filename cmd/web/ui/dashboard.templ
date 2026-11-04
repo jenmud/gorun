@@ -1,155 +1,107 @@
 package ui
 
 templ Dashboard(s DashboardState) {
-	<div class="space-y-3">
-		if hasFinished(s) {
-			<div class="flex justify-end">
-				<button
-					data-on:click="@post('/clear')"
-					class="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-700"
-				>
-					Clear finished
-				</button>
-			</div>
-		}
-		for _, uuid := range s.ProcessOrder {
-			{{ p := s.Processes[uuid] }}
-			{{ total := processTotal(p) }}
-			{{ done := processDone(p) }}
-			<div class={ serverCardClass(processHasFailed(p)) }>
-				<div
-					class="flex cursor-pointer select-none items-center justify-between gap-3 p-4"
-					data-on:click={ "$expanded['" + uuid + "'] = !$expanded['" + uuid + "']" }
-				>
-					<div class="flex items-center gap-2">
-						<span class="rounded bg-accent px-2 py-0.5 text-xs font-bold text-white">gorun</span>
-						<span class="text-zinc-300">{ p.Title }</span>
-						<span class="font-mono text-xs text-zinc-500">{ uuid }</span>
-					</div>
-					<div class="flex items-center gap-3 text-xs">
-						if !p.Finished {
-							<span class="text-zinc-400">{ done }/{ total }</span>
-							if processHasFailed(p) {
-								<span class="font-bold text-red-400">✗ running</span>
-							} else {
-								<span class="text-accent">● running</span>
-							}
-						} else {
-							if p.Success {
-								<span class="text-green-400">✓ all { p.TotalTasks } done</span>
-							} else {
-								<span class="text-red-400">✗ { p.Failed } of { p.TotalTasks } failed</span>
-								if p.Skipped > 0 {
-									<span class="text-amber-400">, { p.Skipped } skipped</span>
-								}
-							}
-							<span class="text-zinc-500"> { int(p.Duration / 1000000000) }s</span>
-						}
-						<span class="text-zinc-600" data-text={ "$expanded['" + uuid + "'] ? '▾' : '▸'" }></span>
-					</div>
-					<div class="mt-2 h-1.5 w-full overflow-hidden rounded bg-zinc-800">
-						if processHasFailed(p) {
-							<div class="h-1.5 rounded bg-red-500" style={ "width: " + itoa(processProgress(p)) + "%" }></div>
-						} else {
-							<div class="h-1.5 rounded bg-accent" style={ "width: " + itoa(processProgress(p)) + "%" }></div>
-						}
-					</div>
-				</div>
+	if len(s.ProcessOrder) == 0 {
+		<div class="rounded-2xl border border-dashed border-zinc-800 p-10 text-center text-sm">
+			<p class="text-zinc-200">Nothing running.</p>
+			<p class="mt-1 text-zinc-500">Pick servers and tasks on the left, then press <span class="font-semibold text-accent">Run</span>. Runs started from the terminal show up here too.</p>
+		</div>
+	}
+	if hasFinished(s) {
+		<div class="mb-3 flex justify-end">
+			<button data-on:click="@post('/clear')" class="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-700">Clear finished</button>
+		</div>
+	}
+	for _, uuid := range s.ProcessOrder {
+		@processCard(s.Processes[uuid])
+	}
+}
 
-				<!-- verbose detail, collapsed by default -->
-				<div class="space-y-3 border-t border-zinc-800 p-4" data-show={ "$expanded['" + uuid + "']" }>
-					for _, sname := range p.ServerOrder {
-						{{ srv := p.Servers[sname] }}
-						<div class={ serverBoxClass(serverHasFailed(srv)) }>
-							<div class="mb-1 flex items-baseline gap-2">
-								<span class={ serverNameClass(serverHasFailed(srv)) }>{ srv.Name }</span>
-								<span class="text-xs text-zinc-500">{ srv.Address }</span>
-							</div>
-							<div class="mb-2 h-1 w-full overflow-hidden rounded bg-zinc-800">
-								if serverHasFailed(srv) {
-									<div class="h-1 rounded bg-red-500" style={ "width: " + itoa(serverProgress(srv)) + "%" }></div>
-								} else {
-									<div class="h-1 rounded bg-accent" style={ "width: " + itoa(serverProgress(srv)) + "%" }></div>
-								}
-							</div>
-							<div class="space-y-0.5 pl-2">
-								for _, tname := range srv.Order {
-									{{ t := srv.Tasks[tname] }}
-									<div class="flex items-center gap-2 text-sm">
-										if t.State == 0 {
-											<span class="text-zinc-500">○</span>
-										} else if t.State == 1 {
-											<span class="animate-pulse text-accent">●</span>
-										} else if t.State == 2 {
-											<span class="text-green-400">✓</span>
-										} else if t.State == 3 {
-											<span class="font-bold text-red-400">✗</span>
-										} else if t.State == 4 {
-											<span class="text-amber-400">⊘</span>
-										}
-										<span class="w-40 truncate text-zinc-200">{ t.Name }</span>
-										if t.Rerun == "unsafe" {
-											<span class="text-amber-400" title="Not safe to rerun: running this task again may change the server">⚠</span>
-										}
-										if t.Description != "" {
-											<span class="min-w-0 flex-1 truncate text-xs text-zinc-500">{ t.Description }</span>
-										}
-										if t.State == 2 || t.State == 3 {
-											<span class="text-zinc-500">{ int(t.Duration / 1000000000) }s</span>
-										}
-										if t.Attempts > 1 {
-											if t.State == 1 {
-												<span class="text-xs text-accent">attempt { t.Attempt }/{ t.Attempts }</span>
-											} else if t.State == 2 || t.State == 3 {
-												<span class="text-xs text-zinc-500" title="Attempts used">{ t.Attempt }/{ t.Attempts } attempts</span>
-											}
-										}
-										if t.State == 3 {
-											<span class="text-red-400">exit { t.ExitCode }</span>
-										} else if t.State == 4 {
-											<span class="text-amber-400">skipped</span>
-										}
-									</div>
-									if t.Description != "" || t.Details != "" || t.Rerun == "unsafe" {
-										<details class="ml-6 mt-1">
-											<summary class="cursor-pointer text-xs text-zinc-400 hover:text-zinc-200">about</summary>
-											<div class="mt-1 rounded bg-zinc-950 p-2 text-xs text-zinc-300">
-												if t.Description != "" {
-													<p class="font-medium text-zinc-100">{ t.Description }</p>
-												}
-												if t.Details != "" {
-													<p class="mt-1 whitespace-pre-wrap">{ t.Details }</p>
-												}
-												if t.Rerun == "unsafe" {
-													<p class="mt-1 text-amber-400">⚠ Not safe to rerun: running this task again may change the server.</p>
-												}
-											</div>
-										</details>
-									}
-									if t.Command != "" {
-										<details class="ml-6 mt-1">
-											<summary class="cursor-pointer text-xs text-zinc-400 hover:text-zinc-200">command</summary>
-											<pre class="mt-1 max-h-48 overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-300 whitespace-pre-wrap">{ t.Command }</pre>
-										</details>
-									}
-									if t.Stdout != "" {
-										<details class="ml-6 mt-1">
-											<summary class="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">stdout</summary>
-											<pre class="mt-1 max-h-48 overflow-auto rounded bg-zinc-950 p-2 text-xs text-zinc-300 whitespace-pre-wrap">{ t.Stdout }</pre>
-										</details>
-									}
-									if t.Stderr != "" {
-										<details class="ml-6 mt-1">
-											<summary class="cursor-pointer text-xs text-red-400 hover:text-red-300">stderr</summary>
-											<pre class="mt-1 max-h-48 overflow-auto rounded bg-red-950/30 p-2 text-xs text-red-300 whitespace-pre-wrap">{ t.Stderr }</pre>
-										</details>
-									}
-								}
-							</div>
-						</div>
-					}
+templ processCard(p *ProcessState) {
+	<section class={ runCardClass(processHasFailed(p), p.Finished) }>
+		<header class="flex flex-wrap items-center gap-3 p-4">
+			<div class="min-w-0 flex-1">
+				<div class="flex items-center gap-2">
+					<span class={ runStateClass(p) }>{ runStateLabel(p) }</span>
+					<h3 class="truncate font-semibold text-zinc-100">{ p.Title }</h3>
 				</div>
+				<p class="mt-1 truncate font-mono text-xs text-zinc-500">{ p.UUID }</p>
 			</div>
-		}
+			<div class="flex items-center gap-4 text-xs text-zinc-400">
+				<span>{ itoa(processDone(p)) }/{ itoa(processTotal(p)) } tasks</span>
+				if p.Finished {
+					<span>{ processDuration(p) }</span>
+				}
+			</div>
+			if !p.Finished {
+				<form method="post" action={ runCancelPath(p.UUID) }>
+					<button class="rounded-lg border border-red-900/60 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-950/40">Stop</button>
+				</form>
+			}
+		</header>
+		<div class="h-1 w-full bg-zinc-800">
+			<div class={ progressClass(processHasFailed(p)) } style={ "width: " + itoa(processProgress(p)) + "%" }></div>
+		</div>
+		<div class="grid gap-3 p-4 md:grid-cols-2">
+			for _, sname := range p.ServerOrder {
+				@serverBlock(p.Servers[sname])
+			}
+		</div>
+	</section>
+}
+
+templ serverBlock(srv *ServerInfo) {
+	<div class={ serverBoxClass(serverHasFailed(srv)) }>
+		<div class="mb-2 flex items-baseline justify-between gap-2">
+			<span class={ serverNameClass(serverHasFailed(srv)) }>{ srv.Name }</span>
+			<span class="font-mono text-xs text-zinc-500">{ srv.Address }</span>
+		</div>
+		<div class="mb-3 h-1 w-full overflow-hidden rounded bg-zinc-800">
+			<div class={ progressClass(serverHasFailed(srv)) } style={ "width: " + itoa(serverProgress(srv)) + "%" }></div>
+		</div>
+		<ul class="space-y-1">
+			for _, tname := range srv.Order {
+				@taskRow(srv.Tasks[tname])
+			}
+		</ul>
 	</div>
+}
+
+templ taskRow(t *TaskInfo) {
+	<li class="rounded-lg px-2 py-1 transition hover:bg-zinc-800/40">
+		<details open?={ t.State == 3 }>
+			<summary class="flex cursor-pointer list-none items-center gap-2 text-sm">
+				<span class={ stateClass(t.State) }>{ stateIcon(t.State) }</span>
+				<span class="font-mono text-zinc-200">{ t.Name }</span>
+				if t.Attempts > 1 {
+					<span class="text-xs text-amber-400">attempt { itoa(t.Attempt) }/{ itoa(t.Attempts) }</span>
+				}
+				<span class="ml-auto text-xs text-zinc-500">{ taskTiming(t) }</span>
+			</summary>
+			<div class="mt-2 space-y-2 border-l border-zinc-800 pl-3 text-xs">
+				<p class="text-zinc-400">{ hintFor(t.State) }</p>
+				if t.Description != "" {
+					<p class="text-zinc-300">{ t.Description }</p>
+				}
+				if t.Details != "" {
+						<p class="text-zinc-400">{ t.Details }</p>
+					}
+					if t.Rerun != "" {
+						<p class="text-amber-400">{ rerunLabel(t.Rerun) }</p>
+					}
+					if t.Command != "" {
+					<pre class="overflow-x-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">$ { t.Command }</pre>
+				}
+				if t.Stdout != "" {
+					<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ t.Stdout }</pre>
+				}
+				if t.Stderr != "" {
+					<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ t.Stderr }</pre>
+				}
+				if t.State == 3 {
+					<p class="text-red-300">exit code { itoa(t.ExitCode) }</p>
+				}
+			</div>
+		</details>
+	</li>
 }

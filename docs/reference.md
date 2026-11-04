@@ -39,7 +39,7 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 | `-dump` | print a starting Gorunfile |
 | `-dump-tasks DIR` | dump each task as a runnable shell file in DIR |
 | `-history` | browse past runs |
-| `-web` | start the web UI |
+| `-web [Gorunfile]` | start the web UI, optionally loading a Gorunfile |
 | `-complete <kind>` | print shell completion candidates |
 | `-version` | print the version |
 

@@ -133,6 +133,8 @@ func main() {
 	historyFlag := flag.Bool("history", false, "view historical runs")
 	taskFlags := stringSlice{}
 	flag.Var(&taskFlags, "task", "run only the named task, glob or @bundle on any selected server (repeatable); dependencies are included")
+	bundleFlags := stringSlice{}
+	flag.Var(&bundleFlags, "bundles", "run only tasks from the named bundle(s), replacing each server's task list (repeatable)")
 	serverFlags := stringSlice{}
 	flag.Var(&serverFlags, "server", "run only the named server or glob (repeatable)")
 	excludeFlags := stringSlice{}
@@ -149,7 +151,7 @@ func main() {
 	listServerGroups := flag.Bool("list-server-groups", false, "list server groups and the servers that have them and exit")
 	listBundles := flag.Bool("list-bundles", false, "list task bundles and what they expand to and exit")
 	dumpTasksDir := flag.String("dump-tasks", "", "dump each task as a file in DIR and exit")
-	complete := flag.String("complete", "", "print shell completion candidates (tasks, servers, tags or groups) and exit")
+	complete := flag.String("complete", "", "print shell completion candidates (tasks, bundles, servers, tags or groups) and exit")
 
 	flag.Usage = printUsage
 	flag.Parse()
@@ -251,11 +253,20 @@ func main() {
 		cfg.MaxParallel = *parallel
 	}
 
-	// validate and apply --task filter. A named task is run on every selected
-	// server even when it is not part of that server's configured pipeline, so
-	// one-off tasks work on any host.
+	if len(taskFlags) > 0 && len(bundleFlags) > 0 {
+		fatal(errors.New("--task and --bundles cannot be used together"))
+	}
+
+	// validate and apply task or bundle selection before building pipelines.
 	var selectedTasks []string
-	if len(taskFlags) > 0 {
+	if len(bundleFlags) > 0 {
+		selectedTasks, err = selectBundles(&cfg, bundleFlags...)
+		if err != nil {
+			fatal(err)
+		}
+	} else if len(taskFlags) > 0 {
+		// A named task is run on every selected server even when it is not part
+		// of that server's configured pipeline, so one-off tasks work on any host.
 		selectedTasks, err = cfg.ExpandTaskPatterns(taskFlags...)
 		if err != nil {
 			fatal(err)
@@ -307,7 +318,7 @@ func main() {
 	if *listTasks {
 		// With a filter, list only the tasks the selection would run.
 		var shown map[string]bool
-		if len(selectedTasks) > 0 || !filter.IsZero() {
+		if len(selectedTasks) > 0 || len(bundleFlags) > 0 || !filter.IsZero() {
 			shown = map[string]bool{}
 			servers, err := cfg.ServersPipeline()
 			if err != nil {
@@ -463,6 +474,7 @@ Options:
   -run, -r  run without the interactive server picker (needed when there is no terminal)
   -task     run only the named task on any selected server (repeatable; dependencies included);
             accepts globs ('deploy-*') and bundles ('@base')
+  -bundles  run only the named bundle(s), replacing each server's task list (repeatable; globs allowed)
   -server   run only the named server (repeatable; accepts globs like 'web-*')
   -exclude-server  skip the named server (repeatable; accepts globs)
   -tag      run only servers with this tag (repeatable; servers need every tag)

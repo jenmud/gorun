@@ -29,6 +29,7 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 | `-tag <tag>` | only servers with this tag; repeatable, all must match |
 | `-group <group>` | only servers in this group; repeatable, all must match |
 | `-task <name>` | only this task (with its dependencies); repeatable, globs and `@bundles` allowed |
+| `-bundles <name>` | replace each selected server's task list with these bundle(s); repeatable, globs allowed |
 | `-parallel <n>` | at most n servers at a time; `0` means all (overrides `max_parallel`) |
 | `-list-servers` | list servers with their groups, tags and task lists (a collapsible tree in a terminal) |
 | `-list-tasks` | list tasks as a dependency tree (collapsible in a terminal) |

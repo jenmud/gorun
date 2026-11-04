@@ -137,12 +137,16 @@ gorun Gorunfile --tag prod --tag web --group eu            # servers matching al
 gorun Gorunfile --task verify                              # one task (and what it depends on)
 gorun Gorunfile --task @baseline                           # a bundle
 gorun Gorunfile --task 'deploy-*'                          # every matching task
+gorun Gorunfile --bundles baseline                         # replace server task lists with a bundle
+gorun Gorunfile --bundles 'web-*' --tag prod               # combine matching bundles on prod servers
 ```
 
 - More `--server` flags add servers; `--exclude-server` removes them. More `--tag` and `--group`
   flags must **all** match.
-- `--server`, `--exclude-server` and `--task` take globs (`*`, `?`, `[a-z]`). Quote them so the
-  shell leaves them alone.
+- `--server`, `--exclude-server`, `--task` and `--bundles` take globs (`*`, `?`, `[a-z]`). Quote
+  them so the shell leaves them alone.
+- `--bundles` replaces each selected server's configured task list with the expanded bundle tasks;
+  repeat it to combine bundles. It cannot be combined with `--task`.
 - A name that doesn't exist is an error, with a "did you mean" hint.
 
 > [!CAUTION]

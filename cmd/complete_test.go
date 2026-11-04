@@ -39,6 +39,7 @@ tasks = ["zeta"]
 		want []string
 	}{
 		{kind: "tasks", want: []string{"@base", "alpha", "zeta"}},
+		{kind: "bundles", want: []string{"base"}},
 		{kind: "servers", want: []string{"db-1", "web-1"}},
 		{kind: "tags", want: []string{"prod", "web"}},
 		{kind: "groups", want: []string{"prod"}},

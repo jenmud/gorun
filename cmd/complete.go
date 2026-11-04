@@ -11,7 +11,7 @@ import (
 )
 
 // completionNames returns the names a shell can complete for kind, which is
-// "tasks" (including "@bundle" references), "servers", "tags" or "groups". It is
+// "tasks" (including "@bundle" references), "bundles", "servers", "tags" or "groups". It is
 // used by the bash completion function documented in docs/integrations.md.
 func completionNames(kind, filename string) ([]string, error) {
 	if filename == "" {
@@ -39,6 +39,8 @@ func completionNames(kind, filename string) ([]string, error) {
 		for name := range cfg.Bundles {
 			names = append(names, gorun.BundlePrefix+name)
 		}
+	case "bundles":
+		names = slices.Collect(maps.Keys(cfg.Bundles))
 	case "servers":
 		names = make([]string, 0, len(cfg.Servers))
 		for _, server := range cfg.Servers {
@@ -62,7 +64,7 @@ func completionNames(kind, filename string) ([]string, error) {
 	case "groups":
 		names = slices.Collect(maps.Keys(cfg.Groups))
 	default:
-		return nil, fmt.Errorf("unknown completion kind %q (want tasks, servers, tags or groups)", kind)
+		return nil, fmt.Errorf("unknown completion kind %q (want tasks, bundles, servers, tags or groups)", kind)
 	}
 
 	sort.Strings(names)

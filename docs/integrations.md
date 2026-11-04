@@ -140,7 +140,7 @@ _gorun_complete() {
     for ((i = 1; i < COMP_CWORD; i++)); do
         word=${COMP_WORDS[i]}
         case $word in
-            -task|--task|-server|--server|-exclude-server|--exclude-server|-tag|--tag|-group|--group|-parallel|--parallel) ((i++)) ;;
+            -task|--task|-bundles|--bundles|-server|--server|-exclude-server|--exclude-server|-tag|--tag|-group|--group|-parallel|--parallel) ((i++)) ;;
             -*) ;;
             *) file=$word; break ;;
         esac
@@ -151,10 +151,18 @@ _gorun_complete() {
         COMPREPLY=($(compgen -W "$(gorun -complete tasks "$file" 2>/dev/null | sed -n 's/^@//p')" -- "$cur"))
         return
     fi
+    if [[ $prev == @ && ( ${COMP_WORDS[COMP_CWORD-2]} == -bundles || ${COMP_WORDS[COMP_CWORD-2]} == --bundles ) ]]; then
+        COMPREPLY=($(compgen -W "$(gorun -complete bundles "$file" 2>/dev/null)" -- "$cur"))
+        return
+    fi
 
     case $prev in
         -task|--task)
             COMPREPLY=($(compgen -W "$(gorun -complete tasks "$file" 2>/dev/null)" -- "$cur"))
+            return
+            ;;
+        -bundles|--bundles)
+            COMPREPLY=($(compgen -W "$(gorun -complete bundles "$file" 2>/dev/null)" -- "$cur"))
             return
             ;;
         -server|--server|-exclude-server|--exclude-server)
@@ -172,7 +180,7 @@ _gorun_complete() {
     esac
 
     if [[ $cur == -* ]]; then
-        COMPREPLY=($(compgen -W "-v -plain -run -r -task -server -exclude-server -tag -group -parallel -list-tasks -list-servers -list-tags -list-groups -list-bundles -dump -dump-tasks -version -web -history -h --task --server --exclude-server --tag --group --parallel --run --plain --list-tasks --list-servers --list-tags --list-groups --list-bundles --dump --dump-tasks --version --web --history --help" -- "$cur"))
+        COMPREPLY=($(compgen -W "-v -plain -run -r -task -bundles -server -exclude-server -tag -group -parallel -list-tasks -list-servers -list-tags -list-groups -list-bundles -dump -dump-tasks -version -web -history -h --task --bundles --server --exclude-server --tag --group --parallel --run --plain --list-tasks --list-servers --list-tags --list-groups --list-bundles --dump --dump-tasks --version --web --history --help" -- "$cur"))
     else
         COMPREPLY=($(compgen -f -- "$cur"))
     fi
@@ -182,4 +190,4 @@ complete -o filenames -F _gorun_complete gorun
 ```
 
 `gorun -complete <kind> [Gorunfile]` prints the names for `tasks` (including `@bundles`),
-`servers`, `tags` or `groups`, using `./Gorunfile` when no file is given.
+`bundles`, `servers`, `tags` or `groups`, using `./Gorunfile` when no file is given.

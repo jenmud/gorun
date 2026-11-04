@@ -517,13 +517,13 @@ tasks = ["@check"]
 
 	m.selectedBundles = map[string]bool{"validate": true}
 	m.applyBundles()
-	if diff := cmp.Diff(map[string][]string{"web-1": {"docker", "caddy"}, "laptop": {}}, tasksOf()); diff != "" {
+	if diff := cmp.Diff(map[string][]string{"web-1": {"docker", "caddy"}}, tasksOf()); diff != "" {
 		t.Errorf("@validate should only run on the SSH server (-want +got):\n%s", diff)
 	}
 
 	m.selectedBundles = map[string]bool{"check": true}
 	m.applyBundles()
-	if diff := cmp.Diff(map[string][]string{"web-1": {}, "laptop": {"lint"}}, tasksOf()); diff != "" {
+	if diff := cmp.Diff(map[string][]string{"laptop": {"lint"}}, tasksOf()); diff != "" {
 		t.Errorf("@check should only run on the local server (-want +got):\n%s", diff)
 	}
 }

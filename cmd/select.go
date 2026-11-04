@@ -364,6 +364,9 @@ func (m *serverSelectionModel) applyBundles() {
 		if pipeline, err := m.cfg.ServerPipeline(server); err == nil {
 			server = pipeline
 		}
+		if len(server.Tasks) == 0 {
+			continue
+		}
 		servers = append(servers, server)
 	}
 	m.servers = servers

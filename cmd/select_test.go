@@ -144,6 +144,7 @@ func TestServerSelectionModel_SSHDetails(t *testing.T) {
 		Groups:   []string{"prod"},
 		Tags:     []string{"web"},
 		EnvVars:  map[string]string{"TOKEN": "abc", "APP_ENV": "prod"},
+		Tasks:    []gorun.Task{{Name: "run"}},
 	}})
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = next.(serverSelectionModel)
@@ -333,7 +334,7 @@ func TestServerSelectionModel_EnvTableScrollsIntoView(t *testing.T) {
 	for i := range 10 {
 		env[fmt.Sprintf("VAR_%02d", i)] = "x"
 	}
-	m := newServerSelectionModel("test", []gorun.Server{{Name: "web-1", EnvVars: env}})
+	m := newServerSelectionModel("test", []gorun.Server{{Name: "web-1", EnvVars: env, Tasks: []gorun.Task{{Name: "run"}}}})
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = press(next.(serverSelectionModel), "right", "down")
 

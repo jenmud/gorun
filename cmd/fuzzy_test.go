@@ -70,9 +70,9 @@ func TestFuzzyMatch_Ranking(t *testing.T) {
 
 func TestServerSelectionModel_Filter(t *testing.T) {
 	servers := []gorun.Server{
-		{Name: "worker-eu-b", Hostname: "localhost"},
-		{Name: "web-prod-1", Hostname: "localhost"},
-		{Name: "db-primary", Hostname: "db.internal", Tags: []string{"prod", "database"}},
+		{Name: "worker-eu-b", Hostname: "localhost", Tasks: []gorun.Task{{Name: "run"}}},
+		{Name: "web-prod-1", Hostname: "localhost", Tasks: []gorun.Task{{Name: "run"}}},
+		{Name: "db-primary", Hostname: "db.internal", Tags: []string{"prod", "database"}, Tasks: []gorun.Task{{Name: "run"}}},
 	}
 
 	m := newServerSelectionModel("test", servers)
@@ -118,7 +118,7 @@ func TestServerSelectionModel_Filter(t *testing.T) {
 }
 
 func TestServerSelectionModel_Mouse(t *testing.T) {
-	servers := []gorun.Server{{Name: "server1"}, {Name: "server2"}, {Name: "server3"}}
+	servers := []gorun.Server{{Name: "server1", Tasks: []gorun.Task{{Name: "run"}}}, {Name: "server2", Tasks: []gorun.Task{{Name: "run"}}}, {Name: "server3", Tasks: []gorun.Task{{Name: "run"}}}}
 	m := newServerSelectionModel("test", servers)
 
 	// clicking the second server row moves the cursor to it and selects it

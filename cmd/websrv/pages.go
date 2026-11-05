@@ -60,6 +60,7 @@ func (a *app) runPage(w http.ResponseWriter, r *http.Request) {
 	case cfg != nil:
 		d.Servers = serverOptions(cfg)
 		d.Tasks = taskOptions(cfg)
+		d.Bundles = bundleOptions(cfg, r.URL.Query().Get("bundle"))
 	case msg == "":
 		d.Flash, d.FlashBad = "No Gorunfile loaded. Load one on the Config page to pick servers and tasks.", true
 	}
@@ -132,7 +133,32 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/", err.Error(), true)
 		return
 	}
-	cfg.SelectedTasks = r.Form["task"]
+	tasks, bundles := r.Form["task"], r.Form["bundle"]
+	if len(tasks) > 0 && len(bundles) > 0 {
+		redirectWith(w, r, "/", "Pick tasks or bundles, not both.", true)
+		return
+	}
+	if len(bundles) > 0 {
+		// A bundle replaces each server's own task list, as the --bundles flag does.
+		refs := make([]string, len(bundles))
+		for i, b := range bundles {
+			refs[i] = gorun.BundlePrefix + b
+		}
+		expanded, err := cfg.ExpandTaskRefs(refs...)
+		if err != nil {
+			redirectWith(w, r, "/", err.Error(), true)
+			return
+		}
+		if len(expanded) == 0 {
+			redirectWith(w, r, "/", "The chosen bundles expand to no tasks.", true)
+			return
+		}
+		for i := range cfg.Servers {
+			cfg.Servers[i].TaskNames = slices.Clone(expanded)
+		}
+	} else {
+		cfg.SelectedTasks = tasks
+	}
 	pipes, err := cfg.ServersPipeline()
 	if err != nil {
 		redirectWith(w, r, "/", err.Error(), true)

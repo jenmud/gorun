@@ -34,4 +34,5 @@ type Event struct {
 	ExitCode   int        `json:"exit_code"`
 	Attempt    int        `json:"attempt,omitempty"`
 	Attempts   int        `json:"attempts,omitempty"`
+	Error      string     `json:"error,omitempty"`
 }

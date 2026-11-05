@@ -24,7 +24,7 @@ templ runPicker(d RunPageData) {
 	<form method="post" action="/run" class="space-y-5 self-start rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
 		<div>
 			<h2 class="text-base font-semibold text-zinc-100">Pick and run</h2>
-			<p class="mt-1 text-xs text-zinc-500">Tick the servers to run on. Tick tasks to run only those; leave them all unticked to run each server's own list. Uses the saved <span class="font-mono">{ d.Path }</span>.</p>
+			<p class="mt-1 text-xs text-zinc-500">Tick the servers to run on. Tick tasks, or bundles, to run only those in place of each server's own list; leave them all unticked to run each server's own list. Tasks and bundles can't be mixed. Uses the saved <span class="font-mono">{ d.Path }</span>.</p>
 		</div>
 		<button type="submit" disabled?={ !d.NATSOK } class="w-full rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-40">Run selected</button>
 		<section>
@@ -53,6 +53,30 @@ templ runPicker(d RunPageData) {
 				}
 			</ul>
 		</section>
+		if len(d.Bundles) > 0 {
+			<section>
+				<div class="mb-2 flex items-center justify-between gap-2">
+					<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Bundles</h3>
+					<button type="button" onclick="gorunSelect('bundle-list', false)" class="rounded px-2 py-0.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200">none</button>
+				</div>
+				<ul id="bundle-list" class="max-h-48 space-y-1 overflow-y-auto pr-1">
+					for _, b := range d.Bundles {
+						<li data-filter={ b.Name + " " + b.Description } class="rounded-lg px-2 py-1.5 hover:bg-zinc-800/50">
+							<label class="flex cursor-pointer items-start gap-2">
+								<input type="checkbox" name="bundle" value={ b.Name } checked?={ b.Selected } onchange="gorunExclusive(this, 'task-list')" class="mt-1 accent-violet-600"/>
+								<span class="min-w-0 flex-1">
+									<span class="block truncate font-mono text-sm text-zinc-100">{ "@" + b.Name }</span>
+									if b.Description != "" {
+										<span class="block truncate text-xs text-zinc-500">{ b.Description }</span>
+									}
+									<span class="block text-xs text-zinc-500">{ itoa(b.Tasks) } tasks</span>
+								</span>
+							</label>
+						</li>
+					}
+				</ul>
+			</section>
+		}
 		<section>
 			<div class="mb-2 flex items-center justify-between gap-2">
 				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Tasks</h3>
@@ -66,7 +90,7 @@ templ runPicker(d RunPageData) {
 				for _, t := range d.Tasks {
 					<li data-filter={ t.Name + " " + t.Description } class="rounded-lg px-2 py-1.5 hover:bg-zinc-800/50">
 						<label class="flex cursor-pointer items-start gap-2" title={ t.Details }>
-							<input type="checkbox" name="task" value={ t.Name } class="mt-1 accent-violet-600"/>
+							<input type="checkbox" name="task" value={ t.Name } onchange="gorunExclusive(this, 'bundle-list')" class="mt-1 accent-violet-600"/>
 							<span class="min-w-0 flex-1">
 								<span class="block truncate font-mono text-sm text-zinc-100">{ t.Name }</span>
 								if t.Description != "" {
@@ -98,15 +122,17 @@ templ statsPanel(s StatsView) {
 	<div class="mt-4 grid gap-3 md:grid-cols-2">
 		<div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
 			<h3 class="text-sm font-semibold text-zinc-100">Recent runs</h3>
-			<p class="mb-3 text-xs text-zinc-500">Bar height is how long each run took, oldest on the left. Red bars failed. Hover for details.</p>
+			<p class="mb-3 text-xs text-zinc-500">Bar height is how long each run took, oldest on the left. Red bars failed. Hover for the run id, click to open it.</p>
 			if len(s.Recent) == 0 {
 				<p class="py-8 text-center text-sm text-zinc-500">No runs yet. Your first run will appear here.</p>
 			} else {
 				<svg viewBox="0 0 300 120" class="h-40 w-full" preserveAspectRatio="none" role="img" aria-label="Run durations">
 					for _, r := range barRects(s.Recent) {
-						<rect x={ itoa(r.X) } y={ itoa(r.Y) } width={ itoa(r.W) } height={ itoa(r.H) } rx="2" class={ r.Class }>
+						<a href={ r.Href } class="cursor-pointer">
+							<rect x={ itoa(r.X) } y="0" width={ itoa(r.W) } height="120" fill="transparent"></rect>
+							<rect x={ itoa(r.X) } y={ itoa(r.Y) } width={ itoa(r.W) } height={ itoa(r.H) } rx="2" class={ r.Class + " transition hover:opacity-70" }></rect>
 							<title>{ r.Tip }</title>
-						</rect>
+						</a>
 					}
 				</svg>
 			}

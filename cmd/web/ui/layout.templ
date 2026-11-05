@@ -30,6 +30,33 @@ function gorunFilter(input, listId) {
 		row.style.display = row.dataset.filter.indexOf(q) === -1 ? 'none' : '';
 	});
 }
+// Sections on the live page rebuild with every event. Remember which ones the person opened and
+// reopen them after each update.
+(function () {
+	var open = new Set();
+	try { JSON.parse(sessionStorage.getItem('gorunOpen') || '[]').forEach(function (k) { open.add(k); }); } catch (e) {}
+	function save() { try { sessionStorage.setItem('gorunOpen', JSON.stringify(Array.from(open))); } catch (e) {} }
+	document.addEventListener('click', function (ev) {
+		var sum = ev.target.closest && ev.target.closest('summary');
+		var d = sum && sum.parentElement;
+		if (!d || !d.dataset.key) { return; }
+		if (d.open) { open.delete(d.dataset.key); } else { open.add(d.dataset.key); }
+		save();
+	});
+	function restore() {
+		document.querySelectorAll('details[data-key]').forEach(function (d) {
+			var want = open.has(d.dataset.key);
+			if (d.open !== want) { d.open = want; }
+		});
+	}
+	document.addEventListener('DOMContentLoaded', restore);
+	new MutationObserver(restore).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
+})();
+// Tasks and bundles can't be run together: ticking one clears the other list.
+function gorunExclusive(box, otherId) {
+	if (!box.checked) { return; }
+	document.querySelectorAll('#' + otherId + ' input[type=checkbox]').forEach(function (b) { b.checked = false; });
+}
 function gorunSelect(formId, on) {
 	document.querySelectorAll('#' + formId + ' [data-filter]').forEach(function (row) {
 		if (row.style.display === 'none') { return; }
@@ -48,6 +75,8 @@ function gorunSelect(formId, on) {
 					<span class="rounded bg-accent px-2 py-0.5 text-sm font-bold text-white">gorun</span>
 					<nav class="flex gap-1 text-sm">
 						@navLink("/", "Run", active == "run")
+						@navLink("/tasks", "Tasks", active == "tasks")
+						@navLink("/bundles", "Bundles", active == "bundles")
 						@navLink("/history", "History", active == "history")
 						@navLink("/config", "Config", active == "config")
 					</nav>

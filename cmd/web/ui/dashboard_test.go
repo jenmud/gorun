@@ -82,3 +82,54 @@ func TestDashboardShowsAttemptProgress(t *testing.T) {
 		t.Error("dashboard output does not show the attempt progress")
 	}
 }
+
+func TestDashboardShowsAServerThatCouldNotRun(t *testing.T) {
+	var state DashboardState
+	state.Apply(Event{Type: "process_started", GorunUUID: "run-1", Title: "demo"})
+	state.Apply(Event{Type: "plan", GorunUUID: "run-1", Server: "web-1", Tasks: []string{"a", "b"}})
+	state.Apply(Event{Type: "server_error", GorunUUID: "run-1", Server: "web-1", Error: "dial tcp 10.0.0.1:22: connection refused"})
+	state.Apply(Event{Type: "process_finished", GorunUUID: "run-1", Failed: 2})
+
+	p := state.Processes["run-1"]
+	if !processHasFailed(p) || serversFailed(p) != 1 {
+		t.Fatalf("failed = %v, servers failed = %d, want the run marked failed", processHasFailed(p), serversFailed(p))
+	}
+	var buf bytes.Buffer
+	if err := Dashboard(state).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	for _, want := range []string{"connection refused", "could not run its tasks", "Its 2 tasks did not run.", "not run"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("dashboard does not contain %q", want)
+		}
+	}
+	if strings.Contains(html, "pending") {
+		t.Error("tasks that will never run must not read as pending")
+	}
+	if strings.Contains(html, "<details data-key=\"run-1\" class=\"group/run overflow-hidden rounded-2xl border border-red-900/50 bg-red-950/10\" open") {
+		t.Error("a run should start collapsed")
+	}
+}
+
+func TestFinishedRunListsSlowestTaskFirst(t *testing.T) {
+	var state DashboardState
+	state.Apply(Event{Type: "plan", GorunUUID: "r", Server: "s", Tasks: []string{"fast", "slow", "mid"}})
+	for name, d := range map[string]int64{"fast": 1, "slow": 9, "mid": 5} {
+		state.Apply(Event{Type: "task", GorunUUID: "r", Server: "s", Task: name, State: 2, Duration: d})
+	}
+	p := state.Processes["r"]
+	srv := p.Servers["s"]
+
+	if got := sortedTasks(p, srv)[0].Name; got != "fast" {
+		t.Errorf("while running the first task = %s, want plan order (fast)", got)
+	}
+	state.Apply(Event{Type: "process_finished", GorunUUID: "r"})
+	var names []string
+	for _, task := range sortedTasks(p, srv) {
+		names = append(names, task.Name)
+	}
+	if strings.Join(names, ",") != "slow,mid,fast" {
+		t.Errorf("finished order = %v, want slow,mid,fast", names)
+	}
+}

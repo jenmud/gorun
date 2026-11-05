@@ -1,6 +1,10 @@
 package ui
 
-import "strconv"
+import (
+	"cmp"
+	"slices"
+	"strconv"
+)
 
 type TaskInfo struct {
 	Name        string
@@ -15,11 +19,13 @@ type TaskInfo struct {
 	Command     string
 	Stdout      string
 	Stderr      string
+	Error       string // why it was skipped
 }
 
 type ServerInfo struct {
 	Name    string
 	Address string
+	Error   string // why the server couldn't run its tasks at all
 	Order   []string
 	Tasks   map[string]*TaskInfo
 }
@@ -137,6 +143,18 @@ func (s *DashboardState) Apply(ev Event) {
 		t.Command = ev.Command
 		t.Stdout = ev.Stdout
 		t.Stderr = ev.Stderr
+		t.Error = ev.Error
+	case "server_error":
+		srv, ok := p.Servers[ev.Server]
+		if !ok {
+			srv = &ServerInfo{Name: ev.Server, Tasks: make(map[string]*TaskInfo)}
+			p.Servers[ev.Server] = srv
+			p.ServerOrder = append(p.ServerOrder, ev.Server)
+		}
+		srv.Error = ev.Error
+		if srv.Error == "" {
+			srv.Error = "the server failed before running its tasks (no reason was reported)"
+		}
 	case "process_finished":
 		// finished runs stay until cleared, so their output can be viewed
 		p.Finished = true
@@ -211,6 +229,9 @@ func serverBoxClass(failed bool) string {
 }
 
 func serverHasFailed(srv *ServerInfo) bool {
+	if srv.Error != "" {
+		return true
+	}
 	for _, t := range srv.Tasks {
 		if t.State == 3 {
 			return true
@@ -230,11 +251,125 @@ func hasFinished(s DashboardState) bool {
 
 func processHasFailed(p *ProcessState) bool {
 	for _, name := range p.ServerOrder {
-		for _, t := range p.Servers[name].Tasks {
-			if t.State == 3 {
-				return true
-			}
+		if serverHasFailed(p.Servers[name]) {
+			return true
 		}
 	}
 	return false
+}
+
+// serversFailed counts the servers that couldn't run their tasks at all.
+func serversFailed(p *ProcessState) int {
+	n := 0
+	for _, name := range p.ServerOrder {
+		if p.Servers[name].Error != "" {
+			n++
+		}
+	}
+	return n
+}
+
+// tasksFailed counts the tasks that failed.
+func tasksFailed(p *ProcessState) int {
+	n := 0
+	for _, name := range p.ServerOrder {
+		for _, t := range p.Servers[name].Tasks {
+			if t.State == 3 {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// notRun reports whether a task will never run: its server failed, or the run ended first.
+func notRun(p *ProcessState, srv *ServerInfo, t *TaskInfo) bool {
+	return t.State < 2 && (srv.Error != "" || p.Finished)
+}
+
+// sortedTasks lists a server's tasks in plan order while it runs, and slowest first once the
+// run is over, so the tasks worth looking at come first.
+func sortedTasks(p *ProcessState, srv *ServerInfo) []*TaskInfo {
+	out := make([]*TaskInfo, 0, len(srv.Order))
+	for _, name := range srv.Order {
+		out = append(out, srv.Tasks[name])
+	}
+	if p.Finished {
+		slices.SortStableFunc(out, func(a, b *TaskInfo) int { return cmp.Compare(b.Duration, a.Duration) })
+	}
+	return out
+}
+
+// serverSummary is the one line a collapsed server shows.
+func serverSummary(p *ProcessState, srv *ServerInfo) string {
+	if srv.Error != "" {
+		return "failed to connect · " + tasksNotRun(len(srv.Tasks))
+	}
+	done, failed := 0, 0
+	for _, t := range srv.Tasks {
+		if t.State >= 2 {
+			done++
+		}
+		if t.State == 3 {
+			failed++
+		}
+	}
+	line := itoa(done) + "/" + itoa(len(srv.Tasks)) + " tasks"
+	if failed > 0 {
+		line += " · " + itoa(failed) + " failed"
+	}
+	return line
+}
+
+func serverNotRunNote(srv *ServerInfo) string { return notRunNote(len(srv.Tasks)) }
+
+// taskIcon is the mark in front of a task: its state, or a dash when it never ran.
+func taskIcon(p *ProcessState, srv *ServerInfo, t *TaskInfo) string {
+	if notRun(p, srv, t) {
+		return "–"
+	}
+	return stateIcon(t.State)
+}
+
+func taskIconClass(p *ProcessState, srv *ServerInfo, t *TaskInfo) string {
+	if notRun(p, srv, t) {
+		return "text-zinc-600"
+	}
+	return stateClass(t.State)
+}
+
+// taskStatus is the right-hand text of a task row: how long it took, or why it has no time.
+func taskStatus(p *ProcessState, srv *ServerInfo, t *TaskInfo) string {
+	if notRun(p, srv, t) {
+		return "not run"
+	}
+	return taskTiming(t)
+}
+
+// taskHint explains a task's state in a sentence.
+func taskHint(p *ProcessState, srv *ServerInfo, t *TaskInfo) string {
+	switch {
+	case srv.Error != "" && t.State < 2:
+		return "Did not run: the server could not be used. See the error above."
+	case notRun(p, srv, t):
+		return "Did not run: the run ended before this task started."
+	default:
+		return hintFor(t.State)
+	}
+}
+
+// tasksNotRun counts tasks that did not run, e.g. "1 task not run".
+func tasksNotRun(n int) string {
+	if n == 1 {
+		return "1 task not run"
+	}
+	return itoa(n) + " tasks not run"
+}
+
+// errorTitle names what a task's error message explains.
+func errorTitle(t *TaskInfo) string {
+	if t.State == 4 {
+		return "Why it was skipped"
+	}
+	return "Why it failed"
 }

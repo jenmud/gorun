@@ -92,7 +92,7 @@ templ HistoryDetailPage(d RunDetailData) {
 			@varsPanel("Run", d.Run.RunEnvVars, d.Run.RunVars)
 		</div>
 	}
-	<p class="mb-4 text-sm text-zinc-400">Each server ran its tasks in order. Open a task to see the command it ran, what it printed, its exit code and the variables it saw. Errors from a server that couldn't be reached are listed at the top of its card.</p>
+	<p class="mb-4 text-sm text-zinc-400">Tasks are listed slowest first. Open a task to see the command it ran, what it printed, its exit code and the variables it saw. Errors from a server that couldn't be reached are listed at the top of its card.</p>
 	<div class="space-y-4">
 		for _, srv := range d.Servers {
 			@historyServer(srv)
@@ -110,7 +110,9 @@ templ historyServer(srv ServerBlock) {
 			<span class="text-xs text-zinc-400">{ itoa(len(srv.Tasks)) } tasks · { formatDuration(srv.Duration) }</span>
 		</header>
 		if srv.Error != "" {
-			<p class="border-t border-zinc-800 px-4 py-3 text-xs text-red-300">Could not run on this server: { srv.Error }</p>
+			<div class="border-t border-zinc-800 p-3">
+				@errorBox("Could not run on this server", srv.Error, notRunNote(len(srv.Tasks)))
+			</div>
 		}
 		if len(srv.EnvVars) > 0 || len(srv.Vars) > 0 {
 			<div class="border-t border-zinc-800 px-4 py-3">
@@ -129,13 +131,15 @@ templ historyTask(t TaskView) {
 	<li class="rounded-lg transition hover:bg-zinc-800/30">
 		<details open?={ t.State == 3 } data-on:toggle__once={ taskLoad(t) }>
 			<summary class="flex cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-sm">
-				<span class={ stateClass(t.State) }>{ stateIcon(t.State) }</span>
+				<span class={ taskViewClass(t) }>{ taskViewIcon(t) }</span>
 				<span class="font-mono text-zinc-200">{ t.Name }</span>
-				<span class={ stateClass(t.State) + " text-xs" }>{ stateLabel(t.State) }</span>
+				<span class={ taskViewClass(t) + " text-xs" }>{ taskViewLabel(t) }</span>
 				if t.State == 3 {
 					<span class="rounded bg-red-500/15 px-1.5 py-0.5 font-mono text-[11px] text-red-300 ring-1 ring-red-500/40">exit { itoa(t.ExitCode) }</span>
 				}
-				<span class="ml-auto font-mono text-xs text-zinc-500">{ formatDuration(t.Duration) }</span>
+				if !t.NotRun {
+					<span class="ml-auto font-mono text-xs text-zinc-500">{ formatDuration(t.Duration) }</span>
+				}
 			</summary>
 			<div id={ t.ID } class="px-2 pb-3">
 				if t.Loaded {
@@ -151,12 +155,15 @@ templ historyTask(t TaskView) {
 // taskInspector is everything saved about one task: its outcome, command, output and variables.
 templ taskInspector(t TaskView) {
 	<div class="mt-1 space-y-3 border-l-2 border-zinc-800 pl-3 text-xs">
+		if t.State == 3 {
+			@errorBox("Failed with exit code "+itoa(t.ExitCode), failureReason(t), "")
+		}
 		<dl class="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
 			@fact("Status") {
-				<span class={ stateClass(t.State) }>{ stateIcon(t.State) } { stateLabel(t.State) }</span>
+				<span class={ taskViewClass(t) }>{ taskViewIcon(t) } { taskViewLabel(t) }</span>
 			}
 			@fact("Exit code") {
-				if t.State == 2 || t.State == 3 {
+				if !t.NotRun && (t.State == 2 || t.State == 3) {
 					<span class={ exitClass(t.ExitCode) }>{ itoa(t.ExitCode) }</span>
 				} else {
 					<span class="text-zinc-500">—</span>
@@ -172,7 +179,7 @@ templ taskInspector(t TaskView) {
 				}
 			}
 		</dl>
-		<p class="text-zinc-400">{ hintFor(t.State) }</p>
+		<p class="text-zinc-400">{ taskViewHint(t, t.ServerFailed) }</p>
 		@outputBlock("Command", "", false) {
 			if t.Command != "" {
 				<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">$ { t.Command }</pre>

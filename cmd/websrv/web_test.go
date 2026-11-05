@@ -191,3 +191,117 @@ func TestConfigPickerListsFolder(t *testing.T) {
 		t.Error("picker lists a hidden file")
 	}
 }
+
+func TestHistoryExplainsAServerThatCouldNotRun(t *testing.T) {
+	a, _ := newTestApp(t)
+	ctx := context.Background()
+	st := a.store
+	_ = st.CreateRun(ctx, "run-x", "deploy", "box", 1, time.Now())
+	_ = st.AddServer(ctx, "run-x", "web-1", "10.0.0.1")
+	_ = st.PlanTask(ctx, "run-x", "web-1", "build")
+	_ = st.PlanTask(ctx, "run-x", "web-1", "deploy")
+	_ = st.SetServerError(ctx, "run-x", "web-1", "dial tcp 10.0.0.1:22: connection refused")
+	_ = st.FinishRun(ctx, "run-x", false, 2, 2, 0, time.Second, time.Now())
+
+	body := get(t, a, "/history/run-x").Body.String()
+	for _, want := range []string{"connection refused", "Could not run on this server", "Its 2 tasks did not run.", "not run", "build", "deploy"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("history detail does not contain %q", want)
+		}
+	}
+	if strings.Contains(body, "no tasks") {
+		t.Error("a server with planned tasks must not say it has none")
+	}
+}
+
+func TestHistoryListsTasksSlowestFirst(t *testing.T) {
+	a, _ := newTestApp(t)
+	ctx := context.Background()
+	st := a.store
+	_ = st.CreateRun(ctx, "run-s", "t", "box", 1, time.Now())
+	_ = st.AddServer(ctx, "run-s", "web-1", "")
+	for name, d := range map[string]time.Duration{"quick": time.Millisecond, "slowest": 9 * time.Second, "medium": time.Second} {
+		_ = st.UpsertTask(ctx, "run-s", "web-1", name, 2, "", "", "", 0, d)
+	}
+	body := get(t, a, "/history/run-s").Body.String()
+	i, j, k := strings.Index(body, ">slowest<"), strings.Index(body, ">medium<"), strings.Index(body, ">quick<")
+	if !(i > 0 && i < j && j < k) {
+		t.Errorf("task order = slowest@%d medium@%d quick@%d, want slowest first", i, j, k)
+	}
+}
+
+func TestRecentRunBarsNameTheRunAndLinkToIt(t *testing.T) {
+	a, _ := newTestApp(t)
+	ctx := context.Background()
+	_ = a.store.CreateRun(ctx, "run-bar", "deploy", "box", 1, time.Now())
+	_ = a.store.FinishRun(ctx, "run-bar", true, 1, 0, 0, time.Second, time.Now())
+
+	body := get(t, a, "/").Body.String()
+	// The stats stream in over SSE; the page itself carries them too.
+	for _, want := range []string{`href="/history/run-bar"`, "run run-bar"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("run page does not contain %q", want)
+		}
+	}
+}
+
+func TestTasksAndBundlesPages(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "Gorunfile")
+	src := `[tasks.build]
+cmd = "make build"
+local = true
+description = "Build it"
+[tasks.ship]
+cmd = "make ship"
+sudo = true
+depends_on = ["build"]
+[bundles.release]
+description = "Build and ship"
+tasks = ["build", "ship"]
+[bundles.all]
+tasks = ["@release"]
+[servers.hosts.local-1]
+tasks = ["build"]
+`
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := newTestApp(t)
+	if err := a.loadConfig(path); err != nil {
+		t.Fatal(err)
+	}
+
+	tasks := get(t, a, "/tasks").Body.String()
+	for _, want := range []string{"make ship", "Build it", "sudo", "depends on build", "@release", "local-1", "Timeout"} {
+		if !strings.Contains(tasks, want) {
+			t.Errorf("tasks page does not contain %q", want)
+		}
+	}
+	bundles := get(t, a, "/bundles").Body.String()
+	for _, want := range []string{"@release", "@all", "Build and ship", "Run this bundle", "/?bundle=release"} {
+		if !strings.Contains(bundles, want) {
+			t.Errorf("bundles page does not contain %q", want)
+		}
+	}
+	if run := get(t, a, "/?bundle=release").Body.String(); !strings.Contains(run, `value="release" checked`) {
+		t.Error("run page does not tick the bundle it was sent")
+	}
+	for _, p := range []string{"/", "/tasks", "/bundles", "/history", "/config"} {
+		if body := get(t, a, p).Body.String(); !strings.Contains(body, `href="/bundles"`) || !strings.Contains(body, `href="/tasks"`) {
+			t.Errorf("%s does not link the Tasks and Bundles tabs", p)
+		}
+	}
+}
+
+func TestRunRefusesTasksAndBundlesTogether(t *testing.T) {
+	a, _ := newTestApp(t)
+	rec := post(t, a, "/run", url.Values{"server": {"local-1"}, "task": {"hello"}, "bundle": {"x"}})
+	// Without NATS the run is refused first; either way nothing may start.
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status %d", rec.Code)
+	}
+	if len(a.runs) != 0 {
+		t.Errorf("a run started: %v", a.runs)
+	}
+}

@@ -106,6 +106,8 @@ func (a *app) routes() *http.ServeMux {
 	mux.HandleFunc("POST /clear", a.clearFinished)
 	mux.HandleFunc("POST /runs/{id}/cancel", a.cancelRun)
 
+	mux.HandleFunc("GET /tasks", a.tasksPage)
+	mux.HandleFunc("GET /bundles", a.bundlesPage)
 	mux.HandleFunc("GET /history", a.historyPage)
 	mux.HandleFunc("GET /history/{id}", a.historyDetail)
 	mux.HandleFunc("GET /history/{id}/task", a.taskDetail)

@@ -107,6 +107,7 @@ func flashClass(bad bool) string {
 type barRect struct {
 	X, Y, W, H int
 	Class, Tip string
+	Href       templ.SafeURL
 }
 
 // barRects lays bars out left to right in the chart, scaled to the largest one.
@@ -131,7 +132,7 @@ func barRects(bars []Bar) []barRect {
 		if b.Bad {
 			class = "fill-red-500/80"
 		}
-		rects = append(rects, barRect{X: i * slot, Y: 120 - h, W: width, H: h, Class: class, Tip: b.Label + ": " + b.Tip})
+		rects = append(rects, barRect{X: i * slot, Y: 120 - h, W: width, H: h, Class: class, Tip: b.Tip, Href: templ.SafeURL(runPath(b.ID))})
 	}
 	return rects
 }
@@ -272,4 +273,93 @@ func pickerIconClass(likely bool) string {
 		return "text-accent"
 	}
 	return "text-zinc-600"
+}
+
+// tailLines keeps the last n lines of s, where a failure usually explains itself.
+func tailLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
+}
+
+// failureReason is the short explanation shown above a failed task's details.
+func failureReason(t TaskView) string {
+	if t.Stderr != "" {
+		return tailLines(t.Stderr, 6)
+	}
+	return "The task exited with code " + itoa(t.ExitCode) + " and printed nothing to stderr."
+}
+
+// taskViewLabel is the word for a task's state, "not run" when it never started.
+func taskViewLabel(t TaskView) string {
+	if t.NotRun {
+		return "not run"
+	}
+	return stateLabel(t.State)
+}
+
+// taskViewIcon is the mark for a task's state, a dash when it never started.
+func taskViewIcon(t TaskView) string {
+	if t.NotRun {
+		return "–"
+	}
+	return stateIcon(t.State)
+}
+
+// taskViewClass colours a task's state, dim when it never started.
+func taskViewClass(t TaskView) string {
+	if t.NotRun {
+		return "text-zinc-600"
+	}
+	return stateClass(t.State)
+}
+
+// taskViewHint explains a task's state in a sentence.
+func taskViewHint(t TaskView, serverErr bool) string {
+	switch {
+	case t.NotRun && serverErr:
+		return "Did not run: its server could not be used."
+	case t.NotRun:
+		return "Did not run: the run ended before this task started."
+	default:
+		return hintFor(t.State)
+	}
+}
+
+// notRunNote says how many of a failed server's tasks never ran.
+func notRunNote(n int) string {
+	switch n {
+	case 0:
+		return ""
+	case 1:
+		return "Its 1 task did not run."
+	default:
+		return "Its " + itoa(n) + " tasks did not run."
+	}
+}
+
+// taskFilter is the text the Tasks filter box searches.
+func taskFilter(t TaskCard) string {
+	return strings.ToLower(t.Name + " " + t.Description + " " + t.Command)
+}
+
+// bundleFilter is the text the Bundles filter box searches.
+func bundleFilter(b BundleCard) string {
+	return strings.ToLower(b.Name + " " + b.Description + " " + strings.Join(b.Expanded, " "))
+}
+
+// runsOn shortens a long server list, so a task used everywhere stays readable.
+func runsOn(servers []string) []string {
+	const max = 8
+	if len(servers) <= max {
+		return servers
+	}
+	return append(slices.Clone(servers[:max]), "+"+itoa(len(servers)-max)+" more")
+}
+
+// runBundlePath opens the run page with a bundle ticked.
+func runBundlePath(name string) templ.SafeURL {
+	return templ.SafeURL("/?" + url.Values{"bundle": {name}}.Encode())
 }

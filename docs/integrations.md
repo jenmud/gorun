@@ -11,13 +11,21 @@
 ## Web UI
 
 `gorun -web Gorunfile` starts a web server on `GORUN_ADDRESS` (default `:8080`). The Gorunfile is
-optional; without it, load one on the Config page. It has three pages:
+optional; without it, load one on the Config page. It has these pages:
 
-- **Run** ticks servers and tasks, as the picker does, and starts them. Stats and a live dashboard
-  update as runs go. **Stop** cancels a run started from the page. Runs read the file on disk.
-- **History** lists saved runs. Open one for each server's tasks; open a task for its status, exit
-  code, duration, command, stdout, stderr, env vars and vars. Run and server env vars and vars show
-  above them. **Trim history** keeps the 10 newest.
+- **Run** ticks servers, then tasks or bundles (not both), as the picker does, and starts them. A
+  bundle replaces each server's task list, like `-bundles`. Stats and a live dashboard update as
+  runs go; each run, server and task starts collapsed and stays as you leave it. A server that
+  can't be reached shows its error, and its tasks read "not run". The **Recent runs** bars show
+  the run id on hover and open that run on click. **Stop** cancels a run started from the page.
+  Runs read the file on disk.
+- **Tasks** lists every task with its command, settings, dependencies, the bundles that include
+  it and the servers that run it, slowest first by average time in recent runs.
+- **Bundles** lists each bundle, its tasks in order and what it expands to, with a link to run it.
+- **History** lists saved runs. Open one for each server's tasks, slowest first; open a task for
+  its status, exit code, duration, command, stdout, stderr, env vars and vars. A server that
+  couldn't run shows why, and its planned tasks read "not run". Run and server env vars and vars
+  show above them. **Trim history** keeps the 10 newest.
 - **Config** adds, removes, loads and saves servers, groups, tasks and bundles. Load a Gorunfile by
   browsing the folders of the machine running gorun, or type its path. Changes wait until you
   press **Save**, which writes each one into the file it came from.

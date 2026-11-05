@@ -72,11 +72,17 @@ func (a *app) stats(ctx context.Context) ui.StatsView {
 	}
 	for i := len(recent) - 1; i >= 0; i-- {
 		r := recent[i]
+		status := "passed"
+		if !r.Success {
+			status = "failed"
+		}
 		v.Recent = append(v.Recent, ui.Bar{
+			ID:    r.ID,
 			Label: r.StartedAt.Format("15:04"),
 			Value: r.Duration.Seconds(),
-			Tip:   fmt.Sprintf("%s · %s", r.Title, r.Duration.Round(time.Millisecond)),
-			Bad:   !r.Success,
+			Tip: fmt.Sprintf("%s\nrun %s\n%s · %s · %s", r.Title, r.ID, status,
+				r.Duration.Round(time.Millisecond), r.StartedAt.Local().Format("Mon 2 Jan 15:04")),
+			Bad: !r.Success,
 		})
 	}
 	v.Slowest = a.slowest(ctx, finished)
@@ -197,7 +203,9 @@ func (a *app) historyDetail(w http.ResponseWriter, r *http.Request) {
 			t.TaskDetail, t.Loaded = full, true
 		}
 	}
-	data := ui.RunDetailData{Run: *d, Summary: runRow(d.RunSummary), Servers: blocks}
+	summary := runRow(d.RunSummary)
+	summary.Servers = len(blocks) // RunDetail.Servers hides the summary's count
+	data := ui.RunDetailData{Run: *d, Summary: summary, Servers: blocks}
 	a.page(w, d.Title, "history", ui.HistoryDetailPage(data))
 }
 
@@ -220,7 +228,8 @@ func (a *app) taskDetail(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	view := ui.TaskView{ID: el, RunID: runID, Address: d.ServerAddress[t.Server], Loaded: true, TaskDetail: t}
+	notRun := t.State < 2 && (d.ServerErrors[t.Server] != "" || d.Finished)
+	view := ui.TaskView{ID: el, RunID: runID, Address: d.ServerAddress[t.Server], Loaded: true, NotRun: notRun, ServerFailed: d.ServerErrors[t.Server] != "", TaskDetail: t}
 
 	var b strings.Builder
 	if err := ui.TaskInspector(view).Render(r.Context(), &b); err != nil {
@@ -280,12 +289,17 @@ func serverBlocks(d *store.RunDetail) []ui.ServerBlock {
 			EnvVars: d.ServerEnvVars[n],
 			Vars:    d.ServerVars[n],
 		}
-		for j, t := range bySrv[n] {
+		// Slowest first, so the tasks worth a look lead.
+		tasks := slices.Clone(bySrv[n])
+		slices.SortStableFunc(tasks, func(x, y store.TaskDetail) int { return cmp.Compare(y.Duration, x.Duration) })
+		for j, t := range tasks {
 			b.Tasks = append(b.Tasks, ui.TaskView{
-				ID:         fmt.Sprintf("task-%d-%d", i, j),
-				RunID:      d.ID,
-				Address:    b.Address,
-				TaskDetail: t,
+				ID:           fmt.Sprintf("task-%d-%d", i, j),
+				RunID:        d.ID,
+				Address:      b.Address,
+				NotRun:       t.State < 2 && (b.Error != "" || d.Finished),
+				ServerFailed: b.Error != "",
+				TaskDetail:   t,
 			})
 			b.Duration += t.Duration
 			if t.State == stateFailed {

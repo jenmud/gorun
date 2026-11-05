@@ -4,7 +4,7 @@ templ Dashboard(s DashboardState) {
 	if len(s.ProcessOrder) == 0 {
 		<div class="rounded-2xl border border-dashed border-zinc-800 p-10 text-center text-sm">
 			<p class="text-zinc-200">Nothing running.</p>
-			<p class="mt-1 text-zinc-500">Pick servers and tasks on the left, then press <span class="font-semibold text-accent">Run</span>. Runs started from the terminal show up here too.</p>
+			<p class="mt-1 text-zinc-500">Pick servers and tasks or bundles on the left, then press <span class="font-semibold text-accent">Run</span>. Runs started from the terminal show up here too.</p>
 		</div>
 	}
 	if hasFinished(s) {
@@ -12,14 +12,18 @@ templ Dashboard(s DashboardState) {
 			<button data-on:click="@post('/clear')" class="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-300 transition hover:bg-zinc-700">Clear finished</button>
 		</div>
 	}
-	for _, uuid := range s.ProcessOrder {
-		@processCard(s.Processes[uuid])
-	}
+	<div class="space-y-3">
+		for _, uuid := range s.ProcessOrder {
+			@processCard(s.Processes[uuid])
+		}
+	</div>
 }
 
+// processCard is one run. It starts collapsed to its summary line; the problems stay visible.
 templ processCard(p *ProcessState) {
-	<section class={ runCardClass(processHasFailed(p), p.Finished) }>
-		<header class="flex flex-wrap items-center gap-3 p-4">
+	<details data-key={ p.UUID } class={ "group/run " + runCardClass(processHasFailed(p), p.Finished) }>
+		<summary class="flex cursor-pointer list-none flex-wrap items-center gap-3 p-4">
+			<span class="inline-block text-zinc-500 transition group-open/run:rotate-90">▸</span>
 			<div class="min-w-0 flex-1">
 				<div class="flex items-center gap-2">
 					<span class={ runStateClass(p) }>{ runStateLabel(p) }</span>
@@ -28,6 +32,7 @@ templ processCard(p *ProcessState) {
 				<p class="mt-1 truncate font-mono text-xs text-zinc-500">{ p.UUID }</p>
 			</div>
 			<div class="flex items-center gap-4 text-xs text-zinc-400">
+				<span>{ itoa(len(p.ServerOrder)) } servers</span>
 				<span>{ itoa(processDone(p)) }/{ itoa(processTotal(p)) } tasks</span>
 				if p.Finished {
 					<span>{ processDuration(p) }</span>
@@ -38,68 +43,98 @@ templ processCard(p *ProcessState) {
 					<button class="rounded-lg border border-red-900/60 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-950/40">Stop</button>
 				</form>
 			}
-		</header>
+		</summary>
 		<div class="h-1 w-full bg-zinc-800">
 			<div class={ progressClass(processHasFailed(p)) } style={ "width: " + itoa(processProgress(p)) + "%" }></div>
 		</div>
-		<div class="grid gap-3 p-4 md:grid-cols-2">
+		if serversFailed(p) > 0 {
+			<div class="space-y-2 px-4 pt-4">
+				for _, sname := range p.ServerOrder {
+					if p.Servers[sname].Error != "" {
+						@errorBox("Server "+sname+" could not run its tasks", p.Servers[sname].Error, serverNotRunNote(p.Servers[sname]))
+					}
+				}
+			</div>
+		}
+		<div class="space-y-2 p-4">
 			for _, sname := range p.ServerOrder {
-				@serverBlock(p.Servers[sname])
+				@serverBlock(p, p.Servers[sname])
 			}
 		</div>
-	</section>
+	</details>
 }
 
-templ serverBlock(srv *ServerInfo) {
-	<div class={ serverBoxClass(serverHasFailed(srv)) }>
-		<div class="mb-2 flex items-baseline justify-between gap-2">
-			<span class={ serverNameClass(serverHasFailed(srv)) }>{ srv.Name }</span>
-			<span class="font-mono text-xs text-zinc-500">{ srv.Address }</span>
-		</div>
-		<div class="mb-3 h-1 w-full overflow-hidden rounded bg-zinc-800">
-			<div class={ progressClass(serverHasFailed(srv)) } style={ "width: " + itoa(serverProgress(srv)) + "%" }></div>
-		</div>
-		<ul class="space-y-1">
-			for _, tname := range srv.Order {
-				@taskRow(srv.Tasks[tname])
-			}
-		</ul>
+// errorBox is the red callout every error uses: what went wrong, the reason, and what it means.
+templ errorBox(title, reason, note string) {
+	<div class="rounded-xl border border-red-900/60 bg-red-950/30 p-3 text-sm" role="alert">
+		<p class="font-semibold text-red-200">{ title }</p>
+		<pre class="mt-1 whitespace-pre-wrap break-words font-mono text-xs text-red-300">{ reason }</pre>
+		if note != "" {
+			<p class="mt-1 text-xs text-red-300/70">{ note }</p>
+		}
 	</div>
 }
 
-templ taskRow(t *TaskInfo) {
+templ serverBlock(p *ProcessState, srv *ServerInfo) {
+	<details data-key={ p.UUID + "/" + srv.Name } class={ "group/srv " + serverBoxClass(serverHasFailed(srv)) }>
+		<summary class="flex cursor-pointer list-none items-center gap-3">
+			<span class="inline-block text-zinc-500 transition group-open/srv:rotate-90">▸</span>
+			<span class={ serverNameClass(serverHasFailed(srv)) }>{ srv.Name }</span>
+			<span class="font-mono text-xs text-zinc-500">{ srv.Address }</span>
+			<span class="ml-auto text-xs text-zinc-400">{ serverSummary(p, srv) }</span>
+		</summary>
+		<div class="mt-2 h-1 w-full overflow-hidden rounded bg-zinc-800">
+			<div class={ progressClass(serverHasFailed(srv)) } style={ "width: " + itoa(serverProgress(srv)) + "%" }></div>
+		</div>
+		if srv.Error != "" {
+			<div class="mt-3">
+				@errorBox("Could not run on this server", srv.Error, serverNotRunNote(srv))
+			</div>
+		}
+		<ul class="mt-3 space-y-1">
+			for _, t := range sortedTasks(p, srv) {
+				@taskRow(p, srv, t)
+			}
+		</ul>
+	</details>
+}
+
+templ taskRow(p *ProcessState, srv *ServerInfo, t *TaskInfo) {
 	<li class="rounded-lg px-2 py-1 transition hover:bg-zinc-800/40">
-		<details open?={ t.State == 3 }>
+		<details data-key={ p.UUID + "/" + srv.Name + "/" + t.Name }>
 			<summary class="flex cursor-pointer list-none items-center gap-2 text-sm">
-				<span class={ stateClass(t.State) }>{ stateIcon(t.State) }</span>
+				<span class={ taskIconClass(p, srv, t) }>{ taskIcon(p, srv, t) }</span>
 				<span class="font-mono text-zinc-200">{ t.Name }</span>
 				if t.Attempts > 1 {
 					<span class="text-xs text-amber-400">attempt { itoa(t.Attempt) }/{ itoa(t.Attempts) }</span>
 				}
-				<span class="ml-auto text-xs text-zinc-500">{ taskTiming(t) }</span>
+				if t.State == 3 {
+					<span class="rounded bg-red-500/15 px-1.5 py-0.5 font-mono text-[11px] text-red-300 ring-1 ring-red-500/40">exit { itoa(t.ExitCode) }</span>
+				}
+				<span class="ml-auto text-xs text-zinc-500">{ taskStatus(p, srv, t) }</span>
 			</summary>
 			<div class="mt-2 space-y-2 border-l border-zinc-800 pl-3 text-xs">
-				<p class="text-zinc-400">{ hintFor(t.State) }</p>
+				<p class="text-zinc-400">{ taskHint(p, srv, t) }</p>
 				if t.Description != "" {
 					<p class="text-zinc-300">{ t.Description }</p>
 				}
 				if t.Details != "" {
-						<p class="text-zinc-400">{ t.Details }</p>
-					}
-					if t.Rerun != "" {
-						<p class="text-amber-400">{ rerunLabel(t.Rerun) }</p>
-					}
-					if t.Command != "" {
-					<pre class="overflow-x-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">$ { t.Command }</pre>
+					<p class="text-zinc-400">{ t.Details }</p>
+				}
+				if t.Rerun != "" {
+					<p class="text-amber-400">{ rerunLabel(t.Rerun) }</p>
+				}
+				if t.Command != "" {
+					<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">$ { t.Command }</pre>
+				}
+				if t.Error != "" {
+					@errorBox(errorTitle(t), t.Error, "")
 				}
 				if t.Stdout != "" {
 					<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ t.Stdout }</pre>
 				}
 				if t.Stderr != "" {
 					<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ t.Stderr }</pre>
-				}
-				if t.State == 3 {
-					<p class="text-red-300">exit code { itoa(t.ExitCode) }</p>
 				}
 			</div>
 		</details>

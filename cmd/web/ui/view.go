@@ -29,6 +29,7 @@ type TaskOption struct {
 
 // Bar is one bar in a chart.
 type Bar struct {
+	ID    string // the run the bar stands for
 	Label string
 	Value float64
 	Tip   string
@@ -60,12 +61,21 @@ type StatsView struct {
 type RunPageData struct {
 	Servers   []ServerOption
 	Tasks     []TaskOption
+	Bundles   []BundleOption
 	Stats     StatsView
 	Dashboard DashboardState
 	NATSOK    bool
 	Flash     string
 	FlashBad  bool
 	Path      string
+}
+
+// BundleOption is a bundle the run page can run.
+type BundleOption struct {
+	Name        string
+	Description string
+	Tasks       int // tasks it expands to
+	Selected    bool
 }
 
 // RunRow is one row of the history list.
@@ -276,9 +286,68 @@ func hintFor(state int) string {
 // TaskView is one task in a saved run. Its command, output and variables are only Loaded
 // when the task is opened, so large runs stay quick to show.
 type TaskView struct {
-	ID      string // element id the detail is patched into
-	RunID   string
-	Address string
-	Loaded  bool
+	ID           string // element id the detail is patched into
+	RunID        string
+	Address      string
+	Loaded       bool
+	NotRun       bool // it never started: its server failed or the run ended first
+	ServerFailed bool // its server could not be used
 	store.TaskDetail
+}
+
+// Option is one labelled setting of a task.
+type Option struct {
+	Name  string
+	Value string
+}
+
+// TaskCard is one task of the library, as the Tasks page shows it.
+type TaskCard struct {
+	Name          string
+	Description   string
+	Details       string
+	Source        string
+	Badges        []string // short flags such as sudo or local
+	Average       time.Duration
+	CommandSource string
+	Command       string
+	Options       []Option
+	DependsOn     []string
+	InBundles     []string
+	RunsOn        []string
+	EnvVars       map[string]string
+	ConfigVars    map[string]any
+	Vars          map[string]any
+}
+
+// TasksPageData is everything the Tasks page shows.
+type TasksPageData struct {
+	Tasks  []TaskCard
+	Path   string
+	Loaded bool
+}
+
+// BundleItem is one entry of a bundle: a task, or another bundle.
+type BundleItem struct {
+	Ref         string
+	IsBundle    bool
+	Description string
+}
+
+// BundleCard is one bundle, as the Bundles page shows it.
+type BundleCard struct {
+	Name        string
+	Description string
+	Source      string
+	Items       []BundleItem
+	Expanded    []string // every task it runs, nested bundles flattened
+	Vars        map[string]any
+	UsedBy      []string
+}
+
+// BundlesPageData is everything the Bundles page shows.
+type BundlesPageData struct {
+	Bundles []BundleCard
+	Path    string
+	Loaded  bool
 }

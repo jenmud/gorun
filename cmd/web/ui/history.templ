@@ -187,14 +187,14 @@ templ taskInspector(t TaskView) {
 				<p class="text-zinc-500">Not recorded.</p>
 			}
 		}
-		@outputBlock("Stdout", t.Stdout, false) {
+		@fold("", "Stdout", lineCount(t.Stdout)) {
 			if t.Stdout != "" {
 				<pre class="max-h-96 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ t.Stdout }</pre>
 			} else {
 				<p class="text-zinc-500">No output.</p>
 			}
 		}
-		@outputBlock("Stderr", t.Stderr, true) {
+		@fold("", "Stderr", lineCount(t.Stderr)) {
 			if t.Stderr != "" {
 				<pre class="max-h-96 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ t.Stderr }</pre>
 			} else {
@@ -209,18 +209,6 @@ templ fact(label string) {
 	<div>
 		<dt class="text-[11px] uppercase tracking-wider text-zinc-500">{ label }</dt>
 		<dd class="mt-0.5">{ children... }</dd>
-	</div>
-}
-
-templ outputBlock(label, body string, bad bool) {
-	<div>
-		<div class="mb-1 flex items-baseline gap-2">
-			<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ label }</span>
-			if body != "" {
-				<span class="text-[11px] text-zinc-600">{ lineCount(body) }</span>
-			}
-		</div>
-		{ children... }
 	</div>
 }
 
@@ -257,7 +245,7 @@ templ varsPanel(scope string, env map[string]string, vars map[string]any) {
 // fold is a labelled section that starts collapsed. key, when set, lets the live page keep it
 // open across updates.
 templ fold(key, label, hint string) {
-	<details data-key={ key } class="group/fold min-w-0">
+	<details { foldAttrs(key)... } class="group/fold min-w-0">
 		<summary class="flex cursor-pointer list-none items-baseline gap-2">
 			<span class="inline-block text-zinc-500 transition group-open/fold:rotate-90">▸</span>
 			<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ label }</span>

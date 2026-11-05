@@ -233,6 +233,9 @@ func varsJSON(vars map[string]any) string {
 
 // lineCount describes how long an output is.
 func lineCount(s string) string {
+	if s == "" {
+		return "none"
+	}
 	n := strings.Count(strings.TrimRight(s, "\n"), "\n") + 1
 	if n == 1 {
 		return "1 line"
@@ -385,4 +388,13 @@ func countLabel(n int) string {
 		return "none"
 	}
 	return itoa(n)
+}
+
+// foldAttrs gives a fold its data-key only when it has one: the live page reopens keyed sections
+// after each update and would otherwise keep closing unkeyed ones.
+func foldAttrs(key string) templ.Attributes {
+	if key == "" {
+		return templ.Attributes{}
+	}
+	return templ.Attributes{"data-key": key}
 }

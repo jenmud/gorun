@@ -44,7 +44,7 @@ function gorunFilter(input, listId) {
 		save();
 	});
 	function restore() {
-		document.querySelectorAll('details[data-key]').forEach(function (d) {
+		document.querySelectorAll('details[data-key]:not([data-key=""])').forEach(function (d) {
 			var want = open.has(d.dataset.key);
 			if (d.open !== want) { d.open = want; }
 		});

@@ -133,10 +133,14 @@ templ taskRow(p *ProcessState, srv *ServerInfo, t *TaskInfo) {
 					@errorBox(errorTitle(t), t.Error, "")
 				}
 				if t.Stdout != "" {
-					<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ t.Stdout }</pre>
+					@fold(p.UUID+"/"+srv.Name+"/"+t.Name+"/out", "Stdout", lineCount(t.Stdout)) {
+						<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ t.Stdout }</pre>
+					}
 				}
 				if t.Stderr != "" {
-					<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ t.Stderr }</pre>
+					@fold(p.UUID+"/"+srv.Name+"/"+t.Name+"/err", "Stderr", lineCount(t.Stderr)) {
+						<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ t.Stderr }</pre>
+					}
 				}
 			</div>
 		</details>

@@ -125,7 +125,9 @@ templ taskRow(p *ProcessState, srv *ServerInfo, t *TaskInfo) {
 					<p class="text-amber-400">{ rerunLabel(t.Rerun) }</p>
 				}
 				if t.Command != "" {
-					<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">$ { t.Command }</pre>
+					@fold(p.UUID+"/"+srv.Name+"/"+t.Name+"/cmd", "Command", "") {
+						<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">$ { t.Command }</pre>
+					}
 				}
 				if t.Error != "" {
 					@errorBox(errorTitle(t), t.Error, "")

@@ -378,3 +378,11 @@ func runsOn(servers []string) []string {
 func runBundlePath(name string) templ.SafeURL {
 	return templ.SafeURL("/?" + url.Values{"bundle": {name}}.Encode())
 }
+
+// countLabel says how many entries a collapsed section holds.
+func countLabel(n int) string {
+	if n == 0 {
+		return "none"
+	}
+	return itoa(n)
+}

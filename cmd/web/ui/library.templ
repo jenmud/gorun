@@ -93,17 +93,7 @@ templ taskCard(t TaskCard) {
 						</ul>
 					</details>
 				}
-				if len(t.EnvVars) > 0 || len(t.Vars) > 0 {
-					<details class="group/vars">
-						<summary class="flex cursor-pointer list-none items-center gap-2">
-							<span class="inline-block text-zinc-500 transition group-open/vars:rotate-90">▸</span>
-							<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Vars</span>
-						</summary>
-						<div class="mt-2 space-y-2">
-							@varsPanel("Task", t.EnvVars, t.Vars)
-						</div>
-					</details>
-				}
+				@varsPanel("Task", t.EnvVars, t.Vars)
 				if len(t.ConfigVars) > 0 {
 					<details class="group/cfgvars">
 						<summary class="flex cursor-pointer list-none items-center gap-2">

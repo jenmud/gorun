@@ -180,7 +180,7 @@ templ taskInspector(t TaskView) {
 			}
 		</dl>
 		<p class="text-zinc-400">{ taskViewHint(t, t.ServerFailed) }</p>
-		@outputBlock("Command", "", false) {
+		@fold("", "Command", "") {
 			if t.Command != "" {
 				<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">$ { t.Command }</pre>
 			} else {
@@ -224,11 +224,11 @@ templ outputBlock(label, body string, bad bool) {
 	</div>
 }
 
-// varsPanel lists the env vars and vars captured at one scope: the run, a server or a task.
+// varsPanel lists the env vars and vars captured at one scope: the run, a server or a task. Both
+// start collapsed.
 templ varsPanel(scope string, env map[string]string, vars map[string]any) {
 	<div class="grid gap-3 md:grid-cols-2">
-		<div>
-			<div class="mb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ scope } env vars</div>
+		@fold("", scope+" env vars", countLabel(len(env))) {
 			if len(env) == 0 {
 				<p class="text-xs text-zinc-500">None recorded.</p>
 			} else {
@@ -243,14 +243,30 @@ templ varsPanel(scope string, env map[string]string, vars map[string]any) {
 					</table>
 				</div>
 			}
-		</div>
-		<div>
-			<div class="mb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ scope } vars</div>
+		}
+		@fold("", scope+" vars", countLabel(len(vars))) {
 			if len(vars) == 0 {
 				<p class="text-xs text-zinc-500">None recorded.</p>
 			} else {
 				<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-xs text-zinc-300">{ varsJSON(vars) }</pre>
 			}
-		</div>
+		}
 	</div>
+}
+
+// fold is a labelled section that starts collapsed. key, when set, lets the live page keep it
+// open across updates.
+templ fold(key, label, hint string) {
+	<details data-key={ key } class="group/fold min-w-0">
+		<summary class="flex cursor-pointer list-none items-baseline gap-2">
+			<span class="inline-block text-zinc-500 transition group-open/fold:rotate-90">▸</span>
+			<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ label }</span>
+			if hint != "" {
+				<span class="text-[11px] text-zinc-600">{ hint }</span>
+			}
+		</summary>
+		<div class="mt-1">
+			{ children... }
+		</div>
+	</details>
 }

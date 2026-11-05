@@ -164,6 +164,8 @@ func entityRowClass(pending string) string {
 	switch pending {
 	case "add":
 		return "flex items-start gap-3 bg-emerald-950/20 px-4 py-3"
+	case "edit":
+		return "flex items-start gap-3 bg-amber-950/20 px-4 py-3"
 	case "remove":
 		return "flex items-start gap-3 bg-red-950/20 px-4 py-3 opacity-60"
 	default:
@@ -176,12 +178,66 @@ func pendingBadgeClass(pending string) string {
 	if pending == "add" {
 		return "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-300 ring-1 ring-emerald-500/40"
 	}
+	if pending == "edit" {
+		return "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-300 ring-1 ring-amber-500/40"
+	}
 	return "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-300 ring-1 ring-red-500/40"
 }
 
 // inputClass styles text inputs and selects in the config editor.
 func inputClass() string {
 	return "w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-accent focus:outline-none"
+}
+
+// modalPath opens the config dialog for mode ("add" or "edit") and kind, for name when editing.
+func modalPath(mode, kind, name string) string {
+	q := url.Values{"modal": {mode + "-" + kind}}
+	if name != "" {
+		q.Set("name", name)
+	}
+	return "/config?" + q.Encode()
+}
+
+// dialogOpen reports whether the dialog for kind should open: the page opened it for that kind.
+func dialogOpen(d Draft, kind string) bool {
+	return d.Mode != "" && d.Kind == kind
+}
+
+// dialogAction is where a dialog's form posts: a new entity, or an edit of an existing one.
+func dialogAction(d Draft) string {
+	if d.Mode == "edit" {
+		return "/config/update"
+	}
+	return "/config/add"
+}
+
+// dialogTitle names a dialog, such as "Add a task" or "Edit task".
+func dialogTitle(d Draft, noun string) string {
+	if d.Mode == "edit" {
+		return "Edit " + noun
+	}
+	return "Add a " + noun
+}
+
+// dialogSubmit labels a dialog's submit button.
+func dialogSubmit(d Draft, noun string) string {
+	if d.Mode == "edit" {
+		return "Save " + noun
+	}
+	return "Add " + noun
+}
+
+// dialogClass styles the config dialogs.
+func dialogClass() string {
+	return "w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-900 p-0 text-zinc-100 backdrop:bg-black/70"
+}
+
+// chipPickClass styles one option of a picker, highlighted when it is picked.
+func chipPickClass(on bool) string {
+	if on {
+		return "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-accent bg-accent/20 px-2.5 py-1 text-xs text-violet-100"
+	}
+	return "inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-zinc-700 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
 }
 
 // addButtonClass styles the submit button of the add forms.

@@ -17,8 +17,11 @@ optional; without it, load one on the Config page. It has three pages:
   update as runs go. **Stop** cancels a run started from the page. Runs read the file on disk.
 - **History** lists saved runs. Open one for each server's tasks, output and exit code. **Trim
   history** keeps the 10 newest.
-- **Config** adds, removes, loads and saves servers, groups, tasks and bundles. Changes wait until
-  you press **Save**, which writes each one into the file it came from.
+- **Config** adds, edits, removes, loads and saves servers, groups, tasks and bundles, in dialogs.
+  A task's **depends on** and a group's servers are ticked from lists. Removing something another
+  entity uses is refused, and the page names what uses it. Changes wait until you press **Save**,
+  which writes each one into the file it came from, and puts the files back if the result won't
+  load.
 
 Runs and live updates need [NATS](#events-nats). The pages use [templ](https://templ.guide) and
 [Datastar](https://data-star.dev), with live updates over server-sent events.

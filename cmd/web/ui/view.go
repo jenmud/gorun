@@ -110,7 +110,8 @@ type EntityRow struct {
 	Name    string
 	Detail  string
 	Source  string
-	Pending string // "", "add" or "remove"
+	Pending string   // "", "add" or "remove"
+	Chips   []string // what it uses, such as the tasks a task depends on
 }
 
 // FileOption is a file an entity can be added to: its path, and a short label for it.
@@ -119,19 +120,52 @@ type FileOption struct {
 	Label string
 }
 
+// Choice is one option in a picker: tasks a task depends on, servers in a group, and so on.
+type Choice struct {
+	Value   string
+	Label   string
+	Checked bool
+}
+
+// Draft is the form open in a config dialog: a new entity, or an existing one being edited.
+// Mode is empty when no dialog is open.
+type Draft struct {
+	Mode         string // "add" or "edit"
+	Kind         string // "host", "group", "task" or "bundle"
+	Name         string
+	File         string
+	Hostname     string
+	Tags         string
+	Description  string
+	Cmd          string
+	Sudo         bool
+	Local        bool
+	SSHUser      string
+	IdentityFile string
+	Depends      []string
+	Tasks        []string
+	Groups       []string
+	Servers      []string
+}
+
 // ConfigPageData is everything the config editor shows.
 type ConfigPageData struct {
-	Path       string
-	Files      []FileOption
-	Servers    []EntityRow
-	Groups     []EntityRow
-	Tasks      []EntityRow
-	Bundles    []EntityRow
-	Pending    []string
-	Flash      string
-	FlashBad   bool
-	HasPending bool
-	Loaded     bool
+	Draft         Draft
+	DependChoices []Choice // tasks, for a task's depends on
+	ListChoices   []Choice // tasks and @bundles, for a bundle's or group's tasks
+	ServerChoices []Choice // servers, for a group's members
+	GroupChoices  []Choice // groups, for a server's groups
+	Path          string
+	Files         []FileOption
+	Servers       []EntityRow
+	Groups        []EntityRow
+	Tasks         []EntityRow
+	Bundles       []EntityRow
+	Pending       []string
+	Flash         string
+	FlashBad      bool
+	HasPending    bool
+	Loaded        bool
 }
 
 // formatDuration renders a duration compactly for the UI, such as 1m02s or 340ms.

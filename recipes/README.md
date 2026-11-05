@@ -10,7 +10,8 @@ the demo docker lab in `recipes/docker-compose.yml`.
 3. `02-dependency-dag` - a diamond DAG: fan out, run in parallel, fan back in.
 4. `03-mega-pipeline` - ~20 tasks across six tiers, bundles and fan-in.
 5. `04-dev-server` - ~230 tasks across fetch/install/configure/smoke tiers, bundles and fan-in.
-6. `local-run` - Go library example: run tasks on the local machine with `RunLocal`.
+6. `large-inventory` - split a large Gorunfile across multiple files with `include`; demonstrates organizing tasks, groups and hosts.
+7. `local-run` - Go library example: run tasks on the local machine with `RunLocal`.
 
 ## One-time: allow docker access
 
@@ -34,6 +35,7 @@ gorun recipes/01-parallel-basics/Gorunfile -r
 gorun recipes/02-dependency-dag/Gorunfile -r
 gorun recipes/03-mega-pipeline/Gorunfile -r
 gorun recipes/04-dev-server/Gorunfile -r
+gorun recipes/large-inventory/Gorunfile -r
 ```
 
 ## Tear down

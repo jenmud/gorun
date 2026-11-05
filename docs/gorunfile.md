@@ -482,6 +482,9 @@ include = [
 
 Check the result with `gorun Gorunfile --list-servers`, or `--list-tasks` for the task library.
 
+See [recipes/large-inventory](../recipes/large-inventory) for a complete example that splits tasks,
+groups and hosts across multiple files.
+
 ## How settings combine
 
 Settings are layered: global, then each group **in the order the server lists them**, then the

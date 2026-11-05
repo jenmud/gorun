@@ -16,7 +16,8 @@ The finished file is in [`tutorial/`](tutorial/Gorunfile), with its scripts and 
 6. [Make it reliable](#6-make-it-reliable)
 7. [Name groups of tasks with bundles](#7-name-groups-of-tasks-with-bundles)
 8. [Regions, tags and exceptions](#8-regions-tags-and-exceptions)
-9. [Everyday use](#9-everyday-use)
+9. [Splitting large Gorunfiles (optional)](#9-splitting-large-gorunfiles-optional)
+10. [Everyday use](#10-everyday-use)
 
 You only need gorun [installed](../README.md#install). Steps 1 and 2 run on your own machine;
 from step 3 on you need a server you can `ssh` into.
@@ -406,7 +407,24 @@ effect before you run anything.
 
 **That's the whole file.** Read it end to end in [`tutorial/Gorunfile`](tutorial/Gorunfile).
 
-## 9. Everyday use
+## 9. Splitting large Gorunfiles (optional)
+
+As your Gorunfile grows, you can split it across multiple files with `include`:
+
+```toml
+include = [
+  "tasks/*.toml",            # shared tasks and bundles
+  "groups/*.toml",           # server groups
+  "hosts/*/*.toml",          # one folder per role, one file per fleet
+]
+```
+
+Files are merged into one config, so you can use names from any of them. This keeps large inventories
+organized and makes it easy to manage by role or region.
+
+For a complete example, see [`recipes/large-inventory`](../recipes/large-inventory).
+
+## 10. Everyday use
 
 ```bash
 gorun Gorunfile                                    # pick servers and tasks, then run

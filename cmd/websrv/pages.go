@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -216,4 +217,48 @@ func (a *app) cancelRun(w http.ResponseWriter, r *http.Request) {
 	}
 	cancel()
 	redirectWith(w, r, "/", "Stopping the run.", false)
+}
+
+// viewFile displays the contents of a file referenced by a task.
+func (a *app) viewFile(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimSpace(r.URL.Query().Get("path"))
+	if path == "" {
+		http.Error(w, "No file path specified", http.StatusBadRequest)
+		return
+	}
+
+	// Prevent path traversal attacks
+	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
+		http.Error(w, "Invalid file path", http.StatusForbidden)
+		return
+	}
+
+	// Read the file
+	data, err := os.ReadFile(path)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Could not read file: %v", err), http.StatusNotFound)
+		return
+	}
+
+	// Determine content type based on extension
+	ext := strings.ToLower(filepath.Ext(path))
+	contentType := "text/plain"
+	switch ext {
+	case ".html", ".htm":
+		contentType = "text/html"
+	case ".json":
+		contentType = "application/json"
+	case ".xml":
+		contentType = "application/xml"
+	case ".yaml", ".yml":
+		contentType = "text/yaml"
+	case ".toml":
+		contentType = "text/plain"
+	case ".sh":
+		contentType = "text/x-shellscript"
+	}
+
+	w.Header().Set("Content-Type", contentType+"; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, filepath.Base(path)))
+	w.Write(data)
 }

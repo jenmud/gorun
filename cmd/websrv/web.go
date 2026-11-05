@@ -116,6 +116,7 @@ func (a *app) routes() *http.ServeMux {
 
 	mux.HandleFunc("GET /config", a.configPage)
 	mux.HandleFunc("GET /config/edit", a.editPage)
+	mux.HandleFunc("GET /file", a.viewFile)
 	mux.HandleFunc("POST /config/load", a.loadHandler)
 	mux.HandleFunc("POST /config/add", a.addHandler)
 	mux.HandleFunc("POST /config/edit", a.editHandler)

@@ -87,7 +87,7 @@ templ taskCard(t TaskCard) {
 							for _, f := range t.Files {
 								<li class="rounded bg-zinc-800/40 px-2 py-1">
 									<div class="text-zinc-500">{ f.Type }</div>
-									<div class="font-mono text-zinc-200 break-all">{ f.Path }</div>
+									<a href={ templ.SafeURL("/file?path=" + f.Path) } target="_blank" class="font-mono text-accent hover:underline break-all">{ f.Path }</a>
 								</li>
 							}
 						</ul>

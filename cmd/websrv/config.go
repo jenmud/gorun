@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/cmd/web/ui"
 )
@@ -71,33 +72,176 @@ func (a *app) configPage(w http.ResponseWriter, r *http.Request) {
 	a.page(w, "Config", "config", ui.ConfigPage(d))
 }
 
-// editPage shows the config page with an edit form modal for the specified entity.
+// editPage shows the config page with the edit form for one entity, filled with its current values.
 func (a *app) editPage(w http.ResponseWriter, r *http.Request) {
-	kind := r.URL.Query().Get("kind")
-	name := r.URL.Query().Get("edit")
+	kind, name := r.URL.Query().Get("kind"), r.URL.Query().Get("name")
 
 	a.mu.Lock()
 	cfg := a.cfg
 	pending := slices.Clone(a.pending)
 	a.mu.Unlock()
-
 	if cfg == nil {
 		redirectWith(w, r, "/config", "Load a Gorunfile first.", true)
 		return
 	}
-
-	if !present(cfg, pending, kind, name) {
-		redirectWith(w, r, "/config", fmt.Sprintf("No %s named %s to edit.", kindNames[kind], name), true)
+	body, err := currentBody(cfg, pending, kind, name)
+	if err != nil {
+		redirectWith(w, r, "/config", err.Error(), true)
 		return
 	}
 
-	// Show config page with edit modal
 	d := configData(cfg, pending)
-	d.Browser = browse(pickerDir(r.URL.Query().Get("dir"), d.Path))
-	d.EditingKind = kind
-	d.EditingName = name
-	d.Flash, d.FlashBad = flashFrom(r)
+	d.Browser = browse(pickerDir("", d.Path))
+	d.EditingKind, d.EditingName = kind, name
+	d.Edit = editFields(body)
 	a.page(w, "Config", "config", ui.ConfigPage(d))
+}
+
+// entityPath is where each kind's tables live in a Gorunfile.
+var entityPath = map[string][]string{
+	kindHost:   {"servers", "hosts"},
+	kindGroup:  {"server_groups"},
+	kindTask:   {"tasks"},
+	kindBundle: {"bundles"},
+}
+
+// currentBody is the entity's table as written: its latest unsaved add, else the table in the
+// file that defines it. Edits start from it so settings the form doesn't show are kept.
+func currentBody(cfg *gorun.Config, pending []gorun.Change, kind, name string) (map[string]any, error) {
+	if _, ok := entityPath[kind]; !ok {
+		return nil, fmt.Errorf("unknown kind %q", kind)
+	}
+	if !present(cfg, pending, kind, name) {
+		return nil, fmt.Errorf("no %s named %s to edit", kindNames[kind], name)
+	}
+	for i := len(pending) - 1; i >= 0; i-- {
+		if p := pending[i]; p.Kind == kind && p.Name == name && !p.Remove {
+			return cloneMap(p.Body), nil
+		}
+	}
+	file := sourceOf(cfg, pending, kind, name)
+	var doc map[string]any
+	if _, err := toml.DecodeFile(file, &doc); err != nil {
+		return nil, fmt.Errorf("read %s: %w", file, err)
+	}
+	var node any = doc
+	for _, key := range append(slices.Clone(entityPath[kind]), name) {
+		m, ok := node.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("%s %s is not a table in %s, so it can't be edited here", kindNames[kind], name, file)
+		}
+		node = m[key]
+	}
+	body, ok := node.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s %s is not a table in %s, so it can't be edited here", kindNames[kind], name, file)
+	}
+	return body, nil
+}
+
+// cloneMap copies m and every table inside it, so edits never touch a queued change's body.
+func cloneMap(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		if sub, ok := v.(map[string]any); ok {
+			v = cloneMap(sub)
+		}
+		out[k] = v
+	}
+	return out
+}
+
+// editFields reads the values the edit form shows from an entity's table.
+func editFields(body map[string]any) ui.EditFields {
+	str := func(m map[string]any, k string) string {
+		s, _ := m[k].(string)
+		return s
+	}
+	list := func(k string) string {
+		var items []string
+		switch v := body[k].(type) {
+		case []any:
+			for _, it := range v {
+				items = append(items, fmt.Sprint(it))
+			}
+		case []string:
+			items = v
+		}
+		return strings.Join(items, ", ")
+	}
+	ssh, _ := body["ssh"].(map[string]any)
+	sudo, _ := body["sudo"].(bool)
+	local, _ := body["local"].(bool)
+	return ui.EditFields{
+		Hostname:     str(body, "hostname"),
+		Groups:       list("groups"),
+		Tags:         list("tags"),
+		SSHUser:      str(ssh, "username"),
+		IdentityFile: str(ssh, "identityfile"),
+		Cmd:          str(body, "cmd"),
+		Description:  str(body, "description"),
+		Tasks:        list("tasks"),
+		Sudo:         sudo,
+		Local:        local,
+	}
+}
+
+// applyEdit writes the edit form's fields over body. A cleared field removes the key.
+func applyEdit(kind string, body map[string]any, form url.Values) error {
+	put := func(m map[string]any, k, v string) {
+		if v = strings.TrimSpace(v); v == "" {
+			delete(m, k)
+		} else {
+			m[k] = v
+		}
+	}
+	putList := func(k string) {
+		delete(body, k)
+		setList(body, k, form.Get(k))
+	}
+	putFlag := func(k string) {
+		if form.Get(k) != "" {
+			body[k] = true
+		} else {
+			delete(body, k)
+		}
+	}
+	putSSH := func() {
+		ssh, _ := body["ssh"].(map[string]any)
+		if ssh == nil {
+			ssh = map[string]any{}
+		}
+		put(ssh, "username", form.Get("ssh_user"))
+		put(ssh, "identityfile", form.Get("identityfile"))
+		if len(ssh) == 0 {
+			delete(body, "ssh")
+		} else {
+			body["ssh"] = ssh
+		}
+	}
+	switch kind {
+	case kindHost:
+		put(body, "hostname", form.Get("hostname"))
+		putList("groups")
+		putList("tags")
+		putSSH()
+	case kindGroup:
+		putList("tags")
+		putList("tasks")
+		putSSH()
+	case kindTask:
+		put(body, "cmd", form.Get("cmd"))
+		put(body, "description", form.Get("description"))
+		putFlag("sudo")
+		putFlag("local")
+	case kindBundle:
+		putList("tasks")
+		if _, ok := body["tasks"]; !ok {
+			return errors.New("a bundle needs at least one task")
+		}
+		put(body, "description", form.Get("description"))
+	}
+	return nil
 }
 
 // maxBrowse caps how many entries the picker lists, so a huge folder stays usable.
@@ -167,7 +311,13 @@ func likelyGorunfile(name string) bool {
 // configData builds the editor page from the loaded file and the unsaved changes.
 func configData(cfg *gorun.Config, pending []gorun.Change) ui.ConfigPageData {
 	var d ui.ConfigPageData
-	for _, p := range pending {
+	for i := 0; i < len(pending); i++ {
+		p := pending[i]
+		if p.Remove && i+1 < len(pending) && isEdit(p, pending[i+1]) {
+			d.Pending = append(d.Pending, fmt.Sprintf("Edit %s %s", kindNames[p.Kind], p.Name))
+			i++
+			continue
+		}
 		d.Pending = append(d.Pending, describe(p))
 	}
 	d.HasPending = len(pending) > 0
@@ -263,6 +413,8 @@ func entityRows(kind string, rows []ui.EntityRow, pending []gorun.Change) []ui.E
 			rows = slices.Delete(rows, i, i+1)
 		case p.Remove && i >= 0:
 			rows[i].Pending = "remove"
+		case !p.Remove && i >= 0 && rows[i].Pending == "remove":
+			rows[i].Pending = "edit"
 		case !p.Remove && i >= 0:
 			rows[i].Pending = "add"
 		case !p.Remove:
@@ -270,6 +422,11 @@ func entityRows(kind string, rows []ui.EntityRow, pending []gorun.Change) []ui.E
 		}
 	}
 	return rows
+}
+
+// isEdit reports whether rm and add are the pair an edit queues.
+func isEdit(rm, add gorun.Change) bool {
+	return !add.Remove && rm.Kind == add.Kind && rm.Name == add.Name && rm.File == add.File
 }
 
 // describe says what an unsaved change does, for the pending list.
@@ -376,14 +533,14 @@ func (a *app) addHandler(w http.ResponseWriter, r *http.Request) {
 	redirectWith(w, r, "/config", describe(change)+". Save to write it to the file.", false)
 }
 
-// editHandler updates an existing server, group, task or bundle by removing and re-adding it.
+// editHandler queues an edit: the entity is removed and written back with the form's changes,
+// in the file that defines it.
 func (a *app) editHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		redirectWith(w, r, "/config", "Could not read the form.", true)
 		return
 	}
-	kind := r.PostFormValue("kind")
-	name := r.PostFormValue("name")
+	kind, name := r.PostFormValue("kind"), r.PostFormValue("name")
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -391,22 +548,21 @@ func (a *app) editHandler(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/config", "Load a Gorunfile first.", true)
 		return
 	}
-	if !present(a.cfg, a.pending, kind, name) {
-		redirectWith(w, r, "/config", fmt.Sprintf("No %s named %s to edit.", kindNames[kind], name), true)
-		return
-	}
-
-	file := sourceOf(a.cfg, a.pending, kind, name)
-	change, err := newChange(kind, name, file, r.PostForm)
+	body, err := currentBody(a.cfg, a.pending, kind, name)
 	if err != nil {
 		redirectWith(w, r, "/config", err.Error(), true)
 		return
 	}
-
-	// Remove the old entity first, then add the new one.
-	a.pending = append(a.pending, gorun.Change{Kind: kind, Name: name, File: file, Remove: true})
-	a.pending = append(a.pending, change)
-	redirectWith(w, r, "/config", fmt.Sprintf("Updated %s %s. Save to write the changes.", kindNames[kind], name), false)
+	if err := applyEdit(kind, body, r.PostForm); err != nil {
+		redirectWith(w, r, "/config", err.Error(), true)
+		return
+	}
+	file := sourceOf(a.cfg, a.pending, kind, name)
+	a.pending = append(a.pending,
+		gorun.Change{Kind: kind, Name: name, File: file, Remove: true},
+		gorun.Change{Kind: kind, Name: name, File: file, Body: body},
+	)
+	redirectWith(w, r, "/config", fmt.Sprintf("Edited %s %s. Save to write it to the file.", kindNames[kind], name), false)
 }
 
 // removeHandler queues the removal of a server, group, task or bundle.

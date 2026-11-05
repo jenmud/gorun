@@ -1,11 +1,13 @@
 package websrv
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"maps"
 	"net/http"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -120,7 +122,7 @@ func taskCards(cfg *gorun.Config, avg map[string]time.Duration) []ui.TaskCard {
 			ConfigVars:  maps.Clone(cfg.Vars),
 			Vars:        t.Vars,
 			EnvVars:     map[string]string{},
-			Files:       taskFiles(t),
+			Files:       taskFiles(t, filepath.Dir(cfg.Path)),
 		}
 		if c.Description == name {
 			c.Description = "" // a description that only repeats the name adds nothing
@@ -131,7 +133,7 @@ func taskCards(cfg *gorun.Config, avg map[string]time.Duration) []ui.TaskCard {
 		for k, v := range t.EnvVars {
 			c.EnvVars[strings.ToUpper(k)] = v
 		}
-		c.CommandSource, c.Command = taskCommand(t)
+		c.CommandSource, c.Command = taskCommand(t, filepath.Dir(cfg.Path))
 		cards = append(cards, c)
 	}
 	slices.SortStableFunc(cards, func(x, y ui.TaskCard) int {
@@ -171,8 +173,11 @@ func taskBadges(t gorun.Task) []string {
 
 // taskCommand is what a task runs and where it comes from. A command file is read here, so the
 // page shows the script and not only its path.
-func taskCommand(t gorun.Task) (source, command string) {
+func taskCommand(t gorun.Task, dir string) (source, command string) {
 	file := func(kind, path string) (string, string) {
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(dir, path)
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return kind + " · " + path, "unable to read " + path + ": " + err.Error()
@@ -232,28 +237,25 @@ func executionOptions(t gorun.Task) []ui.Option {
 	}
 }
 
-// taskFiles extracts all file references from a task.
-func taskFiles(t gorun.Task) []ui.FileRef {
+// taskFiles lists the local files a task reads: its command file or template and the sources
+// of its copies. Relative paths are resolved against dir, as a run resolves them.
+func taskFiles(t gorun.Task, dir string) []ui.FileRef {
 	var files []ui.FileRef
-	if t.CmdFile != "" {
-		files = append(files, ui.FileRef{Type: "cmd_file", Path: t.CmdFile})
+	add := func(kind, path string) {
+		if path == "" {
+			return
+		}
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(dir, path)
+		}
+		files = append(files, ui.FileRef{Type: kind, Path: path})
 	}
-	if t.CmdTemplateFile != "" {
-		files = append(files, ui.FileRef{Type: "cmd_template_file", Path: t.CmdTemplateFile})
-	}
-	for _, c := range append(append(append(t.Copy, t.Copies...), t.Upload...), t.Files...) {
-		if c.SrcFile != "" {
-			files = append(files, ui.FileRef{Type: "src_file", Path: c.SrcFile})
-		}
-		if c.SrcTpl != "" {
-			files = append(files, ui.FileRef{Type: "src_template", Path: c.SrcTpl})
-		}
-		if c.SrcTmpl != "" {
-			files = append(files, ui.FileRef{Type: "src_template", Path: c.SrcTmpl})
-		}
-		if c.Template != "" {
-			files = append(files, ui.FileRef{Type: "template", Path: c.Template})
-		}
+	add("cmd_file", t.CmdFile)
+	add("cmd_template_file", t.CmdTemplateFile)
+	for _, c := range slices.Concat(t.Copy, t.Copies, t.Upload, t.Files) {
+		dst := cmp.Or(c.Dst, c.DstPath, c.Dest, c.Dir)
+		add("template → "+dst, cmp.Or(c.SrcTpl, c.Template, c.SrcTmpl))
+		add("copy → "+dst, cmp.Or(c.Src, c.SrcFile))
 	}
 	return files
 }

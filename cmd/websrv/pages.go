@@ -134,6 +134,7 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/", err.Error(), true)
 		return
 	}
+	cfg.ResolvePaths(filepath.Dir(cfg.Path))
 	tasks, bundles := r.Form["task"], r.Form["bundle"]
 	if len(tasks) > 0 && len(bundles) > 0 {
 		redirectWith(w, r, "/", "Pick tasks or bundles, not both.", true)
@@ -219,46 +220,35 @@ func (a *app) cancelRun(w http.ResponseWriter, r *http.Request) {
 	redirectWith(w, r, "/", "Stopping the run.", false)
 }
 
-// viewFile displays the contents of a file referenced by a task.
+// viewFile shows a file a task in the loaded Gorunfile references, as plain text. Only those
+// files are served, so the page can't be used to read anything else on the machine.
 func (a *app) viewFile(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimSpace(r.URL.Query().Get("path"))
-	if path == "" {
-		http.Error(w, "No file path specified", http.StatusBadRequest)
+	path := r.URL.Query().Get("path")
+	a.mu.Lock()
+	cfg := a.cfg
+	a.mu.Unlock()
+	if cfg == nil || !referenced(cfg, path) {
+		http.Error(w, "No task in the loaded Gorunfile references that file.", http.StatusNotFound)
 		return
 	}
-
-	// Prevent path traversal attacks
-	if strings.Contains(path, "..") || strings.HasPrefix(path, "/") {
-		http.Error(w, "Invalid file path", http.StatusForbidden)
-		return
-	}
-
-	// Read the file
 	data, err := os.ReadFile(path)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Could not read file: %v", err), http.StatusNotFound)
+		http.Error(w, "Could not read the file: "+err.Error(), http.StatusNotFound)
 		return
 	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(data)
+}
 
-	// Determine content type based on extension
-	ext := strings.ToLower(filepath.Ext(path))
-	contentType := "text/plain"
-	switch ext {
-	case ".html", ".htm":
-		contentType = "text/html"
-	case ".json":
-		contentType = "application/json"
-	case ".xml":
-		contentType = "application/xml"
-	case ".yaml", ".yml":
-		contentType = "text/yaml"
-	case ".toml":
-		contentType = "text/plain"
-	case ".sh":
-		contentType = "text/x-shellscript"
+// referenced reports whether some task in cfg references path.
+func referenced(cfg *gorun.Config, path string) bool {
+	for _, t := range cfg.Tasks {
+		for _, f := range taskFiles(t, filepath.Dir(cfg.Path)) {
+			if f.Path == path {
+				return true
+			}
+		}
 	}
-
-	w.Header().Set("Content-Type", contentType+"; charset=utf-8")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, filepath.Base(path)))
-	w.Write(data)
+	return false
 }

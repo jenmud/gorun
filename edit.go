@@ -154,7 +154,9 @@ func encodeTable(base []string, name string, body map[string]any) ([]string, err
 	}
 
 	var buf bytes.Buffer
-	if err := toml.NewEncoder(&buf).Encode(nest); err != nil {
+	enc := toml.NewEncoder(&buf)
+	enc.Indent = ""
+	if err := enc.Encode(nest); err != nil {
 		return nil, fmt.Errorf("encode %s: %w", name, err)
 	}
 

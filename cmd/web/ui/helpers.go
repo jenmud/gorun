@@ -174,6 +174,8 @@ func entityRowClass(pending string) string {
 		return "flex items-start gap-3 bg-emerald-950/20 px-4 py-3"
 	case "remove":
 		return "flex items-start gap-3 bg-red-950/20 px-4 py-3 opacity-60"
+	case "edit":
+		return "flex items-start gap-3 bg-amber-950/20 px-4 py-3"
 	default:
 		return "flex items-start gap-3 px-4 py-3"
 	}
@@ -183,6 +185,9 @@ func entityRowClass(pending string) string {
 func pendingBadgeClass(pending string) string {
 	if pending == "add" {
 		return "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-300 ring-1 ring-emerald-500/40"
+	}
+	if pending == "edit" {
+		return "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-300 ring-1 ring-amber-500/40"
 	}
 	return "rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-300 ring-1 ring-red-500/40"
 }
@@ -252,6 +257,16 @@ func exitClass(code int) string {
 // browsePath opens the Gorunfile picker at dir.
 func browsePath(dir string) templ.SafeURL {
 	return templ.SafeURL("/config?" + url.Values{"dir": {dir}}.Encode() + "#load")
+}
+
+// editPath opens the edit form for one entity on the config page.
+func editPath(kind, name string) templ.SafeURL {
+	return templ.SafeURL("/config/edit?" + url.Values{"kind": {kind}, "name": {name}}.Encode())
+}
+
+// filePath opens a file a task references.
+func filePath(path string) templ.SafeURL {
+	return templ.SafeURL("/file?" + url.Values{"path": {path}}.Encode())
 }
 
 // pickerFileClass styles a file in the picker, brighter when it looks like a Gorunfile.

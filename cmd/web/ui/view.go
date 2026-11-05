@@ -149,20 +149,39 @@ type Browser struct {
 
 // ConfigPageData is everything the config editor shows.
 type ConfigPageData struct {
-	Browser       Browser
-	Path          string
-	Files         []FileOption
-	Servers       []EntityRow
-	Groups        []EntityRow
-	Tasks         []EntityRow
-	Bundles       []EntityRow
-	Pending       []string
-	Flash         string
-	FlashBad      bool
-	HasPending    bool
-	Loaded        bool
-	EditingKind   string // kind of entity being edited (e.g. "task")
-	EditingName   string // name of entity being edited
+	Browser     Browser
+	Path        string
+	Files       []FileOption
+	Servers     []EntityRow
+	Groups      []EntityRow
+	Tasks       []EntityRow
+	Bundles     []EntityRow
+	Pending     []string
+	Flash       string
+	FlashBad    bool
+	HasPending  bool
+	Loaded      bool
+	EditingKind string // kind of entity being edited (e.g. "task")
+	EditingName string // name of entity being edited
+	Edit        EditFields
+}
+
+// EditFields are the current values the edit form starts from.
+type EditFields struct {
+	Hostname, Groups, Tags, SSHUser, IdentityFile string
+	Cmd, Description, Tasks                       string
+	Sudo, Local                                   bool
+}
+
+// kindLabel names an entity kind for headings.
+func kindLabel(kind string) string {
+	switch kind {
+	case "host":
+		return "server"
+	case "group":
+		return "server group"
+	}
+	return kind
 }
 
 // formatDuration renders a duration compactly for the UI, such as 1m02s or 340ms.

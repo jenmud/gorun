@@ -70,7 +70,7 @@ templ entityTable(title string, kind string, key string, rows []EntityRow) {
 							}
 						</div>
 						<div class="flex gap-1">
-							<a href={ templ.SafeURL("?edit=" + r.Name + "&kind=" + kind) } class="rounded-lg px-2.5 py-1 text-xs text-accent transition hover:bg-violet-950/40">Edit</a>
+							<a href={ editPath(kind, r.Name) } class="rounded-lg px-2.5 py-1 text-xs text-accent transition hover:bg-violet-950/40">Edit</a>
 							<form method="post" action="/config/remove" class="contents">
 								<input type="hidden" name="kind" value={ kind }/>
 								<input type="hidden" name="name" value={ r.Name }/>
@@ -108,8 +108,8 @@ templ pendingPanel(d ConfigPageData) {
 }
 
 templ addServerForm(files []FileOption) {
-	<section class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-		<h2 class="text-sm font-semibold text-zinc-100">Add a server</h2>
+	<details class="group/add rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-zinc-100"><span class="inline-block text-zinc-500 transition group-open/add:rotate-90">▸</span>Add a server</summary>
 		<p class="mt-1 text-xs text-zinc-500">Leave the SSH user empty for a server that runs on this machine.</p>
 		<form method="post" action="/config/add" class="mt-3 space-y-2">
 			<input type="hidden" name="kind" value="host"/>
@@ -122,12 +122,12 @@ templ addServerForm(files []FileOption) {
 			@fileSelect(files)
 			<button class={ addButtonClass() }>Add server</button>
 		</form>
-	</section>
+	</details>
 }
 
 templ addTaskForm(files []FileOption) {
-	<section class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-		<h2 class="text-sm font-semibold text-zinc-100">Add a task</h2>
+	<details class="group/add rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-zinc-100"><span class="inline-block text-zinc-500 transition group-open/add:rotate-90">▸</span>Add a task</summary>
 		<form method="post" action="/config/add" class="mt-3 space-y-2">
 			<input type="hidden" name="kind" value="task"/>
 			<input name="name" required placeholder="name, e.g. restart-nginx" class={ inputClass() }/>
@@ -138,12 +138,12 @@ templ addTaskForm(files []FileOption) {
 			@fileSelect(files)
 			<button class={ addButtonClass() }>Add task</button>
 		</form>
-	</section>
+	</details>
 }
 
 templ addGroupForm(files []FileOption) {
-	<section class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-		<h2 class="text-sm font-semibold text-zinc-100">Add a server group</h2>
+	<details class="group/add rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-zinc-100"><span class="inline-block text-zinc-500 transition group-open/add:rotate-90">▸</span>Add a server group</summary>
 		<p class="mt-1 text-xs text-zinc-500">Settings servers share by joining the group.</p>
 		<form method="post" action="/config/add" class="mt-3 space-y-2">
 			<input type="hidden" name="kind" value="group"/>
@@ -155,12 +155,12 @@ templ addGroupForm(files []FileOption) {
 			@fileSelect(files)
 			<button class={ addButtonClass() }>Add group</button>
 		</form>
-	</section>
+	</details>
 }
 
 templ addBundleForm(files []FileOption) {
-	<section class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-		<h2 class="text-sm font-semibold text-zinc-100">Add a bundle</h2>
+	<details class="group/add rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-zinc-100"><span class="inline-block text-zinc-500 transition group-open/add:rotate-90">▸</span>Add a bundle</summary>
 		<p class="mt-1 text-xs text-zinc-500">A named list of tasks. Use it as <span class="font-mono">{ "@name" }</span> anywhere a task list goes.</p>
 		<form method="post" action="/config/add" class="mt-3 space-y-2">
 			<input type="hidden" name="kind" value="bundle"/>
@@ -170,7 +170,7 @@ templ addBundleForm(files []FileOption) {
 			@fileSelect(files)
 			<button class={ addButtonClass() }>Add bundle</button>
 		</form>
-	</section>
+	</details>
 }
 
 templ fileSelect(files []FileOption) {
@@ -236,53 +236,49 @@ templ filePicker(b Browser, current string) {
 }
 
 templ editModal(d ConfigPageData) {
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-		<div class="max-h-96 w-full max-w-2xl overflow-auto rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
-			<h2 class="mb-4 text-lg font-semibold text-zinc-100">Edit { d.EditingName }</h2>
-			<form method="post" action="/config/edit" class="space-y-3">
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+		<div class="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+			<h2 class="text-lg font-semibold text-zinc-100">Edit { kindLabel(d.EditingKind) } <span class="font-mono">{ d.EditingName }</span></h2>
+			<p class="mt-1 text-xs text-zinc-500">Settings not shown here are kept as they are. Clear a field to remove it. The change is queued until you press Save.</p>
+			<form method="post" action="/config/edit" class="mt-4 space-y-3">
 				<input type="hidden" name="kind" value={ d.EditingKind }/>
 				<input type="hidden" name="name" value={ d.EditingName }/>
-				
-				if d.EditingKind == "host" {
-					<input name="hostname" placeholder="hostname (defaults to the name)" class={ inputClass() }/>
-					<input name="groups" placeholder="groups, comma separated" class={ inputClass() }/>
-					<input name="tags" placeholder="tags, comma separated" class={ inputClass() }/>
-					<input name="ssh_user" placeholder="SSH user" class={ inputClass() }/>
-					<input name="identityfile" placeholder="identity file, e.g. ~/.ssh/id_ed25519" class={ inputClass() }/>
+				switch d.EditingKind {
+					case "host":
+						@editField("Hostname", "hostname", d.Edit.Hostname, "defaults to the name")
+						@editField("Groups", "groups", d.Edit.Groups, "comma separated")
+						@editField("Tags", "tags", d.Edit.Tags, "comma separated")
+						@editField("SSH user", "ssh_user", d.Edit.SSHUser, "")
+						@editField("Identity file", "identityfile", d.Edit.IdentityFile, "e.g. ~/.ssh/id_ed25519")
+					case "task":
+						<label class="block text-xs text-zinc-400">
+							Command
+							<textarea name="cmd" rows="4" placeholder="leave empty if the task uses cmd_file, a template or only copies files" class={ inputClass() + " font-mono" }>{ d.Edit.Cmd }</textarea>
+						</label>
+						@editField("Description", "description", d.Edit.Description, "")
+						<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" checked?={ d.Edit.Sudo } class="accent-violet-600"/> run with sudo</label>
+						<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" checked?={ d.Edit.Local } class="accent-violet-600"/> run only on local servers</label>
+					case "group":
+						@editField("Tags", "tags", d.Edit.Tags, "comma separated")
+						@editField("Tasks", "tasks", d.Edit.Tasks, "tasks or @bundles, comma separated")
+						@editField("SSH user", "ssh_user", d.Edit.SSHUser, "")
+						@editField("Identity file", "identityfile", d.Edit.IdentityFile, "")
+					case "bundle":
+						@editField("Tasks", "tasks", d.Edit.Tasks, "tasks or @bundles, comma separated")
+						@editField("Description", "description", d.Edit.Description, "")
 				}
-				if d.EditingKind == "task" {
-					<input name="cmd" placeholder="command to run" class={ inputClass() }/>
-					<input name="description" placeholder="description" class={ inputClass() }/>
-					<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" class="accent-violet-600"/> run with sudo</label>
-					<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" class="accent-violet-600"/> run only on local servers</label>
-				}
-				if d.EditingKind == "group" {
-					<input name="tags" placeholder="tags, comma separated" class={ inputClass() }/>
-					<input name="tasks" placeholder="tasks or @bundles, comma separated" class={ inputClass() }/>
-					<input name="ssh_user" placeholder="SSH user" class={ inputClass() }/>
-					<input name="identityfile" placeholder="identity file" class={ inputClass() }/>
-				}
-				if d.EditingKind == "bundle" {
-					<input name="tasks" placeholder="tasks, comma separated" required class={ inputClass() }/>
-					<input name="description" placeholder="description" class={ inputClass() }/>
-				}
-				
-				if d.Loaded {
-					<label class="block text-xs text-zinc-400">
-						Save into
-						<select name="file" class={ inputClass() }>
-							for _, f := range d.Files {
-								<option value={ f.Path }>{ f.Label }</option>
-							}
-						</select>
-					</label>
-				}
-				
-				<div class="flex gap-2">
+				<div class="flex gap-2 pt-2">
 					<button type="submit" class="flex-1 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-violet-600">Update</button>
 					<a href="/config" class="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800">Cancel</a>
 				</div>
 			</form>
 		</div>
 	</div>
+}
+
+templ editField(label, name, value, placeholder string) {
+	<label class="block text-xs text-zinc-400">
+		{ label }
+		<input name={ name } value={ value } placeholder={ placeholder } class={ inputClass() }/>
+	</label>
 }

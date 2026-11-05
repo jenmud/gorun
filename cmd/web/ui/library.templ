@@ -50,30 +50,52 @@ templ taskCard(t TaskCard) {
 				if t.Details != "" {
 					<p class="text-sm text-zinc-300">{ t.Details }</p>
 				}
-				<div>
-					<div class="mb-1 flex items-baseline gap-2">
+				<details class="group/cmd">
+					<summary class="flex cursor-pointer list-none items-center gap-2">
+						<span class="inline-block text-zinc-500 transition group-open/cmd:rotate-90">▸</span>
 						<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Command</span>
 						<span class="font-mono text-[11px] text-zinc-600">{ t.CommandSource }</span>
-					</div>
-					<pre class="max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">{ t.Command }</pre>
-				</div>
-				<dl class="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-5">
-					for _, o := range t.Options {
-						<div>
-							<dt class="text-[11px] uppercase tracking-wider text-zinc-500">{ o.Name }</dt>
-							<dd class="mt-0.5 font-mono text-zinc-200">{ o.Value }</dd>
-						</div>
-					}
-				</dl>
+					</summary>
+					<pre class="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">{ t.Command }</pre>
+				</details>
+				if len(t.Options) > 0 {
+					<details class="group/opts">
+						<summary class="flex cursor-pointer list-none items-center gap-2">
+							<span class="inline-block text-zinc-500 transition group-open/opts:rotate-90">▸</span>
+							<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Options</span>
+						</summary>
+						<dl class="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-5">
+							for _, o := range t.Options {
+								<div>
+									<dt class="text-[11px] uppercase tracking-wider text-zinc-500">{ o.Name }</dt>
+									<dd class="mt-0.5 font-mono text-zinc-200">{ o.Value }</dd>
+								</div>
+							}
+						</dl>
+					</details>
+				}
 				@linkRow("Depends on", t.DependsOn, "none")
 				@linkRow("In bundles", t.InBundles, "none")
 				@linkRow("Runs on", runsOn(t.RunsOn), "no server runs it")
-				@varsPanel("Task", t.EnvVars, t.Vars)
+				if len(t.EnvVars) > 0 || len(t.Vars) > 0 {
+					<details class="group/vars">
+						<summary class="flex cursor-pointer list-none items-center gap-2">
+							<span class="inline-block text-zinc-500 transition group-open/vars:rotate-90">▸</span>
+							<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Vars</span>
+						</summary>
+						<div class="mt-2 space-y-2">
+							@varsPanel("Task", t.EnvVars, t.Vars)
+						</div>
+					</details>
+				}
 				if len(t.ConfigVars) > 0 {
-					<div>
-						<div class="mb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Config vars</div>
-						<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ varsJSON(t.ConfigVars) }</pre>
-					</div>
+					<details class="group/cfgvars">
+						<summary class="flex cursor-pointer list-none items-center gap-2">
+							<span class="inline-block text-zinc-500 transition group-open/cfgvars:rotate-90">▸</span>
+							<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Config vars</span>
+						</summary>
+						<pre class="mt-2 max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ varsJSON(t.ConfigVars) }</pre>
+					</details>
 				}
 				if t.Source != "" {
 					<p class="font-mono text-zinc-600">Defined in { t.Source }</p>
@@ -131,25 +153,34 @@ templ bundleCard(b BundleCard) {
 				<span class="ml-auto text-xs text-zinc-400">{ itoa(len(b.Expanded)) } tasks</span>
 			</summary>
 			<div class="space-y-4 border-t border-zinc-800 px-4 py-4 text-xs">
-				<ol class="divide-y divide-zinc-800/60 rounded-lg border border-zinc-800 bg-zinc-950">
-					for i, it := range b.Items {
-						<li class="flex items-baseline gap-3 px-3 py-1.5">
-							<span class="w-5 text-right font-mono text-zinc-600">{ itoa(i+1) }</span>
-							<span class="font-mono text-zinc-100">{ it.Ref }</span>
-							if it.IsBundle {
-								<span class="rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] uppercase text-violet-300">bundle</span>
-							}
-							<span class="min-w-0 truncate text-zinc-500">{ it.Description }</span>
-						</li>
-					}
-				</ol>
+				<details class="group/items">
+					<summary class="flex cursor-pointer list-none items-center gap-2">
+						<span class="inline-block text-zinc-500 transition group-open/items:rotate-90">▸</span>
+						<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Tasks in bundle</span>
+					</summary>
+					<ol class="mt-2 divide-y divide-zinc-800/60 rounded-lg border border-zinc-800 bg-zinc-950">
+						for i, it := range b.Items {
+							<li class="flex items-baseline gap-3 px-3 py-1.5">
+								<span class="w-5 text-right font-mono text-zinc-600">{ itoa(i+1) }</span>
+								<span class="font-mono text-zinc-100">{ it.Ref }</span>
+								if it.IsBundle {
+									<span class="rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] uppercase text-violet-300">bundle</span>
+								}
+								<span class="min-w-0 truncate text-zinc-500">{ it.Description }</span>
+							</li>
+						}
+					</ol>
+				</details>
 				@linkRow("Expands to", b.Expanded, "no tasks")
 				@linkRow("Used by", b.UsedBy, "no other bundle")
 				if len(b.Vars) > 0 {
-					<div>
-						<div class="mb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Bundle vars</div>
-						<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ varsJSON(b.Vars) }</pre>
-					</div>
+					<details class="group/bvars">
+						<summary class="flex cursor-pointer list-none items-center gap-2">
+							<span class="inline-block text-zinc-500 transition group-open/bvars:rotate-90">▸</span>
+							<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Bundle vars</span>
+						</summary>
+						<pre class="mt-2 max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ varsJSON(b.Vars) }</pre>
+					</details>
 				}
 				<div class="flex items-center justify-between gap-3">
 					if b.Source != "" {

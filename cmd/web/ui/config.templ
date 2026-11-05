@@ -8,7 +8,7 @@ templ ConfigPage(d ConfigPageData) {
 	}
 	<div class="mb-6 max-w-3xl">
 		<h1 class="text-xl font-semibold text-zinc-100">Config</h1>
-		<p class="mt-1 text-sm text-zinc-400">Add, remove and load the servers, groups, tasks and bundles in your Gorunfile. Changes stay here until you press <span class="font-semibold text-zinc-200">Save</span>, which writes each one back to the file it came from. Comments and layout elsewhere in each file are kept. Runs use the saved file.</p>
+		<p class="mt-1 text-sm text-zinc-400">Add, remove and edit the servers, groups, tasks and bundles in your Gorunfile. Changes stay here until you press <span class="font-semibold text-zinc-200">Save</span>, which writes each one back to the file it came from. Comments and layout elsewhere in each file are kept. Runs use the saved file.</p>
 	</div>
 	<div class="grid gap-6 lg:grid-cols-[1fr_24rem]">
 		<div class="min-w-0 space-y-6">
@@ -66,11 +66,14 @@ templ entityTable(title string, kind string, key string, rows []EntityRow) {
 								<p class="truncate font-mono text-[11px] text-zinc-600">{ r.Source }</p>
 							}
 						</div>
-						<form method="post" action="/config/remove">
-							<input type="hidden" name="kind" value={ kind }/>
-							<input type="hidden" name="name" value={ r.Name }/>
-							<button class="rounded-lg px-2.5 py-1 text-xs text-red-300 transition hover:bg-red-950/40">Remove</button>
-						</form>
+						<div class="flex gap-1">
+							<a href={ templ.SafeURL("?edit=" + r.Name + "&kind=" + kind) } class="rounded-lg px-2.5 py-1 text-xs text-accent transition hover:bg-violet-950/40">Edit</a>
+							<form method="post" action="/config/remove" class="contents">
+								<input type="hidden" name="kind" value={ kind }/>
+								<input type="hidden" name="name" value={ r.Name }/>
+								<button type="submit" class="rounded-lg px-2.5 py-1 text-xs text-red-300 transition hover:bg-red-950/40">Remove</button>
+							</form>
+						</div>
 					</li>
 				}
 			</ul>

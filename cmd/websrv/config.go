@@ -71,6 +71,31 @@ func (a *app) configPage(w http.ResponseWriter, r *http.Request) {
 	a.page(w, "Config", "config", ui.ConfigPage(d))
 }
 
+// editPage shows the config page with an edit form for the specified entity.
+func (a *app) editPage(w http.ResponseWriter, r *http.Request) {
+	kind := r.URL.Query().Get("kind")
+	name := r.URL.Query().Get("edit")
+
+	a.mu.Lock()
+	cfg := a.cfg
+	pending := slices.Clone(a.pending)
+	a.mu.Unlock()
+
+	if cfg == nil {
+		redirectWith(w, r, "/config", "Load a Gorunfile first.", true)
+		return
+	}
+
+	if !present(cfg, pending, kind, name) {
+		redirectWith(w, r, "/config", fmt.Sprintf("No %s named %s to edit.", kindNames[kind], name), true)
+		return
+	}
+
+	// For now, just redirect back to config page - the form will be shown inline
+	// This is a placeholder that allows the template to access edit query params
+	redirectWith(w, r, "/config?edit="+url.QueryEscape(name)+"&kind="+kind, "", false)
+}
+
 // maxBrowse caps how many entries the picker lists, so a huge folder stays usable.
 const maxBrowse = 500
 
@@ -345,6 +370,39 @@ func (a *app) addHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	a.pending = append(a.pending, change)
 	redirectWith(w, r, "/config", describe(change)+". Save to write it to the file.", false)
+}
+
+// editHandler updates an existing server, group, task or bundle by removing and re-adding it.
+func (a *app) editHandler(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		redirectWith(w, r, "/config", "Could not read the form.", true)
+		return
+	}
+	kind := r.PostFormValue("kind")
+	name := r.PostFormValue("name")
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.cfg == nil {
+		redirectWith(w, r, "/config", "Load a Gorunfile first.", true)
+		return
+	}
+	if !present(a.cfg, a.pending, kind, name) {
+		redirectWith(w, r, "/config", fmt.Sprintf("No %s named %s to edit.", kindNames[kind], name), true)
+		return
+	}
+
+	file := sourceOf(a.cfg, a.pending, kind, name)
+	change, err := newChange(kind, name, file, r.PostForm)
+	if err != nil {
+		redirectWith(w, r, "/config", err.Error(), true)
+		return
+	}
+
+	// Remove the old entity first, then add the new one.
+	a.pending = append(a.pending, gorun.Change{Kind: kind, Name: name, File: file, Remove: true})
+	a.pending = append(a.pending, change)
+	redirectWith(w, r, "/config", fmt.Sprintf("Updated %s %s. Save to write the changes.", kindNames[kind], name), false)
 }
 
 // removeHandler queues the removal of a server, group, task or bundle.

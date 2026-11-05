@@ -115,8 +115,10 @@ func (a *app) routes() *http.ServeMux {
 	mux.HandleFunc("POST /runs/truncate", a.truncateRuns)
 
 	mux.HandleFunc("GET /config", a.configPage)
+	mux.HandleFunc("GET /config/edit", a.editPage)
 	mux.HandleFunc("POST /config/load", a.loadHandler)
 	mux.HandleFunc("POST /config/add", a.addHandler)
+	mux.HandleFunc("POST /config/edit", a.editHandler)
 	mux.HandleFunc("POST /config/remove", a.removeHandler)
 	mux.HandleFunc("POST /config/save", a.saveHandler)
 	mux.HandleFunc("POST /config/discard", a.discardHandler)

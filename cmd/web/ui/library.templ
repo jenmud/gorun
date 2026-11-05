@@ -77,6 +77,22 @@ templ taskCard(t TaskCard) {
 				@linkRow("Depends on", t.DependsOn, "none")
 				@linkRow("In bundles", t.InBundles, "none")
 				@linkRow("Runs on", runsOn(t.RunsOn), "no server runs it")
+				if len(t.Files) > 0 {
+					<details class="group/files">
+						<summary class="flex cursor-pointer list-none items-center gap-2">
+							<span class="inline-block text-zinc-500 transition group-open/files:rotate-90">▸</span>
+							<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Referenced files</span>
+						</summary>
+						<ul class="mt-2 space-y-1 text-[11px]">
+							for _, f := range t.Files {
+								<li class="rounded bg-zinc-800/40 px-2 py-1">
+									<div class="text-zinc-500">{ f.Type }</div>
+									<div class="font-mono text-zinc-200 break-all">{ f.Path }</div>
+								</li>
+							}
+						</ul>
+					</details>
+				}
 				if len(t.EnvVars) > 0 || len(t.Vars) > 0 {
 					<details class="group/vars">
 						<summary class="flex cursor-pointer list-none items-center gap-2">

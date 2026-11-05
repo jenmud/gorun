@@ -120,6 +120,7 @@ func taskCards(cfg *gorun.Config, avg map[string]time.Duration) []ui.TaskCard {
 			ConfigVars:  maps.Clone(cfg.Vars),
 			Vars:        t.Vars,
 			EnvVars:     map[string]string{},
+			Files:       taskFiles(t),
 		}
 		if c.Description == name {
 			c.Description = "" // a description that only repeats the name adds nothing
@@ -229,6 +230,32 @@ func executionOptions(t gorun.Task) []ui.Option {
 		{Name: "Log level", Value: or(t.LogLevel, "inherit")},
 		{Name: "File copies", Value: fmt.Sprint(copies)},
 	}
+}
+
+// taskFiles extracts all file references from a task.
+func taskFiles(t gorun.Task) []ui.FileRef {
+	var files []ui.FileRef
+	if t.CmdFile != "" {
+		files = append(files, ui.FileRef{Type: "cmd_file", Path: t.CmdFile})
+	}
+	if t.CmdTemplateFile != "" {
+		files = append(files, ui.FileRef{Type: "cmd_template_file", Path: t.CmdTemplateFile})
+	}
+	for _, c := range append(append(append(t.Copy, t.Copies...), t.Upload...), t.Files...) {
+		if c.SrcFile != "" {
+			files = append(files, ui.FileRef{Type: "src_file", Path: c.SrcFile})
+		}
+		if c.SrcTpl != "" {
+			files = append(files, ui.FileRef{Type: "src_template", Path: c.SrcTpl})
+		}
+		if c.SrcTmpl != "" {
+			files = append(files, ui.FileRef{Type: "src_template", Path: c.SrcTmpl})
+		}
+		if c.Template != "" {
+			files = append(files, ui.FileRef{Type: "template", Path: c.Template})
+		}
+	}
+	return files
 }
 
 // bundleCards describes the bundles of cfg.

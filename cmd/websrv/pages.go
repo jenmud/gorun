@@ -2,6 +2,7 @@ package websrv
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"maps"
@@ -129,51 +130,10 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var cfg gorun.Config
-	if err := cfg.LoadFile(path); err != nil {
-		redirectWith(w, r, "/", err.Error(), true)
-		return
-	}
-	cfg.ResolvePaths(filepath.Dir(cfg.Path))
-	tasks, bundles := r.Form["task"], r.Form["bundle"]
-	if len(tasks) > 0 && len(bundles) > 0 {
-		redirectWith(w, r, "/", "Pick tasks or bundles, not both.", true)
-		return
-	}
-	if len(bundles) > 0 {
-		// A bundle replaces each server's own task list, as the --bundles flag does.
-		refs := make([]string, len(bundles))
-		for i, b := range bundles {
-			refs[i] = gorun.BundlePrefix + b
-		}
-		expanded, err := cfg.ExpandTaskRefs(refs...)
-		if err != nil {
-			redirectWith(w, r, "/", err.Error(), true)
-			return
-		}
-		if len(expanded) == 0 {
-			redirectWith(w, r, "/", "The chosen bundles expand to no tasks.", true)
-			return
-		}
-		for i := range cfg.Servers {
-			cfg.Servers[i].TaskNames = slices.Clone(expanded)
-		}
-	} else {
-		cfg.SelectedTasks = tasks
-	}
-	pipes, err := cfg.ServersPipeline()
+	cfg, servers, err := planRun(path, names, r.Form["task"], r.Form["bundle"])
 	if err != nil {
 		redirectWith(w, r, "/", err.Error(), true)
 		return
-	}
-	servers := make([]gorun.Server, 0, len(names))
-	for _, n := range names {
-		s, ok := pipes[n]
-		if !ok {
-			redirectWith(w, r, "/", fmt.Sprintf("Unknown server %q.", n), true)
-			return
-		}
-		servers = append(servers, s)
 	}
 
 	uuid := fmt.Sprintf("web-%d-%d", os.Getpid(), time.Now().UnixNano())
@@ -195,6 +155,59 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	redirectWith(w, r, "/", fmt.Sprintf("Started on %d server(s).", len(servers)), false)
+}
+
+// planRun loads the saved Gorunfile and works out what each ticked server runs. Ticked tasks or
+// bundles replace each server's own list, as --task and --bundles do; with neither, each server
+// runs its own list. It fails when no ticked server would run anything.
+func planRun(path string, names, tasks, bundles []string) (*gorun.Config, []gorun.Server, error) {
+	if len(tasks) > 0 && len(bundles) > 0 {
+		return nil, nil, errors.New("Pick tasks or bundles, not both.")
+	}
+	cfg := &gorun.Config{}
+	if err := cfg.LoadFile(path); err != nil {
+		return nil, nil, err
+	}
+	cfg.ResolvePaths(filepath.Dir(cfg.Path))
+
+	selected := tasks
+	if len(bundles) > 0 {
+		refs := make([]string, len(bundles))
+		for i, b := range bundles {
+			refs[i] = gorun.BundlePrefix + b
+		}
+		expanded, err := cfg.ExpandTaskRefs(refs...)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(expanded) == 0 {
+			return nil, nil, errors.New("The chosen bundles expand to no tasks.")
+		}
+		selected = expanded
+	}
+	if len(selected) > 0 {
+		for i := range cfg.Servers {
+			cfg.Servers[i].TaskNames = slices.Clone(selected)
+		}
+		cfg.SelectedTasks = selected
+	}
+
+	pipes, err := cfg.ServersPipeline()
+	if err != nil {
+		return nil, nil, err
+	}
+	servers := make([]gorun.Server, 0, len(names))
+	for _, n := range names {
+		s, ok := pipes[n]
+		if !ok {
+			return nil, nil, fmt.Errorf("Unknown server %q.", n)
+		}
+		servers = append(servers, s)
+	}
+	if !slices.ContainsFunc(servers, func(s gorun.Server) bool { return len(s.Tasks) > 0 }) {
+		return nil, nil, errors.New("Nothing to run on the ticked servers. Local servers only run tasks marked local = true, and other tasks only run over SSH.")
+	}
+	return cfg, servers, nil
 }
 
 // clearFinished removes the finished runs from the dashboard.

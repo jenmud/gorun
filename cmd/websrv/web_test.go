@@ -305,3 +305,41 @@ func TestRunRefusesTasksAndBundlesTogether(t *testing.T) {
 		t.Errorf("a run started: %v", a.runs)
 	}
 }
+
+func TestPlanRunUsesTickedTasksInPlaceOfTheServerList(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "Gorunfile")
+	src := `[tasks.own]
+local = true
+cmd = "echo own"
+
+[tasks.extra]
+local = true
+cmd = "echo extra"
+
+[tasks.remote]
+cmd = "uptime"
+
+[servers.hosts.local]
+hostname = "localhost"
+tasks = ["own"]
+`
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, servers, err := planRun(path, []string{"local"}, []string{"extra"}, nil)
+	if err != nil {
+		t.Fatalf("a ticked task the server doesn't list should still run: %v", err)
+	}
+	if got := servers[0].Tasks; len(got) != 1 || got[0].Name != "extra" {
+		t.Errorf("tasks = %v, want only extra", got)
+	}
+
+	if _, servers, err = planRun(path, []string{"local"}, nil, nil); err != nil || servers[0].Tasks[0].Name != "own" {
+		t.Errorf("with nothing ticked the server's own list should run: %v %v", servers, err)
+	}
+
+	if _, _, err := planRun(path, []string{"local"}, []string{"remote"}, nil); err == nil || !strings.Contains(err.Error(), "Nothing to run") {
+		t.Errorf("an SSH-only task on a local server should be refused, got %v", err)
+	}
+}

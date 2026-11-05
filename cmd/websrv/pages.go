@@ -124,13 +124,7 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/", "Load a Gorunfile on the Config page first.", true)
 		return
 	}
-	names := r.Form["server"]
-	if len(names) == 0 {
-		redirectWith(w, r, "/", "Tick at least one server.", true)
-		return
-	}
-
-	cfg, servers, err := planRun(path, names, r.Form["task"], r.Form["bundle"])
+	cfg, servers, err := planRun(path, r.Form["server"], r.Form["task"], r.Form["bundle"])
 	if err != nil {
 		redirectWith(w, r, "/", err.Error(), true)
 		return
@@ -159,10 +153,14 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 
 // planRun loads the saved Gorunfile and works out what each ticked server runs. Ticked tasks or
 // bundles replace each server's own list, as --task and --bundles do; with neither, each server
-// runs its own list. It fails when no ticked server would run anything.
+// runs its own list. Ticked local tasks run on this machine without a server being ticked, but
+// other tasks need a ticked SSH server. It fails when nothing would run.
 func planRun(path string, names, tasks, bundles []string) (*gorun.Config, []gorun.Server, error) {
 	if len(tasks) > 0 && len(bundles) > 0 {
 		return nil, nil, errors.New("Pick tasks or bundles, not both.")
+	}
+	if len(names) == 0 && len(tasks) == 0 && len(bundles) == 0 {
+		return nil, nil, errors.New("Tick a server, or a task marked local = true.")
 	}
 	cfg := &gorun.Config{}
 	if err := cfg.LoadFile(path); err != nil {
@@ -204,10 +202,42 @@ func planRun(path string, names, tasks, bundles []string) (*gorun.Config, []goru
 		}
 		servers = append(servers, s)
 	}
+	if len(selected) > 0 {
+		var err error
+		if servers, err = addLocal(cfg, servers, selected); err != nil {
+			return nil, nil, err
+		}
+	}
 	if !slices.ContainsFunc(servers, func(s gorun.Server) bool { return len(s.Tasks) > 0 }) {
 		return nil, nil, errors.New("Nothing to run on the ticked servers. Local servers only run tasks marked local = true, and other tasks only run over SSH.")
 	}
 	return cfg, servers, nil
+}
+
+// addLocal adds this machine to servers when selected has local tasks and no ticked server is
+// local, and fails when selected has other tasks but no ticked server reaches them over SSH.
+func addLocal(cfg *gorun.Config, servers []gorun.Server, selected []string) ([]gorun.Server, error) {
+	var local, remote []string
+	for _, n := range selected {
+		if cfg.Tasks[n].Local {
+			local = append(local, n)
+		} else {
+			remote = append(remote, n)
+		}
+	}
+	if len(remote) > 0 && !slices.ContainsFunc(servers, func(s gorun.Server) bool { return !s.IsLocal() }) {
+		return nil, fmt.Errorf("Tick a server to run %s on. Only tasks marked local = true run without one.", strings.Join(remote, ", "))
+	}
+	if len(local) == 0 || slices.ContainsFunc(servers, gorun.Server.IsLocal) {
+		return servers, nil
+	}
+	s := cfg.LocalServer()
+	s.TaskNames = slices.Clone(selected)
+	s, err := cfg.ServerPipeline(s)
+	if err != nil {
+		return nil, err
+	}
+	return append(servers, s), nil
 }
 
 // clearFinished removes the finished runs from the dashboard.

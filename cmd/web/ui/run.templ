@@ -24,7 +24,7 @@ templ runPicker(d RunPageData) {
 	<form method="post" action="/run" class="space-y-5 self-start rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
 		<div>
 			<h2 class="text-base font-semibold text-zinc-100">Pick and run</h2>
-			<p class="mt-1 text-xs text-zinc-500">Tick the servers to run on. Tick tasks, or bundles, to run only those in place of each server's own list; leave them all unticked to run each server's own list. Tasks and bundles can't be mixed. Uses the saved <span class="font-mono">{ d.Path }</span>.</p>
+			<p class="mt-1 text-xs text-zinc-500">Tick the servers to run on. Tick tasks, or bundles, to run only those in place of each server's own list; leave them all unticked to run each server's own list. Tasks marked local run on this machine, so they need no server ticked. Tasks and bundles can't be mixed. Uses the saved <span class="font-mono">{ d.Path }</span>.</p>
 		</div>
 		<button type="submit" disabled?={ !d.NATSOK } class="w-full rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-40">Run selected</button>
 		<section>
@@ -92,7 +92,12 @@ templ runPicker(d RunPageData) {
 						<label class="flex cursor-pointer items-start gap-2" title={ t.Details }>
 							<input type="checkbox" name="task" value={ t.Name } onchange="gorunExclusive(this, 'bundle-list')" class="mt-1 accent-violet-600"/>
 							<span class="min-w-0 flex-1">
-								<span class="block truncate font-mono text-sm text-zinc-100">{ t.Name }</span>
+								<span class="block truncate font-mono text-sm text-zinc-100">
+									{ t.Name }
+									if t.Local {
+										<span class="ml-1 rounded bg-zinc-800 px-1.5 py-0.5 font-sans text-[10px] uppercase text-zinc-400" title="Runs on this machine; no server needed">local</span>
+									}
+								</span>
 								if t.Description != "" {
 									<span class="block truncate text-xs text-zinc-500">{ t.Description }</span>
 								}

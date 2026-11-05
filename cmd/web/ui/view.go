@@ -149,18 +149,20 @@ type Browser struct {
 
 // ConfigPageData is everything the config editor shows.
 type ConfigPageData struct {
-	Browser    Browser
-	Path       string
-	Files      []FileOption
-	Servers    []EntityRow
-	Groups     []EntityRow
-	Tasks      []EntityRow
-	Bundles    []EntityRow
-	Pending    []string
-	Flash      string
-	FlashBad   bool
-	HasPending bool
-	Loaded     bool
+	Browser       Browser
+	Path          string
+	Files         []FileOption
+	Servers       []EntityRow
+	Groups        []EntityRow
+	Tasks         []EntityRow
+	Bundles       []EntityRow
+	Pending       []string
+	Flash         string
+	FlashBad      bool
+	HasPending    bool
+	Loaded        bool
+	EditingKind   string // kind of entity being edited (e.g. "task")
+	EditingName   string // name of entity being edited
 }
 
 // formatDuration renders a duration compactly for the UI, such as 1m02s or 340ms.

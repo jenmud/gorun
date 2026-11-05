@@ -6,6 +6,9 @@ templ ConfigPage(d ConfigPageData) {
 	if d.Flash != "" {
 		@flash(d.Flash, d.FlashBad)
 	}
+	if d.EditingKind != "" && d.EditingName != "" {
+		@editModal(d)
+	}
 	<div class="mb-6 max-w-3xl">
 		<h1 class="text-xl font-semibold text-zinc-100">Config</h1>
 		<p class="mt-1 text-sm text-zinc-400">Add, remove and edit the servers, groups, tasks and bundles in your Gorunfile. Changes stay here until you press <span class="font-semibold text-zinc-200">Save</span>, which writes each one back to the file it came from. Comments and layout elsewhere in each file are kept. Runs use the saved file.</p>
@@ -230,4 +233,56 @@ templ filePicker(b Browser, current string) {
 			</form>
 		</details>
 	</section>
+}
+
+templ editModal(d ConfigPageData) {
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+		<div class="max-h-96 w-full max-w-2xl overflow-auto rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+			<h2 class="mb-4 text-lg font-semibold text-zinc-100">Edit { d.EditingName }</h2>
+			<form method="post" action="/config/edit" class="space-y-3">
+				<input type="hidden" name="kind" value={ d.EditingKind }/>
+				<input type="hidden" name="name" value={ d.EditingName }/>
+				
+				if d.EditingKind == "host" {
+					<input name="hostname" placeholder="hostname (defaults to the name)" class={ inputClass() }/>
+					<input name="groups" placeholder="groups, comma separated" class={ inputClass() }/>
+					<input name="tags" placeholder="tags, comma separated" class={ inputClass() }/>
+					<input name="ssh_user" placeholder="SSH user" class={ inputClass() }/>
+					<input name="identityfile" placeholder="identity file, e.g. ~/.ssh/id_ed25519" class={ inputClass() }/>
+				}
+				if d.EditingKind == "task" {
+					<input name="cmd" placeholder="command to run" class={ inputClass() }/>
+					<input name="description" placeholder="description" class={ inputClass() }/>
+					<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" class="accent-violet-600"/> run with sudo</label>
+					<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" class="accent-violet-600"/> run only on local servers</label>
+				}
+				if d.EditingKind == "group" {
+					<input name="tags" placeholder="tags, comma separated" class={ inputClass() }/>
+					<input name="tasks" placeholder="tasks or @bundles, comma separated" class={ inputClass() }/>
+					<input name="ssh_user" placeholder="SSH user" class={ inputClass() }/>
+					<input name="identityfile" placeholder="identity file" class={ inputClass() }/>
+				}
+				if d.EditingKind == "bundle" {
+					<input name="tasks" placeholder="tasks, comma separated" required class={ inputClass() }/>
+					<input name="description" placeholder="description" class={ inputClass() }/>
+				}
+				
+				if d.Loaded {
+					<label class="block text-xs text-zinc-400">
+						Save into
+						<select name="file" class={ inputClass() }>
+							for _, f := range d.Files {
+								<option value={ f.Path }>{ f.Label }</option>
+							}
+						</select>
+					</label>
+				}
+				
+				<div class="flex gap-2">
+					<button type="submit" class="flex-1 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-violet-600">Update</button>
+					<a href="/config" class="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800">Cancel</a>
+				</div>
+			</form>
+		</div>
+	</div>
 }

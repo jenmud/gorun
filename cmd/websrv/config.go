@@ -71,7 +71,7 @@ func (a *app) configPage(w http.ResponseWriter, r *http.Request) {
 	a.page(w, "Config", "config", ui.ConfigPage(d))
 }
 
-// editPage shows the config page with an edit form for the specified entity.
+// editPage shows the config page with an edit form modal for the specified entity.
 func (a *app) editPage(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 	name := r.URL.Query().Get("edit")
@@ -91,9 +91,13 @@ func (a *app) editPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For now, just redirect back to config page - the form will be shown inline
-	// This is a placeholder that allows the template to access edit query params
-	redirectWith(w, r, "/config?edit="+url.QueryEscape(name)+"&kind="+kind, "", false)
+	// Show config page with edit modal
+	d := configData(cfg, pending)
+	d.Browser = browse(pickerDir(r.URL.Query().Get("dir"), d.Path))
+	d.EditingKind = kind
+	d.EditingName = name
+	d.Flash, d.FlashBad = flashFrom(r)
+	a.page(w, "Config", "config", ui.ConfigPage(d))
 }
 
 // maxBrowse caps how many entries the picker lists, so a huge folder stays usable.

@@ -286,6 +286,18 @@ func UpdateDatabase(ctx context.Context, st *store.Store, ev *Event) {
 			if err := st.SetServerEnvVars(ctx, ev.GorunUUID, ev.Server, ev.EnvVars, ev.Vars); err != nil {
 				slog.Error("gorun nats: failed to set server env vars", "server", ev.Server, "error", err)
 			}
+			for _, name := range ev.Tasks {
+				if err := st.PlanTask(ctx, ev.GorunUUID, ev.Server, name); err != nil {
+					slog.Error("gorun nats: failed to plan task", "task", name, "error", err)
+				}
+			}
+		}
+	case "server_error":
+		if ev.Server == "" || ev.Error == "" {
+			return
+		}
+		if err := st.SetServerError(ctx, ev.GorunUUID, ev.Server, ev.Error); err != nil {
+			slog.Error("gorun nats: failed to set server error", "server", ev.Server, "error", err)
 		}
 	case "task":
 		if ev.Server == "" || ev.Task == "" {

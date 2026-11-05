@@ -1,6 +1,7 @@
 package gorun
 
 import (
+	"encoding/json"
 	"github.com/jenmud/gorun/internal/nats"
 	"log"
 	"os"
@@ -119,12 +120,42 @@ type TaskEvent struct {
 	Attempts int `json:"attempts,omitempty"`
 }
 
+// errText is the message of err, or "" for nil. An error value marshals as {}, so events
+// carry its text instead.
+func errText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+// taskEventJSON has TaskEvent's fields without its MarshalJSON method.
+type taskEventJSON TaskEvent
+
+// MarshalJSON publishes Err as its message.
+func (e TaskEvent) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		taskEventJSON
+		Err string `json:"error,omitempty"`
+	}{taskEventJSON(e), errText(e.Err)})
+}
+
 // ServerErrorEvent is sent when a server can't run its tasks at all (e.g. SSH connection failed).
 type ServerErrorEvent struct {
 	Type      string `json:"type"`
 	GorunUUID string `json:"gorun_uuid"`
 	Server    string `json:"server"`
 	Err       error  `json:"error"`
+}
+
+// MarshalJSON publishes Err as its message.
+func (e ServerErrorEvent) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Type      string `json:"type"`
+		GorunUUID string `json:"gorun_uuid"`
+		Server    string `json:"server"`
+		Err       string `json:"error"`
+	}{e.Type, e.GorunUUID, e.Server, errText(e.Err)})
 }
 
 // RunDoneEvent is sent when every server has finished.

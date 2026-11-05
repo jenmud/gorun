@@ -40,6 +40,7 @@ type Event struct {
 	Attempts   int               `json:"attempts,omitempty"`
 	EnvVars    map[string]string `json:"envvars,omitempty"`
 	Vars       map[string]any    `json:"vars,omitempty"`
+	Error      string            `json:"error,omitempty"`
 }
 
 // TaskMeta carries the documentation attached to a task in a plan event.
@@ -80,6 +81,7 @@ func (e Event) UIEvent() ui.Event {
 		ExitCode:   e.ExitCode,
 		Attempt:    e.Attempt,
 		Attempts:   e.Attempts,
+		Error:      e.Error,
 	}
 }
 

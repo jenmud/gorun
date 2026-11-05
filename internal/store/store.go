@@ -209,6 +209,15 @@ func (s *Store) SetServerError(ctx context.Context, runID, name, message string)
 	return err
 }
 
+// PlanTask records a task as pending, unless it already has a row, so a run shows the tasks a
+// server was meant to run even when it never got to them.
+func (s *Store) PlanTask(ctx context.Context, runID, server, name string) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT OR IGNORE INTO tasks (run_id,server,name,state,command,stdout,stderr,exit_code,duration_ns)
+		 VALUES (?,?,?,0,'','','',0,0)`, runID, server, name)
+	return err
+}
+
 func (s *Store) UpsertTask(ctx context.Context, runID, server, name string, state int, command, stdout, stderr string, exitCode int, duration time.Duration) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO tasks (run_id,server,name,state,command,stdout,stderr,exit_code,duration_ns)

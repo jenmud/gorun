@@ -13,6 +13,7 @@ One Go binary, one TOML file and SSH. Nothing to install on the servers.
 - **[Quick start](#quick-start)**: running in two minutes
 - **[Tutorial](docs/tutorial.md)**: from one task to a full server deployment, step by step
 - **[Documentation](#documentation)**
+- **[Website](https://go-run.dev)**: an overview, the docs and a playground to try a Gorunfile in your browser
 
 > [!WARNING]
 > **Use at your own risk.** gorun runs commands on your servers, often as root. It comes with no
@@ -117,6 +118,7 @@ gorun Gorunfile --dump-tasks ./tasks   # write each task as a runnable shell fil
 
 | Read | To |
 |---|---|
+| [Website](https://go-run.dev) | an overview of gorun, with the docs and a playground to try a Gorunfile in your browser |
 | [Tutorial](docs/tutorial.md) | learn gorun step by step, from hello world to a full deployment |
 | [The Gorunfile](docs/gorunfile.md) | understand every option: tasks, copies, secrets, servers, bundles, groups |
 | [Running gorun](docs/running.md) | use the picker, the live view, filters, CI mode and the history |

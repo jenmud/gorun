@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/jenmud/gorun/internal/alerts"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -80,6 +81,9 @@ type Config struct {
 
 	// Groups hold defaults shared by the servers that join them.
 	Groups map[string]ServerGroup `toml:"server_groups"`
+
+	// Alerts are checked against the history as each run finishes. See internal/alerts.
+	Alerts []alerts.Rule `toml:"alerts"`
 
 	// Servers are the [servers.hosts.<name>] tables, in the order they appear in the file.
 	Servers []Server `toml:"-"`

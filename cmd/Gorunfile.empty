@@ -22,6 +22,16 @@ envvars = { APP_ENV = "development" }   # exported to every task (a task's own e
 # config_file = "~/.ssh/config"   # fills in user/port/key/hostname a host doesn't set
 
 #
+# Alerts are checked against the history as each run finishes, in the web UI (gorun -web).
+# Fired alerts are listed on the Alerts page and published to NATS (GORUN_ALERT_TOPIC).
+# [[alerts]]
+# name = "deploy keeps failing"
+# kind = "failure_streak"         # failure_streak, slow or run_failed
+# task = "deploy"                 # glob; server = "web-*" works too, empty matches all
+# count = 3                       # failure_streak: failed this many runs in a row (default 3)
+# factor = 2                      # slow: took this many times the median (default 2)
+# window = 20                     # slow: passing runs the median comes from (default 20, min 3)
+#
 # Tasks: define each once in the library, then refer to it by name.
 #
 

@@ -454,6 +454,47 @@ envvars = { REGION = "eu-central-1" }   # the server wins over its groups
     port = 2229                         # the rest comes from the lab group
 ```
 
+## Alerts
+
+An `[[alerts]]` table is a rule checked against the saved history each time a run finishes. The
+check runs in the web UI (`gorun -web`), because that is where the history and the live event
+stream come together. Rules come from the Gorunfile the web UI has loaded, and they can also be
+defined in included files.
+
+```toml
+[[alerts]]
+name = "deploy keeps failing"
+kind = "failure_streak"
+task = "deploy"
+count = 3
+
+[[alerts]]
+name = "backup is slow"
+kind = "slow"
+task = "backup"
+factor = 2
+window = 20
+
+[[alerts]]
+name = "any run failed"
+kind = "run_failed"
+```
+
+- `failure_streak` fires when a task has failed the last `count` runs in a row.
+- `slow` fires when a task takes longer than `factor` times the median of its last `window`
+  passing runs. It stays quiet until there are at least 3 passing runs to compare against.
+- `run_failed` fires when a whole run fails.
+
+`server` and `task` are globs (`path.Match` syntax, so `*` and `?`). Leave them out to match
+everything. A rule only fires for the run that just finished, so an old failure is not raised
+again on every later run. Each alert is kept once, on the **Alerts** page, which also shows the
+per-task stats (runs, success rate, median and p95). Every new alert is published to the
+`gorun.alerts` NATS subject, or the topic in `GORUN_ALERT_TOPIC`, as a JSON message with `type`
+set to `alert`.
+
+Bad rules, such as an unknown `kind`, a duplicate `name` or a `factor` of 1 or less, stop the
+Gorunfile from loading.
+
 ## Splitting a large Gorunfile
 
 Move tasks, groups and hosts into their own files with a top-level `include` list. Paths and
@@ -587,6 +628,18 @@ Every key, grouped by the table it belongs to. `gorun -dump` prints the same lis
 | `vars` | template variables (merged into the server) |
 | `log_level` | log level |
 | `[ssh]` | `username`, `port`, `identityfile`, `password`, `config_file` |
+
+### `[[alerts]]`
+
+| Key | Description |
+|---|---|
+| `name` | required and unique; shown on the Alerts page |
+| `kind` | `failure_streak`, `slow` or `run_failed` |
+| `server` | glob for the server; empty matches all (not used by `run_failed`) |
+| `task` | glob for the task; empty matches all (not used by `run_failed`) |
+| `count` | `failure_streak`: runs in a row (default `3`) |
+| `factor` | `slow`: multiple of the median (default `2`, must be above 1) |
+| `window` | `slow`: passing runs the median comes from (default `20`, at least `3`) |
 
 ### `[servers]`
 

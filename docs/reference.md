@@ -55,6 +55,7 @@ already set.
 | `GORUN_LOG_FILE` | `~/.gorun/gorun.log` | log file |
 | `GORUN_ADDRESS` | `:8080` | web UI listen address |
 | `GORUN_EVENT_TOPIC` | `gorun.events` | NATS topic for events |
+| `GORUN_ALERT_TOPIC` | `gorun.alerts` | NATS topic that fired alerts are published to (see [Alerts](gorunfile.md#alerts)) |
 | `GORUN_SKIP_NATS` | unset | set to skip NATS |
 | `GORUN_NATS_CLIENT_URL` | `nats://127.0.0.1:4222` | NATS server |
 | `GORUN_NATS_CLIENT_NAME` | `GORUN_NAME` | NATS client name |

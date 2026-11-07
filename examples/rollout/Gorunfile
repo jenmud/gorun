@@ -1,0 +1,81 @@
+# rollout's Gorunfile: a release rolled out to a small fleet.
+#
+# Every server is local and every task only echoes and sleeps, so the demo runs anywhere.
+# For real servers, add an [ssh] table to each host and drop `local = true`.
+title = "Release 3.1"
+
+[tasks.drain]
+local = true
+description = "Take the server out of the load balancer"
+cmd = "sleep 0.6; sleep $JITTER; echo 'drained: 0 active connections'"
+
+[tasks.backup]
+local = true
+description = "Snapshot the app data"
+cmd = "sleep 1.0; sleep $JITTER; echo 'snapshot written'"
+depends_on = ["drain"]
+
+[tasks.install]
+local = true
+description = "Install release 3.1"
+cmd_template = "sleep 1.1; sleep $JITTER; {{if eq .Name \"edge-4\"}}echo 'E: Unable to fetch app_3.1_amd64.deb  404 Not Found' >&2; exit 100{{else}}echo 'app 3.1.0 installed'{{end}}"
+depends_on = ["backup"]
+retries = 1
+retry_delay = "300ms"
+
+[tasks.migrate]
+local = true
+description = "Migrate the local schema"
+cmd = "sleep 0.7; sleep $JITTER; echo 'schema at version 57'"
+depends_on = ["install"]
+
+[tasks.restart]
+local = true
+description = "Restart the service"
+cmd = "sleep 0.5; sleep $JITTER; echo 'app.service: active (running)'"
+depends_on = ["migrate"]
+
+[tasks.verify]
+local = true
+description = "Check it answers"
+cmd = "sleep 0.4; sleep $JITTER; echo 'GET /health 200'"
+depends_on = ["restart"]
+
+[tasks.undrain]
+local = true
+description = "Put the server back in the load balancer"
+cmd = "sleep 0.3; sleep $JITTER; echo 'back in rotation'"
+depends_on = ["verify"]
+
+[servers]
+tasks = ["undrain"]
+
+[server_groups.edge]
+tags = ["edge"]
+
+[server_groups.core]
+tags = ["core"]
+
+[servers.hosts.edge-1]
+groups = ["edge"]
+envvars = { JITTER = "0.2" }
+
+[servers.hosts.edge-2]
+groups = ["edge"]
+envvars = { JITTER = "0.4" }
+
+[servers.hosts.edge-3]
+groups = ["edge"]
+envvars = { JITTER = "0.1" }
+
+[servers.hosts.edge-4]
+groups = ["edge"]
+envvars = { JITTER = "0.3" }
+
+[servers.hosts.core-1]
+groups = ["core"]
+envvars = { JITTER = "0.5" }
+
+[servers.hosts.core-2]
+groups = ["core"]
+envvars = { JITTER = "0.0" }

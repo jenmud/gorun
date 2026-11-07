@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Service Deck · built on gorun</title>
+<script type="module" src="/static/datastar.js"></script>
+<style>
+  :root { --bg:#0b0b10; --panel:#14141c; --line:#262633; --text:#e8e8f0; --muted:#8d8da0;
+    --accent:#8b5cf6; --green:#22c55e; --red:#ef4444; --amber:#f59e0b; --blue:#60a5fa;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 Inter, system-ui, sans-serif; }
+  header { display:flex; align-items:center; gap:12px; padding:14px 24px; border-bottom:1px solid var(--line); background:#101017; }
+  header h1 { font-size:17px; margin:0; }
+  header .by { color:var(--muted); font-size:13px; margin-left:auto; }
+  .logo { width:28px; height:28px; border-radius:8px; background:linear-gradient(135deg,#7c3aed,#22d3ee); display:grid; place-items:center; font-weight:800; }
+  main { display:grid; grid-template-columns: 300px 1fr; gap:20px; padding:20px 24px; }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; padding:14px; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .panel h2 { font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:var(--muted); margin:0 0 10px; }
+  .targets { display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap; }
+  .targets button { flex:1; background:#1c1c27; color:var(--muted); border:1px solid var(--line); border-radius:8px; padding:7px 0; font:600 13px inherit; cursor:pointer; }
+  .targets button.on { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .act { display:block; width:100%; text-align:left; background:#1a1a24; color:var(--text); border:1px solid var(--line);
+    border-radius:10px; padding:11px 14px; margin-bottom:8px; cursor:pointer; font:inherit; }
+  .act:hover { border-color:var(--accent); }
+  .act b { display:block; font-size:14px; }
+  .act span { color:var(--muted); font-size:12.5px; }
+  .act[disabled] { opacity:.45; cursor:progress; }
+  .runline { display:flex; align-items:baseline; gap:10px; margin:0 0 14px; flex-wrap:wrap; }
+  .runline h2 { margin:0; font-size:18px; text-transform:none; letter-spacing:0; color:var(--text); }
+  .pill { font:600 11.5px var(--mono); padding:2px 8px; border-radius:999px; background:#232330; color:var(--muted); }
+  .pill.running { background:rgba(139,92,246,.18); color:#c4b5fd; }
+  .pill.done { background:rgba(34,197,94,.15); color:#86efac; }
+  .pill.failed { background:rgba(239,68,68,.15); color:#fca5a5; }
+  .pill.queued { background:#1d1d29; color:var(--muted); }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap:12px; }
+  .card { background:#11111a; border:1px solid var(--line); border-radius:12px; padding:12px 14px; min-width:0; }
+  .card.failed { border-color: rgba(239,68,68,.55); }
+  .card.done { border-color: rgba(34,197,94,.35); }
+  .card .top { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .card .name { font:700 14px var(--mono); }
+  .tags { color:var(--muted); font:12px var(--mono); }
+  .bar { height:6px; background:#22222e; border-radius:4px; overflow:hidden; margin:10px 0 8px; }
+  .bar i { display:block; height:100%; background:var(--accent); transition: width .25s; }
+  .card.done .bar i { background:var(--green); }
+  .card.failed .bar i { background:var(--red); }
+  .now { font:12.5px var(--mono); color:var(--blue); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .out { font:12px var(--mono); color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px; }
+  .card.failed .out { color:#fca5a5; }
+  .summary { margin-top:14px; font:13px var(--mono); }
+  .summary.ok { color:var(--green); } .summary.bad { color:var(--red); }
+  .events { margin-top:18px; }
+  .log { font:12px/1.65 var(--mono); background:#0d0d13; border:1px solid var(--line); border-radius:10px; padding:10px 12px; min-height:120px; overflow:hidden; }
+  .log div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .log .t { color:#5b5b70; } .log .k { display:inline-block; width:64px; }
+  .k.start, .k.finish { color:#c4b5fd; } .k.plan { color:var(--muted); } .k.running { color:var(--blue); }
+  .k.done { color:var(--green); } .k.failed { color:var(--red); } .k.skipped { color:var(--amber); }
+  .hint { color:var(--muted); font-size:13px; margin:14px 0 0; }
+</style>
+</head>
+<body data-signals="{target: 'all', running: false}" data-init="@get('/updates')">
+<header>
+  <div class="logo">⚙</div>
+  <h1>Service Deck</h1>
+  <span class="by">powered by the gorun library</span>
+</header>
+<main>
+  <section class="panel">
+    <h2>Servers</h2>
+    <div class="targets">
+      {{range .Targets}}<button type="button" data-class="{on: $target == '{{.}}'}" data-on:click="$target = '{{.}}'">{{.}}</button>{{end}}
+    </div>
+    <h2>Actions</h2>
+    {{range .Actions}}
+    <button type="button" class="act" data-attr:disabled="$running" data-on:click="@post('/run/{{.ID}}')">
+      <b>{{.Label}}</b><span>{{.Hint}}</span>
+    </button>
+    {{end}}
+    <p class="hint">Each action is a gorun task. Its dependencies run first, every server runs at once, and each progress event updates the board.</p>
+  </section>
+  {{template "board" .}}
+</main>
+</body>
+</html>
+{{define "board"}}
+<section id="board">
+  <div class="panel">
+    <div class="runline">
+      <h2>{{if .Board.Action}}{{.Board.Action}}{{else}}Fleet{{end}}</h2>
+      {{if .Board.Target}}<span class="pill">{{.Board.Target}}</span>{{end}}
+      {{if .Running}}<span class="pill running">running</span>{{else if .Board.Summary}}{{if .Board.Failed}}<span class="pill failed">failed</span>{{else}}<span class="pill done">done</span>{{end}}{{end}}
+    </div>
+    <div class="grid">
+      {{range .Board.Servers}}
+      <div class="card {{.State}}">
+        <div class="top"><span class="name">{{.Name}}</span><span class="pill {{.State}}">{{.State}}</span></div>
+        <div class="tags">{{range .Tags}}#{{.}} {{end}}</div>
+        <div class="bar"><i style="width: {{pct .Done (len .Tasks)}}%"></i></div>
+        {{if .Current}}<div class="now">▸ {{.Current}} {{.Attempt}}</div>{{else if eq .State "done"}}<div class="now">✓ {{.Done}}/{{len .Tasks}} tasks</div>{{else}}<div class="now">&nbsp;</div>{{end}}
+        <div class="out">{{if .LastLine}}{{.LastLine}}{{else}}&nbsp;{{end}}</div>
+      </div>
+      {{end}}
+    </div>
+    {{if .Board.Summary}}<div class="summary {{if .Board.Failed}}bad{{else}}ok{{end}}">{{if .Board.Failed}}✗{{else}}✓{{end}} {{.Board.Summary}}</div>{{end}}
+    <div class="events">
+      <h2>OnEvent stream</h2>
+      <div class="log">
+        {{range .Board.Events}}<div><span class="t">{{.At}}</span> <span class="k {{.Kind}}">{{.Kind}}</span> {{.Text}}</div>{{else}}<div class="t">Pick servers and an action. gorun's events will scroll here.</div>{{end}}
+      </div>
+    </div>
+  </div>
+</section>
+{{end}}

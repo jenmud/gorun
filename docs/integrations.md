@@ -137,6 +137,21 @@ other task runs only over SSH. This holds for `Run`, `RunLocal` and the pipeline
 (`ServersPipeline`, `ServerPipeline`): tasks of the wrong kind, and tasks that depend on them, are
 dropped. `RunTask` returns an error when none of its servers can run the task.
 
+`Config.OnEvent` receives the [events](#events-nats) as Go values, not JSON:
+`ProcessStartedEvent`, a `PlanEvent` per server, a `TaskEvent` for every change of a task's
+state (`TaskRunning`, `TaskDone`, `TaskFailed`, `TaskSkipped`; `Attempt` counts retries), a
+`ServerErrorEvent` when a server can't run, and `ProcessFinishedEvent` at the end. It's called from
+one goroutine per server, so guard what it updates with a mutex.
+
+Task logs go to stdout unless you call `gorun.SetLogOutput`, for example with
+`gorun.OpenLogFile(gorun.LogFilePath())` for gorun's own log file. A program that draws on the
+terminal needs this.
+
+**Examples:** [`examples/servicedeck`](../examples/servicedeck) is a web app that manages services
+across a fleet and streams every server's progress to the browser;
+[`examples/rollout`](../examples/rollout) is a CLI that draws its own progress bars. See
+[examples/README.md](../examples/README.md).
+
 ## Shell completion
 
 Bash can complete gorun's flags, Gorunfile paths, and the task, bundle, server, tag and group

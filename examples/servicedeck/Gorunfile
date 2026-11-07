@@ -1,0 +1,106 @@
+# Service Deck's Gorunfile: the actions the web app offers, as gorun tasks.
+#
+# For the demo every server is local (no [ssh] table) and every task only echoes and
+# sleeps, so it runs anywhere. For real servers, give each host an ssh table, drop
+# `local = true`, and swap the commands for the real ones shown in the comments.
+title = "Service Deck"
+
+# --- health -----------------------------------------------------------------------------
+[tasks.health]
+local = true
+description = "Check the service answers on /health"
+# real: curl -fsS --max-time 5 http://localhost:8080/health
+cmd_template = "sleep 0.5; sleep $JITTER; {{if eq .Name \"worker-2\"}}echo 'curl: (7) Failed to connect to localhost port 8080: Connection refused' >&2; exit 7{{else}}echo 'GET /health 200 OK in 14ms'{{end}}"
+
+# --- restart nginx ----------------------------------------------------------------------
+[tasks.nginx-config-test]
+local = true
+description = "Validate the nginx config before touching the service"
+# real: nginx -t
+cmd = "sleep 0.6; sleep $JITTER; echo 'nginx: configuration file /etc/nginx/nginx.conf test is successful'"
+sudo = false
+
+[tasks.restart-nginx]
+local = true
+description = "Reload nginx without dropping connections"
+# real: systemctl reload nginx && systemctl is-active nginx
+cmd = "sleep 0.8; sleep $JITTER; echo 'nginx.service: active (running)'"
+depends_on = ["nginx-config-test"]
+
+# --- deploy the API ---------------------------------------------------------------------
+[tasks.pull-image]
+local = true
+description = "Pull the release image"
+# real: docker pull ghcr.io/acme/api:${VERSION}
+cmd = "sleep 1.2; sleep $JITTER; echo 'ghcr.io/acme/api:2.4.0: Pull complete'"
+retries = 1
+
+[tasks.migrate]
+local = true
+description = "Run database migrations (safe to repeat)"
+# real: docker run --rm ghcr.io/acme/api:${VERSION} migrate up
+cmd = "sleep 0.7; sleep $JITTER; echo 'migrations: 2 applied, 0 pending'"
+depends_on = ["pull-image"]
+
+[tasks.restart-api]
+local = true
+description = "Restart the API on the new image"
+# real: systemctl restart api
+cmd = "sleep 0.9; sleep $JITTER; echo 'api.service: active (running) since now'"
+depends_on = ["migrate"]
+
+[tasks.deploy-api]
+local = true
+description = "Deploy API 2.4.0 and check it answers"
+# real: curl -fsS http://localhost:8080/version | grep 2.4.0
+cmd = "sleep 0.5; sleep $JITTER; echo 'GET /version -> 2.4.0'"
+depends_on = ["restart-api"]
+
+# --- logs -------------------------------------------------------------------------------
+[tasks.rotate-logs]
+local = true
+description = "Rotate and compress the service logs"
+# real: logrotate -f /etc/logrotate.d/app
+cmd = "sleep 0.6; sleep $JITTER; echo 'rotated 3 logs, freed 412M'"
+
+# --- the fleet --------------------------------------------------------------------------
+[server_groups.web]
+tags = ["web"]
+
+[server_groups.api]
+tags = ["api"]
+
+[server_groups.worker]
+tags = ["worker"]
+
+[servers.hosts.web-1]
+groups = ["web"]
+envvars = { JITTER = "0.1" }
+
+[servers.hosts.web-2]
+groups = ["web"]
+envvars = { JITTER = "0.4" }
+
+[servers.hosts.web-3]
+groups = ["web"]
+envvars = { JITTER = "0.2" }
+
+[servers.hosts.api-1]
+groups = ["api"]
+envvars = { JITTER = "0.3" }
+
+[servers.hosts.api-2]
+groups = ["api"]
+envvars = { JITTER = "0.0" }
+
+[servers.hosts.api-3]
+groups = ["api"]
+envvars = { JITTER = "0.5" }
+
+[servers.hosts.worker-1]
+groups = ["worker"]
+envvars = { JITTER = "0.2" }
+
+[servers.hosts.worker-2]
+groups = ["worker"]
+envvars = { JITTER = "0.3" }

@@ -12,6 +12,10 @@
   `listview.go` (`-list-*` trees), `historyview.go`, `plain.go` (`-plain`, used when stdout is not a
   terminal). `cmd/websrv` is the web server, `cmd/web/ui` the templ components,
   `internal/store` the sqlite history, `internal/nats` events, `internal/envvars` env access.
+- `examples/` holds programs built on the library (`servicedeck`, a web app; `rollout`, a CLI). Each
+  is its own module with `replace github.com/jenmud/gorun => ../..`, so root `go test ./...` skips
+  them; `make examples` vets and builds them (CI runs it). An API change that breaks them must fix
+  them too. Keep their `// docs:begin` / `// docs:end` markers: the website shows those regions.
 
 ## Commands
 

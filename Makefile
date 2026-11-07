@@ -1,4 +1,4 @@
-.PHONY: vendor test build-otel build-go build templ-gen web web-dev
+.PHONY: vendor test build-otel build-go build templ-gen web web-dev examples
 
 all: vendor build
 
@@ -8,6 +8,12 @@ vendor:
 
 test:
 	go test -race ./...
+
+# The library examples are modules of their own (examples/*/go.mod, built against this
+# checkout), so `go test ./...` above doesn't reach them.
+examples:
+	cd examples/rollout && go vet ./... && go build -o /dev/null .
+	cd examples/servicedeck && go vet ./... && go build -o /dev/null .
 
 
 build-otel:

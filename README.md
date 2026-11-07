@@ -114,6 +114,34 @@ gorun Gorunfile --dump-tasks ./tasks   # write each task as a runnable shell fil
 
 **Next:** the [tutorial](docs/tutorial.md) builds up a real deployment one step at a time.
 
+## Use it from Go
+
+Everything gorun does is in the `gorun` package, so your own tools can run Gorunfiles and follow
+every step through progress events:
+
+```bash
+go get github.com/jenmud/gorun@latest
+```
+
+```go
+var cfg gorun.Config
+if err := cfg.LoadFile("Gorunfile"); err != nil {
+	log.Fatal(err)
+}
+cfg.OnEvent = func(event any) { // called from one goroutine per server
+	if ev, ok := event.(gorun.TaskEvent); ok && ev.State != gorun.TaskRunning {
+		fmt.Printf("%s: %s exit %d\n", ev.Server, ev.Task, ev.ExitCode)
+	}
+}
+err := cfg.Run(context.Background())
+```
+
+[`examples/`](examples/README.md) has two complete apps built this way: **servicedeck**, a web app
+that manages services across a fleet with live progress in the browser, and **rollout**, a CLI
+that draws its own progress bars. The events and the rest of the API are in
+[Integrations](docs/integrations.md#using-gorun-as-a-go-library) and on
+[pkg.go.dev](https://pkg.go.dev/github.com/jenmud/gorun).
+
 ## Documentation
 
 | Read | To |
@@ -125,6 +153,7 @@ gorun Gorunfile --dump-tasks ./tasks   # write each task as a runnable shell fil
 | [Integrations](docs/integrations.md) | use the web UI, OpenTelemetry, NATS events, the Go library and shell completion |
 | [Reference](docs/reference.md) | look up any flag, Gorunfile key, environment variable or shortcut |
 | [Recipes](recipes/README.md) | try bigger examples against a lab of a hundred SSH servers |
+| [Examples](examples/README.md) | build your own tools on the Go library: a web app and a CLI with live progress |
 
 ## Development
 
@@ -134,6 +163,7 @@ make build                    # build the standard and instrumented binaries
 make up                       # start the example lab: a hundred SSH servers and NATS
 gorun recipes/Gorunfile -r    # run the lab starter
 make web-dev                  # the web UI with live reload
+make examples                 # vet and build the library examples
 ```
 
 The terminal screenshots are made by [`docs/screenshots/capture.sh`](docs/screenshots/capture.sh);

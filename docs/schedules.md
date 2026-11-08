@@ -49,7 +49,8 @@ timezone = "Europe/London"
 - **Cron plus one-off `at`.** Cron comes from `github.com/robfig/cron/v3`, the standard
   parser for this syntax.
 - **Scheduler in `-web` only.** It checks each minute and fires due runs through the same
-  path as the web UI's run button.
+  path as the web UI's run button. A plain CLI run (`gorun -r`) never fires schedules; it still
+  validates them when the file loads.
 - **Skip overlaps.** A run still going when the next one is due is skipped and logged.
 - **Library users can add schedules too.** The types and parsing live in the root package.
 

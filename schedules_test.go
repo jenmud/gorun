@@ -1,6 +1,7 @@
 package gorun
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -126,5 +127,47 @@ func TestScheduleNext(t *testing.T) {
 	}
 	if _, ok, _ := once.Next(at); ok {
 		t.Error("one-off schedule still due after its time")
+	}
+}
+
+// A plain run (the CLI's -r) ignores schedules: only the server task lists run.
+func TestScheduleIgnoredByRun(t *testing.T) {
+	c, err := loadTree(t, map[string]string{"Gorunfile": `
+[tasks.hello]
+cmd = "echo hello-ran"
+local = true
+
+[tasks.migrate]
+cmd = "echo MIGRATE-RAN"
+local = true
+
+[[schedule]]
+name = "maintenance"
+target = "migrate"
+at = "2026-12-01T02:00"
+
+[servers]
+tasks = ["hello"]
+
+[servers.hosts.localhost]
+`})
+	if err != nil {
+		t.Fatalf("LoadFile: %v", err)
+	}
+
+	ran := map[string]bool{}
+	c.OnEvent = func(event any) {
+		if ev, ok := event.(TaskEvent); ok && ev.State == TaskDone {
+			ran[ev.Task] = true
+		}
+	}
+	if err := c.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !ran["hello"] {
+		t.Error("the server's task did not run")
+	}
+	if ran["migrate"] {
+		t.Error("the scheduled target ran from a plain run")
 	}
 }

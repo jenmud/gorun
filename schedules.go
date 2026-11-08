@@ -18,6 +18,8 @@ const (
 // atLayout is the local time form of a one-off schedule's at value, read in its timezone.
 const atLayout = "2006-01-02T15:04"
 
+// Schedules only run inside the long-running web server, never in a plain CLI run, so a
+// one-off `gorun -r` does not fire them. Loading still validates them.
 // Schedule runs a target, a task or an "@bundle", on every server, either on a cron pattern
 // or once at a time. It is defined as [[schedule]] in a Gorunfile; docs/schedules.md
 // describes the design.

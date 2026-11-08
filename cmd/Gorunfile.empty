@@ -129,3 +129,18 @@ tags = ["dev"]
 #   identityfile = "~/.ssh/id_ed25519"
 #   password = ""                 # prefer identityfile
 #   config_file = "~/.ssh/config"
+
+#
+# Schedules: run a target (a task or "@bundle") on every server, on a cron pattern or once.
+# They are checked when the Gorunfile loads. The scheduler runs inside `gorun -web`.
+# See docs/schedules.md.
+#
+
+# [[schedule]]
+# name = "nightly-backup"         # unique across the Gorunfile and its includes
+# description = "Back up the databases"
+# target = "@base"                # a task, or "@bundle"
+# cron = "0 2 * * *"              # five fields, minute first; set cron or at, not both
+# at = "2026-12-01T02:00"         # or one time: RFC 3339, or "2006-01-02T15:04" in timezone
+# timezone = "Australia/Sydney"   # IANA name; default UTC
+# missed = "skip"                 # skip (default) or run: what to do with runs missed while paused or down

@@ -168,6 +168,9 @@ func tag(f *configFile, path string) {
 		g.Source = path
 		f.Groups[name] = g
 	}
+	for i := range f.Schedules {
+		f.Schedules[i].Source = path
+	}
 	for name, s := range f.Servers.Hosts {
 		s.Source = path
 		f.Servers.Hosts[name] = s
@@ -187,6 +190,7 @@ func (l *loader) claim(f configFile, path string) error {
 		{"task", keysOf(f.Tasks)},
 		{"bundle", keysOf(f.Bundles)},
 		{"server_group", keysOf(f.Groups)},
+		{"schedule", scheduleNames(f.Schedules)},
 		{"host", keysOf(f.Servers.Hosts)},
 		{"envvar", keysOf(f.EnvVars)},
 		{"var", keysOf(f.Vars)},
@@ -210,6 +214,7 @@ func (l *loader) merge(f configFile) {
 	putAll(&c.Tasks, f.Tasks)
 	putAll(&c.Bundles, f.Bundles)
 	putAll(&c.Groups, f.Groups)
+	c.Schedules = append(c.Schedules, f.Schedules...)
 	putAll(&c.EnvVars, f.EnvVars)
 	putAll(&c.Vars, f.Vars)
 }

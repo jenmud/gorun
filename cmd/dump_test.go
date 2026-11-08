@@ -52,7 +52,7 @@ func TestEmptyGorunfileDocumentsEveryKey(t *testing.T) {
 		"config": true, // config_file
 	}
 
-	for _, v := range []any{gorun.Config{}, gorun.Task{}, gorun.Copy{}, gorun.Bundle{}, gorun.ServerGroup{}, gorun.Server{}, gorun.SSH{}} {
+	for _, v := range []any{gorun.Config{}, gorun.Task{}, gorun.Copy{}, gorun.Bundle{}, gorun.ServerGroup{}, gorun.Schedule{}, gorun.Server{}, gorun.SSH{}} {
 		typ := reflect.TypeOf(v)
 		for i := range typ.NumField() {
 			key, _, _ := strings.Cut(typ.Field(i).Tag.Get("toml"), ",")

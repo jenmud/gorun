@@ -13,6 +13,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/kevinburke/ssh_config v1.6.0
 	github.com/nats-io/nats.go v1.55.0
+	github.com/robfig/cron/v3 v3.0.1
 	go.opentelemetry.io/otel/metric v1.44.0
 	golang.org/x/term v0.47.0
 	modernc.org/sqlite v1.61.0

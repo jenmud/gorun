@@ -81,6 +81,9 @@ type Config struct {
 	// Groups hold defaults shared by the servers that join them.
 	Groups map[string]ServerGroup `toml:"server_groups"`
 
+	// Schedules are the [[schedule]] tables, in file order; see docs/schedules.md.
+	Schedules []Schedule `toml:"schedule"`
+
 	// Servers are the [servers.hosts.<name>] tables, in the order they appear in the file.
 	Servers []Server `toml:"-"`
 

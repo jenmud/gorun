@@ -59,6 +59,12 @@ func (c *Config) validateLibrary() error {
 		}
 	}
 
+	for _, s := range c.Schedules {
+		if err := c.validateSchedule(s); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

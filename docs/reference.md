@@ -103,6 +103,8 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 
 **`[server_groups.<name>]`**: `tags`, `tasks`, `envvars`, `vars`, `log_level` and an `ssh` table.
 
+**`[[schedule]]`**: `name`, `target` (a task or `@bundle`), `cron` or `at`, `timezone` and `missed` (`skip` or `run`); [schedules](schedules.md).
+
 **`[servers]`**: `tasks`, the list every host runs.
 
 **`[servers.hosts.<name>]`**

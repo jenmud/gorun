@@ -485,6 +485,20 @@ Check the result with `gorun Gorunfile --list-servers`, or `--list-tasks` for th
 See [recipes/large-inventory](../recipes/large-inventory) for a complete example that splits tasks,
 groups and hosts across multiple files.
 
+## Schedules
+
+A `[[schedule]]` table runs a task or bundle on every server, on a cron pattern or once at a
+set time. The scheduler runs inside `gorun -web`. See [schedules](schedules.md) for the
+syntax, time zones and missed runs.
+
+```toml
+[[schedule]]
+name = "nightly-backup"
+target = "@backup"
+cron = "0 2 * * *"
+timezone = "Australia/Sydney"
+```
+
 ## How settings combine
 
 Settings are layered: global, then each group **in the order the server lists them**, then the
@@ -587,6 +601,12 @@ Every key, grouped by the table it belongs to. `gorun -dump` prints the same lis
 | `vars` | template variables (merged into the server) |
 | `log_level` | log level |
 | `[ssh]` | `username`, `port`, `identityfile`, `password`, `config_file` |
+
+### `[[schedule]]`
+
+`name` (required, unique), `description`, `target` (a task or `@bundle`, required), `cron`
+(five fields) or `at` (one time), `timezone` (IANA name, default UTC) and `missed` (`skip`,
+the default, or `run`). See [schedules](schedules.md).
 
 ### `[servers]`
 

@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/jenmud/gorun/internal/alerts"
 )
 
 // rootOnlyKeys can only be set in the root Gorunfile, so an included file can't change
@@ -213,7 +212,6 @@ func (l *loader) merge(f configFile) {
 	putAll(&c.Groups, f.Groups)
 	putAll(&c.EnvVars, f.EnvVars)
 	putAll(&c.Vars, f.Vars)
-	c.Alerts = append(c.Alerts, f.Alerts...)
 }
 
 // collectHosts keeps the file's servers in the order the file lists them.
@@ -237,9 +235,6 @@ func (l *loader) finish() error {
 
 	if c.MaxParallel < 0 {
 		return fmt.Errorf("error with loading config: max_parallel must not be negative")
-	}
-	if err := alerts.Validate(c.Alerts); err != nil {
-		return fmt.Errorf("error with loading config: %w", err)
 	}
 
 	// tasks, bundles, groups and servers are named by their table keys

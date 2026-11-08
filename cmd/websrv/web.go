@@ -109,7 +109,6 @@ func (a *app) routes() *http.ServeMux {
 	mux.HandleFunc("GET /tasks", a.tasksPage)
 	mux.HandleFunc("GET /bundles", a.bundlesPage)
 	mux.HandleFunc("GET /history", a.historyPage)
-	mux.HandleFunc("GET /alerts", a.alertsPage)
 	mux.HandleFunc("GET /history/{id}", a.historyDetail)
 	mux.HandleFunc("GET /history/{id}/task", a.taskDetail)
 	mux.HandleFunc("POST /runs/{id}/delete", a.deleteRun)
@@ -176,7 +175,6 @@ func (a *app) onEvent(m *nats.Msg) {
 		inats.UpdateDatabase(context.Background(), a.store, &ev)
 	}
 	if ev.Type == "process_finished" {
-		a.evaluateAlerts(context.Background(), ev.GorunUUID, !ev.Success)
 		a.pushStats(context.Background())
 	}
 	a.pushDashboard()

@@ -110,16 +110,6 @@ func (s *Store) migrate() error {
 			duration_ns INTEGER,
 			UNIQUE(run_id, server, name)
 		)`,
-		`CREATE TABLE IF NOT EXISTS alerts (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			rule TEXT,
-			run_id TEXT,
-			server TEXT,
-			name TEXT,
-			message TEXT,
-			created_at TEXT,
-			UNIQUE(rule, run_id, server, name)
-		)`,
 	}
 	for _, st := range stmts {
 		if _, err := s.db.Exec(st); err != nil {

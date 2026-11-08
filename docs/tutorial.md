@@ -17,7 +17,8 @@ The finished file is in [`tutorial/`](tutorial/Gorunfile), with its scripts and 
 7. [Name groups of tasks with bundles](#7-name-groups-of-tasks-with-bundles)
 8. [Regions, tags and exceptions](#8-regions-tags-and-exceptions)
 9. [Splitting large Gorunfiles (optional)](#9-splitting-large-gorunfiles-optional)
-10. [Everyday use](#10-everyday-use)
+10. [Schedule a task (preview)](#10-schedule-a-task-preview)
+11. [Everyday use](#11-everyday-use)
 
 You only need gorun [installed](../README.md#install). Steps 1 and 2 run on your own machine;
 from step 3 on you need a server you can `ssh` into.
@@ -424,7 +425,29 @@ organized and makes it easy to manage by role or region.
 
 For a complete example, see [`recipes/large-inventory`](../recipes/large-inventory).
 
-## 10. Everyday use
+## 10. Schedule a task (preview)
+
+A `[[schedule]]` table names a target, a task or a bundle, and when it should run. Add one to the
+file:
+
+```toml
+[[schedule]]
+name = "nightly-check"
+description = "Read-only checks every night"
+target = "@check"
+cron = "0 2 * * *"                # minute hour day month weekday
+timezone = "Australia/Sydney"     # the clock the fields are read in; omit for UTC
+missed = "skip"                   # or "run": what to do with runs missed while paused or down
+```
+
+For a one-off run, use `at = "2026-12-01T02:00"` instead of `cron`. Set one of them, not both.
+
+The file is checked as it loads, so a bad schedule stops gorun with a message that names it.
+The scheduler that fires schedules is not in this release yet. Until it is, run the same target
+from cron with `gorun Gorunfile --run --task @check`. The full syntax is in
+[Schedules](schedules.md).
+
+## 11. Everyday use
 
 ```bash
 gorun Gorunfile                                    # pick servers and tasks, then run

@@ -119,6 +119,9 @@ In the verbose view the failed task is marked ✗ and opens by itself:
 need it: with no terminal there is no picker, so gorun stops with an error rather than run
 anything you didn't ask for.
 
+For a timetable, see [schedules](schedules.md). The scheduler is still in progress, so for now run
+`gorun -r` from cron.
+
 When the output isn't a terminal, or with `--plain`, gorun prints plain lines: the plan, then one
 line per finished task, with the end of stderr for failures. Add `-v` to print every task's
 output.

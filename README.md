@@ -57,6 +57,9 @@ each server's progress live.
   direct editing of file-backed commands.
 - **History.** Past runs are saved with commands and output; expanded servers list tasks slowest
   first.
+- **Schedules (preview).** A `[[schedule]]` names a task or bundle and a cron pattern or one-off
+  time, in any time zone. The file is checked as it loads; the scheduler that fires them is still
+  in progress.
 **When to use something else:** gorun runs commands; it doesn't enforce state. It has no modules,
 facts, drift detection, dry runs, dynamic inventories or secrets vault. For that, use Ansible,
 Salt, Puppet or Nix.
@@ -149,6 +152,7 @@ that draws its own progress bars. The events and the rest of the API are in
 | [Website](https://go-run.dev) | an overview of gorun, with the docs and a playground to try a Gorunfile in your browser |
 | [Tutorial](docs/tutorial.md) | learn gorun step by step, from hello world to a full deployment |
 | [The Gorunfile](docs/gorunfile.md) | understand every option: tasks, copies, secrets, servers, bundles, groups |
+| [Schedules](docs/schedules.md) | run a task or bundle on a cron pattern or at a set time, in any time zone |
 | [Running gorun](docs/running.md) | use the picker, the live view, filters, CI mode and the history |
 | [Integrations](docs/integrations.md) | use the web UI, OpenTelemetry, NATS events, the Go library and shell completion |
 | [Reference](docs/reference.md) | look up any flag, Gorunfile key, environment variable or shortcut |

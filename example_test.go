@@ -41,3 +41,30 @@ depends_on = ["hello"]
 	// hello: hello
 	// goodbye: goodbye
 }
+
+// Start the schedules in a Gorunfile, then pause one and skip the next run of another.
+func ExampleNewScheduler() {
+	var cfg gorun.Config
+	if err := cfg.LoadFile("Gorunfile"); err != nil {
+		log.Fatal(err)
+	}
+
+	s := gorun.NewScheduler(&cfg, func(ev gorun.ScheduleEvent) {
+		log.Printf("%s %s %s", ev.Schedule, ev.Kind, ev.Reason)
+	})
+	if err := s.Start(context.Background()); err != nil {
+		log.Fatal(err)
+	}
+	defer s.Stop()
+
+	// hold the nightly backup while the database is moved, and cancel tonight's check
+	if err := s.Pause("nightly-backup"); err != nil {
+		log.Fatal(err)
+	}
+	if err := s.Skip("hourly-check"); err != nil {
+		log.Fatal(err)
+	}
+	for _, st := range s.Status() {
+		fmt.Printf("%s paused=%v next=%v\n", st.Name, st.Paused, st.Next)
+	}
+}

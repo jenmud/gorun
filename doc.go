@@ -75,6 +75,14 @@
 // [Config.RunLocal] runs tasks on this machine without any SSH server; only tasks marked
 // local = true run there. [LocalServer] and [Config.LocalServer] give a [Server] that runs locally.
 //
+// # Schedules
+//
+// [NewScheduler] fires a config's [Schedule]s as they come due. Nothing runs until [Scheduler.Start],
+// so a plain run never fires them. [Scheduler.Pause] holds a schedule's runs, [Scheduler.Resume]
+// lifts the pause and applies the schedule's missed setting, and [Scheduler.Skip] cancels only the
+// next occurrence. [Scheduler.Status] reports each schedule, and every decision is sent to the
+// callback as a [ScheduleEvent].
+//
 // # Events
 //
 // Set [Config.OnEvent] to follow a run as it happens. It receives a [ProcessStartedEvent], a

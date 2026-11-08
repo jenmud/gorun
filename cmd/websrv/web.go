@@ -38,6 +38,7 @@ type app struct {
 	cfg     *gorun.Config                 // the loaded config, for the editor
 	pending []gorun.Change                // unsaved editor changes
 	runs    map[string]context.CancelFunc // runs started from this page, by UUID
+	sched   *gorun.Scheduler              // fires the loaded Gorunfile's schedules, if any
 }
 
 // Run starts the web server on GORUN_ADDRESS (default :8080). configPath, when set, is the
@@ -82,6 +83,7 @@ func Run(configPath string) {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	defer a.stopScheduler()
 
 	srv := &http.Server{Addr: addr, Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second}
 	go func() {

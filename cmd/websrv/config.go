@@ -1,8 +1,11 @@
 package websrv
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log"
+	"log/slog"
 	"maps"
 	"net/http"
 	"net/url"
@@ -44,7 +47,38 @@ func (a *app) loadConfig(path string) error {
 	a.cfgPath = cfg.Path
 	a.pending = nil
 	a.mu.Unlock()
+	a.startScheduler(cfg)
 	return nil
+}
+
+// startScheduler replaces the running scheduler with one for cfg's schedules. The web
+// server is the long-running host, so this is the only place a scheduler is started.
+func (a *app) startScheduler(cfg *gorun.Config) {
+	a.stopScheduler()
+	if len(cfg.Schedules) == 0 {
+		return
+	}
+	s := gorun.NewScheduler(cfg, func(ev gorun.ScheduleEvent) {
+		slog.Info("schedule", "schedule", ev.Schedule, "kind", ev.Kind, "at", ev.At, "reason", ev.Reason)
+	})
+	if err := s.Start(context.Background()); err != nil {
+		log.Printf("gorun web: scheduler: %v", err)
+		return
+	}
+	a.mu.Lock()
+	a.sched = s
+	a.mu.Unlock()
+}
+
+// stopScheduler stops the running scheduler, if there is one.
+func (a *app) stopScheduler() {
+	a.mu.Lock()
+	s := a.sched
+	a.sched = nil
+	a.mu.Unlock()
+	if s != nil {
+		s.Stop()
+	}
 }
 
 // expandHome replaces a leading ~/ with the home folder.

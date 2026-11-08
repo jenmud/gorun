@@ -152,6 +152,13 @@ across a fleet and streams every server's progress to the browser;
 [`examples/rollout`](../examples/rollout) is a CLI that draws its own progress bars. See
 [examples/README.md](../examples/README.md).
 
+### Schedules
+
+`gorun.NewScheduler` fires a config's `[[schedule]]` tables. It does nothing until `Start`, so
+calling it is how a program opts in. `Pause`, `Resume`, `Skip` and `Status` control each schedule,
+and every decision goes to the callback. State is in memory: pauses and skips are lost when the
+process exits. See [schedules](schedules.md).
+
 ## Shell completion
 
 Bash can complete gorun's flags, Gorunfile paths, and the task, bundle, server, tag and group

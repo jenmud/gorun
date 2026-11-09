@@ -142,14 +142,18 @@ cfg.OnEvent = func(event any) { // called from one goroutine per server
 err := cfg.Run(context.Background())
 ```
 
-To save runs, and list, read or delete them later, use the `history` package. It writes to the
-same database as the CLI and web UI, so your program's runs show up there too:
+To save runs, set `Config.Recorder`. The `history` package's store is a recorder that writes to
+the same database as the CLI and web UI, so your program's runs show up there too, and it reads
+them back:
 
 ```go
 h, _ := history.Open(history.DefaultPath())
-cfg.OnEvent = h.Recorder(nil) // or h.Recorder(yourHandler) to keep your own events too
-runs, _ := h.Runs(ctx)        // newest first; also Run, Task, Delete and Keep
+cfg.Recorder = h       // saves every event; OnEvent stays free for your own handler
+runs, _ := h.Runs(ctx) // newest first; also Run, Task, Delete and Keep
 ```
+
+Any type with a `Record(event any)` method is a `gorun.Recorder`, so runs can go to your own
+database, a log or a queue instead.
 
 [`examples/`](examples/README.md) has two complete apps built this way: **servicedeck**, a web app
 that manages services across a fleet with live progress in the browser, and **rollout**, a CLI

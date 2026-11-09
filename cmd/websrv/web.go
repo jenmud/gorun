@@ -198,6 +198,24 @@ func (a *app) onEvent(m *nats.Msg) {
 	a.applyEvent(m.Data)
 }
 
+// Record saves one run event to the history database and the live dashboard, as the NATS
+// handler does for events it receives: the web service is a gorun.Recorder.
+func (a *app) Record(event any) {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return
+	}
+	a.applyEvent(data)
+	// a server error's message doesn't survive JSON (an error marshals as {}), so it is saved directly
+	if e, ok := event.(gorun.ServerErrorEvent); ok && e.Err != nil && a.store != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = a.store.SetServerError(ctx, e.GorunUUID, e.Server, e.Err.Error())
+	}
+}
+
+var _ gorun.Recorder = (*app)(nil)
+
 // applyEvent applies one run event, as JSON, to the dashboard and the history, then pushes the
 // change to every open page. NATS delivers events this way; so do scheduled runs when NATS is
 // down, so their history and live view don't depend on NATS.

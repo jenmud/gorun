@@ -85,9 +85,11 @@
 //
 // # History
 //
-// The [github.com/jenmud/gorun/history] package saves runs to the SQLite database the gorun CLI
-// and web UI use, and reads them back: list runs, open one with its tasks and output, delete runs
-// or keep only the newest. Set Config.OnEvent to the store's Recorder to save a run.
+// Set [Config.Recorder] to keep a run's events: a [Recorder] receives every event, alongside
+// OnEvent. The [github.com/jenmud/gorun/history] package's Store is a Recorder that saves runs to
+// the SQLite database the gorun CLI and web UI use, and reads them back: list runs, open one with
+// its tasks and output, delete runs or keep only the newest. [RecorderFunc] turns a function into
+// a Recorder, to keep runs anywhere else.
 //
 // # Events
 //

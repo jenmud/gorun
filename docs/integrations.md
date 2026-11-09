@@ -152,9 +152,11 @@ across a fleet and streams every server's progress to the browser;
 
 ### History
 
-The library doesn't save runs by itself. The `history` package does: it writes to the same
-SQLite database as the CLI and the web UI, so runs from your program show in `gorun -history`
-and `gorun -web` too, and reads them back so you can show history without the web UI.
+The library doesn't save runs by itself: it hands every event to `Config.Recorder`, a
+`gorun.Recorder` with one method, `Record(event any)`. The `history` package's store is one. It
+writes to the same SQLite database as the CLI and the web UI, so runs from your program show in
+`gorun -history` and `gorun -web` too, and it reads them back so you can show history without the
+web UI. The CLI and the web UI record their own runs through the same interface.
 
 ```go
 h, err := history.Open(history.DefaultPath()) // GORUN_DB_PATH, or ~/.gorun/gorun.db
@@ -163,7 +165,8 @@ if err != nil {
 }
 defer h.Close()
 
-cfg.OnEvent = h.Recorder(myHandler) // save every event, then pass it to myHandler (or nil)
+cfg.Recorder = h        // save every event
+cfg.OnEvent = myHandler // still gets every event, for your own progress display
 err = cfg.Run(ctx)
 
 runs, _ := h.Runs(ctx)                           // newest first
@@ -175,6 +178,17 @@ _ = h.Keep(ctx, 50)                              // only the newest 50
 
 `Run` and `Task` return an error wrapping `history.ErrNotFound` when nothing was saved under that
 name. A `Task`'s `State` holds a `gorun.TaskState` value.
+
+To keep runs somewhere else, write your own recorder. `Record` is called from one goroutine per
+server, so it must be safe for concurrent use:
+
+```go
+cfg.Recorder = gorun.RecorderFunc(func(event any) {
+	if ev, ok := event.(gorun.ProcessFinishedEvent); ok {
+		metrics.RunFinished(ev.Success, ev.Duration) // your own store, queue or metrics
+	}
+})
+```
 
 ### Schedules
 

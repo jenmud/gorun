@@ -2,6 +2,7 @@ package websrv
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"os"
@@ -215,12 +216,12 @@ func statusOf(a *app, name string) string {
 // Without NATS, a scheduled run's events still reach the history.
 func TestScheduledRunsReachHistoryWithoutNATS(t *testing.T) {
 	a := loadSchedules(t)
-	if a.cfg.OnEvent == nil {
+	if a.cfg.Recorder == nil {
 		t.Fatal("no path for scheduled run events when NATS is down")
 	}
 	now := time.Now()
-	a.cfg.OnEvent(gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "sched-1", Title: "datatime", Servers: []string{"localhost"}, StartedAt: now, Hostname: "h", PID: 1})
-	a.cfg.OnEvent(gorun.ProcessFinishedEvent{Type: "process_finished", GorunUUID: "sched-1", Success: true, TotalTasks: 1, FinishedAt: now})
+	a.cfg.Recorder.Record(gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "sched-1", Title: "datatime", Servers: []string{"localhost"}, StartedAt: now, Hostname: "h", PID: 1})
+	a.cfg.Recorder.Record(gorun.ProcessFinishedEvent{Type: "process_finished", GorunUUID: "sched-1", Success: true, TotalTasks: 1, FinishedAt: now})
 
 	runs, err := a.store.ListRuns(context.Background())
 	if err != nil {
@@ -267,5 +268,20 @@ func TestScheduleNamesMayHaveSpacesAndDots(t *testing.T) {
 	}
 	if err := validName(kindTask, "two words"); err == nil {
 		t.Error("a task name with a space was accepted")
+	}
+}
+
+// The web service records a server's error message, which doesn't survive the JSON round trip.
+func TestWebRecorderKeepsServerErrors(t *testing.T) {
+	a := loadSchedules(t)
+	now := time.Now()
+	a.Record(gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "r-err", Title: "t", Servers: []string{"web-1"}, StartedAt: now})
+	a.Record(gorun.ServerErrorEvent{Type: "server_error", GorunUUID: "r-err", Server: "web-1", Err: errors.New("ssh: connection refused")})
+	detail, err := a.store.GetRun(context.Background(), "r-err")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := detail.ServerErrors["web-1"]; got != "ssh: connection refused" {
+		t.Errorf("server error = %q", got)
 	}
 }

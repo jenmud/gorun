@@ -22,7 +22,7 @@ import (
 
 	"github.com/jenmud/gorun"
 	web "github.com/jenmud/gorun/cmd/websrv"
-	"github.com/jenmud/gorun/internal/store"
+	"github.com/jenmud/gorun/history"
 )
 
 var version = "0.1.0"
@@ -413,18 +413,11 @@ func main() {
 		fmt.Printf("%s: %s\n", server.Name, strings.Join(names, " -> "))
 	}
 
-	st, _ := store.Open(getHistoryDBPath())
-	defer func() {
-		if st != nil {
-			_ = st.Close()
-		}
-	}()
-
 	printer := &plainPrinter{w: os.Stdout, verbose: *verbose}
-
-	cfg.OnEvent = func(event any) {
-		printer.event(event)
-		recordEvent(ctx, st, event)
+	cfg.OnEvent = printer.event
+	if h, err := history.Open(getHistoryDBPath()); err == nil {
+		defer func() { _ = h.Close() }()
+		cfg.Recorder = h
 	}
 
 	if err := cfg.Run(ctx); err != nil {

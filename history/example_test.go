@@ -21,7 +21,7 @@ func Example() {
 	if err := cfg.LoadFile("Gorunfile"); err != nil {
 		log.Fatal(err)
 	}
-	cfg.OnEvent = h.Recorder(nil) // or h.Recorder(yourOwnHandler) to keep both
+	cfg.Recorder = h // OnEvent stays free for your own handler
 	if err := cfg.Run(context.Background()); err != nil {
 		log.Print(err)
 	}

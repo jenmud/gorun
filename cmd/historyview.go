@@ -1324,9 +1324,10 @@ func getHistoryDBPath() string {
 				p = filepath.Join(home, p[1:])
 			}
 		}
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
+		// a path given in GORUN_DB_PATH is used even before it exists, as the web UI and the
+		// history package do, so they all read and write the same file
+		_ = os.MkdirAll(filepath.Dir(p), 0o755)
+		return p
 	}
 	if _, err := os.Stat("gorun.db"); err == nil {
 		return "gorun.db"

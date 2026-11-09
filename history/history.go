@@ -1,6 +1,7 @@
 // Package history saves gorun runs to a SQLite database and reads them back. It is the same
-// history the gorun CLI and web UI keep, so a program built on the library can record its runs,
-// show them, and have them appear in `gorun -history` and `gorun -web` too.
+// history the gorun CLI and web UI keep, so a program built on the library can record its runs
+// (set Config.Recorder to a Store), show them, and have them appear in `gorun -history` and
+// `gorun -web` too. To keep runs somewhere else, write your own gorun.Recorder instead.
 package history
 
 import (
@@ -31,13 +32,16 @@ type RunDetail = store.RunDetail
 // Task is one task on one server in a saved run. State holds a gorun.TaskState value.
 type Task = store.TaskDetail
 
+var _ gorun.Recorder = (*Store)(nil)
+
 // ErrNotFound is returned by Run and Task when nothing was saved under that name.
 var ErrNotFound = errors.New("history: not found")
 
 // writeTimeout bounds each save, so a stuck database never holds up a run.
 const writeTimeout = 5 * time.Second
 
-// Store is an open history database. It is safe for concurrent use.
+// Store is an open history database. It is a gorun.Recorder, so it can be set as
+// Config.Recorder to save runs, and it is safe for concurrent use.
 type Store struct {
 	mu sync.Mutex // keeps a run's events in the order they arrived
 	st *store.Store
@@ -76,8 +80,8 @@ func (s *Store) Close() error {
 	return s.st.Close()
 }
 
-// Record saves one run event, as Config.OnEvent receives it. Events of any other type are
-// ignored. Saves use their own short deadline, so the end of a cancelled run is still recorded.
+// Record saves one run event, as Config.Recorder receives it. Values that aren't gorun events
+// are ignored. Saves use their own short deadline, so the end of a cancelled run is still recorded.
 func (s *Store) Record(event any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -100,19 +104,6 @@ func (s *Store) Record(event any) {
 		return
 	}
 	inats.UpdateDatabase(ctx, s.st, &ev)
-}
-
-// Recorder returns an OnEvent callback that saves each event, then passes it on to next when
-// next is not nil:
-//
-//	cfg.OnEvent = h.Recorder(showProgress)
-func (s *Store) Recorder(next func(event any)) func(event any) {
-	return func(event any) {
-		s.Record(event)
-		if next != nil {
-			next(event)
-		}
-	}
 }
 
 // Runs lists every saved run, newest first.

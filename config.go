@@ -95,6 +95,9 @@ type Config struct {
 	// OnEvent, when set, receives the events in events.go as tasks run.
 	OnEvent func(event any) `toml:"-"`
 
+	// Recorder, when set, also receives every event, to keep it as history or anywhere else.
+	Recorder Recorder `toml:"-"`
+
 	// SelectedTasks, when non-empty, limits execution to these tasks (and their
 	// dependencies). Bundle references ("@name") are expanded. Used by the --task CLI flag.
 	SelectedTasks []string `toml:"-"`
@@ -1057,11 +1060,14 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 	return nil
 }
 
-// emit sends an event to the OnEvent callback, if one is set, and publishes it
-// to NATS when a publisher is available.
+// emit sends an event to the OnEvent callback and the Recorder, if they are set, and publishes
+// it to NATS when a publisher is available.
 func (c *Config) emit(event any) {
 	if c.OnEvent != nil {
 		c.OnEvent(event)
+	}
+	if c.Recorder != nil {
+		c.Recorder.Record(event)
 	}
 
 	if publisher != nil {

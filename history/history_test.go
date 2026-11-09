@@ -36,10 +36,11 @@ func runOnce(t *testing.T, h *history.Store) string {
 		t.Fatal(err)
 	}
 	var seen atomic.Int32
-	cfg.OnEvent = h.Recorder(func(any) { seen.Add(1) })
+	cfg.OnEvent = func(any) { seen.Add(1) } // OnEvent still gets every event alongside the recorder
+	cfg.Recorder = h
 	_ = cfg.Run(context.Background()) // the broken task fails the run on purpose
 	if seen.Load() == 0 {
-		t.Fatal("the next callback got no events")
+		t.Fatal("OnEvent got no events with a recorder set")
 	}
 	return cfg.GorunUUID
 }
@@ -142,5 +143,26 @@ func TestDefaultPathFollowsGORUN_DB_PATH(t *testing.T) {
 	t.Setenv("GORUN_DB_PATH", "")
 	if got := history.DefaultPath(); !strings.HasSuffix(got, filepath.Join(".gorun", "gorun.db")) {
 		t.Errorf("DefaultPath = %q, want ~/.gorun/gorun.db", got)
+	}
+}
+
+// A Recorder of your own receives the same events, so runs can be kept anywhere.
+func TestACustomRecorderGetsEveryEvent(t *testing.T) {
+	var cfg gorun.Config
+	if err := cfg.Load(strings.NewReader(gorunfile)); err != nil {
+		t.Fatal(err)
+	}
+	var started, finished atomic.Int32
+	cfg.Recorder = gorun.RecorderFunc(func(event any) {
+		switch event.(type) {
+		case gorun.ProcessStartedEvent:
+			started.Add(1)
+		case gorun.ProcessFinishedEvent:
+			finished.Add(1)
+		}
+	})
+	_ = cfg.Run(context.Background())
+	if started.Load() != 1 || finished.Load() != 1 {
+		t.Errorf("custom recorder saw %d starts and %d finishes, want 1 each", started.Load(), finished.Load())
 	}
 }

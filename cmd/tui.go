@@ -16,7 +16,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/jenmud/gorun"
-	"github.com/jenmud/gorun/internal/store"
+	"github.com/jenmud/gorun/history"
 )
 
 var (
@@ -1197,21 +1197,23 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 	defer drainTerminalInput()
 	p := tea.NewProgram(newTUIModel(cfg.Title, verbose, cancel), tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1")))
 
-	st, _ := store.Open(getHistoryDBPath())
-	defer func() {
-		if st != nil {
-			_ = st.Close()
-		}
-	}()
+	h, herr := history.Open(getHistoryDBPath())
+	if herr == nil {
+		defer func() { _ = h.Close() }()
+	}
 
+	// the recorder hands events to a goroutine that saves them, so database writes never slow the run
 	recordCh := make(chan any, 4096)
 	recordDone := make(chan struct{})
 	go func() {
 		for ev := range recordCh {
-			recordEvent(ctx, st, ev)
+			if herr == nil {
+				h.Record(ev)
+			}
 		}
 		close(recordDone)
 	}()
+	cfg.Recorder = gorun.RecorderFunc(func(event any) { recordCh <- event })
 
 	// Batch events instead of forwarding every one to the TUI: a large run can
 	// emit tens of thousands of events, and handling them one at a time (with a
@@ -1244,7 +1246,6 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 	}
 
 	cfg.OnEvent = func(event any) {
-		recordCh <- event
 		batchMu.Lock()
 		batch = append(batch, event)
 		batchMu.Unlock()

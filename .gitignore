@@ -47,3 +47,8 @@ builds
 dist/
 gorun_bin
 .superpowers/
+
+# binaries from `go build` in the example and recipe modules
+/examples/rollout/rollout
+/examples/servicedeck/servicedeck
+/recipes/local-run/local-run

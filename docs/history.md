@@ -102,12 +102,13 @@ ProcessStartedEvent                      once, first
 PlanEvent                                once per server, all of them before any task starts
 ServerErrorEvent                         instead of tasks, when a server can't run at all
 TaskEvent  running                       when a task starts, and again for each retry
+CopyProgressEvent                        while a running task copies a file or directory
 TaskEvent  done | failed | skipped       once per task, when it finishes
 ProcessFinishedEvent                     once, last, after every server has finished
 ```
 
-Server errors and task events for different servers interleave. For one task, the running events come before its final
-event. `ProcessFinishedEvent` is always sent, even when tasks fail or the run is cancelled, so a
+Server errors and task events for different servers interleave. For one task, the running events come before its
+copy progress, and both come before its final event. `ProcessFinishedEvent` is always sent, even when tasks fail or the run is cancelled, so a
 recorder can rely on it to close a run off.
 
 ## The events
@@ -167,6 +168,39 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
 
 A server with this error runs no tasks. It fails the run, and its planned tasks count as failed in
 `ProcessFinishedEvent`.
+
+### `CopyProgressEvent` (`copy_progress`)
+
+Sent while a task copies a `src` file or directory to its server, so you can show an upload's
+progress.
+
+| Field | Meaning |
+|---|---|
+| `Server`, `Task` | which task is copying, on which server |
+| `File` | where the copy goes on the server, as the task's `dst` (or `dir`) names it |
+| `Bytes`, `Total` | bytes sent so far, out of the total; for a directory, the size of every file in it |
+| `Percent` | `Bytes` as a percentage of `Total`, from 0 to 100 |
+| `BytesPerSecond` | the average upload rate so far |
+| `Elapsed` | how long the copy has been running |
+| `Done` | true on the last event for this copy, once the server has confirmed every byte |
+
+- One event is sent at 0% as the copy starts, then at most one every quarter of a second, then one
+  with `Done` set. A task with two copies sends a series for each, one after the other.
+- A copy that fails or is cancelled sends no `Done` event; the task's failed event follows.
+- `content` and `src_template` copies send none.
+- They come often, so the built-in SQLite recorder doesn't save them. A recorder that writes each
+  event somewhere slow may want to skip them, or keep only the `Done` ones.
+
+```go
+cfg.OnEvent = func(event any) {
+	if ev, ok := event.(gorun.CopyProgressEvent); ok && !ev.Done {
+		fmt.Printf("%s: %s %.0f%%\n", ev.Server, ev.File, ev.Percent)
+	}
+}
+```
+
+To copy files from your own code, outside a run, `gorun.CopyFilesContext` takes a context and a
+`func(gorun.CopyProgress)` that gets the same progress.
 
 ### `ProcessFinishedEvent` (`process_finished`)
 

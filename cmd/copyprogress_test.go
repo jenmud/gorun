@@ -59,13 +59,13 @@ func TestPlainPrintsCopyProgressEveryTenPercent(t *testing.T) {
 	}
 }
 
-func TestPlainSmallCopyPrintsOnlyDone(t *testing.T) {
+func TestPlainSmallCopyPrintsNothing(t *testing.T) {
 	var buf bytes.Buffer
 	p := &plainPrinter{w: &buf}
 	p.event(gorun.CopyProgressEvent{Server: "web-1", Task: "conf", File: "/etc/app.conf", Total: 300})
 	p.event(gorun.CopyProgressEvent{Server: "web-1", Task: "conf", File: "/etc/app.conf", Bytes: 300, Total: 300, Percent: 100, Done: true})
-	if got := strings.TrimSpace(buf.String()); !strings.HasPrefix(got, "web-1: conf sent app.conf (300 B in") || strings.Contains(got, "\n") {
-		t.Fatalf("output = %q, want one done line", got)
+	if got := buf.String(); got != "" {
+		t.Fatalf("output = %q, want nothing for a small copy", got)
 	}
 }
 

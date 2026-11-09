@@ -125,6 +125,13 @@ func (p *progress) onEvent(event any) {
 			r.done++
 		}
 
+	case gorun.CopyProgressEvent: // a task is uploading a file or directory
+		r := p.servers[ev.Server]
+		r.note = ""
+		if !ev.Done {
+			r.note = fmt.Sprintf("↑ %s %.0f%% of %.0f MB", filepath.Base(ev.File), ev.Percent, float64(ev.Total)/(1<<20))
+		}
+
 	case gorun.ServerErrorEvent: // the server couldn't run at all (e.g. SSH refused)
 		r := p.servers[ev.Server]
 		r.failed, r.finished, r.note = true, true, clip(fmt.Sprint(ev.Err), 32)

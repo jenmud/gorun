@@ -19,7 +19,8 @@ The finished file is in [`tutorial/`](tutorial/Gorunfile), with its scripts and 
 9. [Splitting large Gorunfiles (optional)](#9-splitting-large-gorunfiles-optional)
 10. [Run jobs on a schedule](#10-run-jobs-on-a-schedule)
 11. [Share tasks with other Gorunfiles](#11-share-tasks-with-other-gorunfiles)
-12. [Everyday use](#12-everyday-use)
+12. [Upload big files (optional)](#12-upload-big-files-optional)
+13. [Everyday use](#13-everyday-use)
 
 You only need gorun [installed](../README.md#install). Steps 1 and 2 run on your own machine;
 from step 3 on you need a server you can `ssh` into.
@@ -514,7 +515,45 @@ The [task library recipe](../recipes/06-task-library/README.md) does this with a
 can run on your own machine. [Tasks from a git repository](gorunfile.md#tasks-from-a-git-repository)
 has every rule.
 
-## 12. Everyday use
+## 12. Upload big files (optional)
+
+Servers that can't reach your registry need the app's image brought to them. Save it to a file
+and copy it like any other file; gorun streams it, so a few gigabytes is fine. This step isn't in
+the finished `tutorial/Gorunfile`, because it needs an image file to exist first.
+
+```bash
+docker save myapp:2.4.0 -o build/myapp-image.tar
+```
+
+```toml
+[tasks.app-image]
+description = "Ship the app's image to servers that can't reach the registry"
+cmd = "docker load -i /tmp/myapp-image.tar && rm /tmp/myapp-image.tar"
+sudo = true
+depends_on = ["docker-install"]
+[[tasks.app-image.copy]]
+src = "./build/myapp-image.tar"
+dst = "/tmp/myapp-image.tar"
+```
+
+Run it, and each server shows its upload as it goes: the percentage, how much has been sent and
+how fast. Slow links are easy to spot, because their bars fall behind:
+
+```bash
+gorun Gorunfile --run --task app-image
+```
+
+![gorun uploading to three servers at different speeds](screenshot-upload.png)
+
+Press **v** for a row per task, with its own bar. `gorun -web` shows the same under the running
+task, and `--plain` prints a line about every 10%, so CI logs show it too. Ctrl-C stops the
+uploads where they are. See [upload progress](gorunfile.md#upload-progress) for the details.
+
+> [!TIP]
+> Copying a whole directory (`src = "./build/site"`) shows one bar for all of it, counting every
+> file.
+
+## 13. Everyday use
 
 ```bash
 gorun Gorunfile                                    # pick servers and tasks, then run

@@ -187,7 +187,50 @@ Good to know:
   permissions.
 - A directory copy creates the target and its parents, leaves other files alone and follows
   symlinks. For a single file, the parent directory must already exist.
-- Each file is read into memory, which is fine for configs and scripts but not for large trees.
+- Files from `src` are streamed, so a multi-gigabyte release is fine. `src_template` and
+  `content` are built in memory, which suits configs and scripts.
+- Stopping a run (Ctrl-C, **Stop** in the web UI, or a task's `timeout`) stops a copy part way.
+
+#### Upload progress
+
+A `src` copy, of a file or a whole directory, shows how far it has got while it runs: the
+percentage, the bytes sent and the upload rate. A directory counts every file in it.
+
+```toml
+[tasks.upload-release]
+description = "Upload the release"
+[[tasks.upload-release.copy]]
+src = "build/release.tar.gz"      # 1 GB
+dst = "/srv/app/releases/v2.4.0/release.tar.gz"
+```
+
+The terminal shows a bar on the server's line, and on the task's row in the verbose view:
+
+![The gorun TUI uploading a 1 GB release to three servers](screenshot-upload.png)
+
+![The verbose view: each server's upload-release row has its own bar](screenshot-upload-verbose.png)
+
+`gorun -web` shows a bar under the running task, and the upload on a closed server's line:
+
+![The web dashboard uploading the release](screenshot-web-upload.png)
+
+With `--plain` (CI logs), gorun prints a line as a large copy starts, about every 10%, and when it
+is done:
+
+```
+web-1: upload-release sending release.tar.gz (1.0 GB)
+web-1: upload-release sending release.tar.gz 10% (104.2 MB / 1.0 GB · 59.8 MB/s)
+...
+web-1: upload-release sent release.tar.gz (1.0 GB in 17.1s, 59.9 MB/s)
+```
+
+The progress is what has been sent over the SSH connection. SSH only lets a few megabytes be in
+flight before the server reads them, so on a slow link the bar moves at the speed the server is
+receiving. A copy is done only once the server has confirmed every byte. Copies of `content` and
+`src_template` are small and show no progress.
+
+Programs using the library get the same progress as a
+[`CopyProgressEvent`](history.md#copyprogressevent-copy_progress).
 
 ### Dependencies
 

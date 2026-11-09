@@ -14,6 +14,7 @@ the demo docker lab in `recipes/docker-compose.yml`.
 7. `local-run` - Go library example: run tasks on the local machine with `RunLocal`.
 8. `05-scheduled-jobs` - schedules on this machine: cron, a one-off time, missed runs, and the Schedules page in `gorun -web`.
 9. `06-task-library` - a Gorunfile with no tasks of its own: it includes a shared task library from git, pinned to a commit.
+10. `07-big-upload` - upload a 1 GB release and a folder of 200 files to three servers, with a progress bar per upload. Run `07-big-upload/make-files.sh` first.
 
 ## One-time: allow docker access
 
@@ -40,6 +41,7 @@ gorun recipes/04-dev-server/Gorunfile -r
 gorun recipes/large-inventory/Gorunfile -r
 gorun recipes/05-scheduled-jobs/Gorunfile -r        # a plain run; schedules need -web
 gorun recipes/06-task-library/Gorunfile -r          # tasks fetched from git (needs network once)
+recipes/07-big-upload/make-files.sh && gorun recipes/07-big-upload/Gorunfile -r  # upload progress
 ```
 
 ## Tear down

@@ -70,9 +70,12 @@ func (p *plainPrinter) event(event any) {
 	}
 }
 
-// copyProgress prints a line as a copy starts, at every 10%, and when it is done. Small copies,
-// which finish before their first update, print only the done line.
+// copyProgress prints a line as a copy starts, about every 10%, and when it is done. Copies
+// under copyAnnounceSize print nothing: the task's own line is enough.
 func (p *plainPrinter) copyProgress(ev gorun.CopyProgressEvent) {
+	if ev.Total < copyAnnounceSize {
+		return
+	}
 	if p.copied == nil {
 		p.copied = map[string]int{}
 	}
@@ -88,15 +91,13 @@ func (p *plainPrinter) copyProgress(ev gorun.CopyProgressEvent) {
 	}
 	p.copied[key] = tenth
 	if ev.Bytes == 0 {
-		if ev.Total >= copyAnnounceSize {
-			fmt.Fprintf(p.w, "%s: %s sending %s (%s)\n", ev.Server, ev.Task, copyName(ev), formatBytes(ev.Total))
-		}
+		fmt.Fprintf(p.w, "%s: %s sending %s (%s)\n", ev.Server, ev.Task, copyName(ev), formatBytes(ev.Total))
 		return
 	}
 	fmt.Fprintf(p.w, "%s: %s sending %s %d%% (%s)\n", ev.Server, ev.Task, copyName(ev), int(ev.Percent), copySizes(ev))
 }
 
-// copyAnnounceSize is how big a copy must be for -plain to say it is starting.
+// copyAnnounceSize is how big a copy must be for -plain to print its progress.
 const copyAnnounceSize = 1 << 20
 
 // output prints the last n lines of a task's output, indented under the task.

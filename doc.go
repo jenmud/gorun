@@ -103,7 +103,8 @@
 //
 // Set [Config.OnEvent] to follow a run as it happens. It receives a [ProcessStartedEvent], a
 // [PlanEvent] per server, a [TaskEvent] for every change in a task's [TaskState], a
-// [ServerErrorEvent] when a server can't run, and a [ProcessFinishedEvent] at the end:
+// [CopyProgressEvent] while a task uploads a file or directory, a [ServerErrorEvent] when a
+// server can't run, and a [ProcessFinishedEvent] at the end:
 //
 //	cfg.OnEvent = func(event any) {
 //		if ev, ok := event.(gorun.TaskEvent); ok && ev.State != gorun.TaskRunning {

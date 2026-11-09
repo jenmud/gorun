@@ -71,6 +71,7 @@ Every event has a `type` and the run's `gorun_uuid`:
 | `plan` | per server, before it starts | `server`, `address`, `tasks`, `task_meta` |
 | `task` | every task state change | `server`, `task`, `state`, `command`, `stdout`, `stderr`, `exit_code`, `duration`, `attempt`, `attempts` |
 | `server_error` | a server couldn't run (e.g. SSH failed) | `server` |
+| `copy_progress` | while a task copies a file or directory, at most 4 times a second | `server`, `task`, `file`, `bytes`, `total`, `percent`, `bytes_per_second`, `elapsed`, `done` |
 | `process_finished` | when the run ends | `success`, `duration`, `total_tasks`, `failed`, `skipped`, `finished_at` |
 
 `command` is the command as written, with templates rendered. Events are published synchronously,
@@ -137,7 +138,9 @@ dropped. `RunTask` returns an error when none of its servers can run the task.
 `Config.OnEvent` receives the [events](#events-nats) as Go values, not JSON:
 `ProcessStartedEvent`, a `PlanEvent` per server, a `TaskEvent` for every change of a task's
 state (`TaskRunning`, `TaskDone`, `TaskFailed`, `TaskSkipped`; `Attempt` counts retries), a
-`ServerErrorEvent` when a server can't run, and `ProcessFinishedEvent` at the end. It's called from
+`CopyProgressEvent` while a task uploads a file or directory, a `ServerErrorEvent` when a server
+can't run, and `ProcessFinishedEvent` at the end. See [the events](history.md#the-events) for every
+field. It's called from
 one goroutine per server, so guard what it updates with a mutex.
 
 Task logs go to stdout unless you call `gorun.SetLogOutput`, for example with

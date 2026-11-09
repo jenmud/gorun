@@ -57,7 +57,9 @@ task to the bundles that include it.
 ### Run
 
 The picker: tick servers, then tasks or bundles (not both), and start. Stats and a live dashboard
-update as runs go. Each run, server and task starts collapsed. **Recent runs** bars link to the
+update as runs go. Each run, server and task starts collapsed. A task that is uploading a file shows
+a bar with the size and rate, and a closed server shows the upload on its line
+([screenshot](screenshot-web-upload.png)). **Recent runs** bars link to the
 run; **Stop** cancels a run started from the page. Runs read the Gorunfile on disk, so save first.
 
 ### Tasks

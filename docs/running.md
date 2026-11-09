@@ -101,6 +101,11 @@ The live view shows a progress bar per server and what each one is doing:
 
 ![a task's output opened inline](screenshot-output.png)
 
+**While a task uploads a file or directory,** its line shows a bar, the percentage, the size sent
+and the rate (see [upload progress](gorunfile.md#upload-progress)):
+
+![gorun uploading a 1 GB release to three servers](screenshot-upload.png)
+
 A spinner on a server means no task is running there right now: it's `connecting to host`, or
 `waiting for next task`.
 
@@ -123,8 +128,8 @@ For a timetable, see [schedules](schedules.md). The scheduler is still in progre
 `gorun -r` from cron.
 
 When the output isn't a terminal, or with `--plain`, gorun prints plain lines: the plan, then one
-line per finished task, with the end of stderr for failures. Add `-v` to print every task's
-output.
+line per finished task, with the end of stderr for failures. A large upload prints a line about
+every 10%. Add `-v` to print every task's output.
 
 ```bash
 gorun Gorunfile -r --plain --tag prod

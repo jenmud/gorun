@@ -8,6 +8,9 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
+
+	"golang.org/x/crypto/ssh"
 
 	"github.com/jenmud/gorun"
 )
@@ -118,4 +121,34 @@ func ExampleRecorderFunc() {
 		}
 	})
 	_ = cfg.Run(context.Background())
+}
+
+// Show each upload's progress during a run: a task's copies send a CopyProgressEvent as they go.
+func ExampleCopyProgressEvent() {
+	var cfg gorun.Config
+	if err := cfg.LoadFile("Gorunfile"); err != nil {
+		log.Fatal(err)
+	}
+	cfg.OnEvent = func(event any) {
+		if ev, ok := event.(gorun.CopyProgressEvent); ok {
+			fmt.Printf("%s: %s %.0f%% (%d of %d bytes)\n", ev.Server, ev.File, ev.Percent, ev.Bytes, ev.Total)
+		}
+	}
+	_ = cfg.Run(context.Background())
+}
+
+// Copy a task's files to a server from your own code, with a progress callback. Cancelling the
+// context stops a copy part way.
+func ExampleCopyFilesContext() {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	task := &gorun.Task{Copy: []gorun.Copy{{Src: "build/release.tar.gz", Dst: "/srv/app/release.tar.gz"}}}
+	var client *ssh.Client // from gorun.NewSSHClient; nil copies on this machine
+	err := gorun.CopyFilesContext(ctx, client, gorun.Server{Name: "web-1"}, task, func(p gorun.CopyProgress) {
+		fmt.Printf("%.0f%% at %.1f MB/s\n", p.Percent(), p.BytesPerSecond()/(1<<20))
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 }

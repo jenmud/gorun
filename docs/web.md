@@ -103,6 +103,10 @@ stderr, env vars and vars.
 A run whose Gorunfile reads [tasks from a git repository](gorunfile.md#tasks-from-a-git-repository)
 lists them under **Task libraries**: each repository, the ref asked for and the commit it ran.
 
+A run that a [schedule](schedules.md) started carries a **⏱ scheduled · name** badge, on the
+live run while it executes and in History afterwards. Click it to open the Schedules page at that
+schedule.
+
 Skipped, missed and failed scheduled runs are listed too, with the reason in the title. A schedule
 whose target can't run on a server (for example, a task that isn't `local = true` on a local
 server) appears as a failed run.

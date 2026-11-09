@@ -416,6 +416,14 @@ func bundleHref(name string) templ.SafeURL {
 	return templ.SafeURL("/bundles#bundle-" + url.PathEscape(strings.TrimPrefix(name, "@")))
 }
 
+// scheduleHref opens the schedules page at the named schedule.
+func scheduleHref(name string) templ.SafeURL {
+	return templ.SafeURL("/schedules#schedule-" + url.PathEscape(name))
+}
+
+// scheduleID is the id of a schedule's row on the schedules page, which scheduleHref links to.
+func scheduleID(name string) string { return "schedule-" + name }
+
 // refHref links a task, or a "@bundle" reference, to its page.
 func refHref(ref string) templ.SafeURL {
 	if name, ok := strings.CutPrefix(ref, "@"); ok {

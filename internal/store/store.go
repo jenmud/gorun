@@ -23,6 +23,8 @@ type RunSummary struct {
 	Failed     int
 	Skipped    int
 	Duration   time.Duration
+	// Schedule is the schedule that started the run, or empty.
+	Schedule string
 }
 
 type TaskDetail struct {
@@ -138,6 +140,7 @@ func (s *Store) migrate() error {
 	s.addColumn("runs", "envvars")
 	s.addColumn("runs", "vars")
 	s.addColumn("runs", "includes")
+	s.addColumn("runs", "schedule")
 
 	return nil
 }
@@ -199,6 +202,12 @@ func (s *Store) SetRunEnvVars(ctx context.Context, runID string, envvars map[str
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE runs SET envvars=?, vars=? WHERE id=?`,
 		string(envJSON), string(varJSON), runID)
+	return err
+}
+
+// SetRunSchedule records the schedule that started a run.
+func (s *Store) SetRunSchedule(ctx context.Context, runID, schedule string) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE runs SET schedule=? WHERE id=?`, schedule, runID)
 	return err
 }
 
@@ -264,7 +273,7 @@ func (s *Store) FinishRun(ctx context.Context, runID string, success bool, total
 
 func (s *Store) ListRuns(ctx context.Context) ([]RunSummary, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT (SELECT COUNT(*) FROM servers WHERE run_id=runs.id),id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns FROM runs ORDER BY started_at ASC`)
+		`SELECT (SELECT COUNT(*) FROM servers WHERE run_id=runs.id),id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns,schedule FROM runs ORDER BY started_at ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -277,9 +286,11 @@ func (s *Store) ListRuns(ctx context.Context) ([]RunSummary, error) {
 		var pid sql.NullInt64
 		var total, failed, skipped sql.NullInt64
 		var dur sql.NullInt64
-		if err := rows.Scan(&r.Servers, &r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &succ, &total, &failed, &skipped, &dur); err != nil {
+		var schedule sql.NullString
+		if err := rows.Scan(&r.Servers, &r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &succ, &total, &failed, &skipped, &dur, &schedule); err != nil {
 			return nil, err
 		}
+		r.Schedule = schedule.String
 		r.PID = int(pid.Int64)
 		if started.Valid {
 			r.StartedAt, _ = time.Parse(time.RFC3339Nano, started.String)
@@ -304,17 +315,18 @@ func (s *Store) ListRuns(ctx context.Context) ([]RunSummary, error) {
 
 func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns,envvars,vars,includes FROM runs WHERE id=?`, id)
+		`SELECT id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns,envvars,vars,includes,schedule FROM runs WHERE id=?`, id)
 	var r RunDetail
 	var started, finished sql.NullString
 	var succ sql.NullInt64
 	var pid sql.NullInt64
 	var total, failed, skipped sql.NullInt64
 	var dur sql.NullInt64
-	var runEnv, runVars, includes sql.NullString
-	if err := row.Scan(&r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &succ, &total, &failed, &skipped, &dur, &runEnv, &runVars, &includes); err != nil {
+	var runEnv, runVars, includes, schedule sql.NullString
+	if err := row.Scan(&r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &succ, &total, &failed, &skipped, &dur, &runEnv, &runVars, &includes, &schedule); err != nil {
 		return nil, err
 	}
+	r.Schedule = schedule.String
 	r.PID = int(pid.Int64)
 	r.TotalTasks = int(total.Int64)
 	r.Failed = int(failed.Int64)

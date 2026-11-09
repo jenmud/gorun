@@ -106,7 +106,9 @@ Any reload of the file, from the Config page or the schedules page, keeps the pa
 on schedules that still exist.
 
 Scheduled runs appear in **History** and in the live view whether or not NATS is connected.
-Without NATS, the web server applies their events itself.
+Without NATS, the web server applies their events itself. Each one carries a
+**⏱ scheduled · name** badge, live and in History, that links to its schedule on the Schedules
+page. Skipped, missed and failed runs carry it too.
 
 A scheduled run that fails before it starts, such as a target no server can run (a task that is
 not `local = true` on a local server), is written to **History** as a failed run with the reason.

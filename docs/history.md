@@ -53,7 +53,8 @@ id. A run's id is its `GorunUUID`.
 
 **`history.Run`** (a summary): `ID`, `Title`, `Hostname`, `PID`, `StartedAt`, `FinishedAt`,
 `Finished` (false while it is still running, or if it was cut off), `Success`, `TotalTasks`,
-`Failed`, `Skipped`, `Duration`, and `Servers` (how many).
+`Failed`, `Skipped`, `Duration`, `Servers` (how many), and `Schedule` (the schedule that started
+the run, or empty).
 
 **`history.RunDetail`**: the summary plus `Servers` (names), `Tasks`, `ServerErrors` (by server:
 why it couldn't run at all), `ServerAddress`, `ServerEnvVars` and `ServerVars` (by server, from
@@ -125,6 +126,7 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
 | `Hostname`, `PID` | the machine and process running it |
 | `EnvVars`, `Vars` | the Gorunfile's top-level `envvars` and `vars` |
 | `Includes` | the [git includes](gorunfile.md#tasks-from-a-git-repository) the Gorunfile read: each one's `Source`, `Ref` and the `Commit` it used |
+| `Schedule` | the [schedule](schedules.md) that started the run, or empty when it was started any other way |
 
 ### `PlanEvent` (`plan`)
 

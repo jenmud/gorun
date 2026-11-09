@@ -275,6 +275,11 @@ func UpdateDatabase(ctx context.Context, st *store.Store, ev *Event) {
 				slog.Error("gorun nats: failed to add server", "server", server, "error", err)
 			}
 		}
+		if ev.Schedule != "" {
+			if err := st.SetRunSchedule(ctx, ev.GorunUUID, ev.Schedule); err != nil {
+				slog.Error("gorun nats: failed to set run schedule", "error", err)
+			}
+		}
 		if len(ev.Includes) > 0 {
 			if err := st.SetRunIncludes(ctx, ev.GorunUUID, ev.Includes); err != nil {
 				slog.Error("gorun nats: failed to set run includes", "error", err)

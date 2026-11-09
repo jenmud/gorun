@@ -316,3 +316,39 @@ cron = "0 3 * * *"
 		t.Errorf("status a = %+v", st[0])
 	}
 }
+
+func TestScheduledRunNamesItsSchedule(t *testing.T) {
+	f := newSchedulerFixture(t, `
+[[schedule]]
+name = "nightly backup"
+target = "migrate"
+at = "2026-12-01T02:00"
+`, time.Date(2026, 11, 30, 0, 0, 0, 0, time.UTC))
+	var mu sync.Mutex
+	var started []ProcessStartedEvent
+	f.cfg.OnEvent = func(event any) {
+		if ev, ok := event.(ProcessStartedEvent); ok {
+			mu.Lock()
+			started = append(started, ev)
+			mu.Unlock()
+		}
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := f.sched.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer f.sched.Stop()
+	f.sched.tick(ctx, time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
+	f.settle()
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(started) != 1 || started[0].Schedule != "nightly backup" {
+		t.Fatalf("process started events = %+v, want one naming the schedule", started)
+	}
+	if f.cfg.Schedule != "" {
+		t.Errorf("the scheduler changed the shared config's Schedule to %q", f.cfg.Schedule)
+	}
+}

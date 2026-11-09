@@ -66,6 +66,10 @@ type ProcessStartedEvent struct {
 	// Includes are the git includes the Gorunfile read, with the commit each one used, so a run
 	// records exactly which version of a task library it ran.
 	Includes []IncludeSource `json:"includes,omitempty"`
+
+	// Schedule is the name of the schedule that started the run, or empty when it wasn't
+	// started by a schedule.
+	Schedule string `json:"schedule,omitempty"`
 }
 
 // ProcessFinishedEvent is published when a gorun process finishes running.

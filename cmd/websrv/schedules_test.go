@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/jenmud/gorun"
+	"github.com/jenmud/gorun/cmd/web/ui"
 )
 
 const schedulesGorunfile = `[tasks.check]
@@ -296,5 +297,44 @@ func TestHistoryShowsTaskLibraries(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("history page missing %q", want)
 		}
+	}
+}
+
+// A run a schedule started says so, live and in history, and links to the schedule's row.
+func TestScheduledRunsLinkToTheirSchedule(t *testing.T) {
+	a := loadSchedules(t)
+	now := time.Now()
+	a.Record(gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "sched-9", Title: "Backups", Servers: []string{"localhost"}, StartedAt: now, Schedule: "nightly"})
+	a.Record(gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "hand-1", Title: "By hand", Servers: []string{"localhost"}, StartedAt: now})
+
+	link := `href="/schedules#schedule-nightly"`
+	a.mu.Lock()
+	live := render(ui.Dashboard(a.dash))
+	a.mu.Unlock()
+	if strings.Count(live, link) != 1 || !strings.Contains(live, "scheduled · nightly") {
+		t.Errorf("the live run does not link to its schedule once:\n%s", live)
+	}
+
+	for path, want := range map[string]int{"/history": 1, "/history/sched-9": 1, "/history/hand-1": 0} {
+		if got := strings.Count(get(t, a, path).Body.String(), link); got != want {
+			t.Errorf("%s has %d links to the schedule, want %d", path, got, want)
+		}
+	}
+
+	// skipped and missed runs, which never start, link to their schedule too
+	a.recordScheduleEvent(gorun.ScheduleEvent{Schedule: "nightly", Kind: gorun.ScheduleSkipped, At: now, Reason: "skip requested"})
+	runs, _ := a.store.ListRuns(context.Background())
+	skipped := 0
+	for _, r := range runs {
+		if strings.Contains(r.Title, "skipped") && r.Schedule == "nightly" {
+			skipped++
+		}
+	}
+	if skipped != 1 {
+		t.Errorf("the skipped run does not name its schedule: %+v", runs)
+	}
+
+	if !strings.Contains(get(t, a, "/schedules").Body.String(), `id="schedule-nightly"`) {
+		t.Error("the schedules page has no row for the link to open")
 	}
 }

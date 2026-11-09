@@ -60,8 +60,8 @@ function gorunOpenHash() {
 	if (!el) { return; }
 	var card = el.querySelector(':scope > details');
 	if (card) { card.open = true; }
-	el.classList.add('ring-2', 'ring-accent');
-	setTimeout(function () { el.classList.remove('ring-2', 'ring-accent'); }, 2000);
+	el.classList.add('ring-2', 'ring-accent', 'bg-accent/10');
+	setTimeout(function () { el.classList.remove('ring-2', 'ring-accent', 'bg-accent/10'); }, 2000);
 	el.scrollIntoView({ block: 'center' });
 }
 document.addEventListener('DOMContentLoaded', gorunOpenHash);

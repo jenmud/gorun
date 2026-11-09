@@ -90,6 +90,7 @@ type RunRow struct {
 	TotalTasks int
 	Failed     int
 	Skipped    int
+	Schedule   string // the schedule that started the run, or empty
 }
 
 // HistoryPageData is everything the history list shows.

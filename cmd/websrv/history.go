@@ -156,6 +156,7 @@ func runRow(s store.RunSummary) ui.RunRow {
 		TotalTasks: s.TotalTasks,
 		Failed:     s.Failed,
 		Skipped:    s.Skipped,
+		Schedule:   s.Schedule,
 	}
 }
 

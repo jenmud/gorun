@@ -102,6 +102,9 @@ func (a *app) recordScheduleEvent(ev gorun.ScheduleEvent) {
 		log.Printf("gorun web: record schedule %s: %v", ev.Schedule, err)
 		return
 	}
+	if err := a.store.SetRunSchedule(ctx, id, ev.Schedule); err != nil {
+		log.Printf("gorun web: record schedule %s: %v", ev.Schedule, err)
+	}
 	if err := a.store.FinishRun(ctx, id, !failed, 0, 0, 0, 0, ev.At); err != nil {
 		log.Printf("gorun web: finish schedule %s: %v", ev.Schedule, err)
 	}

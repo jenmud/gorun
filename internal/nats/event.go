@@ -43,6 +43,7 @@ type Event struct {
 	Vars       map[string]any    `json:"vars,omitempty"`
 	Error      string            `json:"error,omitempty"`
 	Includes   []store.Include   `json:"includes,omitempty"`
+	Schedule   string            `json:"schedule,omitempty"`
 
 	// copy_progress
 	File           string  `json:"file,omitempty"`
@@ -93,6 +94,7 @@ func (e Event) UIEvent() ui.Event {
 		Attempt:    e.Attempt,
 		Attempts:   e.Attempts,
 		Error:      e.Error,
+		Schedule:   e.Schedule,
 
 		File:           e.File,
 		Bytes:          e.Bytes,

@@ -19,7 +19,7 @@ type TaskInfo struct {
 	Command     string
 	Stdout      string
 	Stderr      string
-	Error       string // why it was skipped
+	Error       string    // why it was skipped
 	Copy        *CopyInfo // the file it is copying, while it copies one
 }
 
@@ -52,6 +52,7 @@ type ProcessState struct {
 	Skipped     int
 	Duration    int64
 	StartedAt   string
+	Schedule    string // the schedule that started the run, or empty
 }
 
 type DashboardState struct {
@@ -99,6 +100,7 @@ func (s *DashboardState) Apply(ev Event) {
 	case "process_started":
 		p.Title = ev.Title
 		p.StartedAt = ev.StartedAt
+		p.Schedule = ev.Schedule
 		p.Servers = make(map[string]*ServerInfo)
 		p.ServerOrder = nil
 		p.Finished = false

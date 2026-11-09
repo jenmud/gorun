@@ -296,6 +296,7 @@ func (s *Scheduler) run(ctx context.Context, st *scheduleState, occ time.Time, n
 		return
 	}
 	c.SelectedTasks = names
+	c.Schedule = name
 	c.Servers = slices.Clone(c.Servers)
 	for i := range c.Servers {
 		c.Servers[i].TaskNames = slices.Clone(names)

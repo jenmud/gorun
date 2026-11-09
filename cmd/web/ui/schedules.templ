@@ -49,7 +49,7 @@ templ SchedulesPage(d SchedulesPageData) {
 					</thead>
 					<tbody class="divide-y divide-zinc-800">
 						for _, r := range d.Rows {
-							<tr class="align-top">
+							<tr id={ scheduleID(r.Name) } class="align-top scroll-mt-24">
 								<td class="px-4 py-2">
 									<div class="font-medium text-zinc-100">{ r.Name }</div>
 									if r.Description != "" {

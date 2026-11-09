@@ -198,3 +198,28 @@ func TestRecordKeepsIncludeCommits(t *testing.T) {
 		t.Errorf("include = %+v", inc)
 	}
 }
+
+func TestRecordKeepsTheSchedule(t *testing.T) {
+	h := open(t)
+	h.Record(gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "r3", Title: "backup", Schedule: "nightly"})
+	h.Record(gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "r4", Title: "by hand"})
+
+	detail, err := h.Run(context.Background(), "r3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Schedule != "nightly" {
+		t.Errorf("run schedule = %q, want nightly", detail.Schedule)
+	}
+	runs, err := h.Runs(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, r := range runs {
+		got[r.ID] = r.Schedule
+	}
+	if got["r3"] != "nightly" || got["r4"] != "" {
+		t.Errorf("schedules by run = %v, want r3 nightly and r4 none", got)
+	}
+}

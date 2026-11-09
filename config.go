@@ -105,6 +105,10 @@ type Config struct {
 	// Includes are the git includes LoadFile read, with the commit each one used.
 	Includes []IncludeSource `toml:"-"`
 
+	// Schedule is the name of the schedule that started this run, set by the Scheduler. It is
+	// empty for a run started any other way, and is reported in ProcessStartedEvent.
+	Schedule string `toml:"-"`
+
 	// SelectedTasks, when non-empty, limits execution to these tasks (and their
 	// dependencies). Bundle references ("@name") are expanded. Used by the --task CLI flag.
 	SelectedTasks []string `toml:"-"`
@@ -693,6 +697,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		EnvVars:   c.EnvVars,
 		Vars:      c.Vars,
 		Includes:  c.Includes,
+		Schedule:  c.Schedule,
 	})
 
 	// announce every server's plan up front, in a stable order

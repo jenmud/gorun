@@ -35,6 +35,7 @@ type Event struct {
 	Attempt    int        `json:"attempt,omitempty"`
 	Attempts   int        `json:"attempts,omitempty"`
 	Error      string     `json:"error,omitempty"`
+	Schedule   string     `json:"schedule,omitempty"` // the schedule that started the run
 
 	// copy_progress
 	File           string  `json:"file,omitempty"`

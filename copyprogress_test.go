@@ -178,6 +178,9 @@ func TestCopyStopsWhenCancelled(t *testing.T) {
 type scpSinkServer struct {
 	dir   string
 	stall bool
+
+	mu       sync.Mutex
+	commands []string // every command the client asked to run
 }
 
 func (s *scpSinkServer) start(t *testing.T) *ssh.Client {
@@ -236,6 +239,11 @@ func (s *scpSinkServer) serve(ch ssh.Channel, reqs <-chan *ssh.Request) {
 			_ = req.Reply(false, nil)
 			continue
 		}
+		var exec struct{ Command string }
+		_ = ssh.Unmarshal(req.Payload, &exec)
+		s.mu.Lock()
+		s.commands = append(s.commands, exec.Command)
+		s.mu.Unlock()
 		_ = req.Reply(true, nil)
 		status := 0
 		if err := s.sink(ch); err != nil {
@@ -373,5 +381,26 @@ func TestRunEmitsCopyProgress(t *testing.T) {
 	if last.Type != "copy_progress" || last.Server != "local" || last.Task != "upload" || last.File != dst ||
 		!last.Done || last.Percent != 100 || last.Total != 2<<20 || last.GorunUUID == "" {
 		t.Fatalf("last event = %+v", last)
+	}
+}
+
+func TestCopyOverSSHCreatesTheFolder(t *testing.T) {
+	server := &scpSinkServer{dir: t.TempDir()}
+	client := server.start(t)
+
+	src := filepath.Join(t.TempDir(), "app.conf")
+	if err := os.WriteFile(src, []byte("port = 8080\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	task := &Task{Copy: []Copy{{Src: src, Dst: "/srv/new app/conf/app.conf"}}}
+	if err := CopyFilesContext(context.Background(), client, &Server{}, task, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	server.mu.Lock()
+	defer server.mu.Unlock()
+	want := []string{"mkdir -p '/srv/new app/conf' && scp -t '/srv/new app/conf'"}
+	if strings.Join(server.commands, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("commands = %q, want %q: one session that makes the folder, then receives the file", server.commands, want)
 	}
 }

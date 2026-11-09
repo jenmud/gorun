@@ -340,21 +340,8 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// runRemote runs cmd on the remote and returns its error together with stderr.
-func runRemote(client *ssh.Client, cmd string) error {
-	session, closeSession, err := newSession(context.Background(), client)
-	if err != nil {
-		return err
-	}
-	defer closeSession()
-	out, err := session.CombinedOutput(cmd)
-	if err != nil {
-		return fmt.Errorf("%s: %w: %s", cmd, err, strings.TrimSpace(string(out)))
-	}
-	return nil
-}
-
-// runSCP starts `scp <flags> -t target` on the remote and lets send stream into it. Cancelling
+// runSCP creates the target directory (and its parents) on the remote, starts
+// `scp <flags> -t target` there in the same session, and lets send stream into it. Cancelling
 // ctx closes the session, which stops a copy even while it waits on a slow connection.
 func runSCP(ctx context.Context, client *ssh.Client, flags, target string, wrap func(io.Reader) io.Reader, send func(*scpSender) error) error {
 	session, closeSession, err := newSession(ctx, client)
@@ -376,7 +363,12 @@ func runSCP(ctx context.Context, client *ssh.Client, flags, target string, wrap 
 	var stderr bytes.Buffer
 	session.Stderr = &stderr
 
-	if err := session.Start("scp " + flags + " -t " + shellQuote(target)); err != nil {
+	scp := "scp -t "
+	if flags != "" {
+		scp = "scp " + flags + " -t "
+	}
+	cmd := "mkdir -p " + shellQuote(target) + " && " + scp + shellQuote(target)
+	if err := session.Start(cmd); err != nil {
 		return err
 	}
 	s := &scpSender{w: stdin, r: bufio.NewReader(stdout), wrap: wrap}
@@ -399,7 +391,8 @@ func runSCP(ctx context.Context, client *ssh.Client, flags, target string, wrap 
 	return nil
 }
 
-// scpCopy copies r (size bytes) to remotePath. A nil client writes locally.
+// scpCopy copies r (size bytes) to remotePath, creating its directory if needed. A nil client
+// writes locally.
 func scpCopy(ctx context.Context, client *ssh.Client, r io.Reader, size int64, remotePath string, mode os.FileMode) error {
 	if mode == 0 {
 		mode = 0644
@@ -427,9 +420,6 @@ func scpCopy(ctx context.Context, client *ssh.Client, r io.Reader, size int64, r
 func scpCopyDir(ctx context.Context, client *ssh.Client, localDir, remoteDir string, wrap func(io.Reader) io.Reader) error {
 	if client == nil {
 		return copyDirLocal(localDir, remoteDir, wrap)
-	}
-	if err := runRemote(client, "mkdir -p "+shellQuote(remoteDir)); err != nil {
-		return err
 	}
 	return runSCP(ctx, client, "-r -d", remoteDir, wrap, func(s *scpSender) error {
 		return s.dirContents(localDir)

@@ -4,14 +4,9 @@ log_level = "info"
 # Uploads a 1 GB release and a folder of 200 files to three servers, and shows each upload's
 # progress. Make the files first: recipes/07-big-upload/make-files.sh
 
-[tasks.prepare]
-description = "Make the release folder"
-cmd = "mkdir -p /tmp/gorun-upload/releases/v2.4.0"
-
 [tasks.upload-release]
 description = "Upload the 1 GB release and its checksum"
 details = "A src copy of a single large file: gorun streams it and shows its progress."
-depends_on = ["prepare"]
     [[tasks.upload-release.copy]]
     src = "build/release.tar.gz"
     dst = "/tmp/gorun-upload/releases/v2.4.0/release.tar.gz"
@@ -47,7 +42,7 @@ tags = ["lab"]
     identityfile = "../ssh-keys/id_ecdsa"
 
 [servers]
-tasks = ["prepare", "upload-release", "upload-site", "verify"]
+tasks = ["upload-release", "upload-site", "verify"]
 
 [servers.hosts.server1]
 hostname = "localhost"

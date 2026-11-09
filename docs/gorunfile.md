@@ -185,8 +185,8 @@ Good to know:
   `/tmp` and move the file into place in the command.
 - Files are written with mode `0644` and overwrite what's there. Directory copies keep local
   permissions.
-- A directory copy creates the target and its parents, leaves other files alone and follows
-  symlinks. For a single file, the parent directory must already exist.
+- A copy creates the folders it needs on the server, as the login user. A directory copy leaves
+  other files in the target alone and follows symlinks.
 - Files from `src` are streamed, so a multi-gigabyte release is fine. `src_template` and
   `content` are built in memory, which suits configs and scripts.
 - Stopping a run (Ctrl-C, **Stop** in the web UI, or a task's `timeout`) stops a copy part way.

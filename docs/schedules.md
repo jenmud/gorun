@@ -129,3 +129,10 @@ the name, target, cron or once-at time, time zone, missed setting and descriptio
 dropdown starts on the browser's zone. A schedule with both cron and once-at, or a target that
 doesn't exist, is refused before it is queued. Saving writes the `[[schedule]]` table into its
 file and reloads the config.
+
+## One-off times in the web UI
+
+The once-at field is a date and time picker. The time is read in the zone chosen next to it, and
+saved in the file as a UTC instant (for example `at = "2026-12-01T15:00:00Z"`), so the same
+moment is kept whatever zone the file is read in. A new one starts on the browser's current
+time. Editing a saved one shows it again in the schedule's zone.

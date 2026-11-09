@@ -92,6 +92,14 @@ func SchedulesPage(d SchedulesPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, " ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = zonePickerScript().Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
 		if !d.Loaded {
 			templ_7745c5c3_Err = notLoaded().Render(ctx, templ_7745c5c3_Buffer)
@@ -99,205 +107,205 @@ func SchedulesPage(d SchedulesPageData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else if len(d.Rows) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<p class=\"text-sm text-zinc-500\">This Gorunfile defines no schedules. Add a <span class=\"font-mono\">[[schedule]]</span> table to see it here.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<p class=\"text-sm text-zinc-500\">This Gorunfile defines no schedules. Add a <span class=\"font-mono\">[[schedule]]</span> table to see it here.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div id=\"schedules-body\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div id=\"schedules-body\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if !d.Running {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<p class=\"mb-4 rounded-lg border border-amber-900 bg-amber-950/40 px-4 py-2 text-sm text-amber-300\">The scheduler is not running, so these schedules will not fire from this web server.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<p class=\"mb-4 rounded-lg border border-amber-900 bg-amber-950/40 px-4 py-2 text-sm text-amber-300\">The scheduler is not running, so these schedules will not fire from this web server.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"overflow-x-auto rounded-lg border border-zinc-800\"><table class=\"w-full text-left text-sm\"><thead class=\"bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500\"><tr><th class=\"px-4 py-2 font-medium\">Schedule</th><th class=\"px-4 py-2 font-medium\">Target</th><th class=\"px-4 py-2 font-medium\">Timing</th><th class=\"px-4 py-2 font-medium\">Status</th><th class=\"px-4 py-2 font-medium\">Next run</th><th class=\"px-4 py-2 font-medium\">Actions</th></tr></thead> <tbody class=\"divide-y divide-zinc-800\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<div class=\"overflow-x-auto rounded-lg border border-zinc-800\"><table class=\"w-full text-left text-sm\"><thead class=\"bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500\"><tr><th class=\"px-4 py-2 font-medium\">Schedule</th><th class=\"px-4 py-2 font-medium\">Target</th><th class=\"px-4 py-2 font-medium\">Timing</th><th class=\"px-4 py-2 font-medium\">Status</th><th class=\"px-4 py-2 font-medium\">Next run</th><th class=\"px-4 py-2 font-medium\">Actions</th></tr></thead> <tbody class=\"divide-y divide-zinc-800\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, r := range d.Rows {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<tr class=\"align-top\"><td class=\"px-4 py-2\"><div class=\"font-medium text-zinc-100\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<tr class=\"align-top\"><td class=\"px-4 py-2\"><div class=\"font-medium text-zinc-100\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(r.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 53, Col: 56}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 54, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if r.Description != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<div class=\"text-xs text-zinc-500\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<div class=\"text-xs text-zinc-500\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(r.Description)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 55, Col: 60}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 56, Col: 60}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</td><td class=\"px-4 py-2 font-mono text-xs text-zinc-300\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</td><td class=\"px-4 py-2 font-mono text-xs text-zinc-300\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(r.Target)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 58, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 59, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</td><td class=\"px-4 py-2\"><div class=\"font-mono text-xs text-zinc-300\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</td><td class=\"px-4 py-2\"><div class=\"font-mono text-xs text-zinc-300\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(r.When)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 60, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 61, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div><div class=\"text-xs text-zinc-500\">written in ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div><div class=\"text-xs text-zinc-500\">written in ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(r.Zone)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 61, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 62, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</div></td><td class=\"px-4 py-2 text-zinc-300\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "</div></td><td class=\"px-4 py-2 text-zinc-300\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(r.Status)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 64, Col: 19}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 65, Col: 19}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if r.Missed > 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<span class=\"text-xs text-amber-400\">(")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<span class=\"text-xs text-amber-400\">(")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var10 string
 					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(itoa(r.Missed))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 66, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 67, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, " missed)</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, " missed)</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</td><td class=\"px-4 py-2 whitespace-nowrap\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "</td><td class=\"px-4 py-2 whitespace-nowrap\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if r.NextUTC != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<time data-utc=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<time data-utc=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var11 string
 					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(r.NextUTC)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 71, Col: 36}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 72, Col: 36}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\" datetime=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" datetime=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var12 string
 					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(r.NextUTC)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 71, Col: 59}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 72, Col: 59}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "\" class=\"font-mono text-xs text-zinc-100\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" class=\"font-mono text-xs text-zinc-100\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var13 string
 					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(r.NextText)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 71, Col: 114}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 72, Col: 114}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</time>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</time>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<span class=\"text-zinc-500\">none left</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<span class=\"text-zinc-500\">none left</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</td><td class=\"px-4 py-2 whitespace-nowrap\"><div class=\"flex flex-wrap gap-2\"><a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</td><td class=\"px-4 py-2 whitespace-nowrap\"><div class=\"flex flex-wrap gap-2\"><a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var14 templ.SafeURL
 				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinURLErrs(scheduleEditPath(r.Name))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 78, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 79, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "\" class=\"rounded-md border border-zinc-700 px-2 py-1 text-xs text-accent hover:border-accent hover:text-white\">Edit</a> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\" class=\"rounded-md border border-zinc-700 px-2 py-1 text-xs text-accent hover:border-accent hover:text-white\">Edit</a> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -313,7 +321,7 @@ func SchedulesPage(d SchedulesPageData) templ.Component {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, " ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, " ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -323,18 +331,18 @@ func SchedulesPage(d SchedulesPageData) templ.Component {
 							return templ_7745c5c3_Err
 						}
 					} else if r.SkipPending {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<span class=\"px-2 py-1 text-xs text-zinc-500\">next run skipped</span>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<span class=\"px-2 py-1 text-xs text-zinc-500\">next run skipped</span>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</div></td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</div></td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</tbody></table></div><p class=\"mt-2 text-xs text-zinc-600\">Refreshes every 30 seconds.</p></div><script>\n(function () {\n\tvar sel = document.getElementById('tz-picker');\n\tvar body = document.getElementById('schedules-body');\n\tif (!sel || !body) { return; }\n\tvar browser = 'UTC';\n\ttry { browser = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) {}\n\tvar zones = (typeof Intl.supportedValuesOf === 'function') ? Intl.supportedValuesOf('timeZone').slice() : [];\n\tif (zones.indexOf(browser) === -1) { zones.unshift(browser); }\n\tif (zones.indexOf('UTC') === -1) { zones.push('UTC'); }\n\tzones.forEach(function (z) {\n\t\tvar o = document.createElement('option');\n\t\to.value = z;\n\t\to.textContent = z;\n\t\tsel.appendChild(o);\n\t});\n\n\t// The chosen zone lasts for the browser session, so an action's reload keeps it. Without\n\t// storage it falls back to the browser's zone.\n\tvar key = 'gorunScheduleZone';\n\tvar saved = null;\n\ttry { saved = sessionStorage.getItem(key); } catch (e) {}\n\tsel.value = (saved && zones.indexOf(saved) !== -1) ? saved : browser;\n\n\t// render shows each instant in the zone, with its zone name; it keeps the UTC text if the zone is unknown\n\tfunction render(zone) {\n\t\tdocument.querySelectorAll('time[data-utc]').forEach(function (el) {\n\t\t\tvar when = new Date(el.getAttribute('data-utc'));\n\t\t\ttry {\n\t\t\t\tel.textContent = new Intl.DateTimeFormat(undefined, {\n\t\t\t\t\ttimeZone: zone, year: 'numeric', month: 'short', day: '2-digit',\n\t\t\t\t\thour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short'\n\t\t\t\t}).format(when);\n\t\t\t} catch (e) {}\n\t\t});\n\t}\n\tsel.addEventListener('change', function () {\n\t\ttry { sessionStorage.setItem(key, sel.value); } catch (e) {}\n\t\trender(sel.value);\n\t});\n\trender(sel.value);\n\n\t// Refresh the table in place so the picker and the page position stay put.\n\tfunction refresh() {\n\t\tfetch(location.pathname, { cache: 'no-store' })\n\t\t\t.then(function (r) { return r.ok ? r.text() : null; })\n\t\t\t.then(function (html) {\n\t\t\t\tif (!html) { return; }\n\t\t\t\tvar fresh = new DOMParser().parseFromString(html, 'text/html').getElementById('schedules-body');\n\t\t\t\tif (fresh) { body.innerHTML = fresh.innerHTML; render(sel.value); }\n\t\t\t})\n\t\t\t.catch(function () {});\n\t}\n\tsetInterval(refresh, 30000);\n})();\n\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</tbody></table></div><p class=\"mt-2 text-xs text-zinc-600\">Refreshes every 30 seconds.</p></div><script>\n(function () {\n\tvar sel = document.getElementById('tz-picker');\n\tvar body = document.getElementById('schedules-body');\n\tif (!sel || !body) { return; }\n\tvar browser = 'UTC';\n\ttry { browser = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) {}\n\tvar zones = (typeof Intl.supportedValuesOf === 'function') ? Intl.supportedValuesOf('timeZone').slice() : [];\n\tif (zones.indexOf(browser) === -1) { zones.unshift(browser); }\n\tif (zones.indexOf('UTC') === -1) { zones.push('UTC'); }\n\tzones.forEach(function (z) {\n\t\tvar o = document.createElement('option');\n\t\to.value = z;\n\t\to.textContent = z;\n\t\tsel.appendChild(o);\n\t});\n\n\t// The chosen zone lasts for the browser session, so an action's reload keeps it. Without\n\t// storage it falls back to the browser's zone.\n\tvar key = 'gorunScheduleZone';\n\tvar saved = null;\n\ttry { saved = sessionStorage.getItem(key); } catch (e) {}\n\tsel.value = (saved && zones.indexOf(saved) !== -1) ? saved : browser;\n\n\t// render shows each instant in the zone, with its zone name; it keeps the UTC text if the zone is unknown\n\tfunction render(zone) {\n\t\tdocument.querySelectorAll('time[data-utc]').forEach(function (el) {\n\t\t\tvar when = new Date(el.getAttribute('data-utc'));\n\t\t\ttry {\n\t\t\t\tel.textContent = new Intl.DateTimeFormat(undefined, {\n\t\t\t\t\ttimeZone: zone, year: 'numeric', month: 'short', day: '2-digit',\n\t\t\t\t\thour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short'\n\t\t\t\t}).format(when);\n\t\t\t} catch (e) {}\n\t\t});\n\t}\n\tsel.addEventListener('change', function () {\n\t\ttry { sessionStorage.setItem(key, sel.value); } catch (e) {}\n\t\trender(sel.value);\n\t});\n\trender(sel.value);\n\n\t// Refresh the table in place so the picker and the page position stay put.\n\tfunction refresh() {\n\t\tfetch(location.pathname, { cache: 'no-store' })\n\t\t\t.then(function (r) { return r.ok ? r.text() : null; })\n\t\t\t.then(function (html) {\n\t\t\t\tif (!html) { return; }\n\t\t\t\tvar fresh = new DOMParser().parseFromString(html, 'text/html').getElementById('schedules-body');\n\t\t\t\tif (fresh) { body.innerHTML = fresh.innerHTML; render(sel.value); }\n\t\t\t})\n\t\t\t.catch(function () {});\n\t}\n\tsetInterval(refresh, 30000);\n})();\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -364,46 +372,46 @@ func scheduleButton(action string, name string, label string) templ.Component {
 			templ_7745c5c3_Var15 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<form method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<form method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var16 templ.SafeURL
 		templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(action))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 160, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 161, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\" class=\"inline\"><input type=\"hidden\" name=\"schedule\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\" class=\"inline\"><input type=\"hidden\" name=\"schedule\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 161, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 162, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "\"> <button type=\"submit\" class=\"rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:border-accent hover:text-white\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\"> <button type=\"submit\" class=\"rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:border-accent hover:text-white\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var18 string
 		templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 162, Col: 142}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 163, Col: 142}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</button></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</button></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -434,33 +442,33 @@ func scheduleEditPanel(d SchedulesPageData) templ.Component {
 			templ_7745c5c3_Var19 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<section class=\"mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5\"><h2 class=\"text-lg font-semibold text-zinc-100\">Edit schedule <span class=\"font-mono\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<section class=\"mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5\"><h2 class=\"text-lg font-semibold text-zinc-100\">Edit schedule <span class=\"font-mono\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(d.EditingName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 170, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 171, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</span></h2><p class=\"mt-1 text-xs text-zinc-500\">The change is written to the file it came from straight away. Pauses and skips on the other schedules are kept.</p><form method=\"post\" action=\"/schedules/edit\" class=\"mt-4 grid gap-3 sm:grid-cols-2\"><input type=\"hidden\" name=\"name\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</span></h2><p class=\"mt-1 text-xs text-zinc-500\">The change is written to the file it came from straight away. Pauses and skips on the other schedules are kept.</p><form method=\"post\" action=\"/schedules/edit\" class=\"mt-4 grid gap-3 sm:grid-cols-2\"><input type=\"hidden\" name=\"name\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(d.EditingName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 173, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 174, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\"> <label class=\"block text-xs text-zinc-400\">Target ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\"> <label class=\"block text-xs text-zinc-400\">Target ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -469,20 +477,20 @@ func scheduleEditPanel(d SchedulesPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<input name=\"target\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<input name=\"target\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var23 string
 		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(d.Edit.Target)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 176, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 177, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" list=\"schedule-edit-targets\" placeholder=\"a task, or @bundle\" class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "\" list=\"schedule-edit-targets\" placeholder=\"a task, or @bundle\" class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -495,30 +503,30 @@ func scheduleEditPanel(d SchedulesPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "\"></label> <datalist id=\"schedule-edit-targets\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\"></label> <datalist id=\"schedule-edit-targets\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, t := range d.Targets {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<option value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<option value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var25 string
 			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(t)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 180, Col: 22}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/schedules.templ`, Line: 181, Col: 22}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\"></option>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\"></option>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</datalist>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</datalist>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -526,15 +534,15 @@ func scheduleEditPanel(d SchedulesPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = editField("Once at", "at", d.Edit.At, "e.g. 2026-12-01T02:00 (clear it to use cron)").Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
 		templ_7745c5c3_Err = zoneSelect("timezone", d.Edit.Timezone).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<label class=\"block text-xs text-zinc-400\">Missed runs ")
+		templ_7745c5c3_Err = onceAtPicker(d.Edit.At).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<label class=\"block text-xs text-zinc-400\">Missed runs ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -543,7 +551,7 @@ func scheduleEditPanel(d SchedulesPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<select name=\"missed\" class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<select name=\"missed\" class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -556,27 +564,27 @@ func scheduleEditPanel(d SchedulesPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\"><option value=\"skip\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "\"><option value=\"skip\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if d.Edit.Missed != "run" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, ">skip them</option> <option value=\"run\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, ">skip them</option> <option value=\"run\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if d.Edit.Missed == "run" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, ">run once to catch up</option></select></label>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, ">run once to catch up</option></select></label>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -584,7 +592,7 @@ func scheduleEditPanel(d SchedulesPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<div class=\"flex gap-2 sm:col-span-2\"><button type=\"submit\" class=\"rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-violet-600\">Save schedule</button> <a href=\"/schedules\" class=\"rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800\">Cancel</a></div></form></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<div class=\"flex gap-2 sm:col-span-2\"><button type=\"submit\" class=\"rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-violet-600\">Save schedule</button> <a href=\"/schedules\" class=\"rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800\">Cancel</a></div></form></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

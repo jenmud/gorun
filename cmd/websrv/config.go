@@ -257,7 +257,7 @@ func editFields(body map[string]any) ui.EditFields {
 		Local:        local,
 		Target:       str(body, "target"),
 		Cron:         str(body, "cron"),
-		At:           str(body, "at"),
+		At:           atForPicker(str(body, "at"), zoneOr(str(body, "timezone"))),
 		Timezone:     zoneOr(str(body, "timezone")),
 		Missed:       str(body, "missed"),
 	}
@@ -326,7 +326,7 @@ func applyEdit(kind string, body map[string]any, form url.Values) error {
 		}
 		put(body, "description", form.Get("description"))
 	case kindSchedule:
-		applyScheduleEdit(body, form)
+		return applyScheduleEdit(body, form)
 	}
 	return nil
 }
@@ -786,7 +786,10 @@ func newChange(kind, name, file string, form url.Values) (gorun.Change, error) {
 		}
 		setIf(body, "description", form.Get("description"))
 	case kindSchedule:
-		body = newScheduleBody(form)
+		var err error
+		if body, err = newScheduleBody(form); err != nil {
+			return gorun.Change{}, err
+		}
 	default:
 		return gorun.Change{}, fmt.Errorf("unknown kind %q", kind)
 	}

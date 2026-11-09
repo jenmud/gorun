@@ -70,6 +70,14 @@ templ zonePickerScript() {
 		});
 		sel.value = current;
 	});
+
+	// a new one-off schedule starts on the browser's current time
+	var n = new Date();
+	var pad = function (x) { return (x < 10 ? '0' : '') + x; };
+	var now = n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()) + 'T' + pad(n.getHours()) + ':' + pad(n.getMinutes());
+	document.querySelectorAll('input[data-at-default]').forEach(function (inp) {
+		if (!inp.value) { inp.value = now; }
+	});
 })();
 	</script>
 }
@@ -103,8 +111,8 @@ templ addScheduleForm(action string, files []FileOption, targets []string) {
 				}
 			</datalist>
 			<input name="cron" placeholder="cron, e.g. 0 2 * * *" class={ inputClass() }/>
-			<input name="at" placeholder="or once at, e.g. 2026-12-01T02:00" class={ inputClass() }/>
 			@zoneSelect("timezone", "")
+			@onceAtPicker("")
 			<label class="block text-xs text-zinc-400">
 				Missed runs
 				<select name="missed" class={ inputClass() }>
@@ -343,8 +351,8 @@ templ editModal(d ConfigPageData) {
 					case "schedule":
 						@editField("Target", "target", d.Edit.Target, "a task, or @bundle")
 						@editField("Cron", "cron", d.Edit.Cron, "e.g. 0 2 * * * (clear it to use once at)")
-						@editField("Once at", "at", d.Edit.At, "e.g. 2026-12-01T02:00 (clear it to use cron)")
 						@zoneSelect("timezone", d.Edit.Timezone)
+						@onceAtPicker(d.Edit.At)
 						<label class="block text-xs text-zinc-400">
 							Missed runs
 							<select name="missed" class={ inputClass() }>
@@ -367,5 +375,18 @@ templ editField(label, name, value, placeholder string) {
 	<label class="block text-xs text-zinc-400">
 		{ label }
 		<input name={ name } value={ value } placeholder={ placeholder } class={ inputClass() }/>
+	</label>
+}
+
+// onceAtPicker is the date and time of a one-off schedule, read in the zone chosen above it and
+// saved in UTC. A new one starts on the browser's current time (set by the zone script).
+templ onceAtPicker(value string) {
+	<label class="block text-xs text-zinc-400">
+		Once at (in the time zone above; leave empty to use cron)
+		if value != "" {
+			<input type="datetime-local" name="at_local" value={ value } class={ inputClass() }/>
+		} else {
+			<input type="datetime-local" name="at_local" data-at-default class={ inputClass() }/>
+		}
 	</label>
 }

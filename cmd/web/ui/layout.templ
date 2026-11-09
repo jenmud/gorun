@@ -53,6 +53,19 @@ function gorunFilter(input, listId) {
 	document.addEventListener('DOMContentLoaded', restore);
 	new MutationObserver(restore).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });
 })();
+// Opening a task or bundle link expands that item and scrolls to it.
+function gorunOpenHash() {
+	var id = decodeURIComponent(location.hash.slice(1));
+	var el = id ? document.getElementById(id) : null;
+	if (!el) { return; }
+	var card = el.querySelector(':scope > details');
+	if (card) { card.open = true; }
+	el.classList.add('ring-2', 'ring-accent');
+	setTimeout(function () { el.classList.remove('ring-2', 'ring-accent'); }, 2000);
+	el.scrollIntoView({ block: 'center' });
+}
+document.addEventListener('DOMContentLoaded', gorunOpenHash);
+window.addEventListener('hashchange', gorunOpenHash);
 // Tasks and bundles can't be run together: ticking one clears the other list.
 function gorunExclusive(box, otherId) {
 	if (!box.checked) { return; }

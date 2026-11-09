@@ -94,7 +94,7 @@ templ pageEditLink(page string, name string) {
 }
 
 templ taskCard(t TaskCard) {
-	<li data-filter={ taskFilter(t) } class="rounded-xl border border-zinc-800 bg-zinc-900/40">
+	<li id={ "task-" + t.Name } data-filter={ taskFilter(t) } class="rounded-xl border border-zinc-800 bg-zinc-900/40">
 		<details class="group/task">
 			<summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
 				<span class="inline-block text-zinc-500 transition group-open/task:rotate-90">▸</span>
@@ -138,8 +138,8 @@ templ taskCard(t TaskCard) {
 						</dl>
 					</details>
 				}
-				@linkRow("Depends on", t.DependsOn, "none")
-				@linkRow("In bundles", t.InBundles, "none")
+				@refRow("Depends on", t.DependsOn, "none", false)
+				@refRow("In bundles", t.InBundles, "none", true)
 				@linkRow("Runs on", runsOn(t.RunsOn), "no server runs it")
 				if len(t.Files) > 0 {
 					<details class="group/files">
@@ -176,6 +176,28 @@ templ taskCard(t TaskCard) {
 }
 
 // linkRow is a labelled list of names, or what to say when there are none.
+// refRow lists task names, or bundle names when bundles is set, each linking to its card.
+templ refRow(label string, items []string, none string, bundles bool) {
+	<div class="flex flex-wrap items-baseline gap-2">
+		<span class="w-20 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ label }</span>
+		if len(items) == 0 {
+			<span class="text-zinc-500">{ none }</span>
+		}
+		for _, it := range items {
+			if bundles {
+				<a href={ bundleHref(it) } class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-zinc-300 hover:bg-zinc-700 hover:text-white">{ it }</a>
+			} else {
+				<a href={ taskHref(it) } class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-zinc-300 hover:bg-zinc-700 hover:text-white">{ it }</a>
+			}
+		}
+	</div>
+}
+
+// taskLink and refLink link a task, or a "@bundle" reference, to where it is defined.
+templ refLink(ref string, class string) {
+	<a href={ refHref(ref) } class={ class }>{ ref }</a>
+}
+
 templ linkRow(label string, items []string, none string) {
 	<div class="flex flex-wrap items-baseline gap-2">
 		<span class="w-20 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ label }</span>
@@ -258,7 +280,7 @@ templ bundleEditPanel(d BundlesPageData) {
 }
 
 templ bundleCard(b BundleCard) {
-	<li data-filter={ bundleFilter(b) } class="rounded-xl border border-zinc-800 bg-zinc-900/40">
+	<li id={ "bundle-" + b.Name } data-filter={ bundleFilter(b) } class="rounded-xl border border-zinc-800 bg-zinc-900/40">
 		<details class="group/bundle">
 			<summary class="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
 				<span class="inline-block text-zinc-500 transition group-open/bundle:rotate-90">▸</span>
@@ -279,7 +301,7 @@ templ bundleCard(b BundleCard) {
 						for i, it := range b.Items {
 							<li class="flex items-baseline gap-3 px-3 py-1.5">
 								<span class="w-5 text-right font-mono text-zinc-600">{ itoa(i+1) }</span>
-								<span class="font-mono text-zinc-100">{ it.Ref }</span>
+								@refLink(it.Ref, "font-mono text-zinc-100 hover:text-accent")
 								if it.IsBundle {
 									<span class="rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] uppercase text-violet-300">bundle</span>
 								}
@@ -288,8 +310,8 @@ templ bundleCard(b BundleCard) {
 						}
 					</ol>
 				</details>
-				@linkRow("Expands to", b.Expanded, "no tasks")
-				@linkRow("Used by", b.UsedBy, "no other bundle")
+				@refRow("Expands to", b.Expanded, "no tasks", false)
+				@refRow("Used by", b.UsedBy, "no other bundle", true)
 				if len(b.Vars) > 0 {
 					<details class="group/bvars">
 						<summary class="flex cursor-pointer list-none items-center gap-2">

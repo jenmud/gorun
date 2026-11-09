@@ -46,6 +46,10 @@ Runs and live updates need [NATS](#events-nats). The pages use [templ](https://t
 > tasks, browse its folders and edit the Gorunfile. Keep it on a trusted network, or bind it to
 > `127.0.0.1:8080` and reach it over an SSH tunnel.
 
+Every task and bundle name in the web UI is a link to its card: a schedule's target, a bundle's
+tasks, a task's dependencies, run and history task names. The link opens that card and scrolls to
+it.
+
 ## Logs and OpenTelemetry
 
 gorun's own log messages go to `~/.gorun/gorun.log` (or `GORUN_LOG_FILE`), not the terminal. The

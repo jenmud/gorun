@@ -117,3 +117,27 @@ func TestAddAndEditForms(t *testing.T) {
 		t.Error("schedules page has no add form")
 	}
 }
+
+// Task and bundle names link to their cards, and the cards have the matching ids.
+func TestTaskAndBundleNamesLinkToTheirCards(t *testing.T) {
+	a, path := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	post(t, a, "/bundles/add", url.Values{"name": {"base"}, "tasks": {"hello"}, "file": {path}})
+	post(t, a, "/schedules/add", url.Values{
+		"name": {"nightly"}, "target": {"@base"}, "cron": {"0 2 * * *"}, "missed": {"skip"}, "file": {path},
+	})
+
+	cases := map[string][]string{
+		"/schedules": {`href="/bundles#bundle-base"`},
+		"/bundles":   {`href="/tasks#task-hello"`, `id="bundle-base"`},
+		"/tasks":     {`id="task-hello"`},
+	}
+	for page, wants := range cases {
+		body := get(t, a, page).Body.String()
+		for _, want := range wants {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s missing %s", page, want)
+			}
+		}
+	}
+}

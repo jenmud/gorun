@@ -151,7 +151,7 @@ templ statsPanel(s StatsView) {
 				<ul class="space-y-2">
 					for _, t := range s.Slowest {
 						<li class="flex items-center gap-3 text-sm">
-							<span class="min-w-0 flex-1 truncate font-mono text-zinc-200">{ t.Name }</span>
+							<a href={ taskHref(t.Name) } class="min-w-0 flex-1 truncate font-mono text-zinc-200 hover:text-accent">{ t.Name }</a>
 							<span class="truncate text-xs text-zinc-500">{ t.Server }</span>
 							<span class="w-16 text-right font-mono text-xs text-zinc-300">{ formatDuration(t.Average) }</span>
 						</li>

@@ -56,7 +56,7 @@ templ SchedulesPage(d SchedulesPageData) {
 										<div class="text-xs text-zinc-500">{ r.Description }</div>
 									}
 								</td>
-								<td class="px-4 py-2 font-mono text-xs text-zinc-300">{ r.Target }</td>
+								<td class="px-4 py-2 font-mono text-xs">@refLink(r.Target, "text-zinc-300 hover:text-accent")</td>
 								<td class="px-4 py-2">
 									<div class="font-mono text-xs text-zinc-300">{ r.When }</div>
 									<div class="text-xs text-zinc-500">written in { r.Zone }</div>

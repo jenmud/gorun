@@ -403,3 +403,21 @@ func foldAttrs(key string) templ.Attributes {
 	}
 	return templ.Attributes{"data-key": key}
 }
+
+// taskHref opens the tasks page with the named task expanded.
+func taskHref(name string) templ.SafeURL {
+	return templ.SafeURL("/tasks#task-" + url.PathEscape(name))
+}
+
+// bundleHref opens the bundles page with the named bundle expanded.
+func bundleHref(name string) templ.SafeURL {
+	return templ.SafeURL("/bundles#bundle-" + url.PathEscape(name))
+}
+
+// refHref links a task, or a "@bundle" reference, to its page.
+func refHref(ref string) templ.SafeURL {
+	if name, ok := strings.CutPrefix(ref, "@"); ok {
+		return bundleHref(name)
+	}
+	return taskHref(ref)
+}

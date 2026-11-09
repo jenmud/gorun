@@ -18,14 +18,14 @@ func TestExpandEnv(t *testing.T) {
 		"plain":                    "plain",
 	}
 	for in, want := range tests {
-		if got := expandEnv(in); got != want {
-			t.Errorf("expandEnv(%q) = %q, want %q", in, got, want)
+		if got := ExpandEnv(in); got != want {
+			t.Errorf("ExpandEnv(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
 
 func TestEnvLine(t *testing.T) {
-	got, err := envLine(map[string]string{"token": "it's $HOME", "A": "1"})
+	got, err := EnvLine(map[string]string{"token": "it's $HOME", "A": "1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,8 +34,8 @@ func TestEnvLine(t *testing.T) {
 	}
 
 	for _, vars := range []map[string]string{{"A": "two\nlines"}, {"BAD-NAME": "x"}, {"1A": "x"}} {
-		if _, err := envLine(vars); err == nil {
-			t.Errorf("envLine(%v) succeeded, want an error", vars)
+		if _, err := EnvLine(vars); err == nil {
+			t.Errorf("EnvLine(%v) succeeded, want an error", vars)
 		}
 	}
 }

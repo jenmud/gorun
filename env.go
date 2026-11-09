@@ -3,6 +3,7 @@ package gorun
 import (
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"regexp"
 	"slices"
@@ -14,21 +15,16 @@ const envPrelude = `IFS= read -r __gorun_env && eval "$__gorun_env" && unset __g
 
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-// expandEnv expands $VAR and ${VAR} in an envvars value from gorun's own
+// ExpandEnv expands $VAR and ${VAR} in an envvars value from gorun's own
 // environment (including .env), so secrets such as tokens stay out of the
 // Gorunfile. $$ is a literal $.
-func expandEnv(value string) string {
+func ExpandEnv(value string) string {
 	return os.Expand(value, func(name string) string {
 		if name == "$" {
 			return "$"
 		}
 		return os.Getenv(name)
 	})
-}
-
-// ExpandEnv is the exported form of expandEnv.
-func ExpandEnv(value string) string {
-	return expandEnv(value)
 }
 
 // envStdin returns the stdin that feeds envPrelude, or nil when there are no vars.
@@ -41,7 +37,7 @@ func envStdin(vars map[string]string) (io.Reader, error) {
 		return nil, nil
 	}
 
-	line, err := envLine(vars)
+	line, err := EnvLine(vars)
 	if err != nil {
 		return nil, err
 	}
@@ -50,23 +46,11 @@ func envStdin(vars map[string]string) (io.Reader, error) {
 }
 
 // EnvLine renders vars as a single `export KEY='value' ...` shell line, keys
-// upper-cased and sorted. It is the exported form of envLine.
-func EnvLine(vars map[string]string) (string, error) {
-	return envLine(vars)
-}
-
-// envLine renders vars as a single `export KEY='value' ...` shell line, keys
 // upper-cased and sorted.
-func envLine(vars map[string]string) (string, error) {
-	keys := make([]string, 0, len(vars))
-	for k := range vars {
-		keys = append(keys, k)
-	}
-	slices.Sort(keys)
-
+func EnvLine(vars map[string]string) (string, error) {
 	var b strings.Builder
 	b.WriteString("export")
-	for _, k := range keys {
+	for _, k := range slices.Sorted(maps.Keys(vars)) {
 		name := strings.ToUpper(k)
 		if !envName.MatchString(name) {
 			return "", fmt.Errorf("envvar %q is not a valid variable name", k)

@@ -99,7 +99,7 @@ func Run(configPath string) {
 	a := &app{
 		store: st,
 		nc:    nc,
-		topic: topicName(),
+		topic: inats.Topic(),
 		hub:   &hub{clients: map[chan string]struct{}{}},
 		runs:  map[string]context.CancelFunc{},
 		nats:  natsStartState(emb, nc, err, envvars.Get("GORUN_SKIP_NATS") != ""),
@@ -178,14 +178,6 @@ func (a *app) routes() *http.ServeMux {
 	mux.HandleFunc("POST /config/save", a.saveHandler)
 	mux.HandleFunc("POST /config/discard", a.discardHandler)
 	return mux
-}
-
-// topicName is the NATS subject events are published on.
-func topicName() string {
-	if t := envvars.Get("GORUN_EVENT_TOPIC"); t != "" {
-		return t
-	}
-	return "gorun.events"
 }
 
 // openStore opens the history database, or returns nil so the UI still works without it.

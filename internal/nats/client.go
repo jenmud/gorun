@@ -20,6 +20,11 @@ type Client = natsclient.Conn
 // DefaultURL is the default NATS URL.
 const DefaultURL = natsclient.DefaultURL
 
+// Topic is the subject run events are published on: GORUN_EVENT_TOPIC, or "gorun.events".
+func Topic() string {
+	return cmp.Or(envvars.Get("GORUN_EVENT_TOPIC"), "gorun.events")
+}
+
 // NewClient connects to NATS, configured by the GORUN_NATS_CLIENT_* environment variables.
 func NewClient() (*Client, error) {
 	start := time.Now()

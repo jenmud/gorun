@@ -2,25 +2,12 @@ package gorun
 
 import (
 	"bytes"
-	"context"
-	"errors"
+	"cmp"
 	"fmt"
-	"io"
-	"log/slog"
 	"os"
-	"os/exec"
 	"reflect"
-	"strings"
-	"sync"
 	"text/template"
 	"time"
-
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/metric"
-	"golang.org/x/crypto/ssh"
-
-	"github.com/jenmud/gorun/internal/envvars"
 )
 
 const (
@@ -43,7 +30,9 @@ const (
 	RerunUnsafe = "unsafe"
 )
 
-// Copy represents a file copy operation.
+// Copy is one file copy of a task. A source is one of Src (a file or directory), SrcTpl (a
+// template rendered for each server) or Content (inline text); the target is Dst, or Dir to keep
+// the source's name. The other fields are alternative spellings of those keys.
 type Copy struct {
 	Src      string `toml:"src"`
 	SrcFile  string `toml:"src_file,omitempty"`
@@ -57,6 +46,14 @@ type Copy struct {
 	Dest     string `toml:"dest,omitempty"`
 	Mode     string `toml:"mode,omitempty"`
 	Perm     string `toml:"perm,omitempty"`
+}
+
+// normalized returns the copy with its alternative keys folded into Src, SrcTpl and Dst.
+func (c Copy) normalized() Copy {
+	c.Src = cmp.Or(c.Src, c.SrcFile)
+	c.SrcTpl = cmp.Or(c.SrcTpl, c.Template, c.SrcTmpl)
+	c.Dst = cmp.Or(c.Dst, c.DstPath, c.Dest)
+	return c
 }
 
 // Task is a task to execute on one or more servers.
@@ -130,92 +127,94 @@ func (t Task) TimeoutDuration() time.Duration {
 	return DefaultTaskTimeout
 }
 
-// Command reads the command from either inline cmd or from a file
-func (t *Task) Command() (string, error) {
-	return t.CommandFor(nil)
+// copies returns every copy of the task, from all four spellings of the key, normalized.
+func (t Task) copies() []Copy {
+	var out []Copy
+	for _, list := range [][]Copy{t.Copy, t.Copies, t.Upload, t.Files} {
+		for _, c := range list {
+			out = append(out, c.normalized())
+		}
+	}
+	return out
 }
 
-// CommandFor reads the command from either inline cmd or from a file,
-// and compiles templates with the provided server.
-func (t *Task) CommandFor(server any) (string, error) {
-	if t.CmdTemplate != "" {
-		tmpl, err := template.New(t.Name).Parse(t.CmdTemplate)
-		if err != nil {
-			return "", fmt.Errorf("failed to parse command template for task %s: %w", t.Name, err)
-		}
-		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, t.templateData(server)); err != nil {
-			return "", fmt.Errorf("failed to execute command template for task %s: %w", t.Name, err)
-		}
-		return buf.String(), nil
-	}
+// commandSources are the task's four ways to give a command, of which at most one may be set.
+func (t Task) commandSources() []string {
+	return []string{t.Cmd, t.CmdFile, t.CmdTemplate, t.CmdTemplateFile}
+}
 
-	if t.CmdTemplateFile != "" {
+// hasCommand reports whether the task runs a command (as opposed to only copying files).
+func (t Task) hasCommand() bool {
+	return cmp.Or(t.commandSources()...) != ""
+}
+
+// CommandFor returns the task's command: cmd as written, the contents of cmd_file, or
+// cmd_template / cmd_template_file rendered for server (a Server, a *Server or nil).
+func (t *Task) CommandFor(server any) (string, error) {
+	switch {
+	case t.CmdTemplate != "":
+		return t.render("command template for task "+t.Name, t.CmdTemplate, server)
+	case t.CmdTemplateFile != "":
 		content, err := os.ReadFile(t.CmdTemplateFile)
 		if err != nil {
 			return "", fmt.Errorf("failed to read command template file %s: %w", t.CmdTemplateFile, err)
 		}
-		tmpl, err := template.New(t.Name).Parse(string(content))
-		if err != nil {
-			return "", fmt.Errorf("failed to parse command template file %s: %w", t.CmdTemplateFile, err)
-		}
-		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, t.templateData(server)); err != nil {
-			return "", fmt.Errorf("failed to execute command template file %s: %w", t.CmdTemplateFile, err)
-		}
-		return buf.String(), nil
-	}
-
-	if t.Cmd != "" {
+		return t.render("command template file "+t.CmdTemplateFile, string(content), server)
+	case t.Cmd != "":
 		return t.Cmd, nil
-	}
-
-	if t.CmdFile != "" {
-		// Read command from file
+	case t.CmdFile != "":
 		content, err := os.ReadFile(t.CmdFile)
 		if err != nil {
 			return "", fmt.Errorf("failed to read command file %s: %w", t.CmdFile, err)
 		}
 		return string(content), nil
 	}
-
 	return "", fmt.Errorf("task %s has no command specified", t.Name)
 }
 
-// templateData is the value handed to cmd_template and copy templates. It keeps the
-// server's fields at the top level (so existing templates keep working) and adds
-// the task's vars under both "Vars" and "vars".
+// render executes a template with the task's template data. what names it in errors.
+func (t *Task) render(what, text string, server any) (string, error) {
+	tmpl, err := template.New(t.Name).Parse(text)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse %s: %w", what, err)
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, t.templateData(server)); err != nil {
+		return "", fmt.Errorf("failed to execute %s: %w", what, err)
+	}
+	return buf.String(), nil
+}
+
+// templateData is what cmd_template and copy templates see: every exported field of the server
+// at the top level ({{.Name}}, {{.Hostname}}, ...), the server itself as .Server, and the task's
+// vars as .Vars and .vars. Envvars are expanded from gorun's environment, so templates see the
+// resolved values and not the "$VAR" references.
 func (t *Task) templateData(server any) map[string]any {
 	data := map[string]any{}
+	var s *Server
 	switch v := server.(type) {
 	case *Server:
-		if v != nil {
-			rv := reflect.ValueOf(*v)
-			rt := rv.Type()
-			for i := 0; i < rt.NumField(); i++ {
-				f := rt.Field(i)
-				if !f.IsExported() {
-					continue
-				}
-				data[f.Name] = rv.Field(i).Interface()
-			}
-			data["Server"] = v
-			data["IsLocal"] = v.IsLocal()
-			data["Address"] = v.Address()
-		}
+		s = v
 	case Server:
-		rv := reflect.ValueOf(v)
-		rt := rv.Type()
-		for i := 0; i < rt.NumField(); i++ {
-			f := rt.Field(i)
-			if !f.IsExported() {
-				continue
+		s = &v
+	}
+	if s != nil {
+		expanded := *s
+		if s.EnvVars != nil {
+			expanded.EnvVars = make(map[string]string, len(s.EnvVars))
+			for k, v := range s.EnvVars {
+				expanded.EnvVars[k] = ExpandEnv(v)
 			}
-			data[f.Name] = rv.Field(i).Interface()
 		}
-		data["Server"] = v
-		data["IsLocal"] = v.IsLocal()
-		data["Address"] = v.Address()
+		fields := reflect.ValueOf(expanded)
+		for i := range fields.NumField() {
+			if f := fields.Type().Field(i); f.IsExported() {
+				data[f.Name] = fields.Field(i).Interface()
+			}
+		}
+		data["Server"] = &expanded
+		data["IsLocal"] = expanded.IsLocal()
+		data["Address"] = expanded.Address()
 	}
 	vars := t.Vars
 	if vars == nil {
@@ -223,734 +222,68 @@ func (t *Task) templateData(server any) map[string]any {
 	}
 	data["Vars"] = vars
 	data["vars"] = vars
-
-	// Envvars are expanded from gorun's own environment, so templates see the
-	// resolved values rather than the raw "$VAR" references.
-	if env, ok := data["EnvVars"].(map[string]string); ok && env != nil {
-		expanded := make(map[string]string, len(env))
-		for k, v := range env {
-			expanded[k] = expandEnv(v)
-		}
-		data["EnvVars"] = expanded
-	}
-
-	// Keep the server exposed to templates consistent with the expanded envvars.
-	if s, ok := data["Server"].(*Server); ok && s != nil {
-		cp := *s
-		if cp.EnvVars != nil {
-			expanded := make(map[string]string, len(cp.EnvVars))
-			for k, v := range cp.EnvVars {
-				expanded[k] = expandEnv(v)
-			}
-			cp.EnvVars = expanded
-		}
-		data["Server"] = &cp
-	}
-	if s, ok := data["Server"].(Server); ok {
-		cp := s
-		if cp.EnvVars != nil {
-			expanded := make(map[string]string, len(cp.EnvVars))
-			for k, v := range cp.EnvVars {
-				expanded[k] = expandEnv(v)
-			}
-			cp.EnvVars = expanded
-		}
-		data["Server"] = cp
-	}
 	return data
 }
 
-// hasCommand reports whether the task runs a command (as opposed to only copying files).
-func (t Task) hasCommand() bool {
-	return t.Cmd != "" || t.CmdFile != "" || t.CmdTemplate != "" || t.CmdTemplateFile != ""
-}
-
-// validate runs some validations against the task checking that it is valid for execution.
+// validate checks the task can run: its settings are in range, it has one command or at least
+// one copy, and the files it names exist.
 func (t Task) validate() error {
-	if t.Timeout < 0 {
-		return fmt.Errorf("task %s timeout must not be negative", t.Name)
-	}
-
 	switch t.Rerun {
 	case "", RerunSafe, RerunUnsafe:
 	default:
 		return fmt.Errorf("task %s rerun must be %q or %q, got %q", t.Name, RerunSafe, RerunUnsafe, t.Rerun)
 	}
-
-	if t.Retries < 0 {
+	switch {
+	case t.Timeout < 0:
+		return fmt.Errorf("task %s timeout must not be negative", t.Name)
+	case t.Retries < 0:
 		return fmt.Errorf("task %s retries must not be negative", t.Name)
-	}
-
-	if t.RetryDelay != nil && *t.RetryDelay < 0 {
+	case t.RetryDelay != nil && *t.RetryDelay < 0:
 		return fmt.Errorf("task %s retry_delay must not be negative", t.Name)
 	}
 
-	count := 0
-	if t.Cmd != "" {
-		count++
+	commands := 0
+	for _, source := range t.commandSources() {
+		if source != "" {
+			commands++
+		}
 	}
-	if t.CmdFile != "" {
-		count++
-	}
-	if t.CmdTemplate != "" {
-		count++
-	}
-	if t.CmdTemplateFile != "" {
-		count++
-	}
-	if count > 1 {
+	copies := t.copies()
+	switch {
+	case commands > 1:
 		return fmt.Errorf("task %s cannot have more than one of cmd, cmd_file, cmd_template, cmd_template_file specified", t.Name)
-	}
-
-	copies := t.getCopies()
-	hasAction := count > 0 || len(copies) > 0
-	if !hasAction {
+	case commands == 0 && len(copies) == 0:
 		return fmt.Errorf("task %s has no command specified", t.Name)
-	}
-
-	if t.CmdFile != "" {
-		if _, err := os.Stat(t.CmdFile); os.IsNotExist(err) {
-			return fmt.Errorf("command file %s does not exist", t.CmdFile)
-		}
-	}
-
-	if t.CmdTemplateFile != "" {
-		if _, err := os.Stat(t.CmdTemplateFile); os.IsNotExist(err) {
-			return fmt.Errorf("command template file %s does not exist", t.CmdTemplateFile)
-		}
+	case missing(t.CmdFile):
+		return fmt.Errorf("command file %s does not exist", t.CmdFile)
+	case missing(t.CmdTemplateFile):
+		return fmt.Errorf("command template file %s does not exist", t.CmdTemplateFile)
 	}
 
 	for _, c := range copies {
-		src := c.Src
-		if c.SrcFile != "" && src == "" {
-			src = c.SrcFile
-		}
-		if c.Template != "" && c.SrcTpl == "" {
-			c.SrcTpl = c.Template
-		}
-		if c.SrcTmpl != "" && c.SrcTpl == "" {
-			c.SrcTpl = c.SrcTmpl
-		}
-		if c.Content != "" {
-			// content is fine
-		} else if c.SrcTpl != "" {
-			if _, err := os.Stat(c.SrcTpl); os.IsNotExist(err) {
+		switch {
+		case c.Content != "":
+		case c.SrcTpl != "":
+			if missing(c.SrcTpl) {
 				return fmt.Errorf("copy template %s does not exist", c.SrcTpl)
 			}
-		} else if src == "" {
+		case c.Src == "":
 			return fmt.Errorf("task %s copy requires src", t.Name)
-		} else {
-			if _, err := os.Stat(src); os.IsNotExist(err) {
-				return fmt.Errorf("copy source %s does not exist", src)
-			}
+		case missing(c.Src):
+			return fmt.Errorf("copy source %s does not exist", c.Src)
 		}
-		if c.Dst == "" && c.DstPath == "" && c.Dest == "" && c.Dir == "" {
+		if c.Dst == "" && c.Dir == "" {
 			return fmt.Errorf("task %s copy requires dst or dir", t.Name)
 		}
 	}
-
 	return nil
 }
 
-func (t *Task) getCopies() []Copy {
-	var out []Copy
-	out = append(out, t.Copy...)
-	out = append(out, t.Copies...)
-	out = append(out, t.Upload...)
-	out = append(out, t.Files...)
-	return out
-}
-
-// TaskExec is a execution task to be run on a server.
-type TaskExec struct {
-	task        Task
-	command     string
-	logger      *slog.Logger
-	server      *ssh.Client
-	serverName  string
-	gorunServer *Server
-	gorunUUID   string
-	createdAt   time.Time
-	startedAt   time.Time
-	completedAt time.Time
-	stdout      []byte
-	stderr      []byte
-	exitCode    int
-	// progress, when set, is told how far each copy has got.
-	progress CopyProgressFunc
-	// stopped is set when the task stopped because its context was canceled or
-	// its timeout expired. Such attempts are not retried.
-	stopped bool
-}
-
-// resetForRetry clears the result of the previous attempt so the task can run
-// again with a clean exit code, output and command.
-func (t *TaskExec) resetForRetry() {
-	t.stdout = nil
-	t.stderr = nil
-	t.exitCode = 0
-	t.command = ""
-	t.stopped = false
-	t.startedAt = time.Time{}
-	t.completedAt = time.Time{}
-}
-
-// waitForRetry pauses before the next attempt. It returns false when the run is
-// canceled while waiting, so the task is not retried.
-func (t *TaskExec) waitForRetry(ctx context.Context) bool {
-	delay := t.task.RetryDelayDuration()
-	if delay <= 0 {
-		return ctx.Err() == nil
-	}
-
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-
-	select {
-	case <-timer.C:
-		return true
-	case <-ctx.Done():
+// missing reports whether path is set but names nothing on disk.
+func missing(path string) bool {
+	if path == "" {
 		return false
 	}
-}
-
-// contextErr turns a canceled or timed-out context into an error that explains
-// why the task stopped.
-func (t *TaskExec) contextErr(err error) error {
-	if errors.Is(err, context.DeadlineExceeded) {
-		return fmt.Errorf("task %q timed out after %s", t.task.Name, t.task.TimeoutDuration())
-	}
-
-	return fmt.Errorf("task %q was interrupted", t.task.Name)
-}
-
-// appendStderr adds a reason to the captured stderr without losing any output
-// the command already produced. This keeps the reason visible to consumers
-// that only see stdout/stderr (the web UI and history database).
-func (t *TaskExec) appendStderr(msg string) {
-	if len(t.stderr) > 0 && !bytes.HasSuffix(t.stderr, []byte("\n")) {
-		t.stderr = append(t.stderr, '\n')
-	}
-	t.stderr = append(t.stderr, msg...)
-}
-
-// Fail will fail a task.
-func (t *TaskExec) Fail(ctx context.Context, err error) error {
-	ctx, span := tracer.Start(ctx, "Fail")
-	defer span.End()
-
-	span.SetAttributes(
-		attribute.String("task.name", t.task.Name),
-		attribute.Bool("task.sudo", t.task.Sudo),
-	)
-
-	if err != nil {
-		// report the command's real exit code when there is one
-		var sshErr *ssh.ExitError
-		var execErr *exec.ExitError
-
-		ctxErr := ctx.Err()
-		t.stopped = ctxErr != nil
-
-		switch {
-		case errors.Is(ctxErr, context.DeadlineExceeded):
-			t.exitCode = 124 // same convention as timeout(1)
-			err = t.contextErr(ctxErr)
-		case errors.Is(ctxErr, context.Canceled):
-			t.exitCode = 130 // interrupted by SIGINT
-			err = t.contextErr(ctxErr)
-		case errors.As(err, &sshErr):
-			t.exitCode = sshErr.ExitStatus()
-		case errors.As(err, &execErr):
-			t.exitCode = execErr.ExitCode()
-		case errors.Is(err, exec.ErrWaitDelay):
-			t.exitCode = 2
-			err = fmt.Errorf("task %q finished but left a background process holding its output open", t.task.Name)
-		default:
-			t.exitCode = 2
-		}
-
-		if ctxErr != nil {
-			t.appendStderr(err.Error())
-		}
-
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-
-		t.logger.ErrorContext(
-			ctx,
-			"task failed",
-			slog.Int("exitcode", t.exitCode),
-			slog.String("stderr", string(t.stderr)),
-			slog.String("stdout", string(t.stdout)),
-			slog.String("reason", err.Error()),
-		)
-
-		span.SetAttributes(attribute.Int("task.exit_code", t.exitCode))
-
-		return err
-	}
-
-	t.exitCode = 0
-	span.SetAttributes(attribute.Int("task.exit_code", t.exitCode))
-	span.SetStatus(codes.Ok, "")
-	return nil
-}
-
-// Terminates the task.
-func (t *TaskExec) Terminate(ctx context.Context, err error) error {
-	ctx, span := tracer.Start(ctx, "Terminate")
-	defer span.End()
-
-	span.SetAttributes(attribute.String("task.name", t.task.Name))
-
-	if err != nil {
-		t.stopped = true
-		if errors.Is(err, context.DeadlineExceeded) {
-			t.exitCode = 124 // same convention as timeout(1)
-			err = t.contextErr(err)
-		} else {
-			t.exitCode = 130 // interrupted by SIGINT
-			err = t.contextErr(err)
-		}
-		t.appendStderr(err.Error())
-
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-
-		t.logger.WarnContext(
-			ctx,
-			"task terminated",
-			slog.Int("exitcode", t.exitCode),
-			slog.String("stderr", string(t.stderr)),
-			slog.String("stdout", string(t.stdout)),
-			slog.String("reason", err.Error()),
-		)
-
-		span.SetAttributes(attribute.Int("task.exit_code", t.exitCode))
-
-		return err
-	}
-
-	t.exitCode = 0
-	span.SetAttributes(attribute.Int("task.exit_code", t.exitCode))
-	span.SetStatus(codes.Ok, "")
-	return nil
-}
-
-// Completed marks the task as completed.
-func (t *TaskExec) Completed(ctx context.Context) error {
-	ctx, span := tracer.Start(ctx, "Completed")
-	defer span.End()
-
-	span.SetAttributes(
-		attribute.String("task.name", t.task.Name),
-		attribute.Int("task.exit_code", 0),
-	)
-	span.SetStatus(codes.Ok, "")
-
-	t.exitCode = 0
-
-	t.logger.DebugContext(
-		ctx,
-		"task completed",
-		slog.Int("exitcode", t.exitCode),
-		slog.String("stderr", string(t.stderr)),
-		slog.String("stdout", string(t.stdout)),
-	)
-
-	return nil
-}
-
-// NewLocalTaskExec creates TaskExecs that run on the local machine (no SSH).
-func NewLocalTaskExec(task ...Task) ([]*TaskExec, error) {
-	return NewTaskExec(nil, task...)
-}
-
-// NewTaskExec creates and sets up a task to be executed on the remote session.
-func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
-	tasks := make([]*TaskExec, len(task))
-
-	for i, t := range task {
-		if err := t.validate(); err != nil {
-			return nil, err
-		}
-
-		logger := NewLogger(t.LogLevel, logOutput, false)
-
-		logger = logger.With(
-			slog.String("name", t.Name),
-			slog.String("shell", t.Shell),
-			slog.Bool("sudo", t.Sudo),
-			slog.String("cmd_file", t.CmdFile),
-			slog.String("cmd_template_file", t.CmdTemplateFile),
-			slog.String("cmd_template", t.CmdTemplate),
-			slog.Any("depends_on", t.DependsOn),
-			slog.Any("envvars", envNames(t.EnvVars)), // names only, the values can be secrets
-		)
-
-		if server != nil {
-			logger = logger.With(
-				slog.Group(
-					"server",
-					slog.String("user", server.User()),
-					slog.String("session", server.RemoteAddr().String()),
-				),
-			)
-		} else {
-			logger = logger.With(
-				slog.Group(
-					"server",
-					slog.String("user", envvars.Get("USER")),
-					slog.String("session", "localhost"),
-				),
-			)
-		}
-
-		tasks[i] = &TaskExec{
-			task:      t,
-			server:    server,
-			logger:    logger,
-			createdAt: time.Now(),
-		}
-	}
-
-	return tasks, nil
-}
-
-// timeoutContext applies the task's timeout to ctx.
-func (t *TaskExec) timeoutContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	timeout := t.task.TimeoutDuration()
-	if timeout <= 0 {
-		return ctx, func() {}
-	}
-
-	return context.WithTimeout(ctx, timeout)
-}
-
-// LocalExecute executes the task as a local task.
-func (t *TaskExec) LocalExecute(ctx context.Context) error {
-	ctx, cancel := t.timeoutContext(ctx)
-	defer cancel()
-
-	return t.localExecute(ctx)
-}
-
-func (t *TaskExec) localExecute(ctx context.Context) error {
-	ctx, span := tracer.Start(ctx, "TaskExec.LocalExecute")
-	defer span.End()
-
-	span.SetAttributes(
-		attribute.String("task.name", t.task.Name),
-		attribute.Bool("task.sudo", t.task.Sudo),
-	)
-
-	t.logger.InfoContext(ctx, "running local task")
-
-	if t.serverName == "" {
-		t.serverName = "localhost"
-	}
-
-	defer func() {
-		// make sure that the completed at always is set at the end
-		t.completedAt = time.Now()
-	}()
-
-	defer func() {
-		status := "ok"
-		if t.exitCode != 0 {
-			status = "error"
-		}
-		attrs := metric.WithAttributes(
-			attribute.String("task.name", t.task.Name),
-			attribute.String("server.name", t.serverName),
-			attribute.String("task.status", status),
-		)
-		taskExecutions.Add(ctx, 1, attrs)
-		if !t.startedAt.IsZero() {
-			taskDuration.Record(ctx, time.Since(t.startedAt).Seconds(), attrs)
-		}
-	}()
-
-	var serverArg any
-	if t.gorunServer != nil {
-		serverArg = t.gorunServer
-	} else if t.serverName != "" {
-		serverArg = Server{Name: t.serverName}
-	}
-
-	t.startedAt = time.Now()
-	if err := CopyFilesContext(ctx, t.server, serverArg, &t.task, t.progress); err != nil {
-		return t.Fail(ctx, err)
-	}
-	if !t.task.hasCommand() {
-		return t.Completed(ctx)
-	}
-
-	command, err := t.task.CommandFor(serverArg)
-	if err != nil {
-		return t.Fail(ctx, err)
-	}
-
-	stdin, err := envStdin(t.task.EnvVars)
-	if err != nil {
-		return t.Fail(ctx, err)
-	}
-
-	name, args := t.task.localArgs(command, stdin != nil)
-	cmd := exec.CommandContext(ctx, name, args...)
-	configureCommand(cmd)
-	cmd.Stdin = stdin
-
-	// record the command as written (templates rendered), not the shell, sudo and
-	// envvars wrapping, so history and events show what the user wrote
-	t.command = command
-
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	t.startedAt = time.Now()
-
-	err = cmd.Run()
-
-	t.stderr = stderr.Bytes()
-	t.stdout = stdout.Bytes()
-
-	if err := t.Fail(ctx, err); err != nil {
-		return err
-	}
-
-	return t.Completed(ctx)
-}
-
-// execResult carries the output of a remote command back to Execute.
-type execResult struct {
-	stdout []byte
-	stderr []byte
-	err    error
-}
-
-// Execute executes the task with the attached SSH client.
-func (t *TaskExec) Execute(ctx context.Context) error {
-	ctx, span := tracer.Start(ctx, "TaskExec.Execute")
-	defer span.End()
-
-	if t.serverName == "" {
-		t.serverName = "localhost"
-	}
-
-	span.SetAttributes(
-		attribute.String("task.name", t.task.Name),
-		attribute.String("server.name", t.serverName),
-		attribute.Bool("task.sudo", t.task.Sudo),
-	)
-
-	ctx, cancel := t.timeoutContext(ctx)
-	defer cancel()
-
-	if t.server == nil {
-		return t.localExecute(ctx)
-	}
-
-	defer func() {
-		status := "ok"
-		if t.exitCode != 0 {
-			status = "error"
-		}
-		attrs := metric.WithAttributes(
-			attribute.String("task.name", t.task.Name),
-			attribute.String("server.name", t.serverName),
-			attribute.String("task.status", status),
-		)
-		taskExecutions.Add(ctx, 1, attrs)
-		if !t.startedAt.IsZero() {
-			taskDuration.Record(ctx, time.Since(t.startedAt).Seconds(), attrs)
-		}
-	}()
-
-	t.logger.InfoContext(ctx, "running task")
-
-	defer func() {
-		// make sure that the completed at always is set at the end
-		t.completedAt = time.Now()
-	}()
-
-	var serverArg any
-	if t.gorunServer != nil {
-		serverArg = t.gorunServer
-	} else if t.serverName != "" {
-		serverArg = Server{Name: t.serverName}
-	}
-
-	var (
-		command string
-		err     error
-	)
-	if t.task.hasCommand() {
-		command, err = t.task.CommandFor(serverArg)
-		if err != nil {
-			return t.Fail(ctx, fmt.Errorf("error running the task on the remote server: %w", err))
-		}
-	}
-
-	// record the command as written, before the envvars prelude, sudo wrapping and quoting below
-	t.command = command
-
-	var stdin io.Reader
-	if command != "" {
-		stdin, err = envStdin(t.task.EnvVars)
-		if err != nil {
-			return t.Fail(ctx, err)
-		}
-
-		switch {
-		case t.task.Sudo:
-			command = sudoWrap(envPreludeIf(stdin) + command)
-		case stdin != nil:
-			// run the prelude in sh, whatever the remote user's login shell is
-			command = shWrap(envPrelude + command)
-		}
-	}
-
-	t.startedAt = time.Now()
-
-	result := make(chan execResult, 1)
-
-	// The command's session is only opened once the files are copied, so a task
-	// holds at most one of the connection's session slots at a time and tasks
-	// can't deadlock waiting on each other's slots.
-	var (
-		sessionMu sync.Mutex
-		session   *ssh.Session
-	)
-
-	go func() {
-		if err := CopyFilesContext(ctx, t.server, serverArg, &t.task, t.progress); err != nil {
-			result <- execResult{err: fmt.Errorf("error running the task on the remote server: %w", err)}
-			return
-		}
-		if command == "" {
-			// copy-only task
-			result <- execResult{}
-			return
-		}
-
-		s, closeSession, err := newSession(ctx, t.server)
-		if err != nil {
-			result <- execResult{err: fmt.Errorf("error creating SSH session: %w", err)}
-			return
-		}
-		defer closeSession()
-
-		var stdout, stderr bytes.Buffer
-		s.Stdin = stdin
-		s.Stdout = &stdout
-		s.Stderr = &stderr
-
-		sessionMu.Lock()
-		session = s
-		sessionMu.Unlock()
-
-		err = s.Run(command)
-		if err != nil {
-			err = fmt.Errorf("error running the task on the remote server: %w", err)
-		}
-
-		result <- execResult{stdout: stdout.Bytes(), stderr: stderr.Bytes(), err: err}
-	}()
-
-	finish := func(res execResult) error {
-		t.stdout = res.stdout
-		t.stderr = res.stderr
-		switch {
-		case res.err != nil && ctx.Err() != nil && errors.Is(res.err, ctx.Err()):
-			// cancelled while waiting for a free session
-			return t.Terminate(ctx, ctx.Err())
-		case res.err != nil:
-			return t.Fail(ctx, res.err)
-		}
-		return t.Completed(ctx)
-	}
-
-	select {
-	case res := <-result:
-		return finish(res)
-	case <-ctx.Done():
-		// The command may have finished at the same moment the deadline hit.
-		// Prefer its result over reporting a timeout.
-		select {
-		case res := <-result:
-			return finish(res)
-		default:
-		}
-
-		// Ask the remote command to stop. Closing the client also unblocks a
-		// stuck copy or command, so Execute can return promptly.
-		sessionMu.Lock()
-		if session != nil {
-			_ = session.Signal(ssh.SIGTERM)
-		}
-		sessionMu.Unlock()
-		_ = t.server.Close()
-
-		select {
-		case res := <-result:
-			t.stdout = res.stdout
-			t.stderr = res.stderr
-		case <-time.After(taskKillGrace):
-			// The connection didn't close in time; don't hold up the whole run.
-		}
-
-		return t.Terminate(ctx, ctx.Err())
-	}
-}
-
-// localArgs returns the program and arguments that run command locally: through
-// the task's shell (sh -c by default, so multi-word commands work), under sudo if set.
-// With env, a plain sh first runs envPrelude and then execs the task's shell, so that
-// shell never sees the values.
-func (t *Task) localArgs(command string, env bool) (string, []string) {
-	name, args := "sh", []string{"-c", command}
-
-	if t.Shell != "" {
-		scmd := strings.Split(t.Shell, " ")
-		name = scmd[0]
-
-		args = append([]string{}, scmd[1:]...)
-		args = append(args, command)
-	}
-
-	if env {
-		args = append([]string{"-c", envPrelude + `exec "$@"`, "sh", name}, args...)
-		name = "sh"
-	}
-
-	if t.Sudo {
-		// -n: fail instead of hanging on a password prompt
-		args = append([]string{"-n", name}, args...)
-		name = "sudo"
-	}
-
-	return name, args
-}
-
-// sudoWrap runs command as root through sh, single-quoting it.
-func sudoWrap(command string) string {
-	return "sudo -n " + shWrap(command)
-}
-
-// shWrap runs command through sh, single-quoting it.
-func shWrap(command string) string {
-	return "sh -c '" + strings.ReplaceAll(command, "'", `'\''`) + "'"
-}
-
-// envPreludeIf returns envPrelude when there is env stdin to read.
-func envPreludeIf(stdin io.Reader) string {
-	if stdin == nil {
-		return ""
-	}
-	return envPrelude
+	_, err := os.Stat(path)
+	return os.IsNotExist(err)
 }

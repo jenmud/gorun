@@ -1,29 +1,19 @@
 package gorun
 
 import (
+	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"maps"
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
-	"time"
 
 	"github.com/BurntSushi/toml"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/metric"
-	"golang.org/x/crypto/ssh"
 
 	"github.com/jenmud/gorun/internal/envvars"
 )
@@ -32,37 +22,11 @@ func init() {
 	// Default the OTEL service name to GORUN_NAME when OTEL_SERVICE_NAME is
 	// not explicitly provided, so traces/metrics are attributed correctly.
 	if _, ok := os.LookupEnv("OTEL_SERVICE_NAME"); !ok {
-		if name := envvars.Get("GORUN_NAME"); name != "" {
-			_ = os.Setenv("OTEL_SERVICE_NAME", name)
-		} else {
-			_ = os.Setenv("OTEL_SERVICE_NAME", "gorun")
-		}
+		_ = os.Setenv("OTEL_SERVICE_NAME", cmp.Or(envvars.Get("GORUN_NAME"), "gorun"))
 	}
 }
 
-var tracer = otel.Tracer("gorun")
-var meter = otel.Meter("gorun")
-
-// task metrics
-var (
-	taskExecutions, _ = meter.Int64Counter(
-		"gorun.task.executions",
-		metric.WithDescription("Number of task executions"),
-		metric.WithUnit("{execution}"),
-	)
-	taskDuration, _ = meter.Float64Histogram(
-		"gorun.task.duration",
-		metric.WithDescription("Task execution duration"),
-		metric.WithUnit("s"),
-	)
-	taskSkipped, _ = meter.Int64Counter(
-		"gorun.task.skipped",
-		metric.WithDescription("Number of tasks skipped due to a failed dependency"),
-		metric.WithUnit("{task}"),
-	)
-)
-
-// Config represents a config file.
+// Config is a loaded Gorunfile: the task library, the servers and how to run them.
 type Config struct {
 	Title           string            `toml:"title"`
 	GorunUUID       string            `toml:"-"`
@@ -166,9 +130,9 @@ func (c *Config) LoadFile(path string) error {
 	return newLoader(c).load(f, abs)
 }
 
-// ResolvePaths makes the relative file paths in the config (SSH identity files and task
-// cmd_files) relative to dir, normally the directory holding the config file, so gorun
-// can be run from anywhere.
+// ResolvePaths makes the relative file paths in the config (SSH identity and config files, task
+// cmd_files and copy sources) relative to dir, normally the directory holding the config file,
+// so gorun can be run from anywhere. A leading ~/ is the home directory.
 func (c *Config) ResolvePaths(dir string) {
 	resolve := func(path string) string {
 		if rest, ok := strings.CutPrefix(path, "~/"); ok {
@@ -181,67 +145,29 @@ func (c *Config) ResolvePaths(dir string) {
 		}
 		return filepath.Join(dir, path)
 	}
-
-	c.SSH.Identityfile = resolve(c.SSH.Identityfile)
-	if c.SSH.ConfigFile == "" && c.SSH.Config != "" {
-		c.SSH.ConfigFile = c.SSH.Config
+	resolveSSH := func(s *SSH) {
+		s.Identityfile = resolve(s.Identityfile)
+		s.ConfigFile = resolve(cmp.Or(s.ConfigFile, s.Config)) // config is another name for config_file
 	}
-	c.SSH.ConfigFile = resolve(c.SSH.ConfigFile)
 
+	resolveSSH(&c.SSH)
 	for name, task := range c.Tasks {
 		task.CmdFile = resolve(task.CmdFile)
 		task.CmdTemplateFile = resolve(task.CmdTemplateFile)
-		resolveCopy := func(c *Copy) {
-			if c.SrcFile != "" && c.Src == "" {
-				c.Src = c.SrcFile
+		for _, list := range [][]Copy{task.Copy, task.Copies, task.Upload, task.Files} {
+			for i, cp := range list {
+				cp = cp.normalized()
+				cp.Src, cp.SrcTpl = resolve(cp.Src), resolve(cp.SrcTpl)
+				list[i] = cp
 			}
-			if c.DstPath != "" && c.Dst == "" {
-				c.Dst = c.DstPath
-			}
-			if c.Dest != "" && c.Dst == "" {
-				c.Dst = c.Dest
-			}
-			if c.Template != "" && c.SrcTpl == "" {
-				c.SrcTpl = c.Template
-			}
-			if c.SrcTmpl != "" && c.SrcTpl == "" {
-				c.SrcTpl = c.SrcTmpl
-			}
-			if c.Dir != "" && c.Dst == "" && c.Src != "" {
-				// leave for runtime resolution
-			}
-			if c.Src != "" {
-				c.Src = resolve(c.Src)
-			}
-			if c.SrcTpl != "" {
-				c.SrcTpl = resolve(c.SrcTpl)
-			}
-		}
-		for i := range task.Copy {
-			resolveCopy(&task.Copy[i])
-		}
-		for i := range task.Copies {
-			resolveCopy(&task.Copies[i])
-		}
-		for i := range task.Upload {
-			resolveCopy(&task.Upload[i])
-		}
-		for i := range task.Files {
-			resolveCopy(&task.Files[i])
 		}
 		c.Tasks[name] = task
 	}
-
 	for i := range c.Servers {
-		c.Servers[i].SSH.Identityfile = resolve(c.Servers[i].SSH.Identityfile)
-		if c.Servers[i].SSH.ConfigFile == "" && c.Servers[i].SSH.Config != "" {
-			c.Servers[i].SSH.ConfigFile = c.Servers[i].SSH.Config
-		}
-		c.Servers[i].SSH.ConfigFile = resolve(c.Servers[i].SSH.ConfigFile)
-		// inherit global ssh config file when the server doesn't specify one
-		if c.Servers[i].SSH.ConfigFile == "" && c.SSH.ConfigFile != "" {
-			c.Servers[i].SSH.ConfigFile = c.SSH.ConfigFile
-		}
+		s := &c.Servers[i].SSH
+		resolveSSH(s)
+		// a server without its own SSH config file uses the global one
+		s.ConfigFile = cmp.Or(s.ConfigFile, c.SSH.ConfigFile)
 	}
 }
 
@@ -349,21 +275,17 @@ func editDistance(a, b string) int {
 	return d[len(s)][len(t)]
 }
 
-// ServersPipeline returns every server with its tasks resolved into run order.
+// ServersPipeline returns every server, by name, with its tasks resolved into run order.
 func (c *Config) ServersPipeline() (map[string]Server, error) {
-	sTasks := make(map[string]Server)
-
+	servers := make(map[string]Server, len(c.Servers))
 	for _, server := range c.Servers {
 		server, err := c.ServerPipeline(server)
-
 		if err != nil {
 			return nil, err
 		}
-
-		sTasks[server.Name] = server
+		servers[server.Name] = server
 	}
-
-	return sTasks, nil
+	return servers, nil
 }
 
 // ErrNoTasks is returned by Run when no selected server has a task to run. Local
@@ -442,56 +364,32 @@ func (c *Config) noTasksError() error {
 // ServerPipeline returns the server with its tasks, and their dependencies, resolved into run order.
 func (c *Config) ServerPipeline(server Server) (Server, error) {
 	names, err := c.ExpandTaskRefs(server.TaskNames...)
-	if err != nil {
-		err = fmt.Errorf("error building task pipeline for server %q: %w", server.Name, err)
-		return Server{}, err
+	if err == nil {
+		server.Tasks, err = resolveTasks(c.Tasks, names...)
 	}
-
-	pipeline, err := resolveTasks(c.Tasks, names...)
 	if err != nil {
-		err = fmt.Errorf("error building task pipeline for server %q: %w", server.Name, err)
-		return Server{}, err
+		return Server{}, fmt.Errorf("error building task pipeline for server %q: %w", server.Name, err)
 	}
 
 	// A task runs on one kind of server: local-only tasks never run over SSH, and
 	// other tasks never run on the local machine. Anything that depends on a
 	// dropped task is dropped too.
 	local := server.IsLocal()
-	pipeline = dropTasks(pipeline, func(t Task) bool { return t.Local != local })
-
-	server.Tasks = pipeline
+	server.Tasks = dropTasks(server.Tasks, func(t Task) bool { return t.Local != local })
 	return server, nil
 }
 
-// dropTasks removes the tasks drop reports, and tasks that transitively depend on them.
+// dropTasks removes the tasks drop reports, and tasks that transitively depend on them. tasks
+// must be in run order, dependencies first.
 func dropTasks(tasks []Task, drop func(Task) bool) []Task {
 	removed := map[string]bool{}
-	changed := true
-	out := append([]Task(nil), tasks...)
-	for changed {
-		changed = false
-		next := out[:0]
-		for _, t := range out {
-			if drop(t) {
-				removed[t.Name] = true
-				changed = true
-				continue
-			}
-			depRemoved := false
-			for _, dep := range t.DependsOn {
-				if removed[dep] {
-					depRemoved = true
-					break
-				}
-			}
-			if depRemoved {
-				removed[t.Name] = true
-				changed = true
-				continue
-			}
-			next = append(next, t)
+	out := make([]Task, 0, len(tasks))
+	for _, t := range tasks {
+		if drop(t) || slices.ContainsFunc(t.DependsOn, func(dep string) bool { return removed[dep] }) {
+			removed[t.Name] = true
+			continue
 		}
-		out = next
+		out = append(out, t)
 	}
 	return out
 }
@@ -526,15 +424,12 @@ func (c *Config) LocalServer() Server {
 // when none of them are. Task names may be globs or bundle references ("@name"),
 // just like --task.
 func (c *Config) RunLocal(ctx context.Context, names ...string) error {
-	var taskNames []string
+	taskNames := c.TaskNames()
 	if len(names) > 0 {
-		expanded, err := c.ExpandTaskPatterns(names...)
-		if err != nil {
+		var err error
+		if taskNames, err = c.ExpandTaskPatterns(names...); err != nil {
 			return err
 		}
-		taskNames = expanded
-	} else {
-		taskNames = c.TaskNames()
 	}
 	if len(taskNames) == 0 {
 		return errors.New("no tasks to run")
@@ -558,24 +453,16 @@ func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
 	}
 	c.Tasks[t.Name] = t
 
-	targets := make([]Server, len(server))
-	copy(targets, server)
+	targets := slices.Clone(server)
 	if len(targets) == 0 {
-		targets = make([]Server, len(c.Servers))
-		copy(targets, c.Servers)
+		targets = slices.Clone(c.Servers)
 	}
 	if len(targets) == 0 {
 		return errors.New("no servers to run on")
 	}
 
 	// local-only tasks run only on local servers, and other tasks only over SSH
-	filtered := targets[:0]
-	for _, s := range targets {
-		if s.IsLocal() == t.Local {
-			filtered = append(filtered, s)
-		}
-	}
-	targets = filtered
+	targets = slices.DeleteFunc(targets, func(s Server) bool { return s.IsLocal() != t.Local })
 	if len(targets) == 0 {
 		if t.Local {
 			return fmt.Errorf("task %q only runs locally", t.Name)
@@ -595,21 +482,15 @@ func (c *Config) RunTask(ctx context.Context, t Task, server ...Server) error {
 
 // TaskNames returns the task names in dependency order (dependencies first).
 func (c *Config) TaskNames() []string {
-	names := make([]string, 0, len(c.Tasks))
-	for name := range c.Tasks {
-		names = append(names, name)
-	}
+	names := slices.Sorted(maps.Keys(c.Tasks))
 	ordered, err := resolveTasks(c.Tasks, names...)
 	if err != nil {
-		// Fall back to alphabetical order if the dependency graph cannot be resolved.
-		sort.Strings(names)
-		return names
+		return names // alphabetical, when the dependency graph can't be resolved
 	}
-	out := make([]string, 0, len(ordered))
-	for _, t := range ordered {
-		out = append(out, t.Name)
+	for i, t := range ordered {
+		names[i] = t.Name
 	}
-	return out
+	return names
 }
 
 // selectedTaskSet returns the set of task names that should run when a task filter
@@ -640,543 +521,4 @@ func (c *Config) selectedTaskSet() map[string]bool {
 		visit(name)
 	}
 	return allowed
-}
-
-// Run runs all the tasks as returned by `Pipeline` on one or more servers.
-func (c *Config) Run(ctx context.Context, server ...Server) error {
-	if c.MaxParallel < 0 {
-		return errors.New("max_parallel must not be negative")
-	}
-
-	hostname, _ := os.Hostname()
-	if c.GorunUUID == "" {
-		c.GorunUUID = fmt.Sprintf("%s-%d-%d", hostname, os.Getpid(), time.Now().UnixNano())
-	}
-
-	started := time.Now()
-
-	var wg sync.WaitGroup
-
-	pipeline := make(map[string]Server)
-
-	if len(server) > 0 {
-		for _, s := range server {
-			s, err := c.ServerPipeline(s)
-			if err != nil {
-				err = fmt.Errorf("error buiding servers task execution pipeline: %w", err)
-				return err
-			}
-			pipeline[s.Name] = s
-		}
-	} else {
-		pipelines, err := c.ServersPipeline()
-		if err != nil {
-			err = fmt.Errorf("error buiding servers task execution pipeline: %w", err)
-			return err
-		}
-		pipeline = pipelines
-	}
-
-	// merge the global envvars, then the server's (including its groups'), then the
-	// task's own into each task, later ones winning. Keys are compared upper-cased and
-	// values expand $VAR from gorun's environment. Tasks share their library map
-	// between servers, so each one gets a fresh map.
-	for name, server := range pipeline {
-		// global vars are the lowest layer for server vars, mirroring envvars
-		if len(c.Vars) > 0 {
-			if server.Vars == nil {
-				server.Vars = map[string]any{}
-			}
-			for k, v := range c.Vars {
-				if _, ok := server.Vars[k]; !ok {
-					server.Vars[k] = v
-				}
-			}
-		}
-		// global envvars are the lowest layer for server envvars too, so templates
-		// and dumps see them alongside the server's own.
-		if len(c.EnvVars) > 0 {
-			if server.EnvVars == nil {
-				server.EnvVars = map[string]string{}
-			}
-			for k, v := range c.EnvVars {
-				if _, ok := server.EnvVars[k]; !ok {
-					server.EnvVars[k] = v
-				}
-			}
-		}
-		for i := range server.Tasks {
-			env := map[string]string{}
-			for _, layer := range []map[string]string{c.EnvVars, server.EnvVars, server.Tasks[i].EnvVars} {
-				for k, v := range layer {
-					env[strings.ToUpper(k)] = expandEnv(v)
-				}
-			}
-			server.Tasks[i].EnvVars = env
-		}
-		pipeline[name] = server
-	}
-
-	// apply --task filter (plus dependencies) if requested
-	if allowed := c.selectedTaskSet(); allowed != nil {
-		for name, server := range pipeline {
-			filtered := make([]Task, 0, len(server.Tasks))
-			for _, t := range server.Tasks {
-				if allowed[t.Name] {
-					filtered = append(filtered, t)
-				}
-			}
-			server.Tasks = filtered
-			pipeline[name] = server
-		}
-	}
-
-	// a server left with no tasks of its kind has nothing to do, so don't connect to it
-	for name, server := range pipeline {
-		if len(server.Tasks) == 0 {
-			delete(pipeline, name)
-		}
-	}
-	if len(pipeline) == 0 {
-		return c.noTasksError()
-	}
-
-	serverNames := slices.Sorted(maps.Keys(pipeline))
-
-	totalTasks := 0
-	for _, s := range pipeline {
-		totalTasks += len(s.Tasks)
-	}
-
-	maxParallel := c.MaxParallel
-	if maxParallel == 0 || maxParallel > len(pipeline) {
-		maxParallel = len(pipeline)
-	}
-	parallelSlots := make(chan struct{}, maxParallel)
-
-	var failedCount, skippedCount atomic.Int64
-
-	c.emit(ProcessStartedEvent{
-		Type:      "process_started",
-		GorunUUID: c.GorunUUID,
-		Title:     c.Title,
-		Servers:   serverNames,
-		StartedAt: started,
-		Hostname:  func() string { h, _ := os.Hostname(); return h }(),
-		PID:       os.Getpid(),
-		EnvVars:   c.EnvVars,
-		Vars:      c.Vars,
-		Includes:  c.Includes,
-		Schedule:  c.Schedule,
-	})
-
-	// announce every server's plan up front, in a stable order
-	names := slices.Sorted(maps.Keys(pipeline))
-	for _, name := range names {
-		server := pipeline[name]
-
-		tasks := []string{}
-		meta := make([]TaskMeta, 0, len(server.Tasks))
-		for _, task := range server.Tasks {
-			tasks = append(tasks, task.Name)
-			meta = append(meta, TaskMeta{
-				Name:        task.Name,
-				Description: task.Description,
-				Details:     task.Details,
-				Rerun:       task.Rerun,
-			})
-		}
-
-		c.emit(PlanEvent{Type: "plan", GorunUUID: c.GorunUUID, Server: server.Name, Address: server.Address(), Tasks: tasks, TaskMeta: meta, EnvVars: server.EnvVars, Vars: server.Vars})
-	}
-
-	var failed atomic.Bool
-
-	for _, server := range pipeline {
-
-		if server.LogLevel == "" {
-			server.LogLevel = c.LogLevel
-		}
-
-		// update tasks logging level based on the server logging level
-		for i, task := range server.Tasks {
-			if task.LogLevel == "" {
-				task.LogLevel = server.LogLevel
-			}
-
-			server.Tasks[i] = task
-		}
-		wg.Go(func() {
-			select {
-			case parallelSlots <- struct{}{}:
-				defer func() { <-parallelSlots }()
-			case <-ctx.Done():
-				return
-			}
-
-			ctx, span := tracer.Start(ctx, "server.run")
-			defer span.End()
-			span.SetAttributes(
-				attribute.String("server.name", server.Name),
-				attribute.String("server.address", server.Hostname),
-			)
-
-			logger := NewLogger(server.LogLevel, logOutput, false)
-			logger = logger.With(
-				slog.String("gorun_uuid", c.GorunUUID),
-				slog.Group(
-					"server",
-					slog.String("name", server.Name),
-					slog.String("address", server.Hostname),
-				),
-			)
-
-			var sshClient *ssh.Client
-
-			if server.SSH != (SSH{}) {
-				logger.Debug("connecting to server via SSH")
-
-				client, err := NewSSHClient(ctx, server)
-				if err != nil {
-					// TODO: need to catch this in a error group
-					err = fmt.Errorf("error creating SSH connection: %w", err)
-					span.RecordError(err)
-					span.SetStatus(codes.Error, err.Error())
-					logger.Error("error with running tasks", slog.String("reason", err.Error()))
-					failed.Store(true)
-					failedCount.Add(int64(len(server.Tasks)))
-					c.emit(ServerErrorEvent{Type: "server_error", GorunUUID: c.GorunUUID, Server: server.Name, Err: err})
-					return
-				}
-
-				logger.Debug("connected to server via SSH")
-				defer func() { _ = closeSSHClient(client) }()
-				sshClient = client
-			}
-
-			tasks, err := NewTaskExec(sshClient, server.Tasks...)
-			if err != nil {
-				err = fmt.Errorf("error loading tasks: %w", err)
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				logger.Error("error with running tasks", slog.String("reason", err.Error()))
-				failed.Store(true)
-				failedCount.Add(int64(len(server.Tasks)))
-				c.emit(ServerErrorEvent{Type: "server_error", GorunUUID: c.GorunUUID, Server: server.Name, Err: err})
-				return
-			}
-
-			for _, task := range tasks {
-				task.serverName = server.Name
-				task.gorunServer = &server
-				task.gorunUUID = c.GorunUUID
-				task.logger = task.logger.With(slog.String("gorun_uuid", c.GorunUUID))
-			}
-
-			// completion signals: a task closes its channel when it finishes
-			// (success, failure or skip), so dependents can wait on it.
-			done := make(map[string]chan struct{}, len(tasks))
-			for _, task := range tasks {
-				done[task.task.Name] = make(chan struct{})
-			}
-
-			taskByName := make(map[string]*TaskExec, len(tasks))
-			for _, task := range tasks {
-				taskByName[task.task.Name] = task
-			}
-
-			taskLimit := server.MaxTaskParallel
-			if taskLimit == 0 {
-				taskLimit = c.MaxTaskParallel
-			}
-			if taskLimit == 0 {
-				// default: run a host's tasks one at a time
-				taskLimit = 1
-			}
-			if taskLimit < 0 {
-				// -1 means as many as possible
-				taskLimit = len(tasks)
-			}
-			if taskLimit < 1 && len(tasks) > 0 {
-				taskLimit = 1
-			}
-			if taskLimit > len(tasks) {
-				taskLimit = len(tasks)
-			}
-			taskSlots := make(chan struct{}, taskLimit)
-
-			var resultsMu sync.Mutex
-			results := make(map[string]error, len(tasks))
-
-			var taskWg sync.WaitGroup
-			runOne := func(task *TaskExec) {
-				defer taskWg.Done()
-				name := task.task.Name
-				tlogger := logger.With(slog.String("task", name))
-				historyEnvVars := make(map[string]string, len(server.EnvVars))
-				for k, v := range server.EnvVars {
-					historyEnvVars[strings.ToUpper(k)] = v
-				}
-				if definition, ok := c.Tasks[name]; ok {
-					for k, v := range definition.EnvVars {
-						historyEnvVars[strings.ToUpper(k)] = v
-					}
-				}
-
-				// wait for every dependency to finish first
-				for _, dep := range task.task.DependsOn {
-					if ch, ok := done[dep]; ok {
-						select {
-						case <-ch:
-						case <-ctx.Done():
-						}
-					}
-				}
-
-				finish := func(runErr error) {
-					resultsMu.Lock()
-					results[name] = runErr
-					resultsMu.Unlock()
-					close(done[name])
-				}
-
-				if ctx.Err() != nil {
-					err := ctx.Err()
-					tlogger.Warn("task skipped due to cancellation", slog.String("reason", err.Error()))
-					skippedCmd, _ := task.task.CommandFor(&server)
-					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err, EnvVars: historyEnvVars, Vars: task.task.Vars})
-					skippedCount.Add(1)
-					taskSkipped.Add(ctx, 1, metric.WithAttributes(
-						attribute.String("task.name", name),
-						attribute.String("server.name", server.Name),
-					))
-					finish(err)
-					return
-				}
-
-				// a failed (or skipped) dependency, or any earlier failure,
-				// means this task can't run
-				resultsMu.Lock()
-				depFailed := false
-				var depName string
-				for _, dep := range task.task.DependsOn {
-					if r, ok := results[dep]; ok && r != nil {
-						depFailed = true
-						depName = dep
-						break
-					}
-				}
-				resultsMu.Unlock()
-
-				if depFailed {
-					var err error
-					if depName != "" {
-						if slices.Contains(task.task.DependsOn, depName) {
-							err = fmt.Errorf("dependent task (%s) failed, aborting task (%s)", depName, name)
-						} else {
-							err = fmt.Errorf("task %s failed, aborting task (%s)", depName, name)
-						}
-					} else {
-						err = fmt.Errorf("a previous task failed, aborting task (%s)", name)
-					}
-					tlogger.Error("error with running tasks", slog.String("reason", err.Error()))
-					skippedCmd, _ := task.task.CommandFor(&server)
-					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err, EnvVars: historyEnvVars, Vars: task.task.Vars})
-					skippedCount.Add(1)
-					taskSkipped.Add(ctx, 1, metric.WithAttributes(
-						attribute.String("task.name", name),
-						attribute.String("server.name", server.Name),
-					))
-					finish(err)
-					return
-				}
-
-				// wait for a task slot so a server can opt out of
-				// running its tasks in parallel (max_task_parallel = 1)
-				select {
-				case taskSlots <- struct{}{}:
-				case <-ctx.Done():
-					err := ctx.Err()
-					tlogger.Warn("task skipped due to cancellation", slog.String("reason", err.Error()))
-					skippedCmd, _ := task.task.CommandFor(&server)
-					c.emit(TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskSkipped, Command: skippedCmd, Stderr: err.Error(), Err: err, EnvVars: historyEnvVars, Vars: task.task.Vars})
-					skippedCount.Add(1)
-					taskSkipped.Add(ctx, 1, metric.WithAttributes(
-						attribute.String("task.name", name),
-						attribute.String("server.name", server.Name),
-					))
-					finish(err)
-					return
-				}
-				defer func() { <-taskSlots }()
-
-				task.progress = func(p CopyProgress) {
-					c.emit(CopyProgressEvent{
-						Type:           "copy_progress",
-						GorunUUID:      c.GorunUUID,
-						Server:         server.Name,
-						Task:           name,
-						File:           p.File,
-						Bytes:          p.Bytes,
-						Total:          p.Total,
-						Percent:        p.Percent(),
-						BytesPerSecond: p.BytesPerSecond(),
-						Elapsed:        p.Elapsed,
-						Done:           p.Done,
-					})
-				}
-
-				attempts := task.task.Attempts()
-				var (
-					attempt int
-					runErr  error
-					started = time.Now()
-				)
-
-				for attempt = 1; attempt <= attempts; attempt++ {
-					// Retry events only carry attempt numbers when retries are configured.
-					evAttempt, evAttempts := 0, 0
-					if attempts > 1 {
-						evAttempt, evAttempts = attempt, attempts
-					}
-
-					runningCmd, _ := task.task.CommandFor(&server)
-					runningEvent := TaskEvent{
-						Type:      "task",
-						GorunUUID: c.GorunUUID,
-						Server:    server.Name,
-						Task:      name,
-						State:     TaskRunning,
-						Command:   runningCmd,
-						Attempt:   evAttempt,
-						Attempts:  evAttempts,
-						EnvVars:   historyEnvVars,
-						Vars:      task.task.Vars,
-					}
-
-					if attempt > 1 {
-						// Carry the previous attempt's failure so consumers can
-						// explain why the task is running again.
-						runningEvent.ExitCode = task.exitCode
-						runningEvent.Stderr = string(task.stderr)
-						runningEvent.Err = runErr
-						task.resetForRetry()
-					}
-
-					c.emit(runningEvent)
-
-					runErr = task.Execute(ctx)
-					if runErr == nil || task.stopped || ctx.Err() != nil || attempt == attempts {
-						break
-					}
-
-					if !task.task.CanRetry() {
-						task.appendStderr("not retried: task is marked unsafe to rerun (set retry_unsafe = true to override)")
-						tlogger.Warn("task failed; not retrying because it is marked unsafe to rerun",
-							slog.Int("attempt", attempt),
-							slog.Int("attempts", attempts),
-							slog.String("reason", runErr.Error()),
-						)
-						break
-					}
-
-					tlogger.Warn("task failed, retrying",
-						slog.Int("attempt", attempt),
-						slog.Int("attempts", attempts),
-						slog.Duration("delay", task.task.RetryDelayDuration()),
-						slog.String("reason", runErr.Error()),
-					)
-
-					if !task.waitForRetry(ctx) {
-						break
-					}
-				}
-
-				event := TaskEvent{Type: "task", GorunUUID: c.GorunUUID, Server: server.Name, Task: name, State: TaskDone}
-				if attempts > 1 {
-					event.Attempt = attempt
-					event.Attempts = attempts
-				}
-				if runErr != nil {
-					failed.Store(true)
-					failedCount.Add(1)
-					event.State = TaskFailed
-					event.Err = runErr
-				}
-
-				event.Command = task.command
-				if event.Command == "" {
-					if ccmd, err := task.task.CommandFor(&server); err == nil {
-						event.Command = ccmd
-					}
-				}
-				event.Stdout = string(task.stdout)
-				event.Stderr = string(task.stderr)
-				event.ExitCode = task.exitCode
-				event.Duration = time.Since(started)
-				event.EnvVars = historyEnvVars
-				event.Vars = task.task.Vars
-				c.emit(event)
-
-				finish(runErr)
-			}
-
-			if taskLimit == 1 {
-				for _, task := range tasks {
-					taskWg.Add(1)
-					runOne(task)
-				}
-			} else {
-				for _, task := range tasks {
-					taskWg.Add(1)
-					go runOne(task)
-				}
-				taskWg.Wait()
-			}
-			taskWg.Wait()
-		})
-	}
-
-	wg.Wait()
-
-	success := !failed.Load()
-
-	c.emit(ProcessFinishedEvent{
-		Type:       "process_finished",
-		GorunUUID:  c.GorunUUID,
-		Success:    success,
-		Duration:   time.Since(started),
-		TotalTasks: totalTasks,
-		Failed:     int(failedCount.Load()),
-		Skipped:    int(skippedCount.Load()),
-		FinishedAt: time.Now(),
-	})
-
-	if failed.Load() {
-		return errors.New("one or more tasks failed")
-	}
-
-	return nil
-}
-
-// emit sends an event to the OnEvent callback and the Recorder, if they are set, and publishes
-// it to NATS when a publisher is available.
-func (c *Config) emit(event any) {
-	if c.OnEvent != nil {
-		c.OnEvent(event)
-	}
-	if c.Recorder != nil {
-		c.Recorder.Record(event)
-	}
-
-	if publisher != nil {
-		topic := envvars.Get("GORUN_EVENT_TOPIC")
-		if topic == "" {
-			topic = "gorun.events"
-		}
-		if data, err := json.Marshal(event); err == nil {
-			_ = publisher.Publish(topic, data)
-			_ = publisher.Flush()
-		}
-	}
 }

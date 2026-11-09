@@ -2,7 +2,6 @@ package gorun
 
 import (
 	"encoding/json"
-	"github.com/jenmud/gorun/internal/nats"
 	"log"
 	"os"
 	"sync"
@@ -10,34 +9,32 @@ import (
 
 	_ "github.com/joho/godotenv/autoload"
 	natsCore "github.com/nats-io/nats.go"
+
+	"github.com/jenmud/gorun/internal/nats"
 )
 
-var mux sync.Mutex
-var once sync.Once
-var publisher *natsCore.Conn
+// publisher is the NATS connection events are published on, once StartNATS has connected.
+var (
+	publisher *natsCore.Conn
+	startNATS sync.Once
+)
 
+// StartNATS connects to NATS so that runs publish their events (see docs/integrations.md). It
+// connects once, however often it is called. NATS is optional: when it can't be reached, or
+// GORUN_SKIP_NATS is set, runs carry on without publishing.
 func StartNATS() {
 	if os.Getenv("GORUN_SKIP_NATS") != "" {
 		return
 	}
-	once.Do(func() {
-		mux.Lock()
-		defer mux.Unlock()
-
+	startNATS.Do(func() {
 		conn, err := nats.NewClient()
 		if err != nil {
-			// NATS is optional: keep running without a publisher.
 			log.Printf("gorun: NATS publisher disabled: %v", err)
 			return
 		}
-
 		publisher = conn
 		log.Printf("gorun: NATS publisher connected")
 	})
-}
-
-func init() {
-	// Don't auto-connect; let caller decide
 }
 
 // TaskState is the lifecycle state of a task on a server.

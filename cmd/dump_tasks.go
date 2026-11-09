@@ -138,13 +138,11 @@ func dumpTasks(cfg *gorun.Config, dir string, servers map[string]gorun.Server, s
 }
 
 func writeDumpedTask(cfg *gorun.Config, dir string, task gorun.Task, server gorun.Server, haveServer bool) error {
-	var cmd string
-	var err error
+	var target any // nil renders templates without a server
 	if haveServer {
-		cmd, err = task.CommandFor(server)
-	} else {
-		cmd, err = task.Command()
+		target = server
 	}
+	cmd, err := task.CommandFor(target)
 	if err != nil {
 		if !strings.Contains(err.Error(), "has no command") {
 			return err

@@ -98,6 +98,9 @@ Every run, newest first, with its title, when it started, how long it took and t
 has each server's tasks, slowest first; open a task for its exit code, duration, command, stdout,
 stderr, env vars and vars.
 
+A run whose Gorunfile reads [tasks from a git repository](gorunfile.md#tasks-from-a-git-repository)
+lists them under **Task libraries**: each repository, the ref asked for and the commit it ran.
+
 Skipped, missed and failed scheduled runs are listed too, with the reason in the title. A schedule
 whose target can't run on a server (for example, a task that isn't `local = true` on a local
 server) appears as a failed run.

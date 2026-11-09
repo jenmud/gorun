@@ -92,6 +92,21 @@ templ HistoryDetailPage(d RunDetailData) {
 			@varsPanel("Run", d.Run.RunEnvVars, d.Run.RunVars)
 		</div>
 	}
+	if len(d.Run.Includes) > 0 {
+		<section class="mb-6 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+			<h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Task libraries</h2>
+			<p class="mt-1 text-xs text-zinc-500">The git includes this run read, and the commit each one used.</p>
+			<ul class="mt-2 space-y-1">
+				for _, inc := range d.Run.Includes {
+					<li class="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
+						<span class="text-zinc-200">{ inc.Source }</span>
+						<span class="text-zinc-500">{ "@ " + inc.Ref }</span>
+						<span class="text-zinc-300" title={ inc.Commit }>{ shortCommit(inc.Commit) }</span>
+					</li>
+				}
+			</ul>
+		</section>
+	}
 	<p class="mb-4 text-sm text-zinc-400">Tasks are listed slowest first. Open a task to see the command it ran, what it printed, its exit code and the variables it saw. Errors from a server that couldn't be reached are listed at the top of its card.</p>
 	<div class="space-y-4">
 		for _, srv := range d.Servers {

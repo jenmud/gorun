@@ -180,3 +180,21 @@ func TestRecordKeepsServerErrors(t *testing.T) {
 		t.Errorf("server error = %q", got)
 	}
 }
+
+// The git includes a run read are saved with it, with the commit each one used.
+func TestRecordKeepsIncludeCommits(t *testing.T) {
+	h := open(t)
+	h.Record(gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "r2", Title: "t", Includes: []gorun.IncludeSource{
+		{Source: "https://github.com/you/tasks.git", Ref: "v1.2.0", Commit: "0123456789abcdef0123456789abcdef01234567", Dir: "/cache/x"},
+	}})
+	detail, err := h.Run(context.Background(), "r2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Includes) != 1 {
+		t.Fatalf("includes = %+v", detail.Includes)
+	}
+	if inc := detail.Includes[0]; inc.Source != "https://github.com/you/tasks.git" || inc.Ref != "v1.2.0" || inc.Commit != "0123456789abcdef0123456789abcdef01234567" {
+		t.Errorf("include = %+v", inc)
+	}
+}

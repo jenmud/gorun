@@ -285,3 +285,16 @@ func TestWebRecorderKeepsServerErrors(t *testing.T) {
 		t.Errorf("server error = %q", got)
 	}
 }
+
+// A run's History page lists the task libraries it read and their commits.
+func TestHistoryShowsTaskLibraries(t *testing.T) {
+	a := loadSchedules(t)
+	a.Record(gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "r-inc", Title: "with libraries", StartedAt: time.Now(),
+		Includes: []gorun.IncludeSource{{Source: "https://github.com/you/tasks.git", Ref: "v1.2.0", Commit: "0123456789abcdef0123456789abcdef01234567"}}})
+	body := get(t, a, "/history/r-inc").Body.String()
+	for _, want := range []string{"Task libraries", "https://github.com/you/tasks.git", "@ v1.2.0", "0123456789ab"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("history page missing %q", want)
+		}
+	}
+}

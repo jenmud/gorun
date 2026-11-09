@@ -62,6 +62,10 @@ type ProcessStartedEvent struct {
 	PID       int               `json:"pid"`
 	EnvVars   map[string]string `json:"envvars,omitempty"`
 	Vars      map[string]any    `json:"vars,omitempty"`
+
+	// Includes are the git includes the Gorunfile read, with the commit each one used, so a run
+	// records exactly which version of a task library it ran.
+	Includes []IncludeSource `json:"includes,omitempty"`
 }
 
 // ProcessFinishedEvent is published when a gorun process finishes running.

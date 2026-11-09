@@ -241,3 +241,32 @@ func TestParseGitInclude(t *testing.T) {
 		}
 	}
 }
+
+// A run says which commit of each task library it used, in its started event.
+func TestRunReportsItsIncludeCommits(t *testing.T) {
+	repo := newGitRepo(t, library)
+	commit := repo.run("rev-parse", "HEAD")
+	repo.run("tag", "v1.0.0")
+	dir, files := gitTree(t, "git::"+repo.url()+"//tasks/*.toml?ref=v1.0.0")
+	c, err := loadGit(t, dir, files, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.ResolvePaths(dir)
+
+	var started ProcessStartedEvent
+	c.OnEvent = func(event any) {
+		if ev, ok := event.(ProcessStartedEvent); ok {
+			started = ev
+		}
+	}
+	if err := c.Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(started.Includes) != 1 {
+		t.Fatalf("started event includes = %+v", started.Includes)
+	}
+	if inc := started.Includes[0]; inc.Source != repo.url() || inc.Ref != "v1.0.0" || inc.Commit != commit {
+		t.Errorf("include = %+v, want %s @ v1.0.0 -> %s", inc, repo.url(), commit)
+	}
+}

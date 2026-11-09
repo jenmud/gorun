@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 
 	"github.com/jenmud/gorun/cmd/web/ui"
+	"github.com/jenmud/gorun/internal/store"
 )
 
 // Event represents a NATS message payload.
@@ -41,6 +42,7 @@ type Event struct {
 	EnvVars    map[string]string `json:"envvars,omitempty"`
 	Vars       map[string]any    `json:"vars,omitempty"`
 	Error      string            `json:"error,omitempty"`
+	Includes   []store.Include   `json:"includes,omitempty"`
 }
 
 // TaskMeta carries the documentation attached to a task in a plan event.

@@ -519,6 +519,9 @@ tasks = ["@web-baseline"]                 # a bundle from the library
 - **Paths are the library's.** A library task's `cmd_file`, `cmd_template_file` and copy sources
   are relative to the root of its repository.
 - Names follow the usual rule: a name defined both in the library and in your files is an error.
+- **Every run records what it used.** The run's history lists each git include with the ref asked
+  for and the commit it ran, under **Task libraries** on its page in `gorun -web`, so an old run can
+  always be traced to the exact commands.
 
 A task library is an ordinary repository of TOML files, for example:
 

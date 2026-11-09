@@ -31,10 +31,10 @@ const gitTimeout = 2 * time.Minute
 // IncludeSource is a git include as resolved for this load: where it came from, the ref the
 // Gorunfile asked for, and the commit that was used.
 type IncludeSource struct {
-	Source string // the repository URL
-	Ref    string // the ?ref= value: a tag, branch or commit
-	Commit string // the commit the files were read from
-	Dir    string // the local checkout the files were read from
+	Source string `json:"source"` // the repository URL
+	Ref    string `json:"ref"`    // the ?ref= value: a tag, branch or commit
+	Commit string `json:"commit"` // the commit the files were read from
+	Dir    string `json:"-"`      // the local checkout the files were read from
 }
 
 // gitSpec is a parsed git include: git::<repo>//<path>?ref=<ref>.

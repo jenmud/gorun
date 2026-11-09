@@ -692,6 +692,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		PID:       os.Getpid(),
 		EnvVars:   c.EnvVars,
 		Vars:      c.Vars,
+		Includes:  c.Includes,
 	})
 
 	// announce every server's plan up front, in a stable order

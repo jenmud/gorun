@@ -422,3 +422,11 @@ func refHref(ref string) templ.SafeURL {
 	}
 	return taskHref(ref)
 }
+
+// shortCommit is a commit hash as people read it: its first 12 characters.
+func shortCommit(commit string) string {
+	if len(commit) > 12 {
+		return commit[:12]
+	}
+	return commit
+}

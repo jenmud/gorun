@@ -38,8 +38,19 @@ type TaskDetail struct {
 	Vars     map[string]any
 }
 
+// Include is a git include a run read: the repository, the ref asked for and the commit used.
+type Include struct {
+	Source string `json:"source"`
+	Ref    string `json:"ref"`
+	Commit string `json:"commit"`
+}
+
 type RunDetail struct {
 	RunSummary
+
+	// Includes are the git includes the run's Gorunfile read, with the commit each one used.
+	Includes []Include
+
 	Servers []string
 	Tasks   []TaskDetail
 
@@ -126,6 +137,7 @@ func (s *Store) migrate() error {
 	s.addColumn("tasks", "vars")
 	s.addColumn("runs", "envvars")
 	s.addColumn("runs", "vars")
+	s.addColumn("runs", "includes")
 
 	return nil
 }
@@ -187,6 +199,16 @@ func (s *Store) SetRunEnvVars(ctx context.Context, runID string, envvars map[str
 	_, err := s.db.ExecContext(ctx,
 		`UPDATE runs SET envvars=?, vars=? WHERE id=?`,
 		string(envJSON), string(varJSON), runID)
+	return err
+}
+
+// SetRunIncludes stores the git includes a run read, with their commits.
+func (s *Store) SetRunIncludes(ctx context.Context, runID string, includes []Include) error {
+	data, err := json.Marshal(includes)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE runs SET includes=? WHERE id=?`, string(data), runID)
 	return err
 }
 
@@ -282,15 +304,15 @@ func (s *Store) ListRuns(ctx context.Context) ([]RunSummary, error) {
 
 func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns,envvars,vars FROM runs WHERE id=?`, id)
+		`SELECT id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns,envvars,vars,includes FROM runs WHERE id=?`, id)
 	var r RunDetail
 	var started, finished sql.NullString
 	var succ sql.NullInt64
 	var pid sql.NullInt64
 	var total, failed, skipped sql.NullInt64
 	var dur sql.NullInt64
-	var runEnv, runVars sql.NullString
-	if err := row.Scan(&r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &succ, &total, &failed, &skipped, &dur, &runEnv, &runVars); err != nil {
+	var runEnv, runVars, includes sql.NullString
+	if err := row.Scan(&r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &succ, &total, &failed, &skipped, &dur, &runEnv, &runVars, &includes); err != nil {
 		return nil, err
 	}
 	r.PID = int(pid.Int64)
@@ -310,6 +332,9 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 		r.Success = r.Failed == 0 && r.Skipped == 0
 	}
 	r.Duration = time.Duration(dur.Int64)
+	if includes.Valid && includes.String != "" {
+		_ = json.Unmarshal([]byte(includes.String), &r.Includes)
+	}
 	if runEnv.Valid && runEnv.String != "" {
 		var ev map[string]string
 		if json.Unmarshal([]byte(runEnv.String), &ev) == nil {

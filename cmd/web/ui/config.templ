@@ -78,6 +78,15 @@ templ zonePickerScript() {
 	document.querySelectorAll('input[data-at-default]').forEach(function (inp) {
 		if (!inp.value) { inp.value = now; }
 	});
+
+	// a schedule is cron or once-at, never both: typing one clears the other
+	document.querySelectorAll('form').forEach(function (f) {
+		var cron = f.querySelector('input[name=cron]');
+		var at = f.querySelector('input[name=at_local]');
+		if (!cron || !at) { return; }
+		cron.addEventListener('input', function () { if (cron.value.trim()) { at.value = ''; } });
+		at.addEventListener('input', function () { if (at.value) { cron.value = ''; } });
+	});
 })();
 	</script>
 }

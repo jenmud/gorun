@@ -213,9 +213,10 @@ to see exactly what ran:
 | esc, q | go back |
 | ctrl+k | show all shortcuts |
 
-**Where it's stored:** a SQLite file. gorun uses `GORUN_DB_PATH` if that file exists, otherwise
-`./gorun.db` if there is one, otherwise `~/.gorun/gorun.db`.
+**Where it's stored:** a SQLite file: `GORUN_DB_PATH` when it is set (created if it doesn't exist
+yet), otherwise `./gorun.db` if there is one, otherwise `~/.gorun/gorun.db`.
 
-The [web UI](integrations.md#web-ui) shows the same history at `http://localhost:8080/history`, but
-it uses `GORUN_DB_PATH` as given (even before the file exists) or `~/.gorun/gorun.db`, without the
-`./gorun.db` fallback. Set `GORUN_DB_PATH` if you want both to show the same database.
+The [web UI](web.md#history) shows the same history at `http://localhost:8080/history`. It uses
+`GORUN_DB_PATH` or `~/.gorun/gorun.db`, without the `./gorun.db` fallback, so set `GORUN_DB_PATH` if
+you keep a `gorun.db` in your project folder. Programs built on the gorun library can save their runs
+to the same database with the [history package](history.md), so they show up here too.

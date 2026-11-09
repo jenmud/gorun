@@ -51,7 +51,8 @@ each server's progress live.
   fleets can be split across files with `include`.
 - **Write a task once.** Keep tasks in a git repository and include them in any Gorunfile, pinned to
   a tag or commit and locked in `Gorunfile.lock`:
-  `include = ["git::https://github.com/you/tasks.git//web/*.toml?ref=v1.2.0"]`.
+  `include = ["git::https://github.com/you/tasks.git//web/*.toml?ref=v1.2.0"]`. See the
+  [task library recipe](recipes/06-task-library/README.md).
 - **Remembers.** Every run is saved, with its commands and output, to look back on later.
 - **Exports.** Dump every task as a standalone, runnable shell file with `--dump-tasks`, to audit
   or run by hand.

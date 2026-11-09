@@ -1,0 +1,8 @@
+# This file records the commit each git include in the Gorunfile resolved to, so every run
+# uses the same commands. Commit it with the Gorunfile. Run gorun with -update-includes to move
+# tags and branches to their latest commits.
+
+[[include]]
+  source = "https://github.com/jenmud/gorun.git"
+  ref = "696498c1a35b0dd22ebfa8437fd4006b037aefd3"
+  commit = "696498c1a35b0dd22ebfa8437fd4006b037aefd3"

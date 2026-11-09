@@ -18,7 +18,8 @@ The finished file is in [`tutorial/`](tutorial/Gorunfile), with its scripts and 
 8. [Regions, tags and exceptions](#8-regions-tags-and-exceptions)
 9. [Splitting large Gorunfiles (optional)](#9-splitting-large-gorunfiles-optional)
 10. [Run jobs on a schedule](#10-run-jobs-on-a-schedule)
-11. [Everyday use](#11-everyday-use)
+11. [Share tasks with other Gorunfiles](#11-share-tasks-with-other-gorunfiles)
+12. [Everyday use](#12-everyday-use)
 
 You only need gorun [installed](../README.md#install). Steps 1 and 2 run on your own machine;
 from step 3 on you need a server you can `ssh` into.
@@ -469,7 +470,49 @@ the reason in History.
 The [scheduled jobs recipe](../recipes/05-scheduled-jobs/README.md) runs these schedules on your
 own machine, and [Schedules](schedules.md) has the full syntax.
 
-## 11. Everyday use
+## 11. Share tasks with other Gorunfiles
+
+The tasks you wrote here — Docker, the Caddyfile, the checks — would be useful in other projects
+too. Instead of copying them, move them into a git repository of their own and include them.
+
+1. Make a repository, say `deploy-tasks`, with the task and bundle tables and their scripts:
+
+   ```
+   deploy-tasks/
+     docker.toml       # [tasks.docker-install], [tasks.docker-enable], [bundles.docker]
+     checks.toml       # [tasks.check-docker], [tasks.check-containers], [bundles.check]
+     scripts/docker-install.sh
+   ```
+
+   A library task's `cmd_file` is relative to the root of its repository, so `docker-install` keeps
+   `cmd_file = "scripts/docker-install.sh"`. Servers, groups and global `envvars` stay in your
+   Gorunfile, and secrets stay in the environment as before: a library may only hold tasks and
+   bundles.
+
+2. Tag a version and push it: `git tag v1.0.0 && git push --tags`.
+
+3. Replace the tasks in your Gorunfile with an include, pinned to that tag:
+
+   ```toml
+   include = ["git::https://github.com/you/deploy-tasks.git//*.toml?ref=v1.0.0"]
+   ```
+
+   Over SSH it is `git::git@github.com:you/deploy-tasks.git//*.toml?ref=v1.0.0`. Your git
+   credentials are used, so private repositories work the same way.
+
+4. Run `gorun Gorunfile --list-bundles` to check the bundles arrived. The first run fetches the
+   library and writes `Gorunfile.lock` next to your Gorunfile, with the exact commit it used. Commit
+   that file: from now on every run uses that commit, even if someone moves the tag.
+
+To take a newer version, change `?ref=` or move the tag, then run
+`gorun Gorunfile --update-includes`. It looks the refs up again, updates the lock file and prints
+the commits.
+
+The [task library recipe](../recipes/06-task-library/README.md) does this with a small library you
+can run on your own machine. [Tasks from a git repository](gorunfile.md#tasks-from-a-git-repository)
+has every rule.
+
+## 12. Everyday use
 
 ```bash
 gorun Gorunfile                                    # pick servers and tasks, then run

@@ -1,0 +1,15 @@
+# Recipe 6: a shared task library, written once and included from a git repository.
+#
+# The tasks come from library/ in the gorun repository on GitHub, pinned to a commit. Nothing is
+# defined here except which servers run them. Runs on this machine; no servers needed.
+title = "Recipe 6: a shared task library"
+
+include = [
+  # git::<repository>//<files>?ref=<tag, branch or commit>
+  'git::https://github.com/jenmud/gorun.git//recipes/06-task-library/library/*.toml?ref=696498c1a35b0dd22ebfa8437fd4006b037aefd3',
+]
+
+[servers]
+tasks = ["@lib-checks"]   # a bundle from the library
+
+[servers.hosts.localhost]

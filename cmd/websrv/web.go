@@ -110,6 +110,7 @@ func (a *app) routes() *http.ServeMux {
 
 	mux.HandleFunc("GET /tasks", a.tasksPage)
 	mux.HandleFunc("GET /bundles", a.bundlesPage)
+	mux.HandleFunc("GET /schedules", a.schedulesPage)
 	mux.HandleFunc("GET /history", a.historyPage)
 	mux.HandleFunc("GET /history/{id}", a.historyDetail)
 	mux.HandleFunc("GET /history/{id}/task", a.taskDetail)

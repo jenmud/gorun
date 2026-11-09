@@ -22,6 +22,9 @@ optional; without it, load one on the Config page. It has these pages:
 - **Tasks** lists every task with its command, settings, dependencies, the bundles that include
   it and the servers that run it, slowest first by average time in recent runs.
 - **Bundles** lists each bundle, its tasks in order and what it expands to, with a link to run it.
+- **Schedules** lists each `[[schedule]]` with its target, timing, status and next run. Next runs
+  are UTC instants shown in your browser's time zone; the picker above the table changes the zone
+  and starts on the browser's. A banner says so when the scheduler isn't running.
 - **History** lists saved runs. Open one for each server's tasks, slowest first; open a task for
   its status, exit code, duration, command, stdout, stderr, env vars and vars. A server that
   couldn't run shows why, and its planned tasks read "not run". Run and server env vars and vars

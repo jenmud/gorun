@@ -1,0 +1,101 @@
+package ui
+
+templ SchedulesPage(d SchedulesPageData) {
+	<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+		<div class="max-w-2xl">
+			<h1 class="text-xl font-semibold text-zinc-100">Schedules</h1>
+			<p class="mt-1 text-sm text-zinc-400">Each schedule runs its target on every server when it comes due. Next runs show in the time zone picked here, which starts as your browser's.</p>
+		</div>
+		if d.Loaded && len(d.Rows) > 0 {
+			<label class="flex items-center gap-2 text-sm text-zinc-400">
+				Show times in
+				<select id="tz-picker" class="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-100 focus:border-accent focus:outline-none"></select>
+			</label>
+		}
+	</div>
+	if !d.Loaded {
+		@notLoaded()
+	} else if len(d.Rows) == 0 {
+		<p class="text-sm text-zinc-500">This Gorunfile defines no schedules. Add a <span class="font-mono">[[schedule]]</span> table to see it here.</p>
+	} else {
+		if !d.Running {
+			<p class="mb-4 rounded-lg border border-amber-900 bg-amber-950/40 px-4 py-2 text-sm text-amber-300">The scheduler is not running, so these schedules will not fire from this web server.</p>
+		}
+		<div class="overflow-x-auto rounded-lg border border-zinc-800">
+			<table class="w-full text-left text-sm">
+				<thead class="bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
+					<tr>
+						<th class="px-4 py-2 font-medium">Schedule</th>
+						<th class="px-4 py-2 font-medium">Target</th>
+						<th class="px-4 py-2 font-medium">Timing</th>
+						<th class="px-4 py-2 font-medium">Status</th>
+						<th class="px-4 py-2 font-medium">Next run</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-zinc-800">
+					for _, r := range d.Rows {
+						<tr class="align-top">
+							<td class="px-4 py-2">
+								<div class="font-medium text-zinc-100">{ r.Name }</div>
+								if r.Description != "" {
+									<div class="text-xs text-zinc-500">{ r.Description }</div>
+								}
+							</td>
+							<td class="px-4 py-2 font-mono text-xs text-zinc-300">{ r.Target }</td>
+							<td class="px-4 py-2">
+								<div class="font-mono text-xs text-zinc-300">{ r.When }</div>
+								<div class="text-xs text-zinc-500">written in { r.Zone }</div>
+							</td>
+							<td class="px-4 py-2 text-zinc-300">
+								{ r.Status }
+								if r.Missed > 0 {
+									<span class="text-xs text-amber-400">({ itoa(r.Missed) } missed)</span>
+								}
+							</td>
+							<td class="px-4 py-2 whitespace-nowrap">
+								if r.NextUTC != "" {
+									<time data-utc={ r.NextUTC } datetime={ r.NextUTC } class="font-mono text-xs text-zinc-100">{ r.NextText }</time>
+								} else {
+									<span class="text-zinc-500">none left</span>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<script>
+(function () {
+	var sel = document.getElementById('tz-picker');
+	if (!sel) { return; }
+	var browser = 'UTC';
+	try { browser = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) {}
+	var zones = (typeof Intl.supportedValuesOf === 'function') ? Intl.supportedValuesOf('timeZone').slice() : [];
+	if (zones.indexOf(browser) === -1) { zones.unshift(browser); }
+	if (zones.indexOf('UTC') === -1) { zones.push('UTC'); }
+	zones.forEach(function (z) {
+		var o = document.createElement('option');
+		o.value = z;
+		o.textContent = z;
+		sel.appendChild(o);
+	});
+	sel.value = browser;
+
+	// render shows each instant in the zone, with its zone name, and leaves the UTC text if the zone is unknown
+	function render(zone) {
+		document.querySelectorAll('time[data-utc]').forEach(function (el) {
+			var when = new Date(el.getAttribute('data-utc'));
+			try {
+				el.textContent = new Intl.DateTimeFormat(undefined, {
+					timeZone: zone, year: 'numeric', month: 'short', day: '2-digit',
+					hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short'
+				}).format(when);
+			} catch (e) {}
+		});
+	}
+	sel.addEventListener('change', function () { render(sel.value); });
+	render(sel.value);
+})();
+		</script>
+	}
+}

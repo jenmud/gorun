@@ -96,8 +96,8 @@ due while the process was down are not caught up.
 
 - **Skipped runs in history.** Skipped and missed occurrences are events today, but the
   history view does not show them yet.
-- **Config page.** A schedule dialog with a time zone picker, plus pause, resume and skip
-  controls.
+- **Controls in the web UI.** The schedules page lists schedules and their next runs, with a
+  time zone picker. Pause, resume and skip buttons are not on it yet.
 
 ## Validation
 

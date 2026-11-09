@@ -409,9 +409,10 @@ func taskHref(name string) templ.SafeURL {
 	return templ.SafeURL("/tasks#task-" + url.PathEscape(name))
 }
 
-// bundleHref opens the bundles page with the named bundle expanded.
+// bundleHref opens the bundles page with the named bundle expanded. The name may be written
+// as "@name", the form task lists use; the card's id has no "@".
 func bundleHref(name string) templ.SafeURL {
-	return templ.SafeURL("/bundles#bundle-" + url.PathEscape(name))
+	return templ.SafeURL("/bundles#bundle-" + url.PathEscape(strings.TrimPrefix(name, "@")))
 }
 
 // refHref links a task, or a "@bundle" reference, to its page.

@@ -141,3 +141,17 @@ func TestTaskAndBundleNamesLinkToTheirCards(t *testing.T) {
 		}
 	}
 }
+
+// A bundle named "@x" in a task's list links to the card with id "bundle-x".
+func TestBundleLinkFromATaskOpensTheBundleCard(t *testing.T) {
+	a, path := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	post(t, a, "/bundles/add", url.Values{"name": {"extra"}, "tasks": {"hello"}, "file": {path}})
+	body := get(t, a, "/tasks").Body.String()
+	if !strings.Contains(body, `href="/bundles#bundle-extra"`) || strings.Contains(body, "#bundle-@") {
+		t.Errorf("bundle link from a task does not point at the bundle's card")
+	}
+	if !strings.Contains(get(t, a, "/bundles").Body.String(), `id="bundle-extra"`) {
+		t.Error("bundle card id is wrong")
+	}
+}

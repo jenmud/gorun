@@ -103,6 +103,10 @@ stderr, env vars and vars.
 A run whose Gorunfile reads [tasks from a git repository](gorunfile.md#tasks-from-a-git-repository)
 lists them under **Task libraries**: each repository, the ref asked for and the commit it ran.
 
+Adding or editing a task marked `local = true`, or a schedule for one, adds a local server
+(`[servers.hosts.localhost]` with `tasks = []`) when the Gorunfile has none, so the task has
+somewhere to run. The message after saving says when it did.
+
 A run that a [schedule](schedules.md) started carries a **⏱ scheduled · name** badge, on the
 live run while it executes and in History afterwards. Click it to open the Schedules page at that
 schedule.

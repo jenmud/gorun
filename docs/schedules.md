@@ -123,7 +123,16 @@ a local server in the Gorunfile:
 ```
 
 The Schedules page warns about a schedule like this before it fires, and the error names the task
-and the fix.
+and the fix. When you add or edit a local task, or a schedule for one, in `gorun -web` and the
+Gorunfile has no local server, the web UI adds one for you and says so:
+
+```toml
+[servers.hosts.localhost]
+tasks = []   # its own empty list: the [servers] default tasks never run on this machine
+```
+
+It's called `localhost`, or `local` if a server already has that name. Only schedules and
+`--task` reach it.
 
 Skipped and missed occurrences are written to **History** as runs whose title says what
 happened. Runs that start are recorded by their own events, so they are not duplicated.

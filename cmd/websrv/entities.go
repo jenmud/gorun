@@ -59,7 +59,12 @@ func (a *app) addEntity(kind, back string) http.HandlerFunc {
 			fail(err.Error())
 			return
 		}
-		redirectWith(w, r, back, fmt.Sprintf("Added %s %s.", kindNames[kind], name), false)
+		note, err := a.addLocalServerIfNeeded([]gorun.Change{change})
+		if err != nil {
+			redirectWith(w, r, back, fmt.Sprintf("Added %s %s, but %v", kindNames[kind], name, err), true)
+			return
+		}
+		redirectWith(w, r, back, fmt.Sprintf("Added %s %s.", kindNames[kind], name)+note, false)
 	}
 }
 
@@ -96,6 +101,7 @@ func (a *app) editEntity(kind, back string) http.HandlerFunc {
 		if err == nil {
 			err = checkChangeIn(cfg, gorun.Change{Kind: kind, Name: name, Body: body})
 		}
+		saved := []gorun.Change{{Kind: kind, Name: name, Body: body}}
 		if err == nil {
 			file := sourceOf(cfg, pending, kind, name)
 			err = a.saveDirect(file, []gorun.Change{
@@ -107,7 +113,12 @@ func (a *app) editEntity(kind, back string) http.HandlerFunc {
 			fail(err.Error())
 			return
 		}
-		redirectWith(w, r, back, fmt.Sprintf("Updated %s %s.", kindNames[kind], name), false)
+		note, err := a.addLocalServerIfNeeded(saved)
+		if err != nil {
+			redirectWith(w, r, back, fmt.Sprintf("Updated %s %s, but %v", kindNames[kind], name, err), true)
+			return
+		}
+		redirectWith(w, r, back, fmt.Sprintf("Updated %s %s.", kindNames[kind], name)+note, false)
 	}
 }
 

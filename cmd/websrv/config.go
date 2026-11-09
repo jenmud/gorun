@@ -711,7 +711,14 @@ func (a *app) saveHandler(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/config", "Saved, but the file no longer loads: "+err.Error(), true)
 		return
 	}
-	redirectWith(w, r, "/config", fmt.Sprintf("Saved %d change(s).", len(pending)), false)
+	a.saveMu.Lock()
+	note, err := a.addLocalServerIfNeeded(pending)
+	a.saveMu.Unlock()
+	if err != nil {
+		redirectWith(w, r, "/config", fmt.Sprintf("Saved %d change(s), but %v", len(pending), err), true)
+		return
+	}
+	redirectWith(w, r, "/config", fmt.Sprintf("Saved %d change(s).", len(pending))+note, false)
 }
 
 // discardHandler drops the unsaved changes.

@@ -185,9 +185,9 @@ templ refRow(label string, items []string, none string, bundles bool) {
 		}
 		for _, it := range items {
 			if bundles {
-				<a href={ bundleHref(it) } class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-zinc-300 hover:bg-zinc-700 hover:text-white">{ it }</a>
+				<a href={ bundleHref(it) } class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-zinc-300 underline underline-offset-2 hover:bg-zinc-700 hover:text-white">{ it }</a>
 			} else {
-				<a href={ taskHref(it) } class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-zinc-300 hover:bg-zinc-700 hover:text-white">{ it }</a>
+				<a href={ taskHref(it) } class="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-zinc-300 underline underline-offset-2 hover:bg-zinc-700 hover:text-white">{ it }</a>
 			}
 		}
 	</div>
@@ -301,7 +301,7 @@ templ bundleCard(b BundleCard) {
 						for i, it := range b.Items {
 							<li class="flex items-baseline gap-3 px-3 py-1.5">
 								<span class="w-5 text-right font-mono text-zinc-600">{ itoa(i+1) }</span>
-								@refLink(it.Ref, "font-mono text-zinc-100 hover:text-accent")
+								@refLink(it.Ref, "font-mono text-zinc-100 hover:text-accent underline decoration-zinc-600 underline-offset-2 hover:decoration-accent")
 								if it.IsBundle {
 									<span class="rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] uppercase text-violet-300">bundle</span>
 								}

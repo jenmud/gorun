@@ -167,7 +167,7 @@ func SchedulesPage(d SchedulesPageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = refLink(r.Target, "text-zinc-300 hover:text-accent").Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = refLink(r.Target, "text-zinc-300 hover:text-accent underline decoration-zinc-600 underline-offset-2 hover:decoration-accent").Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

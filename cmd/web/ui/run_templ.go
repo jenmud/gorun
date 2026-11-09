@@ -713,14 +713,14 @@ func statsPanel(s StatsView) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "\" class=\"min-w-0 flex-1 truncate font-mono text-zinc-200 hover:text-accent\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "\" class=\"min-w-0 flex-1 truncate font-mono text-zinc-200 hover:text-accent underline decoration-zinc-600 underline-offset-2 hover:decoration-accent\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(t.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/run.templ`, Line: 154, Col: 118}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/run.templ`, Line: 154, Col: 191}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 				if templ_7745c5c3_Err != nil {

@@ -132,7 +132,7 @@ templ historyTask(t TaskView) {
 		<details open?={ t.State == 3 } data-on:toggle__once={ taskLoad(t) }>
 			<summary class="flex cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-sm">
 				<span class={ taskViewClass(t) }>{ taskViewIcon(t) }</span>
-				<a href={ taskHref(t.Name) } class="font-mono text-zinc-200 hover:text-accent">{ t.Name }</a>
+				<a href={ taskHref(t.Name) } class="font-mono text-zinc-200 hover:text-accent underline decoration-zinc-600 underline-offset-2 hover:decoration-accent">{ t.Name }</a>
 				<span class={ taskViewClass(t) + " text-xs" }>{ taskViewLabel(t) }</span>
 				if t.State == 3 {
 					<span class="rounded bg-red-500/15 px-1.5 py-0.5 font-mono text-[11px] text-red-300 ring-1 ring-red-500/40">exit { itoa(t.ExitCode) }</span>

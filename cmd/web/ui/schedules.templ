@@ -55,6 +55,9 @@ templ SchedulesPage(d SchedulesPageData) {
 									if r.Description != "" {
 										<div class="text-xs text-zinc-500">{ r.Description }</div>
 									}
+									if r.Problem != "" {
+										<div class="mt-2 max-w-md rounded-md border border-amber-900 bg-amber-950/40 px-2 py-1 text-xs text-amber-300" role="alert"><span class="font-semibold">Every run will fail:</span> { r.Problem }</div>
+									}
 								</td>
 								<td class="px-4 py-2 font-mono text-xs">@refLink(r.Target, "text-zinc-300 hover:text-accent underline decoration-zinc-600 underline-offset-2 hover:decoration-accent")</td>
 								<td class="px-4 py-2">

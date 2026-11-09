@@ -338,3 +338,42 @@ func TestScheduledRunsLinkToTheirSchedule(t *testing.T) {
 		t.Error("the schedules page has no row for the link to open")
 	}
 }
+
+// A schedule whose target can't run on any server says so before it fires.
+func TestSchedulesPageWarnsWhenATargetCannotRun(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "Gorunfile")
+	body := `[tasks.datetime]
+cmd = "date"
+local = true
+
+[[schedule]]
+name = "datetime"
+target = "datetime"
+cron = "* * * * *"
+
+[servers.hosts.web-1]
+hostname = "web-1.example.com"
+    [servers.hosts.web-1.ssh]
+    username = "deploy"
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	a, _ := newTestApp(t)
+	if err := a.loadConfig(path); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.stopScheduler)
+
+	page := get(t, a, "/schedules").Body.String()
+	for _, want := range []string{"Every run will fail:", "task &#34;datetime&#34; is marked local = true, but no server in the Gorunfile is local", "[servers.hosts.localhost]"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("schedules page does not say %q", want)
+		}
+	}
+
+	// the fixture's schedules can run, so they get no warning
+	if strings.Contains(get(t, loadSchedules(t), "/schedules").Body.String(), "Every run will fail") {
+		t.Error("a schedule that can run is flagged")
+	}
+}

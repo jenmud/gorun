@@ -18,9 +18,10 @@ type ScheduleRow struct {
 	NextUTC     string // the next run as an RFC 3339 instant; empty when none is left
 	NextText    string // the same instant as UTC text, shown before the picker's script runs
 	Paused      bool
-	SkipPending bool // the next run is already set to be skipped
-	CanSkip     bool // a next run exists and is not already skipped
-	Finished    bool // no run is left
+	SkipPending bool   // the next run is already set to be skipped
+	CanSkip     bool   // a next run exists and is not already skipped
+	Finished    bool   // no run is left
+	Problem     string // why its target can't run on any server, so every run would fail
 }
 
 // SchedulesPageData is what the schedules page shows.

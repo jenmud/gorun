@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/jenmud/gorun"
@@ -141,6 +142,11 @@ func scheduleRows(cfg *gorun.Config, s *gorun.Scheduler, now time.Time) []ui.Sch
 			row.Finished = !found
 		} else if n, ok, err := sc.Next(now); err == nil && ok {
 			next, found = n, true
+		}
+		if names, err := cfg.ExpandTaskRefs(sc.Target); err == nil {
+			if err := cfg.CanRun(names); err != nil {
+				row.Problem = strings.TrimPrefix(err.Error(), "no tasks to run: ")
+			}
 		}
 		if found {
 			row.NextUTC = next.UTC().Format(time.RFC3339)

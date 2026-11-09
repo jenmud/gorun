@@ -110,9 +110,20 @@ Without NATS, the web server applies their events itself. Each one carries a
 **⏱ scheduled · name** badge, live and in History, that links to its schedule on the Schedules
 page. Skipped, missed and failed runs carry it too.
 
-A scheduled run that fails before it starts, such as a target no server can run (a task that is
-not `local = true` on a local server), is written to **History** as a failed run with the reason.
-Its target runs on every server, so a task has to suit every server it reaches.
+A scheduled run that fails before it starts, such as a target no server can run, is written to
+**History** as a failed run with the reason. Its target runs on every server, so a task has to suit
+every server it reaches.
+
+The usual cause is the local rule: a task marked `local = true` runs only on a *local* server, one
+with no `ssh` table, and every other task runs only over SSH. So a schedule for a local task needs
+a local server in the Gorunfile:
+
+```toml
+[servers.hosts.localhost]   # no ssh table: this machine
+```
+
+The Schedules page warns about a schedule like this before it fires, and the error names the task
+and the fix.
 
 Skipped and missed occurrences are written to **History** as runs whose title says what
 happened. Runs that start are recorded by their own events, so they are not duplicated.

@@ -157,3 +157,40 @@ func TestRunSkipsServersWithNoTasks(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 }
+
+func TestCanRunExplainsAMissingServerKind(t *testing.T) {
+	c := &Config{
+		Tasks: map[string]Task{
+			"datetime": {Name: "datetime", Cmd: "date", Local: true},
+			"deploy":   {Name: "deploy", Cmd: "deploy"},
+		},
+		Servers: []Server{{Name: "web-1", SSH: SSH{User: "deploy"}}},
+	}
+	err := c.CanRun([]string{"datetime"})
+	if !errors.Is(err, ErrNoTasks) || !strings.Contains(err.Error(), `task "datetime" is marked local = true, but no server in the Gorunfile is local`) {
+		t.Errorf("local task, SSH servers only: %v", err)
+	}
+	if err := c.CanRun([]string{"datetime", "deploy"}); err != nil {
+		t.Errorf("deploy can run over SSH, so the run can too: %v", err)
+	}
+
+	c.Servers = []Server{{Name: "localhost"}}
+	err = c.CanRun([]string{"deploy"})
+	if !errors.Is(err, ErrNoTasks) || !strings.Contains(err.Error(), `task "deploy" is not marked local = true, so it runs over SSH, but every server in the Gorunfile is local`) {
+		t.Errorf("remote task, local server only: %v", err)
+	}
+	if err := c.CanRun([]string{"datetime"}); err != nil {
+		t.Errorf("datetime can run on the local server: %v", err)
+	}
+}
+
+func TestRunNamesTheTaskThatHasNoServer(t *testing.T) {
+	c := &Config{
+		Tasks:   map[string]Task{"datetime": {Name: "datetime", Cmd: "date", Local: true}},
+		Servers: []Server{{Name: "web-1", SSH: SSH{User: "deploy"}, TaskNames: []string{"datetime"}}},
+	}
+	err := c.Run(context.Background())
+	if !errors.Is(err, ErrNoTasks) || !strings.Contains(err.Error(), `"datetime"`) || !strings.Contains(err.Error(), "[servers.hosts.localhost]") {
+		t.Fatalf("err = %v, want ErrNoTasks naming datetime and the fix", err)
+	}
+}

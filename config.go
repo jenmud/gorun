@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -369,6 +370,75 @@ func (c *Config) ServersPipeline() (map[string]Server, error) {
 // servers only run tasks marked local = true, and other tasks only run over SSH.
 var ErrNoTasks = errors.New("no tasks to run: local servers only run tasks marked local = true, and other tasks only run over SSH")
 
+// CanRun reports whether at least one of the named tasks has a server it can run on: a local
+// server for a task marked local = true, an SSH server for any other. When none has, the error
+// wraps ErrNoTasks and says how to fix the Gorunfile.
+func (c *Config) CanRun(names []string) error {
+	hasLocal, hasRemote := false, false
+	for _, s := range c.Servers {
+		if s.IsLocal() {
+			hasLocal = true
+		} else {
+			hasRemote = true
+		}
+	}
+	var local, remote []string
+	for _, name := range names {
+		if c.Tasks[name].Local {
+			if hasLocal {
+				return nil
+			}
+			local = append(local, name)
+		} else {
+			if hasRemote {
+				return nil
+			}
+			remote = append(remote, name)
+		}
+	}
+	switch {
+	case len(local) > 0:
+		return noTasksErr(taskList(local) + " marked local = true, but no server in the Gorunfile is local. " +
+			"Add a server with no ssh table to run it on this machine, such as [servers.hosts.localhost]")
+	case len(remote) > 0:
+		return noTasksErr(taskList(remote) + " not marked local = true, so it runs over SSH, but every server in the Gorunfile is local. " +
+			"Add a server with an ssh table, or mark the task local = true to run it on this machine")
+	}
+	return ErrNoTasks
+}
+
+// noTasksErr is ErrNoTasks with the specific reason in place of the general one.
+type noTasksErr string
+
+func (e noTasksErr) Error() string        { return "no tasks to run: " + string(e) }
+func (e noTasksErr) Is(target error) bool { return target == ErrNoTasks }
+
+// taskList names tasks in a sentence: `task "a" is` or `tasks "a" and "b" are`.
+func taskList(names []string) string {
+	quoted := make([]string, len(names))
+	for i, n := range names {
+		quoted[i] = strconv.Quote(n)
+	}
+	if len(quoted) == 1 {
+		return "task " + quoted[0] + " is"
+	}
+	return "tasks " + strings.Join(quoted[:len(quoted)-1], ", ") + " and " + quoted[len(quoted)-1] + " are"
+}
+
+// noTasksError explains why a run has nothing to do, naming the tasks that were asked for.
+func (c *Config) noTasksError() error {
+	wanted := c.SelectedTasks
+	if len(wanted) == 0 {
+		for _, s := range c.Servers {
+			wanted = append(wanted, s.TaskNames...)
+		}
+	}
+	if err := c.CanRun(wanted); err != nil {
+		return err
+	}
+	return ErrNoTasks
+}
+
 // ServerPipeline returns the server with its tasks, and their dependencies, resolved into run order.
 func (c *Config) ServerPipeline(server Server) (Server, error) {
 	names, err := c.ExpandTaskRefs(server.TaskNames...)
@@ -668,7 +738,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		}
 	}
 	if len(pipeline) == 0 {
-		return ErrNoTasks
+		return c.noTasksError()
 	}
 
 	serverNames := slices.Sorted(maps.Keys(pipeline))

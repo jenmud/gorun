@@ -16,6 +16,7 @@ require (
 	github.com/nats-io/nats.go v1.55.0
 	github.com/robfig/cron/v3 v3.0.1
 	go.opentelemetry.io/otel/metric v1.44.0
+	go.opentelemetry.io/otel/trace v1.44.0
 	golang.org/x/term v0.47.0
 	modernc.org/sqlite v1.61.0
 )
@@ -48,7 +49,6 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v1.0.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	golang.org/x/time v0.8.0 // indirect
 	modernc.org/libc v1.79.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

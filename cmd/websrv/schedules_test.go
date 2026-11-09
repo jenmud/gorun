@@ -211,3 +211,26 @@ func statusOf(a *app, name string) string {
 	}
 	return ""
 }
+
+// Without NATS, a scheduled run's events still reach the history.
+func TestScheduledRunsReachHistoryWithoutNATS(t *testing.T) {
+	a := loadSchedules(t)
+	if a.cfg.OnEvent == nil {
+		t.Fatal("no path for scheduled run events when NATS is down")
+	}
+	now := time.Now()
+	a.cfg.OnEvent(gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "sched-1", Title: "datatime", Servers: []string{"localhost"}, StartedAt: now, Hostname: "h", PID: 1})
+	a.cfg.OnEvent(gorun.ProcessFinishedEvent{Type: "process_finished", GorunUUID: "sched-1", Success: true, TotalTasks: 1, FinishedAt: now})
+
+	runs, err := a.store.ListRuns(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, r := range runs {
+		found = found || (r.ID == "sched-1" && r.Title == "datatime")
+	}
+	if !found {
+		t.Errorf("the scheduled run is not in history: %+v", runs)
+	}
+}

@@ -169,8 +169,15 @@ func openStore() *store.Store {
 // onEvent applies one run event from NATS to the dashboard and the history, then pushes
 // the change to every open page.
 func (a *app) onEvent(m *nats.Msg) {
+	a.applyEvent(m.Data)
+}
+
+// applyEvent applies one run event, as JSON, to the dashboard and the history, then pushes the
+// change to every open page. NATS delivers events this way; so do scheduled runs when NATS is
+// down, so their history and live view don't depend on NATS.
+func (a *app) applyEvent(data []byte) {
 	var ev inats.Event
-	if err := json.Unmarshal(m.Data, &ev); err != nil {
+	if err := json.Unmarshal(data, &ev); err != nil {
 		return
 	}
 

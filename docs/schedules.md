@@ -105,6 +105,9 @@ it; the choice lasts for the browser session. The page refreshes every 30 second
 Any reload of the file, from the Config page or the schedules page, keeps the pauses and skips
 on schedules that still exist.
 
+Scheduled runs appear in **History** and in the live view whether or not NATS is connected.
+Without NATS, the web server applies their events itself.
+
 Skipped and missed occurrences are written to **History** as runs whose title says what
 happened. Runs that start are recorded by their own events, so they are not duplicated.
 

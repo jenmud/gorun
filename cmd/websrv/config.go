@@ -2,6 +2,7 @@ package websrv
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -60,6 +61,15 @@ func (a *app) startScheduler(cfg *gorun.Config) {
 	a.stopScheduler()
 	if len(cfg.Schedules) == 0 {
 		return
+	}
+	// Without NATS nothing carries a scheduled run's events to the dashboard and history, so
+	// they are applied here, the way the NATS handler would apply them.
+	if a.nc == nil {
+		cfg.OnEvent = func(ev any) {
+			if data, err := json.Marshal(ev); err == nil {
+				a.applyEvent(data)
+			}
+		}
 	}
 	s := gorun.NewScheduler(cfg, func(ev gorun.ScheduleEvent) {
 		slog.Info("schedule", "schedule", ev.Schedule, "kind", ev.Kind, "at", ev.At, "reason", ev.Reason)

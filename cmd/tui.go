@@ -127,6 +127,7 @@ type tuiModel struct {
 	spinner        spinner.Model
 	okBar          progress.Model
 	failBar        progress.Model
+	copyBar        progress.Model // a copy's progress, in one solid colour
 	cancel         context.CancelFunc
 
 	// compact view failure/skip boxes are rendered off the UI loop (see
@@ -167,6 +168,7 @@ func newTUIModel(title string, verbose bool, cancel context.CancelFunc) tuiModel
 		spinner:   spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(cursorStyle)),
 		okBar:     progress.New(progress.WithColors(colorAccent, colorOK), progress.WithFillCharacters('■', '□'), progress.WithoutPercentage()),
 		failBar:   progress.New(progress.WithColors(colorFail), progress.WithFillCharacters('■', '□'), progress.WithoutPercentage()),
+		copyBar:   progress.New(progress.WithColors(colorAccent), progress.WithFillCharacters('■', '□'), progress.WithoutPercentage()),
 	}
 }
 
@@ -1310,7 +1312,7 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 // copyStatus shows how far a copy has got: "↑ release.tar.gz ■■■■□□□□ 43% 440.0 MB / 1.0 GB · 12.3 MB/s".
 // The compact view's server line leaves out the file name, which the task row shows.
 func (m tuiModel) copyStatus(ev *gorun.CopyProgressEvent, withName bool) string {
-	bar := m.okBar
+	bar := m.copyBar
 	bar.SetWidth(12)
 	pct := ev.Percent / 100
 	out := copyStyle.Render("↑ ")

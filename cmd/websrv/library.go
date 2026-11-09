@@ -16,9 +16,6 @@ import (
 	"github.com/jenmud/gorun/cmd/web/ui"
 )
 
-// maxRunsOn caps the servers listed under a task.
-const maxRunsOn = 8
-
 // tasksPage lists every task of the loaded file with its settings, like the terminal's task list.
 func (a *app) tasksPage(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()

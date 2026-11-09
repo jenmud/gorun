@@ -298,19 +298,6 @@ func serversFailed(p *ProcessState) int {
 	return n
 }
 
-// tasksFailed counts the tasks that failed.
-func tasksFailed(p *ProcessState) int {
-	n := 0
-	for _, name := range p.ServerOrder {
-		for _, t := range p.Servers[name].Tasks {
-			if t.State == 3 {
-				n++
-			}
-		}
-	}
-	return n
-}
-
 // notRun reports whether a task will never run: its server failed, or the run ended first.
 func notRun(p *ProcessState, srv *ServerInfo, t *TaskInfo) bool {
 	return t.State < 2 && (srv.Error != "" || p.Finished)
@@ -330,7 +317,7 @@ func sortedTasks(p *ProcessState, srv *ServerInfo) []*TaskInfo {
 }
 
 // serverSummary is the one line a collapsed server shows.
-func serverSummary(p *ProcessState, srv *ServerInfo) string {
+func serverSummary(srv *ServerInfo) string {
 	if srv.Error != "" {
 		return "failed to connect · " + tasksNotRun(len(srv.Tasks))
 	}

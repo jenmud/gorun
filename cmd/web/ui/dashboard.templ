@@ -84,7 +84,7 @@ templ serverBlock(p *ProcessState, srv *ServerInfo) {
 			<span class="inline-block text-zinc-500 transition group-open/srv:rotate-90">▸</span>
 			<span class={ serverNameClass(serverHasFailed(srv)) }>{ srv.Name }</span>
 			<span class="font-mono text-xs text-zinc-500">{ srv.Address }</span>
-			<span class="ml-auto text-xs text-zinc-400">{ serverSummary(p, srv) }</span>
+			<span class="ml-auto text-xs text-zinc-400">{ serverSummary(srv) }</span>
 		</summary>
 		<div class="mt-2 h-1 w-full overflow-hidden rounded bg-zinc-800">
 			<div class={ progressClass(serverHasFailed(srv)) } style={ "width: " + itoa(serverProgress(srv)) + "%" }></div>

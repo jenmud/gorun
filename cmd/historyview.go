@@ -42,32 +42,29 @@ type historyPanelRow struct {
 }
 
 type historyModel struct {
-	expanded         map[string]bool
-	loadedTasks      map[string]bool
-	sectionsOpen     map[string]bool
-	pendingCopy      bool
-	listCursor       int
-	status           string
-	helpOpen         bool
-	state            historyState
-	st               *store.Store
-	runs             []store.RunSummary
-	cursor           int
-	offset           int
-	leftOffset       int
-	rightOffset      int
-	rightCursor      int
-	focusRight       bool
-	detailScroll     int
-	detailCursorLine *int
-	detailLineCount  *int
-	width            int
-	height           int
-	run              *store.RunDetail
-	items            []historyItem
-	err              error
-	askKeep          bool
-	keepInput        string
+	expanded     map[string]bool
+	loadedTasks  map[string]bool
+	sectionsOpen map[string]bool
+	pendingCopy  bool
+	listCursor   int
+	status       string
+	helpOpen     bool
+	state        historyState
+	st           *store.Store
+	runs         []store.RunSummary
+	cursor       int
+	offset       int
+	leftOffset   int
+	rightOffset  int
+	rightCursor  int
+	focusRight   bool
+	width        int
+	height       int
+	run          *store.RunDetail
+	items        []historyItem
+	err          error
+	askKeep      bool
+	keepInput    string
 
 	// embedded is set when the history is a tab of the server picker, where esc and q
 	// on the runs list go back to the servers instead of quitting
@@ -105,11 +102,6 @@ type historyTaskMsg struct {
 }
 
 type historyCopyClearMsg struct{}
-
-// Aliases for callers that use other names.
-type historyTaskDetailMsg = historyTaskMsg
-type historyTaskLoadedMsg = historyTaskMsg
-type taskDetailMsg = historyTaskMsg
 
 func isLocalHost(h string) bool {
 	if h == "" {
@@ -153,15 +145,6 @@ func (m historyModel) loadTask(runID, server, task string) tea.Msg {
 	defer cancel()
 	td, err := m.st.GetTask(ctx, runID, server, task)
 	return historyTaskMsg{task: td, err: err}
-}
-func (m historyModel) loadTaskDetail(runID, server, task string) tea.Msg {
-	return m.loadTask(runID, server, task)
-}
-func (m historyModel) fetchTask(runID, server, task string) tea.Msg {
-	return m.loadTask(runID, server, task)
-}
-func (m historyModel) loadTaskOutput(runID, server, task string) tea.Msg {
-	return m.loadTask(runID, server, task)
 }
 
 // isServerExpanded reports whether a server's tasks are visible. It prefers the
@@ -278,10 +261,10 @@ func (m historyModel) currentItem() (historyItem, bool) {
 	return m.items[m.cursor], true
 }
 
-func (m historyModel) detailSections() ([]string, []historySection, []string) {
+func (m historyModel) detailSections() ([]string, []historySection) {
 	item, ok := m.currentItem()
 	if !ok || m.run == nil {
-		return nil, nil, nil
+		return nil, nil
 	}
 	runScope := "run:" + m.run.ID + ":"
 	serverScope := "server:" + item.server + ":"
@@ -289,7 +272,7 @@ func (m historyModel) detailSections() ([]string, []historySection, []string) {
 	add := func(key, title string, values []string) {
 		sections = append(sections, historySection{key: key, title: title, lines: values})
 	}
-	jsonLines := func(v map[string]any) []string { return varsTableLines(v, max(m.width/2-8, 8)) }
+	jsonLines := varsTableLines
 	envLines := func(v map[string]string) []string { return envTableLines(v, max(m.width/2-8, 8)) }
 
 	meta := []string{}
@@ -314,10 +297,10 @@ func (m historyModel) detailSections() ([]string, []historySection, []string) {
 		if v := m.run.ServerVars[item.server]; len(v) > 0 {
 			add(serverScope+"vars", "Server vars", jsonLines(v))
 		}
-		return meta, sections, nil
+		return meta, sections
 	}
 	if item.taskIdx < 0 || item.taskIdx >= len(m.run.Tasks) {
-		return meta, sections, nil
+		return meta, sections
 	}
 	task := m.run.Tasks[item.taskIdx]
 	taskScope := "task:" + item.server + "\x00" + task.Name + ":"
@@ -367,7 +350,7 @@ func (m historyModel) detailSections() ([]string, []historySection, []string) {
 	add(taskScope+"command", "Command", command)
 	add(taskScope+"stdout", "Stdout", outputLines(task.Stdout))
 	add(taskScope+"stderr", "Stderr", outputLines(task.Stderr))
-	return meta, sections, nil
+	return meta, sections
 }
 
 func outputLines(s string) []string {
@@ -392,14 +375,12 @@ func historyTaskState(state int) string {
 	}
 }
 
-func (m historyModel) detailPanelRows(meta []string, sections []historySection) ([]historyPanelRow, []int) {
+func (m historyModel) detailPanelRows(meta []string, sections []historySection) []historyPanelRow {
 	rows := make([]historyPanelRow, 0, len(meta)+len(sections))
 	for _, line := range meta {
 		rows = append(rows, historyPanelRow{text: line, section: -1})
 	}
-	heads := make([]int, len(sections))
 	for i, section := range sections {
-		heads[i] = len(rows)
 		arrow := "▸"
 		if m.sectionsOpen[section.key] {
 			arrow = "▾"
@@ -411,7 +392,7 @@ func (m historyModel) detailPanelRows(meta []string, sections []historySection) 
 			}
 		}
 	}
-	return rows, heads
+	return rows
 }
 
 func (m *historyModel) ensureRightCursorVisible(rows []historyPanelRow) {
@@ -431,8 +412,8 @@ func (m *historyModel) ensureRightCursorVisible(rows []historyPanelRow) {
 }
 
 func (m *historyModel) moveRightCursor(delta int) {
-	meta, sections, _ := m.detailSections()
-	rows, _ := m.detailPanelRows(meta, sections)
+	meta, sections := m.detailSections()
+	rows := m.detailPanelRows(meta, sections)
 	if len(rows) == 0 {
 		m.rightCursor = 0
 		m.rightOffset = 0
@@ -443,11 +424,11 @@ func (m *historyModel) moveRightCursor(delta int) {
 }
 
 func (m *historyModel) toggleRightSection() tea.Cmd {
-	meta, sections, _ := m.detailSections()
+	meta, sections := m.detailSections()
 	if len(sections) == 0 {
 		return nil
 	}
-	rows, _ := m.detailPanelRows(meta, sections)
+	rows := m.detailPanelRows(meta, sections)
 	m.rightCursor = max(0, min(m.rightCursor, len(rows)-1))
 	row := rows[m.rightCursor]
 	if !row.sectionHead || row.section < 0 || row.section >= len(sections) {
@@ -455,7 +436,7 @@ func (m *historyModel) toggleRightSection() tea.Cmd {
 	}
 	section := sections[row.section]
 	m.sectionsOpen[section.key] = !m.sectionsOpen[section.key]
-	rows, _ = m.detailPanelRows(meta, sections)
+	rows = m.detailPanelRows(meta, sections)
 	m.ensureRightCursorVisible(rows)
 	if !m.sectionsOpen[section.key] || !strings.HasPrefix(section.key, "task:") {
 		return nil
@@ -627,8 +608,8 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.state == historyDetail {
 				m.focusRight = !m.focusRight
 				if m.focusRight {
-					meta, sections, _ := m.detailSections()
-					rows, _ := m.detailPanelRows(meta, sections)
+					meta, sections := m.detailSections()
+					rows := m.detailPanelRows(meta, sections)
 					m.ensureRightCursorVisible(rows)
 				}
 				return m, nil
@@ -653,16 +634,16 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.focusRight = true
 				}
-				meta, sections, _ := m.detailSections()
-				rows, _ := m.detailPanelRows(meta, sections)
+				meta, sections := m.detailSections()
+				rows := m.detailPanelRows(meta, sections)
 				m.ensureRightCursorVisible(rows)
 				return m, nil
 			}
 		case "pgup", "pgdown", "home", "end":
 			if m.state == historyDetail {
 				if m.focusRight {
-					meta, sections, _ := m.detailSections()
-					rows, _ := m.detailPanelRows(meta, sections)
+					meta, sections := m.detailSections()
+					rows := m.detailPanelRows(meta, sections)
 					page := max(m.detailRows()-1, 1)
 					switch msg.String() {
 					case "pgup":
@@ -824,10 +805,11 @@ func (m historyModel) View() tea.View {
 		timeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#38BDF8")).Bold(true)
 		return m.historyDetailView(titleStyle, mutedStyle, okStyle, failStyle, skipStyle, timeStyle)
 	}
-	return m.legacyView()
+	return m.listView()
 }
 
-func (m historyModel) legacyView() tea.View {
+// listView draws the help, the list of runs, or "loading" while a run is fetched.
+func (m historyModel) listView() tea.View {
 	if m.helpOpen {
 		var b strings.Builder
 		b.WriteString(titleStyle.Render("gorun history") + "\n\n")
@@ -938,261 +920,10 @@ func (m historyModel) legacyView() tea.View {
 		return v
 	}
 
-	if m.run == nil {
-		b.WriteString(titleStyle.Render("gorun history") + "\n\n")
-		b.WriteString(mutedStyle.Render("loading...") + "\n")
-		v := tea.NewView(b.String())
-		return v
-	}
-	run := m.run
-
+	// a run's detail is drawn by historyDetailView once the run has loaded
 	b.WriteString(titleStyle.Render("gorun history") + "\n\n")
-	b.WriteString(lipgloss.NewStyle().Bold(true).Render(run.Title) + " " + mutedStyle.Render(run.ID))
-	if isLocalHost(run.Hostname) {
-		b.WriteString(mutedStyle.Render("  [local]"))
-	} else if run.Hostname != "" {
-		b.WriteString(skipStyle.Render(fmt.Sprintf("  [%s]", run.Hostname)))
-	}
-	b.WriteString("\n")
-	if !run.Finished {
-		failedStyle := mutedStyle
-		if run.Failed > 0 {
-			failedStyle = failStyle
-		}
-		b.WriteString(skipStyle.Render("● running") + failedStyle.Render(fmt.Sprintf(" · %d failed", run.Failed)) + "\n\n")
-	} else if run.Success {
-		failedStyle := mutedStyle
-		if run.Failed > 0 {
-			failedStyle = failStyle
-		}
-		b.WriteString(okStyle.Render("✓ success") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, ", run.TotalTasks)) + failedStyle.Render(fmt.Sprintf("%d failed", run.Failed)) + mutedStyle.Render(fmt.Sprintf(", %d skipped (", run.Skipped)) + timeStyle.Render(fmt.Sprintf("%.1fs", run.Duration.Seconds())) + mutedStyle.Render(")") + "\n\n")
-	} else {
-		failedStyle := mutedStyle
-		if run.Failed > 0 {
-			failedStyle = failStyle
-		}
-		b.WriteString(failStyle.Render("✗ failed") + mutedStyle.Render(fmt.Sprintf(" · %d tasks, ", run.TotalTasks)) + failedStyle.Render(fmt.Sprintf("%d failed", run.Failed)) + mutedStyle.Render(fmt.Sprintf(", %d skipped (", run.Skipped)) + timeStyle.Render(fmt.Sprintf("%.1fs", run.Duration.Seconds())) + mutedStyle.Render(")") + "\n\n")
-	}
-
-	// build visible lines
-	var lines []string
-
-	// precompute per-server aggregates so rendering is O(n) instead of O(n^2)
-	type serverAgg struct {
-		total  int
-		done   int
-		dur    time.Duration
-		failed bool
-	}
-	agg := map[string]serverAgg{}
-	for i := range run.Tasks {
-		t := run.Tasks[i]
-		a := agg[t.Server]
-		a.total++
-		if t.State == 2 {
-			a.done++
-		}
-		a.dur += t.Duration
-		if t.State == 3 {
-			a.failed = true
-		}
-		agg[t.Server] = a
-	}
-
-	if len(run.RunEnvVars) > 0 {
-		lines = append(lines, mutedStyle.Render("  run env vars"))
-		for _, l := range envTableLines(run.RunEnvVars, m.width-4) {
-			lines = append(lines, "  "+l)
-		}
-	}
-	if len(run.RunVars) > 0 {
-		lines = append(lines, mutedStyle.Render("  run vars"))
-		for _, l := range varsTableLines(run.RunVars, m.width-4) {
-			lines = append(lines, "  "+l)
-		}
-	}
-
-	cursorLine := 0
-	for idx, it := range m.items {
-		if it.isServer {
-			cursor := "  "
-			selected := idx == m.cursor
-			if selected {
-				cursor = cursorStyle.Render("▶ ")
-			}
-			arrow := "▶"
-			if it.expanded {
-				arrow = "▼"
-			}
-			a := agg[it.server]
-			total := a.total
-			done := a.done
-			dur := a.dur
-			serverFailed := a.failed || run.ServerErrors[it.server] != ""
-			serverStyle := lipgloss.NewStyle().Bold(true)
-			if serverFailed {
-				serverStyle = serverStyle.Foreground(lipgloss.Color("#EF4444"))
-			}
-			srvLine := cursor + arrow + " " + serverStyle.Render(it.server)
-			if total > 0 {
-				srvLine += mutedStyle.Render(fmt.Sprintf(" %d/%d", done, total))
-			}
-			if dur > 0 {
-				srvLine += timeStyle.Render(fmt.Sprintf(" %.1fs", dur.Seconds()))
-			}
-			if selected {
-				srvLine = highlightSelectedRow(srvLine, m.width)
-			}
-			lines = append(lines, srvLine)
-			if selected {
-				cursorLine = len(lines) - 1
-			}
-			if msg := run.ServerErrors[it.server]; msg != "" && it.expanded {
-				lines = append(lines, "  "+failStyle.Render("✗ "+msg))
-			}
-			if it.expanded {
-				if ev := run.ServerEnvVars[it.server]; len(ev) > 0 {
-					lines = append(lines, mutedStyle.Render("  env vars"))
-					for _, l := range envTableLines(ev, m.width-4) {
-						lines = append(lines, "  "+l)
-					}
-				}
-				if vv := run.ServerVars[it.server]; len(vv) > 0 {
-					lines = append(lines, mutedStyle.Render("  vars"))
-					for _, l := range varsTableLines(vv, m.width-4) {
-						lines = append(lines, "  "+l)
-					}
-				}
-			}
-			continue
-		}
-		vis := m.isServerExpanded(it.server)
-		if !vis {
-			continue
-		}
-		if it.taskIdx < 0 || it.taskIdx >= len(run.Tasks) {
-			continue
-		}
-		t := run.Tasks[it.taskIdx]
-		cursor := "  "
-		selected := idx == m.cursor
-		if selected {
-			cursor = cursorStyle.Render("▶ ")
-		}
-		var mark string
-		if t.State == 2 {
-			mark = okStyle.Render("✓")
-		} else if t.State == 3 {
-			mark = failStyle.Render("✗")
-		} else if t.State == 4 {
-			mark = skipStyle.Render("⊘")
-		} else if t.State == 1 {
-			mark = skipStyle.Render("●")
-		} else {
-			mark = mutedStyle.Render("○")
-		}
-		line := cursor + mark + " " + t.Name
-		if (t.State == 3 || t.State == 4) && t.Stderr != "" {
-			line += mutedStyle.Render(" — " + strings.SplitN(strings.TrimSpace(t.Stderr), "\n", 2)[0])
-		}
-		if t.Duration > 0 {
-			line += timeStyle.Render(fmt.Sprintf(" %.1fs", t.Duration.Seconds()))
-		}
-		if !it.expanded {
-			line += mutedStyle.Render(" [expand]")
-		}
-		if selected {
-			line = highlightSelectedRow(line, m.width)
-			cursorLine = len(lines)
-		}
-		lines = append(lines, line)
-		if it.expanded {
-			if t.Command != "" {
-				// show the command as written, line by line, with later lines lined up
-				// under the first; tabs would throw off the layout, so they become spaces
-				lines = append(lines, mutedStyle.Render("      command"))
-				for i, l := range strings.Split(strings.TrimRight(t.Command, "\r\n"), "\n") {
-					prefix := "        $ "
-					if i > 0 {
-						prefix = "          "
-					}
-					lines = append(lines, prefix+strings.ReplaceAll(strings.TrimRight(l, "\r"), "\t", "    "))
-				}
-				lines = append(lines, mutedStyle.Render("        (y or c to copy)"))
-			}
-			if t.Stdout != "" {
-				lines = append(lines, mutedStyle.Render("      stdout"))
-				for _, l := range strings.Split(strings.TrimRight(t.Stdout, "\r\n"), "\n") {
-					lines = append(lines, "        "+l)
-				}
-			}
-			if t.Stderr != "" {
-				lines = append(lines, failStyle.Render("      stderr"))
-				for _, l := range strings.Split(strings.TrimRight(t.Stderr, "\r\n"), "\n") {
-					lines = append(lines, "        "+l)
-				}
-			}
-			if len(t.EnvVars) > 0 {
-				lines = append(lines, mutedStyle.Render("      env vars"))
-				width := m.width - 8
-				for _, l := range envTableLines(t.EnvVars, width) {
-					lines = append(lines, "        "+l)
-				}
-			}
-			if len(t.Vars) > 0 {
-				lines = append(lines, mutedStyle.Render("      vars"))
-				for _, l := range varsTableLines(t.Vars, m.width-8) {
-					lines = append(lines, "        "+l)
-				}
-			}
-			if t.State == 3 && t.Stderr == "" {
-				lines = append(lines, failStyle.Render("      stderr"))
-				lines = append(lines, "        ")
-			}
-		}
-	}
-
-	visible := m.height - 12
-	if visible < 3 {
-		visible = 3
-	}
-	if m.detailCursorLine != nil {
-		*m.detailCursorLine = cursorLine
-	}
-	if m.detailLineCount != nil {
-		*m.detailLineCount = len(lines)
-	}
-	start := 0
-	if m.detailScroll >= 0 {
-		start = m.detailScroll
-	} else if len(lines) > visible {
-		start = cursorLine - visible/2
-	}
-	if len(lines) > visible {
-		if start < 0 {
-			start = 0
-		}
-		if start+visible > len(lines) {
-			start = len(lines) - visible
-		}
-	}
-	for i := start; i < start+visible && i < len(lines); i++ {
-		b.WriteString(lines[i] + "\n")
-	}
-	if len(lines) > visible {
-		b.WriteString(mutedStyle.Render(fmt.Sprintf("    [%d/%d lines]", cursorLine+1, len(lines))) + "\n")
-	}
-	b.WriteString("\n")
-	help := "↑/↓ move · enter expand task · y/c copy command · d delete run · ctrl-k help · esc back · q quit"
-	if m.embedded {
-		help = "↑/↓ move · enter expand task · d delete run · esc/q back to runs"
-	}
-	if m.status != "" {
-		b.WriteString(okStyle.Render(m.status) + "\n")
-	}
-	b.WriteString("\n" + mutedStyle.Render(help))
-	v := tea.NewView(b.String())
-	return v
+	b.WriteString(mutedStyle.Render("loading...") + "\n")
+	return tea.NewView(b.String())
 }
 
 func (m historyModel) historyDetailView(title, muted, ok, fail, skip, timing lipgloss.Style) tea.View {
@@ -1272,8 +1003,8 @@ func (m historyModel) historyDetailView(title, muted, ok, fail, skip, timing lip
 			panelTitle = "Task details"
 		}
 	}
-	metaLines, sections, _ := m.detailSections()
-	rows, _ := m.detailPanelRows(metaLines, sections)
+	metaLines, sections := m.detailSections()
+	rows := m.detailPanelRows(metaLines, sections)
 	rightOffset := max(0, min(m.rightOffset, max(len(rows)-bodyHeight, 0)))
 	if len(rows) > bodyHeight {
 		panelTitle += fmt.Sprintf(" · %d-%d/%d", rightOffset+1, min(rightOffset+bodyHeight, len(rows)), len(rows))

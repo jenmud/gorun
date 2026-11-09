@@ -77,8 +77,7 @@ func (m serverSelectionModel) detailRows(s gorun.Server, match int) []selectionR
 	} else {
 		rows = append(rows, selectionRow{kind: rowVars, match: match})
 		if m.varsOpen[s.Name] {
-			width := m.width/2 - 2 - len(detailIndent) - 2
-			for _, line := range varsTableLines(s.Vars, width) {
+			for _, line := range varsTableLines(s.Vars) {
 				rows = append(rows, selectionRow{kind: rowVarLine, match: match, value: line})
 			}
 		}
@@ -330,7 +329,7 @@ func (m serverSelectionModel) tasksPaneLines(height, width int) []string {
 }
 
 // varsTableLines renders server vars as pretty JSON, one indented line per row.
-func varsTableLines(vars map[string]any, width int) []string {
+func varsTableLines(vars map[string]any) []string {
 	data, err := json.MarshalIndent(vars, "", "  ")
 	if err != nil {
 		return []string{fmt.Sprintf("%v", vars)}

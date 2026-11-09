@@ -260,8 +260,8 @@ func TestHistoryTaskInspectorExpandsAndScrollsSections(t *testing.T) {
 	}
 
 	selectSection := func(name string) {
-		meta, sections, _ := m.detailSections()
-		rows, _ := m.detailPanelRows(meta, sections)
+		meta, sections := m.detailSections()
+		rows := m.detailPanelRows(meta, sections)
 		for sectionIndex, section := range sections {
 			if section.title != name {
 				continue

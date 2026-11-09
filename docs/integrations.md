@@ -49,8 +49,6 @@ the live view and history work with no setup. Its settings come from a
 `GORUN_NATS_SERVER_CONFIG`; the file overrides the defaults it sets, and a host or port it leaves
 out falls back to `127.0.0.1:4222`:
 
-The header shows the address the page is connected to, next to **live**.
-
 ```conf
 # nats.conf: listen on the LAN so other machines can publish to this web service
 host: "0.0.0.0"
@@ -59,6 +57,7 @@ port: 4222
 
 If `GORUN_NATS_CLIENT_URL` names a server, that server is used and nothing is started. The
 embedded server stops when `gorun -web` exits, so other gorun processes that use it stop with it.
+The web UI's header shows how it reaches NATS and the address, next to **live**.
 
 ```bash
 make up    # starts the example lab, including a NATS server (see ../recipes/docker-compose.yml)
@@ -154,7 +153,8 @@ across a fleet and streams every server's progress to the browser;
 
 The library doesn't save runs by itself: it hands every event to `Config.Recorder`, a
 `gorun.Recorder` with one method, `Record(event any)`. Use the built-in SQLite implementation in
-the `history` package, or implement the interface yourself. It
+the `history` package, or implement the interface yourself. [Recording runs](history.md) has the
+order of a run's events, every field, and a complete recorder. It
 writes to the same SQLite database as the CLI and the web UI, so runs from your program show in
 `gorun -history` and `gorun -web` too, and it reads them back so you can show history without the
 web UI. The CLI and the web UI record their own runs through the same interface.

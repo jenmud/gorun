@@ -89,13 +89,8 @@ func (s *Store) Record(event any) {
 	ctx, cancel := context.WithTimeout(context.Background(), writeTimeout)
 	defer cancel()
 
-	// a server error's message doesn't survive JSON (an error marshals as {}), so it is saved directly
-	if e, ok := event.(gorun.ServerErrorEvent); ok {
-		if e.Err != nil {
-			_ = s.st.SetServerError(ctx, e.GorunUUID, e.Server, e.Err.Error())
-		}
-		return
-	}
+	// events marshal to the same JSON as NATS carries (errors as their message), which the
+	// store already knows how to save
 	data, err := json.Marshal(event)
 	if err != nil {
 		return

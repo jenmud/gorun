@@ -166,3 +166,17 @@ func TestACustomRecorderGetsEveryEvent(t *testing.T) {
 		t.Errorf("custom recorder saw %d starts and %d finishes, want 1 each", started.Load(), finished.Load())
 	}
 }
+
+// A server that can't run keeps its error message, which travels as text in the event's JSON.
+func TestRecordKeepsServerErrors(t *testing.T) {
+	h := open(t)
+	h.Record(gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: "r1", Title: "t", Servers: []string{"web-1"}})
+	h.Record(gorun.ServerErrorEvent{Type: "server_error", GorunUUID: "r1", Server: "web-1", Err: errors.New("ssh: connection refused")})
+	detail, err := h.Run(context.Background(), "r1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := detail.ServerErrors["web-1"]; got != "ssh: connection refused" {
+		t.Errorf("server error = %q", got)
+	}
+}

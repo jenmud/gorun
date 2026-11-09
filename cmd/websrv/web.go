@@ -206,12 +206,6 @@ func (a *app) Record(event any) {
 		return
 	}
 	a.applyEvent(data)
-	// a server error's message doesn't survive JSON (an error marshals as {}), so it is saved directly
-	if e, ok := event.(gorun.ServerErrorEvent); ok && e.Err != nil && a.store != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		_ = a.store.SetServerError(ctx, e.GorunUUID, e.Server, e.Err.Error())
-	}
 }
 
 var _ gorun.Recorder = (*app)(nil)

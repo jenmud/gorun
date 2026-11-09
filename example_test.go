@@ -2,9 +2,12 @@ package gorun_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"strings"
+	"sync"
 
 	"github.com/jenmud/gorun"
 )
@@ -67,4 +70,52 @@ func ExampleNewScheduler() {
 	for _, st := range s.Status() {
 		fmt.Printf("%s paused=%v next=%v\n", st.Name, st.Paused, st.Next)
 	}
+}
+
+// jsonLines is a Recorder that appends each event to a writer as one line of JSON: the same JSON
+// gorun publishes on NATS. The mutex keeps lines whole, since Record is called concurrently.
+type jsonLines struct {
+	mu  sync.Mutex
+	enc *json.Encoder
+}
+
+func (j *jsonLines) Record(event any) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	_ = j.enc.Encode(event)
+}
+
+// Keep every event of a run as JSON lines in a file, with a Recorder of your own.
+func ExampleRecorder() {
+	f, err := os.OpenFile("runs.jsonl", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	var cfg gorun.Config
+	if err := cfg.LoadFile("Gorunfile"); err != nil {
+		log.Fatal(err)
+	}
+	cfg.Recorder = &jsonLines{enc: json.NewEncoder(f)}
+	if err := cfg.Run(context.Background()); err != nil {
+		log.Print(err)
+	}
+}
+
+// Count finished runs and failures, with a function as the Recorder.
+func ExampleRecorderFunc() {
+	var cfg gorun.Config
+	if err := cfg.LoadFile("Gorunfile"); err != nil {
+		log.Fatal(err)
+	}
+	cfg.Recorder = gorun.RecorderFunc(func(event any) {
+		switch ev := event.(type) {
+		case gorun.ProcessFinishedEvent:
+			log.Printf("run %s: success=%v failed=%d skipped=%d", ev.GorunUUID, ev.Success, ev.Failed, ev.Skipped)
+		case gorun.ServerErrorEvent:
+			log.Printf("%s could not run: %v", ev.Server, ev.Err)
+		}
+	})
+	_ = cfg.Run(context.Background())
 }

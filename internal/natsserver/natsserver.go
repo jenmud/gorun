@@ -27,38 +27,55 @@ type Settings struct {
 	Skip       bool   // never start one (GORUN_SKIP_NATS)
 }
 
-// Ensure makes sure a NATS server is reachable and returns the URL clients should use, plus a
-// stop function. The URL is empty when the existing configuration is already right: the user
-// named a server, NATS is skipped, or a server answers at ProbeURL.
-func Ensure(s Settings) (url string, stop func(), err error) {
-	noop := func() {}
+// Embedded is a NATS server this process started.
+type Embedded struct {
+	URL        string // where clients connect
+	ConfigPath string // the config file it was started with; empty for the defaults
+	srv        *server.Server
+}
+
+// Connections is how many clients are connected to the server right now.
+func (e *Embedded) Connections() int {
+	return e.srv.NumClients()
+}
+
+// Stop shuts the server down and waits for it to finish.
+func (e *Embedded) Stop() {
+	e.srv.Shutdown()
+	e.srv.WaitForShutdown()
+}
+
+// Ensure makes sure a NATS server is reachable. It returns the server it started, or nil when
+// none was needed: the user named a server, NATS is skipped, or a server already answers at
+// ProbeURL.
+func Ensure(s Settings) (*Embedded, error) {
 	if s.Skip {
-		return "", noop, nil
+		return nil, nil
 	}
 	if s.ClientURL != "" {
 		slog.Info("nats: using the server given by GORUN_NATS_CLIENT_URL", "url", s.ClientURL)
-		return "", noop, nil
+		return nil, nil
 	}
 	if reachable(s.ProbeURL) {
-		return "", noop, nil
+		return nil, nil
 	}
 
 	opts, err := options(s.ConfigPath)
 	if err != nil {
-		return "", noop, err
+		return nil, err
 	}
 	srv, err := server.NewServer(opts)
 	if err != nil {
-		return "", noop, fmt.Errorf("nats server: %w", err)
+		return nil, fmt.Errorf("nats server: %w", err)
 	}
 	go srv.Start()
 	if !srv.ReadyForConnections(5 * time.Second) {
 		srv.Shutdown()
-		return "", noop, fmt.Errorf("nats server did not start listening on %s", srv.ClientURL())
+		return nil, fmt.Errorf("nats server did not start listening on %s", clientURL(opts))
 	}
-	url = clientURL(opts)
-	slog.Info("nats: started an embedded server", "url", url, "config", s.ConfigPath)
-	return url, func() { srv.Shutdown(); srv.WaitForShutdown() }, nil
+	e := &Embedded{URL: clientURL(opts), ConfigPath: s.ConfigPath, srv: srv}
+	slog.Info("nats: started an embedded server", "url", e.URL, "config", s.ConfigPath)
+	return e, nil
 }
 
 // clientURL is the URL this process connects to. A wildcard host (0.0.0.0, ::) listens on every

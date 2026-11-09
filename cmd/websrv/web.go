@@ -41,6 +41,7 @@ type app struct {
 	pending []gorun.Change                // unsaved editor changes
 	runs    map[string]context.CancelFunc // runs started from this page, by UUID
 	sched   *gorun.Scheduler              // fires the loaded Gorunfile's schedules, if any
+	nats    natsState                     // how this service reaches NATS; set once at startup
 }
 
 // Run starts the web server on GORUN_ADDRESS (default :8080). configPath, when set, is the
@@ -52,7 +53,7 @@ func Run(configPath string) {
 	}
 
 	// a NATS server is started here when none is running, before anything connects to one
-	natsURL, stopNATS, err := natsserver.Ensure(natsserver.Settings{
+	emb, err := natsserver.Ensure(natsserver.Settings{
 		ConfigPath: envvars.Get("GORUN_NATS_SERVER_CONFIG"),
 		ProbeURL:   inats.DefaultURL,
 		ClientURL:  envvars.Get("GORUN_NATS_CLIENT_URL"),
@@ -61,9 +62,9 @@ func Run(configPath string) {
 	if err != nil {
 		log.Printf("gorun web: NATS server not started: %v", err)
 	}
-	defer stopNATS()
-	if natsURL != "" {
-		if err := os.Setenv("GORUN_NATS_CLIENT_URL", natsURL); err != nil {
+	if emb != nil {
+		defer emb.Stop()
+		if err := os.Setenv("GORUN_NATS_CLIENT_URL", emb.URL); err != nil {
 			log.Printf("gorun web: %v", err)
 		}
 	}
@@ -80,6 +81,7 @@ func Run(configPath string) {
 		topic: topicName(),
 		hub:   &hub{clients: map[chan string]struct{}{}},
 		runs:  map[string]context.CancelFunc{},
+		nats:  natsStartState(emb, nc, err, envvars.Get("GORUN_SKIP_NATS") != ""),
 	}
 	if nc != nil {
 		defer nc.Close()

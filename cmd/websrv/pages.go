@@ -22,11 +22,7 @@ import (
 // page renders body inside the shared layout.
 func (a *app) page(w http.ResponseWriter, title, active string, body templ.Component) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	natsURL := ""
-	if a.nc != nil {
-		natsURL = a.nc.ConnectedUrl()
-	}
-	if err := ui.Layout(title, active, natsURL, body).Render(context.Background(), w); err != nil {
+	if err := ui.Layout(title, active, a.natsStatus(), body).Render(context.Background(), w); err != nil {
 		log.Printf("gorun web: render %s: %v", title, err)
 	}
 }

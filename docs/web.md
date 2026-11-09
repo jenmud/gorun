@@ -21,8 +21,16 @@ GORUN_ADDRESS=127.0.0.1:9000 gorun -web    # no file yet: load one on the Config
 | `GORUN_SKIP_NATS` | unset | never start or use NATS |
 
 The web service starts its own NATS server on `127.0.0.1:4222` when nothing answers there, so live
-updates and history work with no setup. The header shows the address it is connected to, next to
-**live**. Without NATS, runs and live updates are off and the header says so.
+updates and history work with no setup. The header shows how NATS is reached, next to **live**:
+
+- `embedded`: this web service started the server. It stops when `gorun -web` exits.
+- `external`: an existing server, named by `GORUN_NATS_CLIENT_URL` or already running on the
+  default address.
+- `off`: no connection, with the reason (for example `GORUN_SKIP_NATS` is set). Runs and live
+  updates are off.
+
+The **Config** page has a NATS panel with the same facts: the mode, the address, the config file
+the embedded server was started with (or the defaults), and how many clients are connected to it.
 
 ```bash
 # use a NATS server that's already running

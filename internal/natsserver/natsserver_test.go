@@ -33,32 +33,26 @@ func writeConf(t *testing.T, body string) string {
 }
 
 func TestEnsureStartsNothingWhenToldNotTo(t *testing.T) {
-	if url, stop, err := Ensure(Settings{Skip: true, ProbeURL: "nats://127.0.0.1:1"}); url != "" || err != nil {
-		t.Errorf("skip: url %q err %v", url, err)
-	} else {
-		stop()
+	if e, err := Ensure(Settings{Skip: true, ProbeURL: "nats://127.0.0.1:1"}); e != nil || err != nil {
+		t.Errorf("skip: started %v err %v", e, err)
 	}
-	if url, stop, err := Ensure(Settings{ClientURL: "nats://elsewhere:4222", ProbeURL: "nats://127.0.0.1:1"}); url != "" || err != nil {
-		t.Errorf("given address: url %q err %v", url, err)
-	} else {
-		stop()
+	if e, err := Ensure(Settings{ClientURL: "nats://elsewhere:4222", ProbeURL: "nats://127.0.0.1:1"}); e != nil || err != nil {
+		t.Errorf("given address: started %v err %v", e, err)
 	}
 }
 
 func TestEnsureUsesAServerThatIsAlreadyRunning(t *testing.T) {
 	port := freePort(t)
 	conf := writeConf(t, fmt.Sprintf("host: 127.0.0.1\nport: %d\n", port))
-	existing, stopExisting, err := Ensure(Settings{ConfigPath: conf, ProbeURL: "nats://127.0.0.1:1"})
-	if err != nil || existing == "" {
-		t.Fatalf("starting the first server: url %q err %v", existing, err)
+	first, err := Ensure(Settings{ConfigPath: conf, ProbeURL: "nats://127.0.0.1:1"})
+	if err != nil || first == nil {
+		t.Fatalf("starting the first server: %v err %v", first, err)
 	}
-	defer stopExisting()
+	defer first.Stop()
 
 	// a second Ensure finds the first and starts nothing
-	if url, stop, err := Ensure(Settings{ProbeURL: existing}); url != "" || err != nil {
-		t.Errorf("second Ensure: url %q err %v, want the running server reused", url, err)
-	} else {
-		stop()
+	if e, err := Ensure(Settings{ProbeURL: first.URL}); e != nil || err != nil {
+		t.Errorf("second Ensure: started %v err %v, want the running server reused", e, err)
 	}
 }
 
@@ -66,16 +60,19 @@ func TestEnsureStartsAServerFromItsConfig(t *testing.T) {
 	port := freePort(t)
 	conf := writeConf(t, fmt.Sprintf("host: 127.0.0.1\nport: %d\nmax_payload: 2048\n", port))
 
-	url, stop, err := Ensure(Settings{ConfigPath: conf, ProbeURL: fmt.Sprintf("nats://127.0.0.1:%d", freePort(t))})
-	if err != nil {
-		t.Fatal(err)
+	e, err := Ensure(Settings{ConfigPath: conf, ProbeURL: fmt.Sprintf("nats://127.0.0.1:%d", freePort(t))})
+	if err != nil || e == nil {
+		t.Fatalf("Ensure: %v err %v", e, err)
 	}
-	defer stop()
-	if want := fmt.Sprintf("nats://127.0.0.1:%d", port); url != want {
-		t.Fatalf("url = %q, want %q", url, want)
+	defer e.Stop()
+	if want := fmt.Sprintf("nats://127.0.0.1:%d", port); e.URL != want {
+		t.Fatalf("url = %q, want %q", e.URL, want)
+	}
+	if e.Connections() != 0 {
+		t.Errorf("connections = %d before anyone connects", e.Connections())
 	}
 
-	nc, err := natsclient.Connect(url, natsclient.Timeout(2*time.Second))
+	nc, err := natsclient.Connect(e.URL, natsclient.Timeout(2*time.Second))
 	if err != nil {
 		t.Fatalf("connect to the embedded server: %v", err)
 	}

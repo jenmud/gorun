@@ -15,6 +15,7 @@ templ ConfigPage(d ConfigPageData) {
 	</div>
 	<div class="grid gap-6 lg:grid-cols-[1fr_24rem]">
 		<div class="min-w-0 space-y-6">
+			@natsPanel(d.NATS)
 			<section class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
 				<h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Files</h2>
 				if d.Loaded {
@@ -50,6 +51,32 @@ templ ConfigPage(d ConfigPageData) {
 
 // zonePickerScript fills every time zone dropdown with the zones the browser knows. A dropdown
 // with no value of its own starts on the browser's zone.
+// natsPanel says how the web service reaches NATS, and for an embedded server, what it is doing.
+templ natsPanel(n NATSStatus) {
+	<section class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">NATS</h2>
+		if n.Mode == "off" {
+			<p class="mt-2 text-sm text-amber-300">Off: { n.Reason }. Runs and live updates are off.</p>
+		} else {
+			<dl class="mt-2 grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1 text-sm">
+				<dt class="text-zinc-500">Mode</dt>
+				<dd class="text-zinc-200">{ natsModeLabel(n.Mode) }</dd>
+				<dt class="text-zinc-500">Address</dt>
+				<dd class="font-mono text-zinc-200">{ n.URL }</dd>
+				if n.Mode == "embedded" {
+					<dt class="text-zinc-500">Config</dt>
+					<dd class="font-mono text-xs text-zinc-300">{ natsConfigLabel(n.ConfigPath) }</dd>
+					<dt class="text-zinc-500">Clients</dt>
+					<dd class="text-zinc-200">{ itoa(n.Connections) } connected</dd>
+				}
+			</dl>
+			if n.Mode == "embedded" {
+				<p class="mt-2 text-xs text-zinc-500">This server runs inside gorun -web and stops when it exits. Other gorun processes can use it at the address above.</p>
+			}
+		}
+	</section>
+}
+
 templ zonePickerScript() {
 	<script>
 (function () {

@@ -149,6 +149,7 @@ type Browser struct {
 
 // ConfigPageData is everything the config editor shows.
 type ConfigPageData struct {
+	NATS        NATSStatus
 	Browser     Browser
 	Path        string
 	Files       []FileOption
@@ -396,4 +397,32 @@ type BundlesPageData struct {
 	Targets     []string
 	EditingName string
 	Edit        EditFields
+}
+
+// NATSStatus is how the web service reaches NATS, for the header and the Config page.
+type NATSStatus struct {
+	Mode        string // "embedded" (started by this web service), "external" or "off"
+	URL         string // the server clients connect to
+	ConfigPath  string // the config the embedded server was started with; empty for the defaults
+	Connections int    // clients connected to the embedded server
+	Reason      string // why NATS is off
+}
+
+// natsModeLabel says in words how NATS is reached.
+func natsModeLabel(mode string) string {
+	switch mode {
+	case "embedded":
+		return "embedded, started by gorun -web"
+	case "external":
+		return "external, already running"
+	}
+	return "off"
+}
+
+// natsConfigLabel names the config an embedded server was started with.
+func natsConfigLabel(path string) string {
+	if path == "" {
+		return "defaults (127.0.0.1:4222)"
+	}
+	return path
 }

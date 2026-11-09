@@ -152,6 +152,7 @@ var addedColumns = [][2]string{
 	{"runs", "schedule"},
 }
 
+// migrate creates the tables and adds the columns newer versions need.
 func (s *Store) migrate() error {
 	_, _ = s.db.Exec("PRAGMA journal_mode=WAL;")
 	for _, stmt := range schema {

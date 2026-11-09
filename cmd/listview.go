@@ -30,10 +30,12 @@ type treeNode struct {
 	expanded  bool
 }
 
+// hasChildren reports whether the node can be expanded.
 func (n *treeNode) hasChildren() bool {
 	return len(n.children) > 0 || n.load != nil
 }
 
+// expand builds the node's children the first time it is opened.
 func (n *treeNode) expand() {
 	if n.load != nil {
 		n.children = n.load()
@@ -76,6 +78,7 @@ type treeModel struct {
 	hint string
 }
 
+// newTreeModel returns the tree browser for nodes.
 func newTreeModel(title, kind string, roots []*treeNode) treeModel {
 	m := treeModel{title: title, kind: kind, roots: roots, width: 80, height: 24}
 	m.rebuild()
@@ -108,6 +111,7 @@ func (m *treeModel) rebuild() {
 	m.cursor = max(0, min(m.cursor, len(m.rows)-1))
 }
 
+// Init has nothing to load.
 func (m treeModel) Init() tea.Cmd { return nil }
 
 // pageSize is how many rows fit between the header and the footer.
@@ -162,6 +166,7 @@ func wrapText(s string, width int) []string {
 	return lines
 }
 
+// Update handles key presses, mouse clicks and the editor closing.
 func (m treeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	oldCursor := m.cursor
 	if m.kind == "tasks" && m.embedded && m.detailFocus {
@@ -304,6 +309,7 @@ func (m treeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// taskSectionAt returns the detail section on the given line of the task pane.
 func taskSectionAt(i int) taskSection {
 	return [...]taskSection{
 		taskSectionCommand,
@@ -314,10 +320,12 @@ func taskSectionAt(i int) taskSection {
 	}[max(0, min(i, int(taskSectionCount)-1))]
 }
 
+// isExpanded reports whether a section of the task pane is open.
 func (d *taskDetail) isExpanded(i int) bool {
 	return d.expanded&taskSections(taskSectionAt(i)) != 0
 }
 
+// keepDetailCursorVisible scrolls the task pane so its cursor stays in view.
 func (m *treeModel) keepDetailCursorVisible() {
 	_ = m.taskDetailLines(max(m.width-m.width/2-4, 1))
 	n := m.current()
@@ -333,10 +341,12 @@ func (m *treeModel) keepDetailCursorVisible() {
 	}
 }
 
+// editorFinishedMsg reports that the editor opened on a command file has closed.
 type editorFinishedMsg struct {
 	err error
 }
 
+// editCurrentCommandFile opens the selected task's command file in the editor.
 func (m treeModel) editCurrentCommandFile() (tea.Cmd, bool) {
 	n := m.current()
 	if n == nil || n.task == nil || n.task.commandFile == "" {
@@ -347,6 +357,7 @@ func (m treeModel) editCurrentCommandFile() (tea.Cmd, bool) {
 	return tea.ExecProcess(cmd, func(err error) tea.Msg { return editorFinishedMsg{err: err} }), true
 }
 
+// taskEditorCommand returns the command that opens file in the editor named by editorValue, or in vi.
 func taskEditorCommand(editorValue, file string) *exec.Cmd {
 	editor := strings.Fields(editorValue)
 	if len(editor) == 0 {
@@ -387,6 +398,7 @@ func collapseAll(nodes []*treeNode) {
 	}
 }
 
+// current returns the node under the cursor.
 func (m treeModel) current() *treeNode {
 	if m.cursor < 0 || m.cursor >= len(m.rows) {
 		return nil
@@ -394,6 +406,7 @@ func (m treeModel) current() *treeNode {
 	return m.rows[m.cursor].node
 }
 
+// View draws the tree, with the selected task's details beside it on the Tasks list.
 func (m treeModel) View() tea.View {
 	var v tea.View
 	v.AltScreen = true
@@ -429,6 +442,7 @@ func (m treeModel) View() tea.View {
 	return v
 }
 
+// taskView draws the Tasks list: the tree on the left and the selected task on the right.
 func (m treeModel) taskView() string {
 	leftWidth := m.width / 2
 	if leftWidth < 2 {
@@ -488,6 +502,7 @@ func (m treeModel) taskView() string {
 	return strings.Join(lines, "\n")
 }
 
+// taskDetailLines renders the selected task's details, width cells wide.
 func (m treeModel) taskDetailLines(width int) []string {
 	n := m.current()
 	if n == nil || n.task == nil {
@@ -496,12 +511,14 @@ func (m treeModel) taskDetailLines(width int) []string {
 	return n.task.lines(width, m.detailCursor, m.detailFocus)
 }
 
+// maxDetailOffset is how far the task pane can scroll.
 func (m treeModel) maxDetailOffset() int {
 	rightWidth := max(m.width-m.width/2, 2)
 	lines := m.taskDetailLines(max(rightWidth-4, 1))
 	return max(0, len(lines)-max(m.height-6, 1))
 }
 
+// wrapDetailText wraps text to width, keeping its line breaks.
 func wrapDetailText(text string, width int) []string {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	wrapped := []string{}
@@ -515,6 +532,7 @@ func wrapDetailText(text string, width int) []string {
 	return wrapped
 }
 
+// formatTaskVars renders a task's vars as indented JSON.
 func formatTaskVars(vars map[string]any) string {
 	data, err := json.MarshalIndent(vars, "", "  ")
 	if err != nil {
@@ -523,6 +541,7 @@ func formatTaskVars(vars map[string]any) string {
 	return string(data)
 }
 
+// taskDetail is what the task pane shows for one task.
 type taskDetail struct {
 	description   string
 	details       string
@@ -541,8 +560,10 @@ type taskDetail struct {
 	renderedLines []string
 }
 
+// taskSections is the set of open sections of the task pane.
 type taskSections uint8
 
+// taskSection is one foldable section of the task pane.
 type taskSection taskSections
 
 const (
@@ -555,6 +576,7 @@ const (
 
 const taskSectionCount = 5
 
+// newTaskDetail gathers what the task pane shows for task.
 func newTaskDetail(cfg *gorun.Config, task gorun.Task) *taskDetail {
 	d := &taskDetail{
 		description:   task.Description,
@@ -592,11 +614,13 @@ func newTaskDetail(cfg *gorun.Config, task gorun.Task) *taskDetail {
 	return d
 }
 
+// taskOption is one execution setting of a task, as a label and a value.
 type taskOption struct {
 	name  string
 	value string
 }
 
+// taskExecutionOptions lists a task's execution settings: timeout, retries, shell, sudo and so on.
 func taskExecutionOptions(task gorun.Task) []taskOption {
 	timeout := task.TimeoutDuration().String()
 	if task.Timeout <= 0 {
@@ -644,6 +668,7 @@ func taskExecutionOptions(task gorun.Task) []taskOption {
 	}
 }
 
+// yesNo is "yes" or "no".
 func yesNo(value bool) string {
 	if value {
 		return "yes"
@@ -651,6 +676,7 @@ func yesNo(value bool) string {
 	return "no"
 }
 
+// loadCommand reads the task's command file for the task pane, the first time it is shown.
 func (d *taskDetail) loadCommand() {
 	if d.commandLoaded {
 		return
@@ -664,11 +690,13 @@ func (d *taskDetail) loadCommand() {
 	d.command = string(content)
 }
 
+// toggle opens or closes the node under the cursor.
 func (d *taskDetail) toggle(section taskSection) {
 	d.expanded ^= taskSections(section)
 	d.renderedLines = nil
 }
 
+// lines renders the visible part of the tree.
 func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 	if d.expanded&taskSections(taskSectionCommand) != 0 {
 		d.loadCommand()
@@ -762,6 +790,7 @@ func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 	return lines
 }
 
+// expandCommandPreview returns command with its ${NAME} references to envVars filled in.
 func expandCommandPreview(command string, envVars map[string]string) string {
 	var out strings.Builder
 	for i := 0; i < len(command); {
@@ -784,6 +813,7 @@ func expandCommandPreview(command string, envVars map[string]string) string {
 	return out.String()
 }
 
+// detailTableLines renders rows as a two-column table, width cells wide.
 func detailTableLines(keyHeading, valueHeading string, rows [][2]string, width int) []string {
 	if len(rows) == 0 {
 		return []string{"(none configured)"}
@@ -821,6 +851,7 @@ func detailTableLines(keyHeading, valueHeading string, rows [][2]string, width i
 	return append(lines, mutedStyle.Render(rule("└", "┴", "┘")))
 }
 
+// renderRow renders row i of the tree.
 func (m treeModel) renderRow(i int) string {
 	row := m.rows[i]
 	n := row.node

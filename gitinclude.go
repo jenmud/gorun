@@ -141,6 +141,7 @@ type gitIncludes struct {
 	sources  []IncludeSource
 }
 
+// lockKey identifies an include in the lock file by its repository and ref.
 func lockKey(source, ref string) string { return source + "\x00" + ref }
 
 // newGitIncludes reads the lock file for the root Gorunfile at root, if there is one.

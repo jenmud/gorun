@@ -5,15 +5,23 @@
 - The root package `github.com/jenmud/gorun` **is the library**; `cmd/` is a thin CLI/TUI over it.
   `doc.go` documents the library API and is the source of truth for usage examples (`example_test.go`
   is a runnable one).
-- Library files: `config.go` (load/validate/resolve/select/run), `tasks.go` (task exec, retries,
-  timeouts), `groups.go` (bundles + server groups), `ssh.go` (SSH/SCP, session limits),
-  `events.go` (NATS publishing), `env.go` (secret expansion), `servers.go`, `schedules.go` and
-  `scheduler.go` (schedules). `history/` is the public package over `internal/store` that saves
-  and reads runs for library users.
+- Library files, one job each: `config.go` (the `Config` type, load, path resolving, task
+  pipelines, `RunLocal`/`RunTask`), `run.go` (`Run`: plan, then one goroutine per server, then
+  per task), `exec.go` (running one task, locally or over SSH, and its result), `tasks.go` (the
+  `Task` and `Copy` types, commands and templates, validation), `copy.go` (file copies over scp)
+  and `copyprogress.go`, `ssh.go` (SSH client and session limits), `groups.go` (bundles, server
+  groups, server selection), `include.go`/`gitinclude.go` (includes), `schedules.go`/`scheduler.go`,
+  `edit.go` (writing changes back to a Gorunfile), `events.go` (event types, NATS publishing),
+  `env.go` (secret expansion), `servers.go`, `logging.go`. `history/` is the public package over
+  `internal/store` that saves and reads runs for library users.
+- Run events have one wire type, `store.Event` in `internal/store/event.go`, used by the history
+  store (`Store.Apply`), the web dashboard and the `history` package. A new event field goes
+  there and in the event struct in `events.go`.
 - `cmd/` Bubble Tea TUI: `select.go`/`selectpanes.go` (picker), `tui.go` (live view),
   `listview.go` (`-list-*` trees), `historyview.go`, `plain.go` (`-plain`, used when stdout is not a
   terminal). `cmd/websrv` is the web server, `cmd/web/ui` the templ components,
-  `internal/store` the sqlite history, `internal/nats` events, `internal/envvars` env access.
+  `internal/store` the sqlite history and the wire event, `internal/nats` the NATS client,
+  `internal/envvars` env access.
 - `examples/` holds programs built on the library (`servicedeck`, a web app; `rollout`, a CLI). Each
   is its own module with `replace github.com/jenmud/gorun => ../..`, so root `go test ./...` skips
   them; `make examples` vets and builds them (CI runs it). An API change that breaks them must fix

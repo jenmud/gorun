@@ -68,6 +68,7 @@ func newCopyTracker(ctx context.Context, fn CopyProgressFunc, file string, total
 	return t
 }
 
+// report tells the callback how far the copy has got.
 func (t *copyTracker) report(done bool) {
 	if t.fn == nil {
 		return
@@ -93,11 +94,13 @@ func (t *copyTracker) done() { t.report(true) }
 // wrap counts the bytes read from r, and stops the copy when the context is cancelled.
 func (t *copyTracker) wrap(r io.Reader) io.Reader { return &progressReader{t: t, r: r} }
 
+// progressReader counts what is read through it and fails once its tracker's context is done.
 type progressReader struct {
 	t *copyTracker
 	r io.Reader
 }
 
+// Read reads from the wrapped reader, counting the bytes.
 func (p *progressReader) Read(b []byte) (int, error) {
 	if err := p.t.ctx.Err(); err != nil {
 		return 0, err

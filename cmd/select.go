@@ -506,6 +506,7 @@ func (m serverSelectionModel) titleLine() string {
 	return line + m.tabsLine()
 }
 
+// tabLabel renders a tab's name with its shortcut letter underlined, highlighted when it is the active tab.
 func (m serverSelectionModel) tabLabel(name string, tab int) string {
 	if name == "" {
 		return ""
@@ -592,6 +593,7 @@ type rowKey struct {
 	server, name string
 }
 
+// keyOf identifies a row, so the cursor can follow it when the rows change.
 func (m serverSelectionModel) keyOf(row selectionRow) rowKey {
 	key := rowKey{kind: row.kind, name: row.item.name}
 	if s, ok := m.serverOfRow(row); ok {
@@ -940,6 +942,7 @@ func (m *serverSelectionModel) filter() {
 	m.buildRows()
 }
 
+// current returns the row under the cursor.
 func (m serverSelectionModel) current() (gorun.Server, bool) {
 	row, ok := m.currentRow()
 	if !ok {
@@ -948,6 +951,7 @@ func (m serverSelectionModel) current() (gorun.Server, bool) {
 	return m.serverOfRow(row)
 }
 
+// countSelected is how many servers are selected.
 func (m serverSelectionModel) countSelected() int {
 	n := 0
 	for _, s := range m.servers {
@@ -990,10 +994,12 @@ func (m serverSelectionModel) withChosenTasks(s gorun.Server) gorun.Server {
 	return s
 }
 
+// Init has nothing to load.
 func (m serverSelectionModel) Init() tea.Cmd {
 	return nil
 }
 
+// Update handles key presses, mouse clicks, typing in the filter and window resizes.
 func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -1314,6 +1320,7 @@ func (m serverSelectionModel) runAll() (tea.Model, tea.Cmd) {
 	return m.run()
 }
 
+// View draws the picker, or the history tab.
 func (m serverSelectionModel) View() tea.View {
 	var v tea.View
 	if m.quitting {
@@ -1359,6 +1366,7 @@ type selectionLayout struct {
 	buttonY   int // screen row of the run button
 }
 
+// layout works out where each part of the picker goes for the window size.
 func (m serverSelectionModel) layout() selectionLayout {
 	// title, blank, search box (3), count, blank, pane top border | panes | pane bottom
 	// border, blank, button, blank, help
@@ -1380,6 +1388,7 @@ func (m serverSelectionModel) layout() selectionLayout {
 	return l
 }
 
+// searchBox draws the filter box.
 func (m serverSelectionModel) searchBox() string {
 	// keep the box to one line of text, since layout() counts on its height: the box
 	// has a border and padding each side, then "Search " and the cursor
@@ -1398,6 +1407,7 @@ func (m serverSelectionModel) searchBox() string {
 	return searchBoxStyle.Width(width).Render(searchLabelStyle.Render("Search ") + input)
 }
 
+// runButton draws the button that runs the selected servers.
 func (m serverSelectionModel) runButton() string {
 	chosen := m.chosen()
 
@@ -1410,10 +1420,12 @@ func (m serverSelectionModel) runButton() string {
 	return runButtonStyle.Render(fmt.Sprintf("▶ Run on %d servers", len(chosen)))
 }
 
+// runAllButton draws the button that runs every server shown.
 func (m serverSelectionModel) runAllButton() string {
 	return runAllButtonStyle.Render("▶ Run all")
 }
 
+// viewContent draws the picker: tabs, filter, the server and task panes, and the buttons.
 func (m serverSelectionModel) viewContent() string {
 	l := m.layout()
 

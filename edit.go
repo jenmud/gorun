@@ -294,6 +294,7 @@ func hasPrefix(path, prefix []string) bool {
 	return slicesEqual(path[:len(prefix)], prefix)
 }
 
+// slicesEqual reports whether a and b hold the same strings in the same order.
 func slicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

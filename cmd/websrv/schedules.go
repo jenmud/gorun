@@ -59,10 +59,12 @@ func (a *app) schedulePause(w http.ResponseWriter, r *http.Request) {
 	a.scheduleControl(w, r, (*gorun.Scheduler).Pause)
 }
 
+// scheduleResume resumes a paused schedule.
 func (a *app) scheduleResume(w http.ResponseWriter, r *http.Request) {
 	a.scheduleControl(w, r, (*gorun.Scheduler).Resume)
 }
 
+// scheduleSkip skips a schedule's next run.
 func (a *app) scheduleSkip(w http.ResponseWriter, r *http.Request) {
 	a.scheduleControl(w, r, (*gorun.Scheduler).Skip)
 }

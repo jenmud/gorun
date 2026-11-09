@@ -9,6 +9,7 @@ import (
 	"golang.org/x/term"
 )
 
+// drainTerminalInput discards keys typed while the TUI was closing, so they don't reach the shell.
 func drainTerminalInput() {
 	f := os.Stdin
 	if !term.IsTerminal(int(f.Fd())) {

@@ -12,9 +12,11 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/jenmud/gorun/history"
 	"github.com/jenmud/gorun/internal/store"
 )
 
+// historyState is which history screen is showing.
 type historyState int
 
 const (
@@ -22,6 +24,7 @@ const (
 	historyDetail
 )
 
+// historyItem is a row of a run's left pane: a server, or one of its tasks.
 type historyItem struct {
 	isServer bool
 	server   string
@@ -29,18 +32,21 @@ type historyItem struct {
 	expanded bool
 }
 
+// historySection is a foldable block of a run's right pane, such as a task's stdout.
 type historySection struct {
 	key   string
 	title string
 	lines []string
 }
 
+// historyPanelRow is one line of the right pane: a detail line, a section heading or a line inside a section.
 type historyPanelRow struct {
 	text        string
 	section     int
 	sectionHead bool
 }
 
+// historyModel is the history screen: the list of saved runs, and one run opened with its servers and tasks.
 type historyModel struct {
 	expanded     map[string]bool
 	loadedTasks  map[string]bool
@@ -71,6 +77,7 @@ type historyModel struct {
 	embedded bool
 }
 
+// newHistoryModel returns the history screen for the runs in st, starting on the list.
 func newHistoryModel(st *store.Store) historyModel {
 	return historyModel{
 		state:        historyList,
@@ -83,26 +90,33 @@ func newHistoryModel(st *store.Store) historyModel {
 	}
 }
 
+// Init loads the list of runs.
 func (m historyModel) Init() tea.Cmd {
 	return func() tea.Msg { return m.loadRuns() }
 }
 
+// historyRunsMsg carries the loaded list of runs.
 type historyRunsMsg struct {
 	runs []store.RunSummary
 	err  error
 }
 
+// historyRunMsg carries one loaded run.
 type historyRunMsg struct {
 	run *store.RunDetail
 	err error
 }
+
+// historyTaskMsg carries one task loaded with its command and output.
 type historyTaskMsg struct {
 	task store.TaskDetail
 	err  error
 }
 
+// historyCopyClearMsg clears the "copied" status line.
 type historyCopyClearMsg struct{}
 
+// isLocalHost reports whether a run's hostname is this machine.
 func isLocalHost(h string) bool {
 	if h == "" {
 		return true
@@ -121,6 +135,7 @@ func (m historyModel) listRows() int {
 	return max((m.height-5)/3, 1)
 }
 
+// loadRuns reads every saved run.
 func (m historyModel) loadRuns() tea.Msg {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -128,6 +143,7 @@ func (m historyModel) loadRuns() tea.Msg {
 	return historyRunsMsg{runs: runs, err: err}
 }
 
+// loadRun reads one run with its servers and tasks.
 func (m historyModel) loadRun(id string) tea.Msg {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -140,6 +156,7 @@ func (m historyModel) loadRun(id string) tea.Msg {
 	return historyRunMsg{run: run, err: nil}
 }
 
+// loadTask reads one task with its command, output, envvars and vars.
 func (m historyModel) loadTask(runID, server, task string) tea.Msg {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -162,6 +179,7 @@ func (m historyModel) isServerExpanded(server string) bool {
 	return false
 }
 
+// buildItemsForRun lists the run's servers, slowest first, each followed by its tasks, slowest first, and resets the cursors.
 func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 	items := []historyItem{}
 	if run == nil {
@@ -215,6 +233,7 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 	m.sectionsOpen = map[string]bool{}
 }
 
+// visibleItems returns the indexes of the rows showing: every server, and the tasks of expanded ones.
 func (m historyModel) visibleItems() []int {
 	visible := make([]int, 0, len(m.items))
 	for i, item := range m.items {
@@ -225,6 +244,7 @@ func (m historyModel) visibleItems() []int {
 	return visible
 }
 
+// moveLeftCursor moves the left pane's cursor by delta rows, scrolling to keep it in view.
 func (m *historyModel) moveLeftCursor(delta int) {
 	visible := m.visibleItems()
 	if len(visible) == 0 {
@@ -250,10 +270,12 @@ func (m *historyModel) moveLeftCursor(delta int) {
 	}
 }
 
+// detailRows is how many rows fit in each pane of an opened run.
 func (m historyModel) detailRows() int {
 	return max(m.height-8, 3)
 }
 
+// currentItem returns the row under the left pane's cursor.
 func (m historyModel) currentItem() (historyItem, bool) {
 	if m.cursor < 0 || m.cursor >= len(m.items) {
 		return historyItem{}, false
@@ -261,6 +283,7 @@ func (m historyModel) currentItem() (historyItem, bool) {
 	return m.items[m.cursor], true
 }
 
+// detailSections returns the right pane for the row under the cursor: its summary lines and its foldable sections.
 func (m historyModel) detailSections() ([]string, []historySection) {
 	item, ok := m.currentItem()
 	if !ok || m.run == nil {
@@ -353,6 +376,7 @@ func (m historyModel) detailSections() ([]string, []historySection) {
 	return meta, sections
 }
 
+// outputLines splits a task's output into lines, or says there was none.
 func outputLines(s string) []string {
 	if s == "" {
 		return []string{"(empty)"}
@@ -360,6 +384,7 @@ func outputLines(s string) []string {
 	return strings.Split(strings.TrimRight(s, "\r\n"), "\n")
 }
 
+// historyTaskState renders a task's state as a coloured label.
 func historyTaskState(state int) string {
 	switch state {
 	case 1:
@@ -375,6 +400,7 @@ func historyTaskState(state int) string {
 	}
 }
 
+// detailPanelRows lays the right pane out as rows: the summary, then each section's heading and, when open, its lines.
 func (m historyModel) detailPanelRows(meta []string, sections []historySection) []historyPanelRow {
 	rows := make([]historyPanelRow, 0, len(meta)+len(sections))
 	for _, line := range meta {
@@ -395,6 +421,7 @@ func (m historyModel) detailPanelRows(meta []string, sections []historySection) 
 	return rows
 }
 
+// ensureRightCursorVisible clamps the right pane's cursor to rows and scrolls to keep it in view.
 func (m *historyModel) ensureRightCursorVisible(rows []historyPanelRow) {
 	if len(rows) == 0 {
 		m.rightOffset = 0
@@ -411,6 +438,7 @@ func (m *historyModel) ensureRightCursorVisible(rows []historyPanelRow) {
 	}
 }
 
+// moveRightCursor moves the right pane's cursor by delta rows.
 func (m *historyModel) moveRightCursor(delta int) {
 	meta, sections := m.detailSections()
 	rows := m.detailPanelRows(meta, sections)
@@ -423,6 +451,7 @@ func (m *historyModel) moveRightCursor(delta int) {
 	m.ensureRightCursorVisible(rows)
 }
 
+// toggleRightSection opens or closes the section under the right pane's cursor, loading the task's output the first time it is needed.
 func (m *historyModel) toggleRightSection() tea.Cmd {
 	meta, sections := m.detailSections()
 	if len(sections) == 0 {
@@ -453,6 +482,7 @@ func (m *historyModel) toggleRightSection() tea.Cmd {
 	return func() tea.Msg { return m.loadTask(m.run.ID, task.Server, task.Name) }
 }
 
+// Update handles loaded data and key presses.
 func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.helpOpen {
 		if kmsg, ok := msg.(tea.KeyPressMsg); ok {
@@ -795,6 +825,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// View draws the opened run, or the list of runs.
 func (m historyModel) View() tea.View {
 	if !m.helpOpen && m.state == historyDetail && m.run != nil {
 		titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#7C3AED")).Padding(0, 1)
@@ -926,6 +957,7 @@ func (m historyModel) listView() tea.View {
 	return tea.NewView(b.String())
 }
 
+// historyDetailView draws an opened run: servers and tasks on the left, the selected one's details on the right.
 func (m historyModel) historyDetailView(title, muted, ok, fail, skip, timing lipgloss.Style) tea.View {
 	var b strings.Builder
 	run := m.run
@@ -1048,33 +1080,20 @@ func shortID(id string) string {
 	return id
 }
 
+// getHistoryDBPath is the history database the CLI uses: GORUN_DB_PATH, else gorun.db in the
+// working directory if there is one, else ~/.gorun/gorun.db. Its folder is created if needed.
 func getHistoryDBPath() string {
-	if p := os.Getenv("GORUN_DB_PATH"); p != "" {
-		if len(p) > 0 && p[0] == '~' {
-			if home, err := os.UserHomeDir(); err == nil {
-				p = filepath.Join(home, p[1:])
-			}
+	if os.Getenv("GORUN_DB_PATH") == "" {
+		if _, err := os.Stat("gorun.db"); err == nil {
+			return "gorun.db"
 		}
-		// a path given in GORUN_DB_PATH is used even before it exists, as the web UI and the
-		// history package do, so they all read and write the same file
-		_ = os.MkdirAll(filepath.Dir(p), 0o755)
-		return p
 	}
-	if _, err := os.Stat("gorun.db"); err == nil {
-		return "gorun.db"
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		p := filepath.Join(home, ".gorun", "gorun.db")
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-		dir := filepath.Join(home, ".gorun")
-		_ = os.MkdirAll(dir, 0755)
-		return p
-	}
-	return "gorun.db"
+	path := history.DefaultPath()
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	return path
 }
 
+// runHistoryTUI runs the history screen for -history.
 func runHistoryTUI() error {
 	st, err := store.Open(getHistoryDBPath())
 	if err != nil {

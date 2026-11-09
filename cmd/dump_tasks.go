@@ -137,6 +137,7 @@ func dumpTasks(cfg *gorun.Config, dir string, servers map[string]gorun.Server, s
 	return nil
 }
 
+// writeDumpedTask writes one task to dir as a runnable shell script, with its command rendered for server when there is one.
 func writeDumpedTask(cfg *gorun.Config, dir string, task gorun.Task, server gorun.Server, haveServer bool) error {
 	var target any // nil renders templates without a server
 	if haveServer {

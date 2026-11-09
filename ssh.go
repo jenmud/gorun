@@ -118,6 +118,7 @@ func identitySigners(explicit string, fromConfig []string) ([]ssh.Signer, error)
 	return signers, nil
 }
 
+// readSigner reads the private key at path.
 func readSigner(path string) (ssh.Signer, error) {
 	key, err := os.ReadFile(path)
 	if err != nil {
@@ -150,6 +151,7 @@ const maxSessions = 10
 // sessionSlots holds a semaphore of maxSessions slots per SSH connection.
 var sessionSlots sync.Map // *ssh.Client -> chan struct{}
 
+// slotsFor returns the session semaphore of client.
 func slotsFor(client *ssh.Client) chan struct{} {
 	v, _ := sessionSlots.LoadOrStore(client, make(chan struct{}, maxSessions))
 	return v.(chan struct{})

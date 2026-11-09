@@ -332,7 +332,9 @@ func (c *Config) CanRun(names []string) error {
 // noTasksErr is ErrNoTasks with the specific reason in place of the general one.
 type noTasksErr string
 
-func (e noTasksErr) Error() string        { return "no tasks to run: " + string(e) }
+func (e noTasksErr) Error() string { return "no tasks to run: " + string(e) }
+
+// Is makes errors.Is(err, ErrNoTasks) true.
 func (e noTasksErr) Is(target error) bool { return target == ErrNoTasks }
 
 // taskList names tasks in a sentence: `task "a" is` or `tasks "a" and "b" are`.

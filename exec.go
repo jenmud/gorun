@@ -94,6 +94,7 @@ func (t *TaskExec) LocalExecute(ctx context.Context) error {
 	return t.execute(ctx, true)
 }
 
+// execute runs one attempt, here or over SSH, and records its result and metrics.
 func (t *TaskExec) execute(ctx context.Context, local bool) error {
 	ctx, span := tracer.Start(ctx, "TaskExec.Execute")
 	defer span.End()

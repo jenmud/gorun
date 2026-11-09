@@ -48,6 +48,7 @@ const (
 	outputTailLines = 20
 )
 
+// taskView is a task in the live view, with its latest event.
 type taskView struct {
 	name        string
 	description string
@@ -61,6 +62,7 @@ type taskView struct {
 	copy *gorun.CopyProgressEvent
 }
 
+// serverView is a server in the live view, with its tasks and running totals.
 type serverView struct {
 	name         string
 	address      string
@@ -74,6 +76,7 @@ type serverView struct {
 	open         bool // the compact view lists this server's tasks
 }
 
+// task returns the server's task by name, or nil.
 func (s *serverView) task(name string) *taskView {
 	if s.taskMap != nil {
 		return s.taskMap[name]
@@ -86,6 +89,7 @@ func (s *serverView) task(name string) *taskView {
 	return nil
 }
 
+// count is how many of the server's tasks are in any of the given states.
 func (s *serverView) count(states ...gorun.TaskState) int {
 	if len(states) == 1 {
 		switch states[0] {
@@ -108,6 +112,7 @@ func (s *serverView) count(states ...gorun.TaskState) int {
 	return n
 }
 
+// finished reports whether the server has nothing left to run.
 func (s *serverView) finished() bool {
 	return s.err != nil || s.count(gorun.TaskPending, gorun.TaskRunning) == 0
 }
@@ -154,6 +159,7 @@ type tuiModel struct {
 	forceQuit bool
 }
 
+// newTUIModel returns the live view for a run. cancel stops the run when the user quits.
 func newTUIModel(title string, verbose bool, cancel context.CancelFunc) tuiModel {
 	return tuiModel{
 		title:     title,
@@ -172,10 +178,12 @@ func newTUIModel(title string, verbose bool, cancel context.CancelFunc) tuiModel
 	}
 }
 
+// Init starts the spinner.
 func (m tuiModel) Init() tea.Cmd {
 	return m.spinner.Tick
 }
 
+// server returns the server by name, or nil.
 func (m tuiModel) server(name string) *serverView {
 	if m.serverMap != nil {
 		return m.serverMap[name]
@@ -200,6 +208,7 @@ func (m tuiModel) flatTasks() []*taskView {
 	return tasks
 }
 
+// failed reports whether any server or task has failed.
 func (m tuiModel) failed() bool {
 	if m.runErr != nil {
 		return true
@@ -300,6 +309,7 @@ func (m tuiModel) applyBatch(events []any) tuiModel {
 	return m
 }
 
+// Update applies run events and handles key presses and window resizes.
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Only drop incoming events on a forced quit; while waiting for a normal
 	// quit to finish, keep applying them so progress stays up to date.
@@ -483,6 +493,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// View draws the compact view (a line per server) or the verbose view (a line per task).
 func (m tuiModel) View() tea.View {
 	var v tea.View
 
@@ -496,6 +507,7 @@ func (m tuiModel) View() tea.View {
 	return v
 }
 
+// header draws the title line.
 func (m tuiModel) header() string {
 	return titleStyle.Render("gorun") + " " + mutedStyle.Render(m.title)
 }
@@ -593,6 +605,7 @@ func serverBlockLines(s *serverView) int {
 	return serverSummaryLines
 }
 
+// compactLineCount is how many lines the compact view needs in full.
 func (m tuiModel) compactLineCount() int {
 	n := len(m.compactHead()) + len(m.boxLines)
 	for _, s := range m.servers {
@@ -665,6 +678,7 @@ func (m tuiModel) compactHeight() int {
 	return max(m.height-len(strings.Split(m.footer(), "\n")), 5)
 }
 
+// compactMaxScroll is how far the compact view can scroll.
 func (m tuiModel) compactMaxScroll() int {
 	return max(0, m.compactLineCount()-m.compactHeight())
 }
@@ -704,6 +718,7 @@ func (m *tuiModel) showSelected() {
 	m.follow = false
 }
 
+// compactView draws a line and a progress bar per server, with failures and skips boxed below.
 func (m tuiModel) compactView() string {
 	scroll := m.compactScroll()
 	return strings.Join(m.compactWindow(scroll, scroll+m.compactHeight()), "\n") + "\n" + m.footer()
@@ -722,11 +737,13 @@ type boxCache struct {
 	boxes map[string]cachedBox
 }
 
+// cachedBox is a rendered failure or skip box, kept until what it shows changes.
 type cachedBox struct {
 	sig   string
 	lines []string
 }
 
+// boxKind is what a box reports: a server error, a failed task or a skipped one.
 type boxKind int
 
 const (
@@ -745,6 +762,7 @@ type boxItem struct {
 	skipped   []string
 }
 
+// key identifies the box in the cache.
 func (it boxItem) key() string {
 	return fmt.Sprintf("%d\x00%s\x00%s", it.kind, it.server, it.task.name)
 }
@@ -762,6 +780,7 @@ func (it boxItem) sig(width int) string {
 	return fmt.Sprintf("%d|%d|%d|%d|%d|%d|%s|%d|%d|%d", width, it.task.state, ev.ExitCode, ev.Duration, ev.Attempt, ev.Attempts, errText, len(ev.Stdout), len(ev.Stderr), len(it.skipped))
 }
 
+// boxSnapshot is a copy of what the compact view's boxes show, rendered off the UI loop.
 type boxSnapshot struct {
 	gen   int
 	width int
@@ -843,6 +862,7 @@ func (m tuiModel) maybeRenderBoxes() (tea.Model, tea.Cmd) {
 	}
 }
 
+// verboseView draws every server with a row per task, and the output of expanded tasks.
 func (m tuiModel) verboseView() string {
 	lines := []string{m.header(), ""}
 	if m.runErr != nil {
@@ -945,6 +965,7 @@ func (m tuiModel) verboseView() string {
 	return strings.Join(lines, "\n") + "\n" + footer
 }
 
+// taskRow renders a task's row, with a marker showing whether its output is open.
 func (m tuiModel) taskRow(t *taskView) string {
 	toggle := mutedStyle.Render(" ▸")
 	if t.expanded {
@@ -1000,6 +1021,7 @@ func (m tuiModel) taskStatus(t *taskView) string {
 	return fmt.Sprintf("%s %-24s%s%s %s", icon, t.name, description, warning, detail)
 }
 
+// boxWidth is how wide the failure and output boxes are drawn.
 func (m tuiModel) boxWidth() int {
 	return min(m.width-6, 110)
 }
@@ -1057,6 +1079,7 @@ func (s *serverView) skipped() []string {
 	return skipped
 }
 
+// renderFailureBox draws a failed task: the reason, exit code, the end of its stderr and the tasks skipped because of it.
 func (m tuiModel) renderFailureBox(server string, t *taskView, skipped []string) string {
 	attempt := ""
 	if t.event.Attempts > 1 {
@@ -1106,20 +1129,24 @@ func (m tuiModel) skipBox(server string, t *taskView) string {
 	return outputBoxStyle.BorderForeground(colorSkip).Width(m.boxWidth()).Render(strings.Join(sections, "\n"))
 }
 
+// runErrorBox draws the error that stopped the whole run.
 func (m tuiModel) runErrorBox() string {
 	title := failStyle.Render("✗ could not start the run")
 	return failBoxStyle.Width(m.boxWidth()).Render(title + "\n" + failStyle.Render("reason: ") + m.runErr.Error())
 }
 
+// serverErrorBox draws why a server could not run its tasks.
 func (m tuiModel) serverErrorBox(s *serverView) string {
 	return m.renderServerErrorBox(s.name, s.err)
 }
 
+// renderServerErrorBox draws a server's error in a red box.
 func (m tuiModel) renderServerErrorBox(server string, err error) string {
 	title := failStyle.Render(fmt.Sprintf("✗ %s could not run tasks", server))
 	return failBoxStyle.Width(m.boxWidth()).Render(title + "\n" + failStyle.Render("reason: ") + err.Error())
 }
 
+// footer draws the run's totals once it is over, and the key help.
 func (m tuiModel) footer() string {
 	if m.done || m.quitting {
 		total, failed, skipped := 0, 0, 0
@@ -1183,6 +1210,7 @@ func tail(s string, n int) string {
 	return mutedStyle.Render(fmt.Sprintf("… %d earlier lines", cut)) + "\n" + strings.Join(lines[cut:], "\n")
 }
 
+// indent prefixes every line of s with n spaces.
 func indent(s string, n int) string {
 	pad := strings.Repeat(" ", n)
 	return pad + strings.ReplaceAll(s, "\n", "\n"+pad)
@@ -1200,6 +1228,7 @@ func truncate(s string, n int) string {
 	return string(r[:n-1]) + "…"
 }
 
+// formatDuration shows d to a tenth of a second under a minute, and to the second above.
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%.1fs", d.Seconds())
@@ -1207,6 +1236,7 @@ func formatDuration(d time.Duration) string {
 	return d.Round(time.Second).String()
 }
 
+// highlightSelectedRow draws line as the row under the cursor, width cells wide.
 func highlightSelectedRow(line string, width int) string {
 	if width > 0 {
 		line = truncateANSI(line, width)

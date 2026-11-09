@@ -41,6 +41,7 @@ func (s *scpSender) ack() error {
 	}
 }
 
+// command sends one protocol line and waits for the sink to acknowledge it.
 func (s *scpSender) command(format string, args ...any) error {
 	if _, err := fmt.Fprintf(s.w, format, args...); err != nil {
 		return err
@@ -100,6 +101,7 @@ func (s *scpSender) dirContents(localDir string) error {
 	return nil
 }
 
+// localFile sends the file at path, under name.
 func (s *scpSender) localFile(path, name string, info os.FileInfo) error {
 	f, err := os.Open(path)
 	if err != nil {

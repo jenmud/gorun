@@ -22,6 +22,7 @@ type plainPrinter struct {
 	copied map[string]int
 }
 
+// event prints what one run event means for the plain output.
 func (p *plainPrinter) event(event any) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

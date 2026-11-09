@@ -57,6 +57,7 @@ type Scheduler struct {
 	runs   sync.WaitGroup
 }
 
+// scheduleState is what the scheduler knows about one schedule.
 type scheduleState struct {
 	sched    Schedule
 	next     time.Time

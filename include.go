@@ -42,6 +42,7 @@ type loader struct {
 // groups, schedules and global envvars or vars would change where, when or how your commands run.
 var gitAllowedKeys = map[string]bool{"tasks": true, "bundles": true, "include": true}
 
+// newLoader returns a loader that fills c.
 func newLoader(c *Config) *loader {
 	return &loader{cfg: c, owners: map[string]string{}, loaded: map[string]bool{}}
 }

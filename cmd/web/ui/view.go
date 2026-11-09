@@ -334,6 +334,7 @@ type FileRef struct {
 	Path string
 }
 
+// TaskCard is everything the Tasks page shows for one task.
 type TaskCard struct {
 	Name          string
 	Description   string

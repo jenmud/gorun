@@ -109,7 +109,9 @@ func otelSignalConfigured(getenv func(string) string, signal string) bool {
 // stringSlice is a flag that can be given more than once.
 type stringSlice []string
 
-func (s *stringSlice) String() string     { return strings.Join(*s, ",") }
+func (s *stringSlice) String() string { return strings.Join(*s, ",") }
+
+// Set adds one more value.
 func (s *stringSlice) Set(v string) error { *s = append(*s, v); return nil }
 
 // options are the command line flags. printUsage documents each one.
@@ -127,6 +129,7 @@ func (o *options) lists() bool {
 	return o.listTasks || o.listServers || o.listTags || o.listGroups || o.listBundles || o.dumpTasksDir != ""
 }
 
+// parseFlags reads the command line. Flags may come before or after the Gorunfile.
 func parseFlags() *options {
 	o := &options{}
 	for name, dst := range map[string]*bool{
@@ -437,6 +440,7 @@ func check(err error) {
 	}
 }
 
+// printUsage prints the help text: every flag and environment variable.
 func printUsage() {
 	fmt.Fprintf(os.Stderr, `Usage: gorun [options] <Gorunfile>
 

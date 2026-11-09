@@ -8,6 +8,7 @@ import (
 	"github.com/jenmud/gorun/internal/store"
 )
 
+// TaskInfo is a task of a live run, with its latest state and output.
 type TaskInfo struct {
 	Name        string
 	Description string
@@ -34,6 +35,7 @@ type CopyInfo struct {
 	BytesPerSecond float64
 }
 
+// ServerInfo is a server of a live run, with its tasks in plan order.
 type ServerInfo struct {
 	Name    string
 	Address string
@@ -42,6 +44,7 @@ type ServerInfo struct {
 	Tasks   map[string]*TaskInfo
 }
 
+// ProcessState is one live or just-finished run.
 type ProcessState struct {
 	UUID        string
 	Title       string
@@ -57,11 +60,13 @@ type ProcessState struct {
 	Schedule    string // the schedule that started the run, or empty
 }
 
+// DashboardState is every run the live dashboard shows, in the order they started. Apply keeps it up to date from run events.
 type DashboardState struct {
 	Processes    map[string]*ProcessState
 	ProcessOrder []string
 }
 
+// process returns the run with the given id, adding it when it is new.
 func (s *DashboardState) process(uuid string) *ProcessState {
 	if s.Processes == nil {
 		s.Processes = make(map[string]*ProcessState)
@@ -91,6 +96,7 @@ func (s *DashboardState) ClearFinished() {
 	s.ProcessOrder = filtered
 }
 
+// Apply updates the dashboard with one run event.
 func (s *DashboardState) Apply(ev store.Event) {
 	uuid := ev.GorunUUID
 	if uuid == "" {
@@ -195,6 +201,7 @@ func (s *DashboardState) Apply(ev store.Event) {
 	}
 }
 
+// processDone is how many of the run's tasks have finished.
 func processDone(p *ProcessState) int {
 	n := 0
 	for _, name := range p.ServerOrder {
@@ -207,6 +214,7 @@ func processDone(p *ProcessState) int {
 	return n
 }
 
+// processTotal is how many tasks the run has.
 func processTotal(p *ProcessState) int {
 	n := 0
 	for _, name := range p.ServerOrder {
@@ -215,6 +223,7 @@ func processTotal(p *ProcessState) int {
 	return n
 }
 
+// serverProgress is the percentage of the server's tasks that have finished.
 func serverProgress(srv *ServerInfo) int {
 	total := len(srv.Tasks)
 	if total == 0 {
@@ -229,6 +238,7 @@ func serverProgress(srv *ServerInfo) int {
 	return done * 100 / total
 }
 
+// processProgress is the percentage of the run's tasks that have finished.
 func processProgress(p *ProcessState) int {
 	total := 0
 	done := 0
@@ -246,10 +256,12 @@ func processProgress(p *ProcessState) int {
 	return done * 100 / total
 }
 
+// itoa is strconv.Itoa, short enough to use in templates.
 func itoa(n int) string {
 	return strconv.Itoa(n)
 }
 
+// serverBoxClass is the CSS of a server's box, red when it has failed.
 func serverBoxClass(failed bool) string {
 	if failed {
 		return "rounded-xl border border-red-900/50 bg-red-950/20 p-3"
@@ -257,6 +269,7 @@ func serverBoxClass(failed bool) string {
 	return "rounded-xl border border-zinc-800 bg-zinc-950/40 p-3"
 }
 
+// serverHasFailed reports whether the server, or one of its tasks, failed.
 func serverHasFailed(srv *ServerInfo) bool {
 	if srv.Error != "" {
 		return true
@@ -269,6 +282,7 @@ func serverHasFailed(srv *ServerInfo) bool {
 	return false
 }
 
+// hasFinished reports whether any run on the dashboard is over.
 func hasFinished(s DashboardState) bool {
 	for _, uuid := range s.ProcessOrder {
 		if p, ok := s.Processes[uuid]; ok && p.Finished {
@@ -278,6 +292,7 @@ func hasFinished(s DashboardState) bool {
 	return false
 }
 
+// processHasFailed reports whether any of the run's servers failed.
 func processHasFailed(p *ProcessState) bool {
 	for _, name := range p.ServerOrder {
 		if serverHasFailed(p.Servers[name]) {
@@ -340,6 +355,7 @@ func serverSummary(srv *ServerInfo) string {
 	return line
 }
 
+// serverNotRunNote says how many of the server's tasks did not run.
 func serverNotRunNote(srv *ServerInfo) string { return notRunNote(len(srv.Tasks)) }
 
 // taskIcon is the mark in front of a task: its state, or a dash when it never ran.
@@ -350,6 +366,7 @@ func taskIcon(p *ProcessState, srv *ServerInfo, t *TaskInfo) string {
 	return stateIcon(t.State)
 }
 
+// taskIconClass is the colour of a task's state mark.
 func taskIconClass(p *ProcessState, srv *ServerInfo, t *TaskInfo) string {
 	if notRun(p, srv, t) {
 		return "text-zinc-600"

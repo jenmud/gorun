@@ -76,6 +76,7 @@ func fuzzyMatch(pattern, text string) (score int, positions []int, ok bool) {
 	return score, positions, true
 }
 
+// fold lower-cases r, so matching ignores case.
 func fold(r rune) rune {
 	return unicode.ToLower(r)
 }

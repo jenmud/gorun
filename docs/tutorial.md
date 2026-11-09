@@ -17,7 +17,7 @@ The finished file is in [`tutorial/`](tutorial/Gorunfile), with its scripts and 
 7. [Name groups of tasks with bundles](#7-name-groups-of-tasks-with-bundles)
 8. [Regions, tags and exceptions](#8-regions-tags-and-exceptions)
 9. [Splitting large Gorunfiles (optional)](#9-splitting-large-gorunfiles-optional)
-10. [Schedule a task (preview)](#10-schedule-a-task-preview)
+10. [Run jobs on a schedule](#10-run-jobs-on-a-schedule)
 11. [Everyday use](#11-everyday-use)
 
 You only need gorun [installed](../README.md#install). Steps 1 and 2 run on your own machine;
@@ -425,9 +425,10 @@ organized and makes it easy to manage by role or region.
 
 For a complete example, see [`recipes/large-inventory`](../recipes/large-inventory).
 
-## 10. Schedule a task (preview)
+## 10. Run jobs on a schedule
 
-A `[[schedule]]` table names a target, a task or a bundle, and when it should run. Add one to the
+A `[[schedule]]` table runs a target, a task or a `@bundle`, on a cron pattern or once at a set
+time. Schedules run inside the web service, `gorun -web`, not in a plain run. Add these to the
 file:
 
 ```toml
@@ -437,15 +438,36 @@ description = "Read-only checks every night"
 target = "@check"
 cron = "0 2 * * *"                # minute hour day month weekday
 timezone = "Australia/Sydney"     # the clock the fields are read in; omit for UTC
-missed = "skip"                   # or "run": what to do with runs missed while paused or down
+missed = "skip"                   # or "run": one catch-up run for runs missed while paused or down
+
+[[schedule]]
+name = "maintenance"
+target = "@check"
+at = "2026-12-01T02:00"           # a one-off time, read in the timezone above
+timezone = "Europe/London"
 ```
 
-For a one-off run, use `at = "2026-12-01T02:00"` instead of `cron`. Set one of them, not both.
+Set `cron` or `at` on each schedule, not both. A bad schedule stops gorun with a message that
+names it, when the file loads.
 
-The file is checked as it loads, so a bad schedule stops gorun with a message that names it.
-The scheduler that fires schedules is not in this release yet. Until it is, run the same target
-from cron with `gorun Gorunfile --run --task @check`. The full syntax is in
-[Schedules](schedules.md).
+Start the web service with the file and open the **Schedules** page:
+
+```bash
+gorun -web Gorunfile
+```
+
+The page lists each schedule with its next run, in your browser's time zone (change it with the
+picker). **Pause**, **Resume** and **Skip next run** act on one schedule. **Add a schedule** and
+**Edit** write straight to the file, and every run, skipped run and failed run shows in
+**History**. The web service starts its own NATS server if none is running, so live updates work
+without setup.
+
+A scheduled run goes to every server, as `--task` does, so a task has to suit each server it
+reaches. A task that isn't `local = true` cannot run on a local server, and that run fails with
+the reason in History.
+
+The [scheduled jobs recipe](../recipes/05-scheduled-jobs/README.md) runs these schedules on your
+own machine, and [Schedules](schedules.md) has the full syntax.
 
 ## 11. Everyday use
 

@@ -1,0 +1,50 @@
+# Recipe 5: scheduled jobs. Everything runs on this machine, so no servers are needed.
+# Plain runs (-r) run only the server tasks below, once. Schedules run inside `gorun -web`.
+title = "Recipe 5: scheduled jobs"
+log_level = "info"
+
+[tasks.heartbeat]
+description = "Append a heartbeat line"
+cmd = 'mkdir -p /tmp/gorun-scheduled && echo "$(date -u +%FT%TZ) heartbeat" >> /tmp/gorun-scheduled/heartbeat.log'
+local = true
+
+[tasks.backup]
+description = "Pretend to back up the data"
+details = "Takes a few seconds, so the running state is visible on the Schedules page."
+cmd = 'mkdir -p /tmp/gorun-scheduled && echo "$(date -u +%FT%TZ) backup started" >> /tmp/gorun-scheduled/backup.log && sleep 5 && echo "$(date -u +%FT%TZ) backup done" >> /tmp/gorun-scheduled/backup.log'
+local = true
+
+[tasks.report]
+description = "Write the nightly report"
+cmd = 'mkdir -p /tmp/gorun-scheduled && echo "$(date -u +%FT%TZ) report written" >> /tmp/gorun-scheduled/report.log'
+local = true
+
+[bundles.nightly]
+description = "What runs at night: back up, then report"
+tasks = ["backup", "report"]
+
+[[schedule]]
+name = "heartbeat"
+description = "Every minute"
+target = "heartbeat"
+cron = "* * * * *"
+
+[[schedule]]
+name = "nightly"
+description = "02:00 in Sydney, every night; run once if it was missed while paused or down"
+target = "@nightly"
+cron = "0 2 * * *"
+timezone = "Australia/Sydney"
+missed = "run"
+
+[[schedule]]
+name = "one-off-check"
+description = "Once, at a set time in London"
+target = "report"
+at = "2099-12-01T02:00"
+timezone = "Europe/London"
+
+[servers]
+tasks = ["heartbeat"]
+
+[servers.hosts.localhost]

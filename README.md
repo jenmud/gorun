@@ -57,9 +57,12 @@ each server's progress live.
   direct editing of file-backed commands.
 - **History.** Past runs are saved with commands and output; expanded servers list tasks slowest
   first.
-- **Schedules (preview).** A `[[schedule]]` names a task or bundle and a cron pattern or one-off
-  time, in any time zone. The file is checked as it loads; the scheduler that fires them is still
-  in progress.
+- **Schedules.** A `[[schedule]]` runs a task or bundle on a cron pattern or once at a set time,
+  in any time zone. `gorun -web` fires them and keeps a history of every run, skipped run and
+  failed run. Pause, resume or skip them from the web UI.
+- **Web UI.** `gorun -web` shows the tasks, bundles, schedules and history, and lets you add and
+  edit them, with names linked to where they're defined. It starts its own NATS server when none
+  is running.
 **When to use something else:** gorun runs commands; it doesn't enforce state. It has no modules,
 facts, drift detection, dry runs, dynamic inventories or secrets vault. For that, use Ansible,
 Salt, Puppet or Nix.

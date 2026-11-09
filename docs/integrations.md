@@ -150,6 +150,32 @@ across a fleet and streams every server's progress to the browser;
 [`examples/rollout`](../examples/rollout) is a CLI that draws its own progress bars. See
 [examples/README.md](../examples/README.md).
 
+### History
+
+The library doesn't save runs by itself. The `history` package does: it writes to the same
+SQLite database as the CLI and the web UI, so runs from your program show in `gorun -history`
+and `gorun -web` too, and reads them back so you can show history without the web UI.
+
+```go
+h, err := history.Open(history.DefaultPath()) // GORUN_DB_PATH, or ~/.gorun/gorun.db
+if err != nil {
+	log.Fatal(err)
+}
+defer h.Close()
+
+cfg.OnEvent = h.Recorder(myHandler) // save every event, then pass it to myHandler (or nil)
+err = cfg.Run(ctx)
+
+runs, _ := h.Runs(ctx)                           // newest first
+detail, _ := h.Run(ctx, runs[0].ID)              // servers and tasks
+task, _ := h.Task(ctx, runs[0].ID, "web-01", "deploy") // command, stdout, stderr, exit code
+_ = h.Delete(ctx, runs[0].ID)                    // one run
+_ = h.Keep(ctx, 50)                              // only the newest 50
+```
+
+`Run` and `Task` return an error wrapping `history.ErrNotFound` when nothing was saved under that
+name. A `Task`'s `State` holds a `gorun.TaskState` value.
+
 ### Schedules
 
 `gorun.NewScheduler` fires a config's `[[schedule]]` tables. It does nothing until `Start`, so

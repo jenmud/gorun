@@ -83,6 +83,12 @@
 // next occurrence. [Scheduler.Status] reports each schedule, and every decision is sent to the
 // callback as a [ScheduleEvent].
 //
+// # History
+//
+// The [github.com/jenmud/gorun/history] package saves runs to the SQLite database the gorun CLI
+// and web UI use, and reads them back: list runs, open one with its tasks and output, delete runs
+// or keep only the newest. Set Config.OnEvent to the store's Recorder to save a run.
+//
 // # Events
 //
 // Set [Config.OnEvent] to follow a run as it happens. It receives a [ProcessStartedEvent], a

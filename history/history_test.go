@@ -1,0 +1,146 @@
+package history_test
+
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"testing"
+
+	"github.com/jenmud/gorun"
+	"github.com/jenmud/gorun/history"
+)
+
+const gorunfile = `title = "history test"
+
+[tasks.hello]
+cmd = "echo hello from history"
+local = true
+
+[tasks.broken]
+cmd = "echo oops >&2; exit 3"
+local = true
+
+[servers]
+tasks = ["hello", "broken"]
+
+[servers.hosts.localhost]
+`
+
+// runOnce runs the test Gorunfile once, recording it to h, and returns the run's id.
+func runOnce(t *testing.T, h *history.Store) string {
+	t.Helper()
+	var cfg gorun.Config
+	if err := cfg.Load(strings.NewReader(gorunfile)); err != nil {
+		t.Fatal(err)
+	}
+	var seen atomic.Int32
+	cfg.OnEvent = h.Recorder(func(any) { seen.Add(1) })
+	_ = cfg.Run(context.Background()) // the broken task fails the run on purpose
+	if seen.Load() == 0 {
+		t.Fatal("the next callback got no events")
+	}
+	return cfg.GorunUUID
+}
+
+func open(t *testing.T) *history.Store {
+	t.Helper()
+	h, err := history.Open(filepath.Join(t.TempDir(), "nested", "gorun.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = h.Close() })
+	return h
+}
+
+func TestRecordAndReadARun(t *testing.T) {
+	h := open(t)
+	id := runOnce(t, h)
+	ctx := context.Background()
+
+	runs, err := h.Runs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].ID != id || runs[0].Title != "history test" {
+		t.Fatalf("runs = %+v, want the one run", runs)
+	}
+	if r := runs[0]; !r.Finished || r.Success || r.Failed != 1 || r.TotalTasks != 2 {
+		t.Errorf("summary = %+v, want finished, failed, 1 of 2 tasks failed", r)
+	}
+
+	detail, err := h.Run(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(detail.Tasks) != 2 {
+		t.Fatalf("tasks = %+v", detail.Tasks)
+	}
+
+	hello, err := h.Task(ctx, id, "localhost", "hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(hello.Stdout, "hello from history") || hello.State != int(gorun.TaskDone) {
+		t.Errorf("hello = %+v", hello)
+	}
+	broken, err := h.Task(ctx, id, "localhost", "broken")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if broken.ExitCode != 3 || !strings.Contains(broken.Stderr, "oops") || broken.State != int(gorun.TaskFailed) {
+		t.Errorf("broken = %+v", broken)
+	}
+}
+
+func TestMissingRunsAndTasksAreNotFound(t *testing.T) {
+	h := open(t)
+	ctx := context.Background()
+	if _, err := h.Run(ctx, "nope"); !errors.Is(err, history.ErrNotFound) {
+		t.Errorf("Run: err = %v, want ErrNotFound", err)
+	}
+	if _, err := h.Task(ctx, "nope", "localhost", "hello"); !errors.Is(err, history.ErrNotFound) {
+		t.Errorf("Task: err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDeleteAndKeep(t *testing.T) {
+	h := open(t)
+	ctx := context.Background()
+	first := runOnce(t, h)
+	runOnce(t, h)
+	newest := runOnce(t, h)
+
+	if err := h.Delete(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.Run(ctx, first); !errors.Is(err, history.ErrNotFound) {
+		t.Errorf("deleted run still readable: %v", err)
+	}
+
+	if err := h.Keep(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	runs, err := h.Runs(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(runs) != 1 || runs[0].ID != newest {
+		t.Errorf("after Keep(1), runs = %+v, want only the newest", runs)
+	}
+	if err := h.Keep(ctx, -1); err == nil {
+		t.Error("Keep(-1) was accepted")
+	}
+}
+
+func TestDefaultPathFollowsGORUN_DB_PATH(t *testing.T) {
+	t.Setenv("GORUN_DB_PATH", "/data/gorun/history.db")
+	if got := history.DefaultPath(); got != "/data/gorun/history.db" {
+		t.Errorf("DefaultPath = %q", got)
+	}
+	t.Setenv("GORUN_DB_PATH", "")
+	if got := history.DefaultPath(); !strings.HasSuffix(got, filepath.Join(".gorun", "gorun.db")) {
+		t.Errorf("DefaultPath = %q, want ~/.gorun/gorun.db", got)
+	}
+}

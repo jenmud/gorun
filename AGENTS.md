@@ -7,7 +7,9 @@
   is a runnable one).
 - Library files: `config.go` (load/validate/resolve/select/run), `tasks.go` (task exec, retries,
   timeouts), `groups.go` (bundles + server groups), `ssh.go` (SSH/SCP, session limits),
-  `events.go` (NATS publishing), `env.go` (secret expansion), `servers.go`.
+  `events.go` (NATS publishing), `env.go` (secret expansion), `servers.go`, `schedules.go` and
+  `scheduler.go` (schedules). `history/` is the public package over `internal/store` that saves
+  and reads runs for library users.
 - `cmd/` Bubble Tea TUI: `select.go`/`selectpanes.go` (picker), `tui.go` (live view),
   `listview.go` (`-list-*` trees), `historyview.go`, `plain.go` (`-plain`, used when stdout is not a
   terminal). `cmd/websrv` is the web server, `cmd/web/ui` the templ components,

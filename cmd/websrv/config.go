@@ -21,18 +21,20 @@ import (
 
 // The entity kinds, as the forms and the saved changes name them.
 const (
-	kindHost   = "host"
-	kindGroup  = "group"
-	kindTask   = "task"
-	kindBundle = "bundle"
+	kindHost     = "host"
+	kindGroup    = "group"
+	kindTask     = "task"
+	kindBundle   = "bundle"
+	kindSchedule = gorun.KindSchedule
 )
 
 // kindNames is how each kind reads in messages.
 var kindNames = map[string]string{
-	kindHost:   "server",
-	kindGroup:  "server group",
-	kindTask:   "task",
-	kindBundle: "bundle",
+	kindHost:     "server",
+	kindGroup:    "server group",
+	kindTask:     "task",
+	kindBundle:   "bundle",
+	kindSchedule: "schedule",
 }
 
 // loadConfig reads path into the editor. Runs use this file from now on, and unsaved changes
@@ -134,10 +136,11 @@ func (a *app) editPage(w http.ResponseWriter, r *http.Request) {
 
 // entityPath is where each kind's tables live in a Gorunfile.
 var entityPath = map[string][]string{
-	kindHost:   {"servers", "hosts"},
-	kindGroup:  {"server_groups"},
-	kindTask:   {"tasks"},
-	kindBundle: {"bundles"},
+	kindHost:     {"servers", "hosts"},
+	kindGroup:    {"server_groups"},
+	kindTask:     {"tasks"},
+	kindBundle:   {"bundles"},
+	kindSchedule: {"schedule"},
 }
 
 // currentBody is the entity's table as written: its latest unsaved add, else the table in the
@@ -155,6 +158,9 @@ func currentBody(cfg *gorun.Config, pending []gorun.Change, kind, name string) (
 		}
 	}
 	file := sourceOf(cfg, pending, kind, name)
+	if kind == kindSchedule {
+		return scheduleBodyIn(file, name)
+	}
 	var doc map[string]any
 	if _, err := toml.DecodeFile(file, &doc); err != nil {
 		return nil, fmt.Errorf("read %s: %w", file, err)
@@ -218,7 +224,20 @@ func editFields(body map[string]any) ui.EditFields {
 		Tasks:        list("tasks"),
 		Sudo:         sudo,
 		Local:        local,
+		Target:       str(body, "target"),
+		Cron:         str(body, "cron"),
+		At:           str(body, "at"),
+		Timezone:     zoneOr(str(body, "timezone")),
+		Missed:       str(body, "missed"),
 	}
+}
+
+// zoneOr is a schedule's zone, or UTC when it has none.
+func zoneOr(zone string) string {
+	if zone == "" {
+		return "UTC"
+	}
+	return zone
 }
 
 // applyEdit writes the edit form's fields over body. A cleared field removes the key.
@@ -275,6 +294,8 @@ func applyEdit(kind string, body map[string]any, form url.Values) error {
 			return errors.New("a bundle needs at least one task")
 		}
 		put(body, "description", form.Get("description"))
+	case kindSchedule:
+		applyScheduleEdit(body, form)
 	}
 	return nil
 }
@@ -370,6 +391,8 @@ func configData(cfg *gorun.Config, pending []gorun.Change) ui.ConfigPageData {
 	d.Groups = entityRows(kindGroup, groupRows(cfg, root), pending)
 	d.Tasks = entityRows(kindTask, taskRows(cfg, root), pending)
 	d.Bundles = entityRows(kindBundle, bundleRows(cfg, root), pending)
+	d.Schedules = entityRows(kindSchedule, scheduleEntityRows(cfg, root), pending)
+	d.Targets = targetNames(cfg)
 	return d
 }
 
@@ -498,6 +521,8 @@ func inFile(cfg *gorun.Config, kind, name string) bool {
 	case kindBundle:
 		_, ok := cfg.Bundles[name]
 		return ok
+	case kindSchedule:
+		return slices.ContainsFunc(cfg.Schedules, func(s gorun.Schedule) bool { return s.Name == name })
 	}
 	return false
 }
@@ -524,6 +549,12 @@ func sourceOf(cfg *gorun.Config, pending []gorun.Change, kind, name string) stri
 		src = cfg.Tasks[name].Source
 	case kindBundle:
 		src = cfg.Bundles[name].Source
+	case kindSchedule:
+		for _, s := range cfg.Schedules {
+			if s.Name == name {
+				src = s.Source
+			}
+		}
 	}
 	if src == "" {
 		return cfg.Path
@@ -560,6 +591,9 @@ func (a *app) addHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	change, err := newChange(kind, name, file, r.PostForm)
+	if err == nil {
+		err = a.checkChange(change)
+	}
 	if err != nil {
 		redirectWith(w, r, "/config", err.Error(), true)
 		return
@@ -589,6 +623,10 @@ func (a *app) editHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := applyEdit(kind, body, r.PostForm); err != nil {
+		redirectWith(w, r, "/config", err.Error(), true)
+		return
+	}
+	if err := a.checkChange(gorun.Change{Kind: kind, Name: name, Body: body}); err != nil {
 		redirectWith(w, r, "/config", err.Error(), true)
 		return
 	}
@@ -716,6 +754,8 @@ func newChange(kind, name, file string, form url.Values) (gorun.Change, error) {
 			return gorun.Change{}, errors.New("a bundle needs at least one task")
 		}
 		setIf(body, "description", form.Get("description"))
+	case kindSchedule:
+		body = newScheduleBody(form)
 	default:
 		return gorun.Change{}, fmt.Errorf("unknown kind %q", kind)
 	}

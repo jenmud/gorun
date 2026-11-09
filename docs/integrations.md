@@ -31,7 +31,7 @@ optional; without it, load one on the Config page. It has these pages:
   its status, exit code, duration, command, stdout, stderr, env vars and vars. A server that
   couldn't run shows why, and its planned tasks read "not run". Run and server env vars and vars
   show above them. **Trim history** keeps the 10 newest.
-- **Config** adds, removes, loads and saves servers, groups, tasks and bundles. Load a Gorunfile by
+- **Config** adds, removes, loads and saves servers, groups, tasks, bundles and schedules. Load a Gorunfile by
   browsing the folders of the machine running gorun, or type its path. Changes wait until you
   press **Save**, which writes each one into the file it came from.
 

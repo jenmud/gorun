@@ -132,3 +132,9 @@ func scheduleNames(schedules []Schedule) []string {
 	}
 	return names
 }
+
+// CheckSchedule reports whether s would load in this config: its timing, time zone, missed
+// setting and target. It is what the Gorunfile loader checks, for code that builds schedules.
+func (c *Config) CheckSchedule(s Schedule) error {
+	return c.validateSchedule(s)
+}

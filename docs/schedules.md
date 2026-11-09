@@ -8,7 +8,8 @@ the schedule sits next to the tasks it runs.
 
 Parsing, validation, next-run times and the scheduler are built. The library's
 `gorun.NewScheduler` has start, stop, pause, resume, skip and status. `gorun -web` starts one
-for the loaded Gorunfile. Still to come: skipped runs in history, and the Config page's controls.
+for the loaded Gorunfile, with pause, resume and skip on the Schedules page. Skipped and missed
+runs appear in History. Schedules can be added, edited and removed on the Config page.
 
 ## Syntax
 
@@ -111,3 +112,11 @@ Loading fails with an error when:
 - `timezone` is not a known IANA zone;
 - `missed` is not `skip` or `run`;
 - `target` is missing, or names a task or bundle that does not exist.
+
+## Config page
+
+The Config page adds, edits and removes schedules like the other kinds. The add dialog asks for
+the name, target, cron or once-at time, time zone, missed setting and description. Its time zone
+dropdown starts on the browser's zone. A schedule with both cron and once-at, or a target that
+doesn't exist, is refused before it is queued. Saving writes the `[[schedule]]` table into its
+file and reloads the config.

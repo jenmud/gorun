@@ -14,7 +14,7 @@ import (
 // Change is one edit to a Gorunfile. An add writes Body as a new table in File. A remove
 // deletes the entity from File, where it is defined.
 type Change struct {
-	Kind   string // "task", "bundle", "group" or "host"
+	Kind   string // "task", "bundle", "group", "host" or "schedule"
 	Name   string
 	File   string
 	Remove bool
@@ -27,7 +27,12 @@ var kindTable = map[string][]string{
 	"bundle": {"bundles"},
 	"group":  {"server_groups"},
 	"host":   {"servers", "hosts"},
+	// schedules are an array of [[schedule]] tables, each named by its name key; see addEntity
+	"schedule": {"schedule"},
 }
+
+// KindSchedule is the Change kind for a [[schedule]] table.
+const KindSchedule = "schedule"
 
 // section is one table in a file: its header line and the lines that belong to it.
 type section struct {
@@ -37,7 +42,12 @@ type section struct {
 	path   []string // the dotted header, split into keys
 }
 
-var headerLine = regexp.MustCompile(`^\s*\[[^\[\]]+\]\s*$`)
+// headerLine matches a [table] or [[array of tables]] header. Array headers end sections too,
+// so a schedule's lines never belong to the table above it.
+var headerLine = regexp.MustCompile(`^\s*\[\[?[^\[\]]+\]\]?\s*$`)
+
+// scheduleName matches the name key of a schedule table, quoted either way.
+var scheduleName = regexp.MustCompile(`^\s*name\s*=\s*["']([^"']*)["']\s*$`)
 
 // SaveChanges applies changes to the files they name. Only the tables being changed are
 // rewritten, so comments and layout elsewhere in each file are kept.
@@ -102,6 +112,14 @@ func removeEntity(lines []string, ch Change) []string {
 	secs := parseSections(lines)
 	drop := make([]bool, len(lines))
 	for _, s := range secs {
+		if ch.Kind == KindSchedule {
+			if slicesEqual(s.path, base) && sectionName(lines, s) == ch.Name {
+				for i := s.start; i < s.end; i++ {
+					drop[i] = true
+				}
+			}
+			continue
+		}
 		if hasPrefix(s.path, want) {
 			for i := s.start; i < s.end; i++ {
 				drop[i] = true
@@ -130,12 +148,24 @@ func addEntity(lines []string, ch Change) ([]string, error) {
 	base := kindTable[ch.Kind]
 	want := append(append([]string{}, base...), ch.Name)
 	for _, s := range parseSections(lines) {
+		if ch.Kind == KindSchedule {
+			if slicesEqual(s.path, base) && sectionName(lines, s) == ch.Name {
+				return nil, fmt.Errorf("%s %q is already defined in this file", ch.Kind, ch.Name)
+			}
+			continue
+		}
 		if hasPrefix(s.path, want) {
 			return nil, fmt.Errorf("%s %q is already defined in this file", ch.Kind, ch.Name)
 		}
 	}
 
-	block, err := encodeTable(base, ch.Name, ch.Body)
+	var block []string
+	var err error
+	if ch.Kind == KindSchedule {
+		block, err = encodeSchedule(ch.Name, ch.Body)
+	} else {
+		block, err = encodeTable(base, ch.Name, ch.Body)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +173,38 @@ func addEntity(lines []string, ch Change) ([]string, error) {
 		lines = append(lines, "")
 	}
 	return append(lines, block...), nil
+}
+
+// encodeSchedule renders a [[schedule]] table, with its name key first so the table reads
+// the way a person would write it.
+func encodeSchedule(name string, body map[string]any) ([]string, error) {
+	fields := make(map[string]any, len(body))
+	for k, v := range body {
+		if k != "name" {
+			fields[k] = v
+		}
+	}
+	var buf bytes.Buffer
+	enc := toml.NewEncoder(&buf)
+	enc.Indent = ""
+	if err := enc.Encode(fields); err != nil {
+		return nil, fmt.Errorf("encode schedule %s: %w", name, err)
+	}
+	out := []string{"[[schedule]]", fmt.Sprintf("name = %q", name)}
+	if rest := strings.TrimRight(buf.String(), "\n"); rest != "" {
+		out = append(out, strings.Split(rest, "\n")...)
+	}
+	return out, nil
+}
+
+// sectionName returns the name key inside a table's lines, or "" when there is none.
+func sectionName(lines []string, s section) string {
+	for i := s.header + 1; i < s.end; i++ {
+		if m := scheduleName.FindStringSubmatch(lines[i]); m != nil {
+			return m[1]
+		}
+	}
+	return ""
 }
 
 // encodeTable renders body as the TOML tables base.name, base.name.<sub-table>..., with the
@@ -201,7 +263,11 @@ func headerPath(line string) ([]string, bool) {
 		return nil, false
 	}
 	inner := strings.TrimSpace(line)
-	inner = strings.TrimSuffix(strings.TrimPrefix(inner, "["), "]")
+	if strings.HasPrefix(inner, "[[") {
+		inner = strings.TrimSuffix(strings.TrimPrefix(inner, "[["), "]]")
+	} else {
+		inner = strings.TrimSuffix(strings.TrimPrefix(inner, "["), "]")
+	}
 
 	var keys []string
 	var cur strings.Builder

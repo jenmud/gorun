@@ -156,6 +156,8 @@ type ConfigPageData struct {
 	Groups      []EntityRow
 	Tasks       []EntityRow
 	Bundles     []EntityRow
+	Schedules   []EntityRow
+	Targets     []string // what a schedule can target: tasks, then @bundles
 	Pending     []string
 	Flash       string
 	FlashBad    bool
@@ -171,6 +173,7 @@ type EditFields struct {
 	Hostname, Groups, Tags, SSHUser, IdentityFile string
 	Cmd, Description, Tasks                       string
 	Sudo, Local                                   bool
+	Target, Cron, At, Timezone, Missed            string
 }
 
 // kindLabel names an entity kind for headings.

@@ -11,7 +11,7 @@ templ ConfigPage(d ConfigPageData) {
 	}
 	<div class="mb-6 max-w-3xl">
 		<h1 class="text-xl font-semibold text-zinc-100">Config</h1>
-		<p class="mt-1 text-sm text-zinc-400">Add, remove and edit the servers, groups, tasks and bundles in your Gorunfile. Changes stay here until you press <span class="font-semibold text-zinc-200">Save</span>, which writes each one back to the file it came from. Comments and layout elsewhere in each file are kept. Runs use the saved file.</p>
+		<p class="mt-1 text-sm text-zinc-400">Add, remove and edit the servers, groups, tasks, bundles and schedules in your Gorunfile. Changes stay here until you press <span class="font-semibold text-zinc-200">Save</span>, which writes each one back to the file it came from. Comments and layout elsewhere in each file are kept. Runs use the saved file.</p>
 	</div>
 	<div class="grid gap-6 lg:grid-cols-[1fr_24rem]">
 		<div class="min-w-0 space-y-6">
@@ -31,6 +31,7 @@ templ ConfigPage(d ConfigPageData) {
 			@entityTable("Server groups", "group", "name", d.Groups)
 			@entityTable("Tasks", "task", "name", d.Tasks)
 			@entityTable("Bundles", "bundle", "name", d.Bundles)
+			@entityTable("Schedules", "schedule", "name", d.Schedules)
 		</div>
 		<aside class="space-y-6 self-start">
 			@pendingPanel(d)
@@ -40,9 +41,82 @@ templ ConfigPage(d ConfigPageData) {
 				@addTaskForm(d.Files)
 				@addGroupForm(d.Files)
 				@addBundleForm(d.Files)
+				@addScheduleForm(d.Files, d.Targets)
 			}
 		</aside>
 	</div>
+	@zonePickerScript()
+}
+
+// zonePickerScript fills every time zone dropdown with the zones the browser knows. A dropdown
+// with no value of its own starts on the browser's zone.
+templ zonePickerScript() {
+	<script>
+(function () {
+	var browser = 'UTC';
+	try { browser = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) {}
+	var zones = (typeof Intl.supportedValuesOf === 'function') ? Intl.supportedValuesOf('timeZone').slice() : [];
+	document.querySelectorAll('select[data-zone-picker]').forEach(function (sel) {
+		var current = sel.getAttribute('data-value') || browser;
+		var list = zones.slice();
+		if (list.indexOf(current) === -1) { list.unshift(current); }
+		if (list.indexOf('UTC') === -1) { list.push('UTC'); }
+		sel.innerHTML = '';
+		list.forEach(function (z) {
+			var o = document.createElement('option');
+			o.value = z;
+			o.textContent = z;
+			sel.appendChild(o);
+		});
+		sel.value = current;
+	});
+})();
+	</script>
+}
+
+// zoneSelect is a time zone dropdown. The script fills in the zones; without it the saved zone
+// (or UTC) is the only choice.
+templ zoneSelect(name string, value string) {
+	<label class="block text-xs text-zinc-400">
+		Time zone
+		<select name={ name } data-zone-picker data-value={ value } class={ inputClass() }>
+			if value != "" {
+				<option value={ value }>{ value }</option>
+			} else {
+				<option value="UTC">UTC</option>
+			}
+		</select>
+	</label>
+}
+
+templ addScheduleForm(files []FileOption, targets []string) {
+	<details class="group/add rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-zinc-100"><span class="inline-block text-zinc-500 transition group-open/add:rotate-90">▸</span>Add a schedule</summary>
+		<p class="mt-1 text-xs text-zinc-500">Runs a task or bundle on every server, on a cron pattern or once at a time. Fill in either cron or once at, not both.</p>
+		<form method="post" action="/config/add" class="mt-3 space-y-2">
+			<input type="hidden" name="kind" value="schedule"/>
+			<input name="name" required placeholder="name, e.g. nightly-backup" class={ inputClass() }/>
+			<input name="target" required list="schedule-targets" placeholder="task, or @bundle" class={ inputClass() }/>
+			<datalist id="schedule-targets">
+				for _, t := range targets {
+					<option value={ t }></option>
+				}
+			</datalist>
+			<input name="cron" placeholder="cron, e.g. 0 2 * * *" class={ inputClass() }/>
+			<input name="at" placeholder="or once at, e.g. 2026-12-01T02:00" class={ inputClass() }/>
+			@zoneSelect("timezone", "")
+			<label class="block text-xs text-zinc-400">
+				Missed runs
+				<select name="missed" class={ inputClass() }>
+					<option value="skip">skip them</option>
+					<option value="run">run once to catch up</option>
+				</select>
+			</label>
+			<input name="description" placeholder="description" class={ inputClass() }/>
+			@fileSelect(files)
+			<button class={ addButtonClass() }>Add schedule</button>
+		</form>
+	</details>
 }
 
 templ entityTable(title string, kind string, key string, rows []EntityRow) {
@@ -265,6 +339,19 @@ templ editModal(d ConfigPageData) {
 						@editField("Identity file", "identityfile", d.Edit.IdentityFile, "")
 					case "bundle":
 						@editField("Tasks", "tasks", d.Edit.Tasks, "tasks or @bundles, comma separated")
+						@editField("Description", "description", d.Edit.Description, "")
+					case "schedule":
+						@editField("Target", "target", d.Edit.Target, "a task, or @bundle")
+						@editField("Cron", "cron", d.Edit.Cron, "e.g. 0 2 * * * (clear it to use once at)")
+						@editField("Once at", "at", d.Edit.At, "e.g. 2026-12-01T02:00 (clear it to use cron)")
+						@zoneSelect("timezone", d.Edit.Timezone)
+						<label class="block text-xs text-zinc-400">
+							Missed runs
+							<select name="missed" class={ inputClass() }>
+								<option value="skip" selected?={ d.Edit.Missed != "run" }>skip them</option>
+								<option value="run" selected?={ d.Edit.Missed == "run" }>run once to catch up</option>
+							</select>
+						</label>
 						@editField("Description", "description", d.Edit.Description, "")
 				}
 				<div class="flex gap-2 pt-2">

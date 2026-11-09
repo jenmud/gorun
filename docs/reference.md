@@ -61,6 +61,7 @@ already set.
 | `GORUN_NATS_CLIENT_ALLOW_RECONNECT` | `true` | reconnect automatically |
 | `GORUN_NATS_CLIENT_RECONNECT_WAIT` | NATS default | wait between reconnects, e.g. `2s` |
 | `GORUN_NATS_CLIENT_TIMEOUT` | NATS default | connection timeout, e.g. `5s` |
+| `GORUN_NATS_SERVER_CONFIG` | none | NATS server config file for the server `gorun -web` starts when none is running; see [integrations](integrations.md#events-nats) |
 
 The instrumented build also honours the standard `OTEL_*` variables (see
 [Logs and OpenTelemetry](integrations.md#logs-and-opentelemetry)).

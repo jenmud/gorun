@@ -21,6 +21,7 @@ import (
 	"github.com/jenmud/gorun/cmd/web/ui"
 	"github.com/jenmud/gorun/internal/envvars"
 	inats "github.com/jenmud/gorun/internal/nats"
+	"github.com/jenmud/gorun/internal/natsserver"
 	"github.com/jenmud/gorun/internal/store"
 	"github.com/nats-io/nats.go"
 )
@@ -47,6 +48,23 @@ func Run(configPath string) {
 	st := openStore()
 	if st != nil {
 		defer func() { _ = st.Close() }()
+	}
+
+	// a NATS server is started here when none is running, before anything connects to one
+	natsURL, stopNATS, err := natsserver.Ensure(natsserver.Settings{
+		ConfigPath: envvars.Get("GORUN_NATS_SERVER_CONFIG"),
+		ProbeURL:   inats.DefaultURL,
+		ClientURL:  envvars.Get("GORUN_NATS_CLIENT_URL"),
+		Skip:       envvars.Get("GORUN_SKIP_NATS") != "",
+	})
+	if err != nil {
+		log.Printf("gorun web: NATS server not started: %v", err)
+	}
+	defer stopNATS()
+	if natsURL != "" {
+		if err := os.Setenv("GORUN_NATS_CLIENT_URL", natsURL); err != nil {
+			log.Printf("gorun web: %v", err)
+		}
 	}
 
 	gorun.StartNATS()

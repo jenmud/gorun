@@ -67,6 +67,21 @@ When a [NATS](https://nats.io) server is reachable, gorun publishes each run's e
 JSON on `gorun.events` (or `GORUN_EVENT_TOPIC`); the web UI's live dashboard uses them. Without
 NATS gorun runs as normal. Set `GORUN_SKIP_NATS=1` to not try at all.
 
+**`gorun -web` starts its own NATS server** when none is running at `nats://127.0.0.1:4222`, so
+the live view and history work with no setup. Its settings come from a
+[NATS server config](https://docs.nats.io/running-a-nats-service/configuration) file named by
+`GORUN_NATS_SERVER_CONFIG`; the file overrides the defaults it sets, and a host or port it leaves
+out falls back to `127.0.0.1:4222`:
+
+```conf
+# nats.conf: listen on the LAN so other machines can publish to this web service
+host: "0.0.0.0"
+port: 4222
+```
+
+If `GORUN_NATS_CLIENT_URL` names a server, that server is used and nothing is started. The
+embedded server stops when `gorun -web` exits, so other gorun processes that use it stop with it.
+
 ```bash
 make up    # starts the example lab, including a NATS server (see ../recipes/docker-compose.yml)
 ```

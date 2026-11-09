@@ -12,6 +12,7 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/joho/godotenv v1.5.1
 	github.com/kevinburke/ssh_config v1.6.0
+	github.com/nats-io/nats-server/v2 v2.10.24
 	github.com/nats-io/nats.go v1.55.0
 	github.com/robfig/cron/v3 v3.0.1
 	go.opentelemetry.io/otel/metric v1.44.0
@@ -37,7 +38,9 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mattn/go-runewidth v0.0.30 // indirect
+	github.com/minio/highwayhash v1.0.3 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
+	github.com/nats-io/jwt/v2 v2.7.3 // indirect
 	github.com/nats-io/nkeys v0.4.16 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
@@ -46,6 +49,7 @@ require (
 	github.com/xo/terminfo v1.0.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel/trace v1.44.0 // indirect
+	golang.org/x/time v0.8.0 // indirect
 	modernc.org/libc v1.79.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect

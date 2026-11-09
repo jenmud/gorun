@@ -74,13 +74,18 @@ func TestTUIStaysResponsive(t *testing.T) {
 		}
 	}
 
-	// a batch of events landing must not stall the UI either
-	start := time.Now()
-	next, _ := m.Update(tuiBatchMsg{events: []any{gorun.TaskEvent{Server: "server1", Task: "task-001", State: gorun.TaskDone}}})
-	m = next.(tuiModel)
-	_ = m.View()
-	if d := time.Since(start); d > 100*time.Millisecond {
-		t.Errorf("event batch took %s to handle and render", d)
+	// A batch of events landing must not stall the UI either. A freeze is slow every time, but a
+	// busy CI machine can pause any single measurement, so the fastest of three is what counts.
+	fastest := time.Hour
+	for range 3 {
+		start := time.Now()
+		next, _ := m.Update(tuiBatchMsg{events: []any{gorun.TaskEvent{Server: "server1", Task: "task-001", State: gorun.TaskDone}}})
+		m = next.(tuiModel)
+		_ = m.View()
+		fastest = min(fastest, time.Since(start))
+	}
+	if fastest > 100*time.Millisecond {
+		t.Errorf("event batch took %s to handle and render, at best of three", fastest)
 	}
 
 	next, cmd := m.Update(keyPress("q"))

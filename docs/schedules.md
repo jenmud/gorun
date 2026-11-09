@@ -119,7 +119,8 @@ happened. Runs that start are recorded by their own events, so they are not dupl
 
 Loading fails with an error when:
 
-- `name` is missing, or a name is used twice in the Gorunfile and its includes;
+- `name` is missing, or a name is used twice in the Gorunfile and its includes (names may have
+  spaces and dots, but not quotes, tabs or line breaks);
 - both or neither of `cron` and `at` are set;
 - `cron` is not a valid five-field pattern, or `at` is not a valid time;
 - `timezone` is not a known IANA zone;

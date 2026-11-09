@@ -608,7 +608,7 @@ func (a *app) addHandler(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/config", "Load a Gorunfile first.", true)
 		return
 	}
-	if err := validName(name); err != nil {
+	if err := validName(kind, name); err != nil {
 		redirectWith(w, r, "/config", err.Error(), true)
 		return
 	}
@@ -743,9 +743,16 @@ func (a *app) loadHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // validName rejects names that would not survive as a TOML key or a task reference.
-func validName(name string) error {
+func validName(kind, name string) error {
 	if name == "" {
 		return errors.New("give it a name")
+	}
+	// a schedule's name is a quoted value, not a table key, so it may have spaces and dots
+	if kind == kindSchedule {
+		if strings.ContainsAny(name, "\"'\n\r\t") {
+			return fmt.Errorf("%s has characters a schedule name can't use: quotes, tabs or line breaks", name)
+		}
+		return nil
 	}
 	if strings.ContainsAny(name, " \t.[]\"'#@,") {
 		return fmt.Errorf("%s has characters a name can't use", name)

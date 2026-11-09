@@ -33,8 +33,8 @@ func (a *app) addEntity(kind, back string) http.HandlerFunc {
 		case cfg == nil:
 			fail("Load a Gorunfile first.")
 			return
-		case validName(name) != nil:
-			fail(validName(name).Error())
+		case validName(kind, name) != nil:
+			fail(validName(kind, name).Error())
 			return
 		case pendingConflict(pending, kind, name) != "":
 			fail(pendingConflict(pending, kind, name))

@@ -255,3 +255,17 @@ func TestFailedScheduledRunIsInHistory(t *testing.T) {
 	}
 	t.Errorf("failed scheduled run not in history: %+v", runs)
 }
+
+func TestScheduleNamesMayHaveSpacesAndDots(t *testing.T) {
+	for _, name := range []string{"datetime examples schedule", "nightly v2.1"} {
+		if err := validName(kindSchedule, name); err != nil {
+			t.Errorf("%q refused: %v", name, err)
+		}
+	}
+	if err := validName(kindSchedule, `bad"name`); err == nil {
+		t.Error("a schedule name with a quote was accepted")
+	}
+	if err := validName(kindTask, "two words"); err == nil {
+		t.Error("a task name with a space was accepted")
+	}
+}

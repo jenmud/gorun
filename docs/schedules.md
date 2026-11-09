@@ -96,8 +96,14 @@ due while the process was down are not caught up.
 ## Web UI
 
 The **Schedules** page lists each schedule with its status and next run, and has pause, resume
-and skip buttons for the loaded file. Next runs show in the browser's zone, with a picker to
-change it; the choice lasts for the browser session. The page refreshes every 30 seconds.
+and skip buttons for the loaded file. Edit opens a form for the schedule's target, timing, zone,
+missed setting and description; saving writes the change to the file it came from straight away,
+without touching changes queued on the Config page. A schedule with unsaved Config changes must
+be saved or discarded there first. Next runs show in the browser's zone, with a picker to change
+it; the choice lasts for the browser session. The page refreshes every 30 seconds.
+
+Any reload of the file, from the Config page or the schedules page, keeps the pauses and skips
+on schedules that still exist.
 
 Skipped and missed occurrences are written to **History** as runs whose title says what
 happened. Runs that start are recorded by their own events, so they are not duplicated.

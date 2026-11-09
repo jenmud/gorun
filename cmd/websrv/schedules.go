@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/jenmud/gorun"
@@ -21,11 +22,31 @@ func (a *app) schedulesPage(w http.ResponseWriter, r *http.Request) {
 	s := a.sched
 	a.mu.Unlock()
 
+	msg, bad := flashFrom(r)
 	d := ui.SchedulesPageData{Error: r.URL.Query().Get("error")}
+	if bad {
+		d.Error = msg
+	} else {
+		d.Notice = msg
+	}
 	if cfg != nil {
 		d.Loaded, d.Path = true, cfg.Path
 		d.Running = s != nil
 		d.Rows = scheduleRows(cfg, s, time.Now())
+	}
+	if edit := r.URL.Query().Get("edit"); edit != "" && cfg != nil && d.Error == "" {
+		a.mu.Lock()
+		pending := slices.Clone(a.pending)
+		a.mu.Unlock()
+		if msg := pendingConflict(pending, edit); msg != "" {
+			d.Error = msg
+		} else if body, err := currentBody(cfg, pending, kindSchedule, edit); err != nil {
+			d.Error = err.Error()
+		} else {
+			d.EditingName = edit
+			d.Edit = editFields(body)
+			d.Targets = targetNames(cfg)
+		}
 	}
 	a.page(w, "Schedules", "schedules", ui.SchedulesPage(d))
 }
@@ -155,4 +176,78 @@ func scheduleZone(sc gorun.Schedule) string {
 		return "UTC"
 	}
 	return sc.Timezone
+}
+
+// scheduleEdit saves an edit made on the schedules page straight to the schedule's file. A
+// schedule with unsaved changes on the Config page is left alone until those are saved or
+// discarded, so the two edits can't disagree.
+func (a *app) scheduleEdit(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		redirectWith(w, r, "/schedules", "Could not read the form.", true)
+		return
+	}
+	name := r.PostFormValue("name")
+	back := "/schedules?" + url.Values{"edit": {name}}.Encode()
+
+	a.mu.Lock()
+	cfg, pending := a.cfg, slices.Clone(a.pending)
+	if cfg == nil {
+		a.mu.Unlock()
+		redirectWith(w, r, "/schedules", "Load a Gorunfile first.", true)
+		return
+	}
+	if msg := pendingConflict(pending, name); msg != "" {
+		a.mu.Unlock()
+		redirectWith(w, r, back, msg, true)
+		return
+	}
+	body, err := currentBody(cfg, pending, kindSchedule, name)
+	if err == nil {
+		applyScheduleEdit(body, r.PostForm)
+		err = a.checkChange(gorun.Change{Kind: kindSchedule, Name: name, Body: body})
+	}
+	if err == nil {
+		file := sourceOf(cfg, pending, kindSchedule, name)
+		err = gorun.SaveChanges([]gorun.Change{
+			{Kind: kindSchedule, Name: name, File: file, Remove: true},
+			{Kind: kindSchedule, Name: name, File: file, Body: body},
+		})
+	}
+	a.mu.Unlock()
+	if err != nil {
+		redirectWith(w, r, back, err.Error(), true)
+		return
+	}
+	if err := a.reloadConfig(); err != nil {
+		redirectWith(w, r, "/schedules", err.Error(), true)
+		return
+	}
+	redirectWith(w, r, "/schedules", "Updated schedule "+name+".", false)
+}
+
+// pendingConflict explains why a schedule can't be edited here, or returns "" when it can.
+func pendingConflict(pending []gorun.Change, name string) string {
+	for _, p := range pending {
+		if p.Kind == kindSchedule && p.Name == name {
+			return "Save or discard the unsaved changes to " + name + " on the Config page first."
+		}
+	}
+	return ""
+}
+
+// reloadConfig reads the saved Gorunfile again and restarts the scheduler. Unsaved changes on
+// the Config page are kept, unlike loading a file there.
+func (a *app) reloadConfig() error {
+	a.mu.Lock()
+	path := a.cfgPath
+	a.mu.Unlock()
+	cfg := &gorun.Config{}
+	if err := cfg.LoadFile(path); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	a.cfg = cfg
+	a.mu.Unlock()
+	a.startScheduler(cfg)
+	return nil
 }

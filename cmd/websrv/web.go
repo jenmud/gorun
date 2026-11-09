@@ -114,6 +114,7 @@ func (a *app) routes() *http.ServeMux {
 	mux.HandleFunc("POST /schedules/pause", a.schedulePause)
 	mux.HandleFunc("POST /schedules/resume", a.scheduleResume)
 	mux.HandleFunc("POST /schedules/skip", a.scheduleSkip)
+	mux.HandleFunc("POST /schedules/edit", a.scheduleEdit)
 	mux.HandleFunc("GET /history", a.historyPage)
 	mux.HandleFunc("GET /history/{id}", a.historyDetail)
 	mux.HandleFunc("GET /history/{id}/task", a.taskDetail)

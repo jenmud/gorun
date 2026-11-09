@@ -40,7 +40,11 @@ func redirectWith(w http.ResponseWriter, r *http.Request, to, msg string, bad bo
 	if bad {
 		q.Set("bad", "1")
 	}
-	http.Redirect(w, r, to+"?"+q.Encode(), http.StatusSeeOther)
+	sep := "?"
+	if strings.Contains(to, "?") {
+		sep = "&"
+	}
+	http.Redirect(w, r, to+sep+q.Encode(), http.StatusSeeOther)
 }
 
 // runPage is the run page: the picker, the stats and the live dashboard.

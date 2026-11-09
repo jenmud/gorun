@@ -1,5 +1,11 @@
 package ui
 
+import (
+	"net/url"
+
+	"github.com/a-h/templ"
+)
+
 // ScheduleRow is one schedule as the schedules page shows it.
 type ScheduleRow struct {
 	Name        string
@@ -23,5 +29,16 @@ type SchedulesPageData struct {
 	Path    string
 	Running bool   // whether this web server's scheduler is running
 	Error   string // why the last action failed, if it did
+	Notice  string // what the last action did, when it worked
 	Rows    []ScheduleRow
+
+	// the schedule being edited, if any, and the choices its form offers
+	EditingName string
+	Edit        EditFields
+	Targets     []string
+}
+
+// scheduleEditPath opens the schedules page with the named schedule's edit form.
+func scheduleEditPath(name string) templ.SafeURL {
+	return templ.SafeURL("/schedules?" + url.Values{"edit": {name}}.Encode())
 }

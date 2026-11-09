@@ -56,6 +56,7 @@ func (a *app) loadConfig(path string) error {
 // startScheduler replaces the running scheduler with one for cfg's schedules. The web
 // server is the long-running host, so this is the only place a scheduler is started.
 func (a *app) startScheduler(cfg *gorun.Config) {
+	old := a.schedulerStatus()
 	a.stopScheduler()
 	if len(cfg.Schedules) == 0 {
 		return
@@ -68,9 +69,29 @@ func (a *app) startScheduler(cfg *gorun.Config) {
 		log.Printf("gorun web: scheduler: %v", err)
 		return
 	}
+	// a reload keeps the pauses and skips set on schedules that still exist
+	for _, st := range old {
+		if st.Paused {
+			_ = s.Pause(st.Name)
+		}
+		if st.SkipNext {
+			_ = s.Skip(st.Name)
+		}
+	}
 	a.mu.Lock()
 	a.sched = s
 	a.mu.Unlock()
+}
+
+// schedulerStatus is the running scheduler's status, or nil when none is running.
+func (a *app) schedulerStatus() []gorun.ScheduleStatus {
+	a.mu.Lock()
+	s := a.sched
+	a.mu.Unlock()
+	if s == nil {
+		return nil
+	}
+	return s.Status()
 }
 
 // stopScheduler stops the running scheduler, if there is one.

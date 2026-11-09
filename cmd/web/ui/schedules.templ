@@ -16,6 +16,12 @@ templ SchedulesPage(d SchedulesPageData) {
 	if d.Error != "" {
 		<p class="mb-4 rounded-lg border border-red-900 bg-red-950/40 px-4 py-2 text-sm text-red-300">{ d.Error }</p>
 	}
+	if d.Notice != "" {
+		<p class="mb-4 rounded-lg border border-emerald-900 bg-emerald-950/40 px-4 py-2 text-sm text-emerald-300">{ d.Notice }</p>
+	}
+	if d.EditingName != "" {
+		@scheduleEditPanel(d)
+	}
 	if !d.Loaded {
 		@notLoaded()
 	} else if len(d.Rows) == 0 {
@@ -65,8 +71,9 @@ templ SchedulesPage(d SchedulesPageData) {
 									}
 								</td>
 								<td class="px-4 py-2 whitespace-nowrap">
+									<div class="flex flex-wrap gap-2">
+										<a href={ scheduleEditPath(r.Name) } class="rounded-md border border-zinc-700 px-2 py-1 text-xs text-accent hover:border-accent hover:text-white">Edit</a>
 									if d.Running && !r.Finished {
-										<div class="flex flex-wrap gap-2">
 											if r.Paused {
 												@scheduleButton("/schedules/resume", r.Name, "Resume")
 											} else {
@@ -77,10 +84,8 @@ templ SchedulesPage(d SchedulesPageData) {
 											} else if r.SkipPending {
 												<span class="px-2 py-1 text-xs text-zinc-500">next run skipped</span>
 											}
-										</div>
-									} else {
-										<span class="text-xs text-zinc-600">none</span>
 									}
+									</div>
 								</td>
 							</tr>
 						}
@@ -153,4 +158,40 @@ templ scheduleButton(action string, name string, label string) {
 		<input type="hidden" name="schedule" value={ name }/>
 		<button type="submit" class="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:border-accent hover:text-white">{ label }</button>
 	</form>
+}
+
+// scheduleEditPanel is the edit form for one schedule. It sits above the refreshing table, so
+// a refresh never closes it.
+templ scheduleEditPanel(d SchedulesPageData) {
+	<section class="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+		<h2 class="text-lg font-semibold text-zinc-100">Edit schedule <span class="font-mono">{ d.EditingName }</span></h2>
+		<p class="mt-1 text-xs text-zinc-500">The change is written to the file it came from straight away. Pauses and skips on the other schedules are kept.</p>
+		<form method="post" action="/schedules/edit" class="mt-4 grid gap-3 sm:grid-cols-2">
+			<input type="hidden" name="name" value={ d.EditingName }/>
+			<label class="block text-xs text-zinc-400">
+				Target
+				<input name="target" value={ d.Edit.Target } list="schedule-edit-targets" placeholder="a task, or @bundle" class={ inputClass() }/>
+			</label>
+			<datalist id="schedule-edit-targets">
+				for _, t := range d.Targets {
+					<option value={ t }></option>
+				}
+			</datalist>
+			@editField("Cron", "cron", d.Edit.Cron, "e.g. 0 2 * * * (clear it to use once at)")
+			@editField("Once at", "at", d.Edit.At, "e.g. 2026-12-01T02:00 (clear it to use cron)")
+			@zoneSelect("timezone", d.Edit.Timezone)
+			<label class="block text-xs text-zinc-400">
+				Missed runs
+				<select name="missed" class={ inputClass() }>
+					<option value="skip" selected?={ d.Edit.Missed != "run" }>skip them</option>
+					<option value="run" selected?={ d.Edit.Missed == "run" }>run once to catch up</option>
+				</select>
+			</label>
+			@editField("Description", "description", d.Edit.Description, "")
+			<div class="flex gap-2 sm:col-span-2">
+				<button type="submit" class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-violet-600">Save schedule</button>
+				<a href="/schedules" class="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800">Cancel</a>
+			</div>
+		</form>
+	</section>
 }

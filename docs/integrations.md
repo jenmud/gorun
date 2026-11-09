@@ -24,7 +24,7 @@ optional; without it, load one on the Config page. It has these pages:
 - **Bundles** lists each bundle, its tasks in order and what it expands to, with a link to run it.
 - **Schedules** lists each `[[schedule]]` with its target, timing, status and next run. Next runs
   are UTC instants shown in your browser's time zone; the picker above the table changes the zone
-  and starts on the browser's. Pause, resume and skip buttons act on the scheduler in this web
+  and starts on the browser's. Edit changes a schedule in its file. Pause, resume and skip buttons act on the scheduler in this web
   server, and skipped or missed runs appear in History. A banner says so when the scheduler isn't
   running.
 - **History** lists saved runs. Open one for each server's tasks, slowest first; open a task for

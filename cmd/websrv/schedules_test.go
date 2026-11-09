@@ -234,3 +234,24 @@ func TestScheduledRunsReachHistoryWithoutNATS(t *testing.T) {
 		t.Errorf("the scheduled run is not in history: %+v", runs)
 	}
 }
+
+// A scheduled run that fails before it starts is in history as a failed run.
+func TestFailedScheduledRunIsInHistory(t *testing.T) {
+	a := loadSchedules(t)
+	a.recordScheduleEvent(gorun.ScheduleEvent{Schedule: "nightly", Kind: gorun.ScheduleFailed,
+		At: time.Date(2026, 12, 1, 2, 0, 0, 0, time.UTC), Reason: "no tasks to run"})
+
+	runs, err := a.store.ListRuns(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range runs {
+		if strings.Contains(r.Title, "nightly failed: no tasks to run") {
+			if !r.Finished || r.Success {
+				t.Errorf("failed run recorded as finished=%v success=%v", r.Finished, r.Success)
+			}
+			return
+		}
+	}
+	t.Errorf("failed scheduled run not in history: %+v", runs)
+}

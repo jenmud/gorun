@@ -108,6 +108,10 @@ on schedules that still exist.
 Scheduled runs appear in **History** and in the live view whether or not NATS is connected.
 Without NATS, the web server applies their events itself.
 
+A scheduled run that fails before it starts, such as a target no server can run (a task that is
+not `local = true` on a local server), is written to **History** as a failed run with the reason.
+Its target runs on every server, so a task has to suit every server it reaches.
+
 Skipped and missed occurrences are written to **History** as runs whose title says what
 happened. Runs that start are recorded by their own events, so they are not duplicated.
 

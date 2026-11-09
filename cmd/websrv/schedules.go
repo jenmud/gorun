@@ -86,10 +86,12 @@ func (a *app) scheduleControl(w http.ResponseWriter, r *http.Request, op func(*g
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
-// recordScheduleEvent writes skipped and missed occurrences to history. Runs that start are
-// recorded by the run's own events, so they are not written here.
+// recordScheduleEvent writes skipped, missed and failed occurrences to history. A run that
+// starts is recorded by its own events; a run that fails before it starts, such as a target no
+// server can run, has none, so the failure is written here.
 func (a *app) recordScheduleEvent(ev gorun.ScheduleEvent) {
-	if a.store == nil || (ev.Kind != gorun.ScheduleSkipped && ev.Kind != gorun.ScheduleMissed) {
+	failed := ev.Kind == gorun.ScheduleFailed
+	if a.store == nil || (ev.Kind != gorun.ScheduleSkipped && ev.Kind != gorun.ScheduleMissed && !failed) {
 		return
 	}
 	ctx := context.Background()
@@ -100,7 +102,7 @@ func (a *app) recordScheduleEvent(ev gorun.ScheduleEvent) {
 		log.Printf("gorun web: record schedule %s: %v", ev.Schedule, err)
 		return
 	}
-	if err := a.store.FinishRun(ctx, id, true, 0, 0, 0, 0, ev.At); err != nil {
+	if err := a.store.FinishRun(ctx, id, !failed, 0, 0, 0, 0, ev.At); err != nil {
 		log.Printf("gorun web: finish schedule %s: %v", ev.Schedule, err)
 	}
 }

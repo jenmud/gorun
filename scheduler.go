@@ -214,7 +214,7 @@ func (s *Scheduler) loop(ctx context.Context, done chan struct{}) {
 	defer close(done)
 	for {
 		now := s.now()
-		s.tick(ctx, now)
+		s.tick(now)
 
 		wait := time.Minute
 		if d, ok := s.untilNext(now); ok && d < wait {
@@ -233,7 +233,7 @@ func (s *Scheduler) loop(ctx context.Context, done chan struct{}) {
 }
 
 // tick handles every occurrence due at or before now.
-func (s *Scheduler) tick(ctx context.Context, now time.Time) {
+func (s *Scheduler) tick(now time.Time) {
 	s.mu.Lock()
 	var events []ScheduleEvent
 	for _, name := range s.names() {

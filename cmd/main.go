@@ -106,12 +106,57 @@ func otelSignalConfigured(getenv func(string) string, signal string) bool {
 	return false
 }
 
+// stringSlice is a flag that can be given more than once.
 type stringSlice []string
 
-func (s *stringSlice) String() string { return strings.Join(*s, ",") }
-func (s *stringSlice) Set(v string) error {
-	*s = append(*s, v)
-	return nil
+func (s *stringSlice) String() string     { return strings.Join(*s, ",") }
+func (s *stringSlice) Set(v string) error { *s = append(*s, v); return nil }
+
+// options are the command line flags. printUsage documents each one.
+type options struct {
+	verbose, plain, run, dump, version, web, history, updateIncludes bool
+	listTasks, listServers, listTags, listGroups, listBundles        bool
+	tasks, bundles, servers, exclude, tags, groups                   stringSlice
+	parallel                                                         int
+	parallelSet                                                      bool // -parallel was given
+	dumpTasksDir, complete, filename                                 string
+}
+
+// lists reports whether a flag that only prints and exits was given.
+func (o *options) lists() bool {
+	return o.listTasks || o.listServers || o.listTags || o.listGroups || o.listBundles || o.dumpTasksDir != ""
+}
+
+func parseFlags() *options {
+	o := &options{}
+	for name, dst := range map[string]*bool{
+		"v": &o.verbose, "plain": &o.plain, "run": &o.run, "r": &o.run, "dump": &o.dump, "version": &o.version,
+		"web": &o.web, "history": &o.history, "update-includes": &o.updateIncludes,
+		"list-tasks": &o.listTasks, "list-servers": &o.listServers, "list-tags": &o.listTags,
+		"list-groups": &o.listGroups, "list-server-groups": &o.listGroups, "list-bundles": &o.listBundles,
+	} {
+		flag.BoolVar(dst, name, false, "")
+	}
+	for name, dst := range map[string]*stringSlice{
+		"task": &o.tasks, "bundles": &o.bundles, "server": &o.servers,
+		"exclude-server": &o.exclude, "tag": &o.tags, "group": &o.groups,
+	} {
+		flag.Var(dst, name, "")
+	}
+	flag.IntVar(&o.parallel, "parallel", 0, "")
+	flag.StringVar(&o.dumpTasksDir, "dump-tasks", "", "")
+	flag.StringVar(&o.complete, "complete", "", "")
+	flag.Usage = printUsage
+	flag.Parse()
+
+	o.filename = flag.Arg(0)
+	// the flag package stops at the first positional argument, so parse again
+	// to allow flags after the filename, e.g. `gorun Gorunfile --run -v`
+	if flag.NArg() > 1 && !o.version && o.complete == "" && !o.dump {
+		_ = flag.CommandLine.Parse(flag.Args()[1:])
+	}
+	flag.Visit(func(f *flag.Flag) { o.parallelSet = o.parallelSet || f.Name == "parallel" })
+	return o
 }
 
 func main() {
@@ -122,75 +167,28 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancel()
 
-	verbose := flag.Bool("v", false, "verbose: show every task and its output")
-	plain := flag.Bool("plain", false, "plain output instead of the TUI, and print the --list-* trees in full (default when stdout is not a terminal)")
-	var runNow bool
-	flag.BoolVar(&runNow, "run", false, "run without the interactive server picker (needed when there is no terminal)")
-	flag.BoolVar(&runNow, "r", false, "shorthand for -run")
-	dump := flag.Bool("dump", false, "print a starting Gorunfile that works as-is and documents every option")
-	versionFlag := flag.Bool("version", false, "print version and exit")
-	webFlag := flag.Bool("web", false, "start the web server")
-	historyFlag := flag.Bool("history", false, "view historical runs")
-	taskFlags := stringSlice{}
-	flag.Var(&taskFlags, "task", "run only the named task, glob or @bundle on any selected server (repeatable); dependencies are included")
-	bundleFlags := stringSlice{}
-	flag.Var(&bundleFlags, "bundles", "run only tasks from the named bundle(s), replacing each server's task list (repeatable)")
-	serverFlags := stringSlice{}
-	flag.Var(&serverFlags, "server", "run only the named server or glob (repeatable)")
-	excludeFlags := stringSlice{}
-	flag.Var(&excludeFlags, "exclude-server", "skip the named server or glob (repeatable)")
-	tagFlags := stringSlice{}
-	flag.Var(&tagFlags, "tag", "run only servers with this tag (repeatable; servers need every tag)")
-	groupFlags := stringSlice{}
-	flag.Var(&groupFlags, "group", "run only servers in this server group (repeatable; servers need every group)")
-	parallel := flag.Int("parallel", 0, "maximum number of hosts to run in parallel (0 = all)")
-	listTasks := flag.Bool("list-tasks", false, "list available tasks and exit")
-	listServers := flag.Bool("list-servers", false, "list servers and their task pipelines and exit")
-	listTags := flag.Bool("list-tags", false, "list tags and the servers that have them and exit")
-	listGroups := flag.Bool("list-groups", false, "list server groups and the servers that have them and exit")
-	listServerGroups := flag.Bool("list-server-groups", false, "list server groups and the servers that have them and exit")
-	listBundles := flag.Bool("list-bundles", false, "list task bundles and what they expand to and exit")
-	dumpTasksDir := flag.String("dump-tasks", "", "dump each task as a file in DIR and exit")
-	updateIncludes := flag.Bool("update-includes", false, "look up every git include's ref again, update the lock file and exit")
-	complete := flag.String("complete", "", "print shell completion candidates (tasks, bundles, servers, tags or groups) and exit")
-
-	flag.Usage = printUsage
-	flag.Parse()
-
-	if *versionFlag {
+	o := parseFlags()
+	switch {
+	case o.version:
 		fmt.Println(version)
 		return
-	}
-
-	if *complete != "" {
+	case o.complete != "":
 		os.Setenv("GORUN_SKIP_NATS", "1")
-		names, err := completionNames(*complete, flag.Arg(0))
-		if err != nil {
-			fatal(err)
-		}
+		names, err := completionNames(o.complete, o.filename)
+		check(err)
 		for _, name := range names {
 			fmt.Println(name)
 		}
 		return
-	}
-
-	if *dump {
-		os.Setenv("GORUN_SKIP_NATS", "1")
+	case o.dump:
 		fmt.Print(emptyGorunfile)
 		return
 	}
 
-	filename := flag.Arg(0)
-
-	// the flag package stops at the first positional argument, so parse again
-	// to allow flags after the filename, e.g. `gorun Gorunfile --run -v`
-	if flag.NArg() > 1 {
-		_ = flag.CommandLine.Parse(flag.Args()[1:])
-	}
-
-	useTUI := !*plain && term.IsTerminal(int(os.Stdout.Fd()))
+	stdoutTTY := term.IsTerminal(int(os.Stdout.Fd()))
+	useTUI := !o.plain && stdoutTTY
 	// the server picker needs to read keys as well as draw
-	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
+	interactive := stdoutTTY && term.IsTerminal(int(os.Stdin.Fd()))
 
 	// Set up logging before anything interactive starts, so the TUI, the
 	// history view and the web server all keep library logs (including OTEL
@@ -199,40 +197,36 @@ func main() {
 	if logFile != nil {
 		defer func() { _ = logFile.Close() }()
 	}
-
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
 		log.Printf("opentelemetry: %v", err)
 	}))
 
-	if *historyFlag {
-		if err := runHistoryTUI(); err != nil {
-			fatal(err)
-		}
+	switch {
+	case o.history:
+		check(runHistoryTUI())
 		return
-	}
-
-	if *webFlag {
-		web.Run(filename)
+	case o.web:
+		web.Run(o.filename)
 		return
-	}
-
-	if filename == "" {
+	case o.filename == "":
 		printUsage()
 		os.Exit(1)
 	}
 
-	slog.Info("parsing gorun file", slog.String("filename", filename))
-	if *listTasks || *listServers || *listTags || *listGroups || *listServerGroups || *listBundles || *dumpTasksDir != "" {
+	slog.Info("parsing gorun file", slog.String("filename", o.filename))
+	if o.lists() {
 		os.Setenv("GORUN_SKIP_NATS", "1")
 	}
 	gorun.StartNATS()
 
-	cfg := gorun.Config{UpdateIncludes: *updateIncludes}
-	err := cfg.LoadFile(filename)
-	if err != nil {
-		fatal(fmt.Errorf("%s: %w", filename, err))
+	inFile := func(err error) { // check, naming the Gorunfile
+		if err != nil {
+			fatal(fmt.Errorf("%s: %w", o.filename, err))
+		}
 	}
-	if *updateIncludes {
+	cfg := &gorun.Config{UpdateIncludes: o.updateIncludes}
+	inFile(cfg.LoadFile(o.filename))
+	if o.updateIncludes {
 		if len(cfg.Includes) == 0 {
 			fmt.Println("no git includes")
 		}
@@ -241,195 +235,87 @@ func main() {
 		}
 		return
 	}
-
 	// relative paths in the config are relative to the config file, not the working directory
-	cfg.ResolvePaths(filepath.Dir(filename))
+	cfg.ResolvePaths(filepath.Dir(o.filename))
 
-	if *parallel < 0 {
-		fatal(errors.New("parallel must be 0 or greater"))
-	}
-	parallelSet := false
-	flag.Visit(func(f *flag.Flag) {
-		if f.Name == "parallel" {
-			parallelSet = true
-		}
-	})
-	if parallelSet {
-		cfg.MaxParallel = *parallel
-	}
+	selectedTasks, filtered := applySelection(cfg, o)
 
-	if len(taskFlags) > 0 && len(bundleFlags) > 0 {
-		fatal(errors.New("--task and --bundles cannot be used together"))
-	}
-
-	// validate and apply task or bundle selection before building pipelines.
-	var selectedTasks []string
-	if len(bundleFlags) > 0 {
-		selectedTasks, err = selectBundles(&cfg, bundleFlags...)
-		if err != nil {
-			fatal(err)
-		}
-	} else if len(taskFlags) > 0 {
-		// A named task is run on every selected server even when it is not part
-		// of that server's configured pipeline, so one-off tasks work on any host.
-		selectedTasks, err = cfg.ExpandTaskPatterns(taskFlags...)
-		if err != nil {
-			fatal(err)
-		}
-		for i := range cfg.Servers {
-			cfg.Servers[i].TaskNames = slices.Clone(selectedTasks)
-		}
-		cfg.SelectedTasks = selectedTasks
-	}
-
-	// validate and apply the server filters
-	filter := gorun.ServerFilter{Names: serverFlags, Exclude: excludeFlags, Tags: tagFlags, Groups: groupFlags}
-	if cfg.Servers, err = cfg.SelectServers(filter); err != nil {
-		fatal(err)
-	}
-
-	// the --list-* flags browse a collapsible tree in a terminal, and print
-	// everything as-is with --plain or when not interactive
-	listTUI := interactive && !*plain
-	showList := func(kind string, nodes []*treeNode, print func()) {
-		if !listTUI || len(nodes) == 0 {
-			print()
-			return
-		}
-		if err := runTreeTUI(cfg.Title, kind, nodes); err != nil {
-			fatal(err)
-		}
-	}
-
-	if *listBundles {
-		showList("bundles", bundleTreeNodes(&cfg), func() { printBundles(os.Stdout, &cfg) })
-		return
-	}
-
-	if *listTags {
-		showList("tags", tagTreeNodes(&cfg, cfg.Servers, !filter.IsZero()), func() {
-			printTags(os.Stdout, &cfg, cfg.Servers, !filter.IsZero())
-		})
-		return
-	}
-
-	if *listGroups || *listServerGroups {
-		showList("groups", groupTreeNodes(&cfg, cfg.Servers, !filter.IsZero()), func() {
-			printGroups(os.Stdout, &cfg, cfg.Servers, !filter.IsZero())
-		})
-		return
-	}
-
-	if *listTasks {
-		// With a filter, list only the tasks the selection would run.
-		var shown map[string]bool
-		if len(selectedTasks) > 0 || len(bundleFlags) > 0 || !filter.IsZero() {
-			shown = map[string]bool{}
-			servers, err := cfg.ServersPipeline()
-			if err != nil {
-				fatal(fmt.Errorf("%s: %w", filename, err))
-			}
-			for _, server := range servers {
-				for _, t := range server.Tasks {
-					shown[t.Name] = true
-				}
-			}
-		}
-
-		showList("tasks", taskTreeNodes(&cfg, shown), func() { printTasks(os.Stdout, &cfg, shown) })
+	if showList(cfg, o, interactive, selectedTasks, filtered) {
 		return
 	}
 
 	// check every server's task list up front, so config mistakes such as an unknown task
 	// are reported before the TUI starts rather than lost inside it
 	servers, err := cfg.ServersPipeline()
-	if err != nil {
-		fatal(fmt.Errorf("%s: %w", filename, err))
+	inFile(err)
+	// a server with no tasks of its kind has nothing to run, so it isn't listed or offered
+	for name, server := range servers {
+		if len(server.Tasks) == 0 {
+			delete(servers, name)
+		}
 	}
 
-	if *listServers {
-		filtered := make(map[string]gorun.Server, len(servers))
-		for name, server := range servers {
-			if len(server.Tasks) > 0 {
-				filtered[name] = server
-			}
-		}
-		showList("servers", serverTreeNodes(filtered), func() { printServers(os.Stdout, filtered) })
+	switch {
+	case o.listServers:
+		list(cfg, o, interactive, "servers", serverTreeNodes(servers), func() { printServers(os.Stdout, servers) })
 		return
-	}
-
-	if *dumpTasksDir != "" {
-		if err := dumpTasks(&cfg, *dumpTasksDir, servers, selectedTasks); err != nil {
-			fatal(err)
-		}
+	case o.dumpTasksDir != "":
+		check(dumpTasks(cfg, o.dumpTasksDir, servers, selectedTasks))
 		return
 	}
 
 	// Runs start with the server picker unless --run says to go straight ahead, so
 	// nothing is deployed without an explicit choice.
-	if !runNow {
+	if !o.run {
 		if !interactive {
 			fatal(errors.New("the server picker needs an interactive terminal; pass --run (-r) to run without it"))
 		}
-
-		// the picker lists each server's resolved pipeline, so tasks can be left out;
-		// servers with no tasks of their kind have nothing to run, so don't show them
+		// the picker lists each server's resolved pipeline, so tasks can be left out
 		choices := make([]gorun.Server, 0, len(cfg.Servers))
 		for _, s := range cfg.Servers {
-			if pipeline := servers[s.Name]; len(pipeline.Tasks) > 0 {
+			if pipeline, ok := servers[s.Name]; ok {
 				choices = append(choices, pipeline)
 			}
 		}
-
-		selected, err := runServerSelectionTUI(&cfg, choices)
+		selected, err := runServerSelectionTUI(cfg, choices)
 		if errors.Is(err, errTaskCommandEditorClosed) {
 			return
 		}
-		if err != nil {
-			fatal(err)
-		}
+		check(err)
 		if len(selected) == 0 {
 			fmt.Println("no servers selected")
 			return
 		}
 		cfg.Servers = selected
-
-		// the plain output below prints the plan, which is now just the selection
-		if servers, err = cfg.ServersPipeline(); err != nil {
-			fatal(fmt.Errorf("%s: %w", filename, err))
-		}
 	}
 
 	if useTUI {
-		if err := runTUI(ctx, cancel, &cfg, *verbose); err != nil {
+		if err := runTUI(ctx, cancel, cfg, o.verbose); err != nil {
 			os.Exit(1)
 		}
 		return
 	}
 
+	// plain output: the plan, then a line per task as it finishes
 	slog.Info("parsed config file")
-
+	servers, err = cfg.ServersPipeline()
+	inFile(err)
 	for _, server := range servers {
-		// Run skips a server with no tasks of its kind, so don't list it either
 		if len(server.Tasks) == 0 {
 			continue
 		}
-		names := []string{}
-
-		for _, task := range server.Tasks {
-			names = append(names, task.Name)
+		names := make([]string, len(server.Tasks))
+		for i, task := range server.Tasks {
+			names[i] = task.Name
 		}
-
 		fmt.Printf("%s: %s\n", server.Name, strings.Join(names, " -> "))
 	}
 
-	printer := &plainPrinter{w: os.Stdout, verbose: *verbose}
-	cfg.OnEvent = printer.event
+	cfg.OnEvent = (&plainPrinter{w: os.Stdout, verbose: o.verbose}).event
 	if h, err := history.Open(getHistoryDBPath()); err == nil {
 		defer func() { _ = h.Close() }()
 		cfg.Recorder = h
 	}
-
 	if err := cfg.Run(ctx); err != nil {
 		slog.Error("error executing tasks", slog.String("reason", err.Error()))
 		if logPath != "" {
@@ -437,6 +323,82 @@ func main() {
 		}
 		fatal(err)
 	}
+}
+
+// applySelection applies -parallel, -task or -bundles, and the server filters to cfg. It
+// returns the tasks selected, if any, and whether the servers were filtered.
+func applySelection(cfg *gorun.Config, o *options) (selectedTasks []string, filtered bool) {
+	if o.parallel < 0 {
+		fatal(errors.New("parallel must be 0 or greater"))
+	}
+	if o.parallelSet {
+		cfg.MaxParallel = o.parallel
+	}
+
+	var err error
+	switch {
+	case len(o.tasks) > 0 && len(o.bundles) > 0:
+		fatal(errors.New("--task and --bundles cannot be used together"))
+	case len(o.bundles) > 0:
+		selectedTasks, err = selectBundles(cfg, o.bundles...)
+		check(err)
+	case len(o.tasks) > 0:
+		// A named task is run on every selected server even when it is not part
+		// of that server's configured pipeline, so one-off tasks work on any host.
+		selectedTasks, err = cfg.ExpandTaskPatterns(o.tasks...)
+		check(err)
+		for i := range cfg.Servers {
+			cfg.Servers[i].TaskNames = slices.Clone(selectedTasks)
+		}
+		cfg.SelectedTasks = selectedTasks
+	}
+
+	filter := gorun.ServerFilter{Names: o.servers, Exclude: o.exclude, Tags: o.tags, Groups: o.groups}
+	cfg.Servers, err = cfg.SelectServers(filter)
+	check(err)
+	return selectedTasks, !filter.IsZero()
+}
+
+// list shows one of the -list-* trees: a collapsible tree in a terminal, or print's plain
+// output with -plain, when not interactive, or when there is nothing to browse.
+func list(cfg *gorun.Config, o *options, interactive bool, kind string, nodes []*treeNode, print func()) {
+	if !interactive || o.plain || len(nodes) == 0 {
+		print()
+		return
+	}
+	check(runTreeTUI(cfg.Title, kind, nodes))
+}
+
+// showList handles -list-bundles, -list-tags, -list-groups and -list-tasks, and reports
+// whether one of them was given.
+func showList(cfg *gorun.Config, o *options, interactive bool, selectedTasks []string, filtered bool) bool {
+	switch {
+	case o.listBundles:
+		list(cfg, o, interactive, "bundles", bundleTreeNodes(cfg), func() { printBundles(os.Stdout, cfg) })
+	case o.listTags:
+		list(cfg, o, interactive, "tags", tagTreeNodes(cfg, cfg.Servers, filtered), func() { printTags(os.Stdout, cfg, cfg.Servers, filtered) })
+	case o.listGroups:
+		list(cfg, o, interactive, "groups", groupTreeNodes(cfg, cfg.Servers, filtered), func() { printGroups(os.Stdout, cfg, cfg.Servers, filtered) })
+	case o.listTasks:
+		// with a selection, list only the tasks it would run
+		var shown map[string]bool
+		if len(selectedTasks) > 0 || filtered {
+			shown = map[string]bool{}
+			servers, err := cfg.ServersPipeline()
+			if err != nil {
+				fatal(fmt.Errorf("%s: %w", o.filename, err))
+			}
+			for _, server := range servers {
+				for _, t := range server.Tasks {
+					shown[t.Name] = true
+				}
+			}
+		}
+		list(cfg, o, interactive, "tasks", taskTreeNodes(cfg, shown), func() { printTasks(os.Stdout, cfg, shown) })
+	default:
+		return false
+	}
+	return true
 }
 
 // setupLogging sends logs to the log file so they don't clutter the terminal or
@@ -466,6 +428,13 @@ func setupLogging(useTUI bool) (string, *os.File) {
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "gorun: %v\n", err)
 	os.Exit(1)
+}
+
+// check exits with err, if there is one.
+func check(err error) {
+	if err != nil {
+		fatal(err)
+	}
 }
 
 func printUsage() {

@@ -1,6 +1,7 @@
 package gorun
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -16,110 +17,75 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// SSH represents SSH creds
+// SSH is how gorun connects to a server. A server with none of it set runs on this machine.
 type SSH struct {
 	User         string `toml:"username"`
 	Password     string `toml:"password"`
 	Port         int    `toml:"port"`
 	Identityfile string `toml:"identityfile"`
-	ConfigFile   string `toml:"config_file,omitempty"`
-	Config       string `toml:"config,omitempty"`
+	// ConfigFile is an OpenSSH config file to fill the gaps from; Config is another name for it.
+	ConfigFile string `toml:"config_file,omitempty"`
+	Config     string `toml:"config,omitempty"`
 }
 
-// NewSSHClient creates a new SSH client connected to the provided server.
+// NewSSHClient connects to the server over SSH. What the Gorunfile doesn't set (the host's real
+// name, user, port and keys) is taken from the server's SSH config file, or ~/.ssh/config.
 func NewSSHClient(ctx context.Context, server Server) (*ssh.Client, error) {
-	// Resolve an SSH config file: use the one given, otherwise fall back to the
-	// default ~/.ssh/config when it exists.
-	configPath := server.SSH.ConfigFile
-	if configPath == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			candidate := filepath.Join(home, ".ssh", "config")
-			if _, err := os.Stat(candidate); err == nil {
-				configPath = candidate
-			}
-		}
-	} else {
-		if strings.HasPrefix(configPath, "~/") {
-			if home, err := os.UserHomeDir(); err == nil {
-				configPath = filepath.Join(home, configPath[2:])
-			}
-		}
-	}
-
-	// Apply settings from the SSH config, filling in any gaps (explicit values in
-	// the Gorunfile always take precedence).
-	host := server.Hostname
-	if host == "" {
-		host = server.Name
-	}
-	alias := host
-	resolvedHost := host
+	creds := server.SSH
+	host := cmp.Or(server.Hostname, server.Name)
 	var configKeys []string
-	if configPath != "" {
-		if f, err := os.Open(configPath); err == nil {
-			if cfg, err := sshconfig.Decode(f); err == nil {
-				_ = f.Close()
-				if v, err := cfg.Get(alias, "HostName"); err == nil && v != "" && v != alias {
-					resolvedHost = v
-				}
-				if server.SSH.User == "" {
-					if v, err := cfg.Get(alias, "User"); err == nil && v != "" {
-						server.SSH.User = v
-					}
-				}
-				if server.SSH.Port == 0 {
-					if v, err := cfg.Get(alias, "Port"); err == nil && v != "" {
-						if p, err := strconv.Atoi(v); err == nil {
-							server.SSH.Port = p
-						}
-					}
-				}
-				if server.SSH.Identityfile == "" {
-					// every match, not just the first: a global IdentityFile must not hide the host's own
-					configKeys, _ = cfg.GetAll(alias, "IdentityFile")
-				}
-			} else {
-				_ = f.Close()
-			}
+	if cfg := readSSHConfig(creds.ConfigFile); cfg != nil {
+		alias := host
+		get := func(key string) string { v, _ := cfg.Get(alias, key); return v }
+		host = cmp.Or(get("HostName"), alias)
+		creds.User = cmp.Or(creds.User, get("User"))
+		if port, err := strconv.Atoi(get("Port")); err == nil && creds.Port == 0 {
+			creds.Port = port
+		}
+		if creds.Identityfile == "" {
+			// every match, not just the first: a global IdentityFile must not hide the host's own
+			configKeys, _ = cfg.GetAll(alias, "IdentityFile")
 		}
 	}
-	host = resolvedHost
 
-	port := 22
-	if server.SSH.Port != 0 {
-		port = server.SSH.Port
-	}
-
-	address := fmt.Sprintf("%s:%d", host, port)
-	auth := []ssh.AuthMethod{}
-
-	signers, err := identitySigners(server.SSH.Identityfile, configKeys)
+	var auth []ssh.AuthMethod
+	signers, err := identitySigners(creds.Identityfile, configKeys)
 	if err != nil {
 		return nil, err
 	}
 	if len(signers) > 0 {
 		auth = append(auth, ssh.PublicKeys(signers...))
 	}
-
-	// if we have a SSH password, add it to the list of auths
-	if server.SSH.Password != "" {
-		auth = append(auth, ssh.Password(server.SSH.Password))
+	if creds.Password != "" {
+		auth = append(auth, ssh.Password(creds.Password))
 	}
 
-	config := &ssh.ClientConfig{
-		Config:          ssh.Config{},
-		User:            server.SSH.User,
+	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", host, cmp.Or(creds.Port, 22)), &ssh.ClientConfig{
+		User:            creds.User,
 		Auth:            auth,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         30 * time.Second,
-	}
-
-	client, err := ssh.Dial("tcp", address, config)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("error creating SSH client: %w", err)
 	}
-
 	return client, nil
+}
+
+// readSSHConfig reads the OpenSSH config at path, or ~/.ssh/config when path is empty. It
+// returns nil when there is none to read.
+func readSSHConfig(path string) *sshconfig.Config {
+	path = expandHome(cmp.Or(path, "~/.ssh/config"))
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer func() { _ = f.Close() }()
+	cfg, err := sshconfig.Decode(f)
+	if err != nil {
+		return nil
+	}
+	return cfg
 }
 
 // identitySigners returns the keys to offer, in order. An explicit Gorunfile identityfile is the only key

@@ -95,7 +95,7 @@ timezone = "Europe/London"
 	}
 	defer f.sched.Stop()
 
-	f.sched.tick(ctx, time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
+	f.sched.tick(time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
 	f.settle()
 
 	if got := f.kinds(); len(got) != 1 || got[0] != "fired:maintenance" {
@@ -129,7 +129,7 @@ missed = "skip"
 	if err := f.sched.Pause("held"); err != nil {
 		t.Fatal(err)
 	}
-	f.sched.tick(ctx, time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
+	f.sched.tick(time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
 	f.settle()
 	if got := f.sched.Status()[0].Missed; got != 1 {
 		t.Errorf("missed while paused = %d, want 1", got)
@@ -171,8 +171,8 @@ missed = "run"
 	if err := f.sched.Pause("catchup"); err != nil {
 		t.Fatal(err)
 	}
-	f.sched.tick(ctx, time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
-	f.sched.tick(ctx, time.Date(2026, 12, 2, 2, 0, 1, 0, time.UTC))
+	f.sched.tick(time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
+	f.sched.tick(time.Date(2026, 12, 2, 2, 0, 1, 0, time.UTC))
 	if got := f.sched.Status()[0].Missed; got != 2 {
 		t.Fatalf("missed = %d, want 2", got)
 	}
@@ -208,7 +208,7 @@ cron = "0 2 * * *"
 	if err := f.sched.Skip("daily"); err != nil {
 		t.Fatal(err)
 	}
-	f.sched.tick(ctx, time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
+	f.sched.tick(time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
 	f.settle()
 	if got := f.kinds(); strings.Join(got, ",") != "skipped:daily" {
 		t.Fatalf("events = %v, want skipped:daily", got)
@@ -218,7 +218,7 @@ cron = "0 2 * * *"
 	}
 
 	// the skip does not carry forward: the next day runs
-	f.sched.tick(ctx, time.Date(2026, 12, 2, 2, 0, 1, 0, time.UTC))
+	f.sched.tick(time.Date(2026, 12, 2, 2, 0, 1, 0, time.UTC))
 	f.settle()
 	if got := f.kinds(); strings.Join(got, ",") != "skipped:daily,fired:daily" {
 		t.Errorf("events = %v, want the next day to fire", got)
@@ -247,7 +247,7 @@ cron = "0 2 * * *"
 	f.sched.states["daily"].running = true
 	f.sched.mu.Unlock()
 
-	f.sched.tick(ctx, time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
+	f.sched.tick(time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
 	f.settle()
 	if got := f.kinds(); strings.Join(got, ",") != "skipped:daily" {
 		t.Fatalf("events = %v, want skipped:daily", got)
@@ -286,7 +286,7 @@ at = "2026-12-01T02:00"
 	if err := f.sched.Start(ctx); err == nil {
 		t.Error("starting twice did not fail")
 	}
-	f.sched.tick(ctx, time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
+	f.sched.tick(time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
 	f.settle()
 	if err := f.sched.Skip("once"); err == nil {
 		t.Error("Skip with no upcoming run did not fail")
@@ -340,7 +340,7 @@ at = "2026-12-01T02:00"
 		t.Fatal(err)
 	}
 	defer f.sched.Stop()
-	f.sched.tick(ctx, time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
+	f.sched.tick(time.Date(2026, 12, 1, 2, 0, 1, 0, time.UTC))
 	f.settle()
 
 	mu.Lock()

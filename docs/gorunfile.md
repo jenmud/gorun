@@ -198,7 +198,9 @@ depends_on = ["packages"]
 ```
 
 A task's `depends_on` tasks always run first, once, **even if the server doesn't list them**.
-Cycles are reported before anything runs.
+Cycles are reported before anything runs. A `depends_on` that names a task no file defines is an
+error when the Gorunfile loads, even if nothing runs that task, and the message says which file
+(or which git include) the task came from.
 
 ### Environment variables and secrets
 
@@ -519,6 +521,16 @@ tasks = ["@web-baseline"]                 # a bundle from the library
 - **Paths are the library's.** A library task's `cmd_file`, `cmd_template_file` and copy sources
   are relative to the root of its repository.
 - Names follow the usual rule: a name defined both in the library and in your files is an error.
+- **Keep a library self-contained.** Its tasks' `depends_on` should name tasks in the library.
+  Names are shared across every file, so a library task can depend on a task your Gorunfile
+  defines, and gorun reports a missing one when the file loads. But then every Gorunfile that uses
+  the library has to define a task with exactly that name, and nothing says so. Put your own steps
+  around the library's in your Gorunfile instead:
+
+  ```toml
+  [servers]
+  tasks = ["prepare", "@lib-deploy"]   # your step, then the library's, in that order
+  ```
 - **Every run records what it used.** The run's history lists each git include with the ref asked
   for and the commit it ran, under **Task libraries** on its page in `gorun -web`, so an old run can
   always be traced to the exact commands.

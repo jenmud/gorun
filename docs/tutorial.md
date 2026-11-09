@@ -485,7 +485,9 @@ too. Instead of copying them, move them into a git repository of their own and i
    ```
 
    A library task's `cmd_file` is relative to the root of its repository, so `docker-install` keeps
-   `cmd_file = "scripts/docker-install.sh"`. Servers, groups and global `envvars` stay in your
+   `cmd_file = "scripts/docker-install.sh"`. Move a task's `depends_on` tasks into the library with
+   it, so the library works on its own; your Gorunfile adds its own steps around the library's
+   bundles in a server's `tasks` list. Servers, groups and global `envvars` stay in your
    Gorunfile, and secrets stay in the environment as before: a library may only hold tasks and
    bundles.
 

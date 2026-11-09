@@ -309,6 +309,9 @@ func (l *loader) finish() error {
 		c.Groups[name] = group
 	}
 
+	if l.git != nil {
+		c.Includes = l.git.sources
+	}
 	if err := c.validateLibrary(); err != nil {
 		return fmt.Errorf("error with loading config: %w", err)
 	}
@@ -318,7 +321,6 @@ func (l *loader) finish() error {
 		if err := l.git.writeLock(); err != nil {
 			return fmt.Errorf("error with loading config: %w", err)
 		}
-		c.Includes = l.git.sources
 	}
 
 	c.Servers = nil

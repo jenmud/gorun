@@ -270,3 +270,37 @@ func TestRunReportsItsIncludeCommits(t *testing.T) {
 		t.Errorf("include = %+v, want %s @ v1.0.0 -> %s", inc, repo.url(), commit)
 	}
 }
+
+// A library task that depends on a task nobody defines fails the load, naming where it came from,
+// even when nothing runs it.
+func TestGitIncludeWithAnUnknownDependencyFailsToLoad(t *testing.T) {
+	repo := newGitRepo(t, map[string]string{"tasks.toml": "[tasks.deploy]\ncmd = \"true\"\ndepends_on = [\"prepare\"]\n"})
+	dir := t.TempDir()
+	t.Setenv("GORUN_CACHE_DIR", t.TempDir())
+	_, err := loadGit(t, dir, map[string]string{"Gorunfile": "include = ['git::" + repo.url() + "//tasks.toml?ref=main']\n"}, false)
+	if err == nil {
+		t.Fatal("a library with an unknown dependency loaded")
+	}
+	for _, want := range []string{`task "deploy"`, `unknown task "prepare"`, repo.url() + "@main", "tasks.toml"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not mention %q", err, want)
+		}
+	}
+
+	// defining the task in the Gorunfile satisfies it
+	files := map[string]string{"Gorunfile": "include = ['git::" + repo.url() + "//tasks.toml?ref=main']\n\n[tasks.prepare]\ncmd = \"true\"\n"}
+	if _, err := loadGit(t, dir, files, false); err != nil {
+		t.Errorf("with prepare defined: %v", err)
+	}
+}
+
+// A local file's task with an unknown dependency names the file.
+func TestUnknownDependencyNamesTheFile(t *testing.T) {
+	_, err := loadTree(t, map[string]string{
+		"Gorunfile":  "include = [\"tasks.toml\"]\n",
+		"tasks.toml": "[tasks.deploy]\ncmd = \"true\"\ndepends_on = [\"prepare\"]\n",
+	})
+	if err == nil || !strings.Contains(err.Error(), `(in tasks.toml) depends on unknown task "prepare"`) {
+		t.Fatalf("error = %v", err)
+	}
+}

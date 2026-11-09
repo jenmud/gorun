@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 )
@@ -44,6 +45,16 @@ func (c *Config) validateLibrary() error {
 		}
 	}
 
+	// a dependency on a task no file defines is reported now, even when nothing runs the task yet:
+	// this is how a task library that expects a task you haven't written shows up
+	for _, name := range slices.Sorted(maps.Keys(c.Tasks)) {
+		for _, dep := range c.Tasks[name].DependsOn {
+			if _, ok := c.Tasks[dep]; !ok {
+				return fmt.Errorf("task %q%s depends on unknown task %q", name, c.definedIn(c.Tasks[name].Source), dep)
+			}
+		}
+	}
+
 	for _, name := range slices.Sorted(maps.Keys(c.Bundles)) {
 		if strings.HasPrefix(name, BundlePrefix) {
 			return fmt.Errorf("bundle %q: write the name without %q; task lists refer to it as %q", name, BundlePrefix, BundlePrefix+strings.TrimPrefix(name, BundlePrefix))
@@ -66,6 +77,25 @@ func (c *Config) validateLibrary() error {
 	}
 
 	return nil
+}
+
+// definedIn says where something was defined, for error messages: " (from <repository>@<ref>,
+// <file>)" for a git include, " (in <file>)" for a local file, or "" when it isn't known.
+func (c *Config) definedIn(source string) string {
+	if source == "" {
+		return ""
+	}
+	for _, inc := range c.Includes {
+		if rel, err := filepath.Rel(inc.Dir, source); err == nil && !strings.HasPrefix(rel, "..") {
+			return fmt.Sprintf(" (from %s@%s, %s)", inc.Source, inc.Ref, filepath.ToSlash(rel))
+		}
+	}
+	if c.Path != "" {
+		if rel, err := filepath.Rel(filepath.Dir(c.Path), source); err == nil && !strings.HasPrefix(rel, "..") {
+			source = rel
+		}
+	}
+	return " (in " + filepath.ToSlash(source) + ")"
 }
 
 // ExpandTaskRefs turns a task list into task names: "@<bundle>" entries are replaced by

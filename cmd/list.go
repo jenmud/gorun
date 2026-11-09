@@ -152,15 +152,25 @@ func printBundles(w io.Writer, cfg *gorun.Config) {
 func taskDependents(cfg *gorun.Config, shown map[string]bool) ([]string, map[string][]string) {
 	children := map[string][]string{}
 	roots := []string{}
+	listed := func(name string) bool {
+		_, ok := cfg.Tasks[name]
+		return ok && (shown == nil || shown[name])
+	}
 	for name := range cfg.Tasks {
-		if shown != nil && !shown[name] {
+		if !listed(name) {
 			continue
 		}
-		if len(cfg.Tasks[name].DependsOn) == 0 {
-			roots = append(roots, name)
-		}
+		// a task hangs under the dependencies that are listed; with none, it starts its own branch,
+		// so it can't vanish from the tree
+		under := 0
 		for _, dep := range cfg.Tasks[name].DependsOn {
-			children[dep] = append(children[dep], name)
+			if listed(dep) {
+				children[dep] = append(children[dep], name)
+				under++
+			}
+		}
+		if under == 0 {
+			roots = append(roots, name)
 		}
 	}
 	sort.Strings(roots)

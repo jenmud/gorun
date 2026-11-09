@@ -92,12 +92,14 @@ for _, st := range s.Status() {
 The state is in memory. Pauses and skips are lost when the process exits, and runs that fell
 due while the process was down are not caught up.
 
-## Planned
+## Web UI
 
-- **Skipped runs in history.** Skipped and missed occurrences are events today, but the
-  history view does not show them yet.
-- **Controls in the web UI.** The schedules page lists schedules and their next runs, with a
-  time zone picker. Pause, resume and skip buttons are not on it yet.
+The **Schedules** page lists each schedule with its status and next run, and has pause, resume
+and skip buttons for the loaded file. Next runs show in the browser's zone, with a picker to
+change it; the choice lasts for the browser session. The page refreshes every 30 seconds.
+
+Skipped and missed occurrences are written to **History** as runs whose title says what
+happened. Runs that start are recorded by their own events, so they are not duplicated.
 
 ## Validation
 

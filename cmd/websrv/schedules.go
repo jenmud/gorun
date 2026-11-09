@@ -1,8 +1,12 @@
 package websrv
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net/http"
+	"net/url"
+	"os"
 	"time"
 
 	"github.com/jenmud/gorun"
@@ -11,19 +15,71 @@ import (
 
 // schedulesPage lists the loaded Gorunfile's schedules with their status and next run. Next
 // runs are sent as UTC instants; the page shows them in the viewer's zone.
-func (a *app) schedulesPage(w http.ResponseWriter, _ *http.Request) {
+func (a *app) schedulesPage(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	cfg := a.cfg
 	s := a.sched
 	a.mu.Unlock()
 
-	d := ui.SchedulesPageData{}
+	d := ui.SchedulesPageData{Error: r.URL.Query().Get("error")}
 	if cfg != nil {
 		d.Loaded, d.Path = true, cfg.Path
 		d.Running = s != nil
 		d.Rows = scheduleRows(cfg, s, time.Now())
 	}
 	a.page(w, "Schedules", "schedules", ui.SchedulesPage(d))
+}
+
+// schedulePause, scheduleResume and scheduleSkip are the POST actions on the schedules page.
+func (a *app) schedulePause(w http.ResponseWriter, r *http.Request) {
+	a.scheduleControl(w, r, (*gorun.Scheduler).Pause)
+}
+
+func (a *app) scheduleResume(w http.ResponseWriter, r *http.Request) {
+	a.scheduleControl(w, r, (*gorun.Scheduler).Resume)
+}
+
+func (a *app) scheduleSkip(w http.ResponseWriter, r *http.Request) {
+	a.scheduleControl(w, r, (*gorun.Scheduler).Skip)
+}
+
+// scheduleControl applies one action to the named schedule, then returns to the page. A
+// failure comes back as an error banner rather than an error page.
+func (a *app) scheduleControl(w http.ResponseWriter, r *http.Request, op func(*gorun.Scheduler, string) error) {
+	a.mu.Lock()
+	s := a.sched
+	a.mu.Unlock()
+
+	var err error
+	if s == nil {
+		err = fmt.Errorf("the scheduler is not running")
+	} else {
+		err = op(s, r.FormValue("schedule"))
+	}
+	target := "/schedules"
+	if err != nil {
+		target += "?error=" + url.QueryEscape(err.Error())
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
+}
+
+// recordScheduleEvent writes skipped and missed occurrences to history. Runs that start are
+// recorded by the run's own events, so they are not written here.
+func (a *app) recordScheduleEvent(ev gorun.ScheduleEvent) {
+	if a.store == nil || (ev.Kind != gorun.ScheduleSkipped && ev.Kind != gorun.ScheduleMissed) {
+		return
+	}
+	ctx := context.Background()
+	host, _ := os.Hostname()
+	id := fmt.Sprintf("schedule-%s-%d", ev.Schedule, time.Now().UnixNano())
+	title := fmt.Sprintf("schedule %s %s: %s", ev.Schedule, ev.Kind, ev.Reason)
+	if err := a.store.CreateRun(ctx, id, title, host, os.Getpid(), ev.At); err != nil {
+		log.Printf("gorun web: record schedule %s: %v", ev.Schedule, err)
+		return
+	}
+	if err := a.store.FinishRun(ctx, id, true, 0, 0, 0, 0, ev.At); err != nil {
+		log.Printf("gorun web: finish schedule %s: %v", ev.Schedule, err)
+	}
 }
 
 // scheduleRows builds one row per schedule. A running scheduler supplies the live status;
@@ -51,6 +107,10 @@ func scheduleRows(cfg *gorun.Config, s *gorun.Scheduler, now time.Time) []ui.Sch
 			next, found = st.Next, !st.Next.IsZero()
 			row.Status = liveStatus(st)
 			row.Missed = st.Missed
+			row.Paused = st.Paused
+			row.SkipPending = st.SkipNext
+			row.CanSkip = found && !st.SkipNext
+			row.Finished = !found
 		} else if n, ok, err := sc.Next(now); err == nil && ok {
 			next, found = n, true
 		}

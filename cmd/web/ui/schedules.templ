@@ -4,7 +4,7 @@ templ SchedulesPage(d SchedulesPageData) {
 	<div class="mb-6 flex flex-wrap items-end justify-between gap-4">
 		<div class="max-w-2xl">
 			<h1 class="text-xl font-semibold text-zinc-100">Schedules</h1>
-			<p class="mt-1 text-sm text-zinc-400">Each schedule runs its target on every server when it comes due. Next runs show in the time zone picked here, which starts as your browser's.</p>
+			<p class="mt-1 text-sm text-zinc-400">Each schedule runs its target on every server when it comes due. Next runs show in the time zone picked here, which starts as your browser's. Skipped and missed runs are recorded in History.</p>
 		</div>
 		if d.Loaded && len(d.Rows) > 0 {
 			<label class="flex items-center gap-2 text-sm text-zinc-400">
@@ -13,61 +13,87 @@ templ SchedulesPage(d SchedulesPageData) {
 			</label>
 		}
 	</div>
+	if d.Error != "" {
+		<p class="mb-4 rounded-lg border border-red-900 bg-red-950/40 px-4 py-2 text-sm text-red-300">{ d.Error }</p>
+	}
 	if !d.Loaded {
 		@notLoaded()
 	} else if len(d.Rows) == 0 {
 		<p class="text-sm text-zinc-500">This Gorunfile defines no schedules. Add a <span class="font-mono">[[schedule]]</span> table to see it here.</p>
 	} else {
-		if !d.Running {
-			<p class="mb-4 rounded-lg border border-amber-900 bg-amber-950/40 px-4 py-2 text-sm text-amber-300">The scheduler is not running, so these schedules will not fire from this web server.</p>
-		}
-		<div class="overflow-x-auto rounded-lg border border-zinc-800">
-			<table class="w-full text-left text-sm">
-				<thead class="bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
-					<tr>
-						<th class="px-4 py-2 font-medium">Schedule</th>
-						<th class="px-4 py-2 font-medium">Target</th>
-						<th class="px-4 py-2 font-medium">Timing</th>
-						<th class="px-4 py-2 font-medium">Status</th>
-						<th class="px-4 py-2 font-medium">Next run</th>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-zinc-800">
-					for _, r := range d.Rows {
-						<tr class="align-top">
-							<td class="px-4 py-2">
-								<div class="font-medium text-zinc-100">{ r.Name }</div>
-								if r.Description != "" {
-									<div class="text-xs text-zinc-500">{ r.Description }</div>
-								}
-							</td>
-							<td class="px-4 py-2 font-mono text-xs text-zinc-300">{ r.Target }</td>
-							<td class="px-4 py-2">
-								<div class="font-mono text-xs text-zinc-300">{ r.When }</div>
-								<div class="text-xs text-zinc-500">written in { r.Zone }</div>
-							</td>
-							<td class="px-4 py-2 text-zinc-300">
-								{ r.Status }
-								if r.Missed > 0 {
-									<span class="text-xs text-amber-400">({ itoa(r.Missed) } missed)</span>
-								}
-							</td>
-							<td class="px-4 py-2 whitespace-nowrap">
-								if r.NextUTC != "" {
-									<time data-utc={ r.NextUTC } datetime={ r.NextUTC } class="font-mono text-xs text-zinc-100">{ r.NextText }</time>
-								} else {
-									<span class="text-zinc-500">none left</span>
-								}
-							</td>
+		<div id="schedules-body">
+			if !d.Running {
+				<p class="mb-4 rounded-lg border border-amber-900 bg-amber-950/40 px-4 py-2 text-sm text-amber-300">The scheduler is not running, so these schedules will not fire from this web server.</p>
+			}
+			<div class="overflow-x-auto rounded-lg border border-zinc-800">
+				<table class="w-full text-left text-sm">
+					<thead class="bg-zinc-900 text-xs uppercase tracking-wide text-zinc-500">
+						<tr>
+							<th class="px-4 py-2 font-medium">Schedule</th>
+							<th class="px-4 py-2 font-medium">Target</th>
+							<th class="px-4 py-2 font-medium">Timing</th>
+							<th class="px-4 py-2 font-medium">Status</th>
+							<th class="px-4 py-2 font-medium">Next run</th>
+							<th class="px-4 py-2 font-medium">Actions</th>
 						</tr>
-					}
-				</tbody>
-			</table>
+					</thead>
+					<tbody class="divide-y divide-zinc-800">
+						for _, r := range d.Rows {
+							<tr class="align-top">
+								<td class="px-4 py-2">
+									<div class="font-medium text-zinc-100">{ r.Name }</div>
+									if r.Description != "" {
+										<div class="text-xs text-zinc-500">{ r.Description }</div>
+									}
+								</td>
+								<td class="px-4 py-2 font-mono text-xs text-zinc-300">{ r.Target }</td>
+								<td class="px-4 py-2">
+									<div class="font-mono text-xs text-zinc-300">{ r.When }</div>
+									<div class="text-xs text-zinc-500">written in { r.Zone }</div>
+								</td>
+								<td class="px-4 py-2 text-zinc-300">
+									{ r.Status }
+									if r.Missed > 0 {
+										<span class="text-xs text-amber-400">({ itoa(r.Missed) } missed)</span>
+									}
+								</td>
+								<td class="px-4 py-2 whitespace-nowrap">
+									if r.NextUTC != "" {
+										<time data-utc={ r.NextUTC } datetime={ r.NextUTC } class="font-mono text-xs text-zinc-100">{ r.NextText }</time>
+									} else {
+										<span class="text-zinc-500">none left</span>
+									}
+								</td>
+								<td class="px-4 py-2 whitespace-nowrap">
+									if d.Running && !r.Finished {
+										<div class="flex flex-wrap gap-2">
+											if r.Paused {
+												@scheduleButton("/schedules/resume", r.Name, "Resume")
+											} else {
+												@scheduleButton("/schedules/pause", r.Name, "Pause")
+											}
+											if r.CanSkip {
+												@scheduleButton("/schedules/skip", r.Name, "Skip next run")
+											} else if r.SkipPending {
+												<span class="px-2 py-1 text-xs text-zinc-500">next run skipped</span>
+											}
+										</div>
+									} else {
+										<span class="text-xs text-zinc-600">none</span>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<p class="mt-2 text-xs text-zinc-600">Refreshes every 30 seconds.</p>
 		</div>
 		<script>
 (function () {
 	var sel = document.getElementById('tz-picker');
-	if (!sel) { return; }
+	var body = document.getElementById('schedules-body');
+	if (!sel || !body) { return; }
 	var browser = 'UTC';
 	try { browser = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) {}
 	var zones = (typeof Intl.supportedValuesOf === 'function') ? Intl.supportedValuesOf('timeZone').slice() : [];
@@ -79,9 +105,15 @@ templ SchedulesPage(d SchedulesPageData) {
 		o.textContent = z;
 		sel.appendChild(o);
 	});
-	sel.value = browser;
 
-	// render shows each instant in the zone, with its zone name, and leaves the UTC text if the zone is unknown
+	// The chosen zone lasts for the browser session, so an action's reload keeps it. Without
+	// storage it falls back to the browser's zone.
+	var key = 'gorunScheduleZone';
+	var saved = null;
+	try { saved = sessionStorage.getItem(key); } catch (e) {}
+	sel.value = (saved && zones.indexOf(saved) !== -1) ? saved : browser;
+
+	// render shows each instant in the zone, with its zone name; it keeps the UTC text if the zone is unknown
 	function render(zone) {
 		document.querySelectorAll('time[data-utc]').forEach(function (el) {
 			var when = new Date(el.getAttribute('data-utc'));
@@ -93,9 +125,32 @@ templ SchedulesPage(d SchedulesPageData) {
 			} catch (e) {}
 		});
 	}
-	sel.addEventListener('change', function () { render(sel.value); });
+	sel.addEventListener('change', function () {
+		try { sessionStorage.setItem(key, sel.value); } catch (e) {}
+		render(sel.value);
+	});
 	render(sel.value);
+
+	// Refresh the table in place so the picker and the page position stay put.
+	function refresh() {
+		fetch(location.pathname, { cache: 'no-store' })
+			.then(function (r) { return r.ok ? r.text() : null; })
+			.then(function (html) {
+				if (!html) { return; }
+				var fresh = new DOMParser().parseFromString(html, 'text/html').getElementById('schedules-body');
+				if (fresh) { body.innerHTML = fresh.innerHTML; render(sel.value); }
+			})
+			.catch(function () {});
+	}
+	setInterval(refresh, 30000);
 })();
 		</script>
 	}
+}
+
+templ scheduleButton(action string, name string, label string) {
+	<form method="post" action={ templ.SafeURL(action) } class="inline">
+		<input type="hidden" name="schedule" value={ name }/>
+		<button type="submit" class="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-200 hover:border-accent hover:text-white">{ label }</button>
+	</form>
 }

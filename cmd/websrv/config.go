@@ -60,6 +60,7 @@ func (a *app) startScheduler(cfg *gorun.Config) {
 	}
 	s := gorun.NewScheduler(cfg, func(ev gorun.ScheduleEvent) {
 		slog.Info("schedule", "schedule", ev.Schedule, "kind", ev.Kind, "at", ev.At, "reason", ev.Reason)
+		a.recordScheduleEvent(ev)
 	})
 	if err := s.Start(context.Background()); err != nil {
 		log.Printf("gorun web: scheduler: %v", err)

@@ -5,17 +5,19 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/jenmud/gorun/internal/store"
 )
 
 func TestDashboardPlanCarriesTaskMetadata(t *testing.T) {
 	var state DashboardState
-	state.Apply(Event{Type: "process_started", GorunUUID: "run-1", Title: "demo"})
-	state.Apply(Event{
+	state.Apply(store.Event{Type: "process_started", GorunUUID: "run-1", Title: "demo"})
+	state.Apply(store.Event{
 		Type:      "plan",
 		GorunUUID: "run-1",
 		Server:    "web-1",
 		Tasks:     []string{"deploy"},
-		TaskMeta: []TaskMeta{{
+		TaskMeta: []store.TaskMeta{{
 			Name:        "deploy",
 			Description: "Deploy the app",
 			Details:     "Replaces the running binary.",
@@ -52,14 +54,14 @@ func TestDashboardPlanCarriesTaskMetadata(t *testing.T) {
 
 func TestDashboardShowsAttemptProgress(t *testing.T) {
 	var state DashboardState
-	state.Apply(Event{Type: "process_started", GorunUUID: "run-2", Title: "demo"})
-	state.Apply(Event{
+	state.Apply(store.Event{Type: "process_started", GorunUUID: "run-2", Title: "demo"})
+	state.Apply(store.Event{
 		Type:      "plan",
 		GorunUUID: "run-2",
 		Server:    "web-1",
 		Tasks:     []string{"flaky"},
 	})
-	state.Apply(Event{
+	state.Apply(store.Event{
 		Type:      "task",
 		GorunUUID: "run-2",
 		Server:    "web-1",
@@ -85,10 +87,10 @@ func TestDashboardShowsAttemptProgress(t *testing.T) {
 
 func TestDashboardShowsAServerThatCouldNotRun(t *testing.T) {
 	var state DashboardState
-	state.Apply(Event{Type: "process_started", GorunUUID: "run-1", Title: "demo"})
-	state.Apply(Event{Type: "plan", GorunUUID: "run-1", Server: "web-1", Tasks: []string{"a", "b"}})
-	state.Apply(Event{Type: "server_error", GorunUUID: "run-1", Server: "web-1", Error: "dial tcp 10.0.0.1:22: connection refused"})
-	state.Apply(Event{Type: "process_finished", GorunUUID: "run-1", Failed: 2})
+	state.Apply(store.Event{Type: "process_started", GorunUUID: "run-1", Title: "demo"})
+	state.Apply(store.Event{Type: "plan", GorunUUID: "run-1", Server: "web-1", Tasks: []string{"a", "b"}})
+	state.Apply(store.Event{Type: "server_error", GorunUUID: "run-1", Server: "web-1", Error: "dial tcp 10.0.0.1:22: connection refused"})
+	state.Apply(store.Event{Type: "process_finished", GorunUUID: "run-1", Failed: 2})
 
 	p := state.Processes["run-1"]
 	if !processHasFailed(p) || serversFailed(p) != 1 {
@@ -114,9 +116,9 @@ func TestDashboardShowsAServerThatCouldNotRun(t *testing.T) {
 
 func TestFinishedRunListsSlowestTaskFirst(t *testing.T) {
 	var state DashboardState
-	state.Apply(Event{Type: "plan", GorunUUID: "r", Server: "s", Tasks: []string{"fast", "slow", "mid"}})
+	state.Apply(store.Event{Type: "plan", GorunUUID: "r", Server: "s", Tasks: []string{"fast", "slow", "mid"}})
 	for name, d := range map[string]int64{"fast": 1, "slow": 9, "mid": 5} {
-		state.Apply(Event{Type: "task", GorunUUID: "r", Server: "s", Task: name, State: 2, Duration: d})
+		state.Apply(store.Event{Type: "task", GorunUUID: "r", Server: "s", Task: name, State: 2, Duration: d})
 	}
 	p := state.Processes["r"]
 	srv := p.Servers["s"]
@@ -124,7 +126,7 @@ func TestFinishedRunListsSlowestTaskFirst(t *testing.T) {
 	if got := sortedTasks(p, srv)[0].Name; got != "fast" {
 		t.Errorf("while running the first task = %s, want plan order (fast)", got)
 	}
-	state.Apply(Event{Type: "process_finished", GorunUUID: "r"})
+	state.Apply(store.Event{Type: "process_finished", GorunUUID: "r"})
 	var names []string
 	for _, task := range sortedTasks(p, srv) {
 		names = append(names, task.Name)
@@ -136,10 +138,10 @@ func TestFinishedRunListsSlowestTaskFirst(t *testing.T) {
 
 func TestDashboardShowsCopyProgress(t *testing.T) {
 	var state DashboardState
-	state.Apply(Event{Type: "process_started", GorunUUID: "run-3", Title: "demo"})
-	state.Apply(Event{Type: "plan", GorunUUID: "run-3", Server: "web-1", Tasks: []string{"upload"}})
-	state.Apply(Event{Type: "task", GorunUUID: "run-3", Server: "web-1", Task: "upload", State: 1})
-	state.Apply(Event{
+	state.Apply(store.Event{Type: "process_started", GorunUUID: "run-3", Title: "demo"})
+	state.Apply(store.Event{Type: "plan", GorunUUID: "run-3", Server: "web-1", Tasks: []string{"upload"}})
+	state.Apply(store.Event{Type: "task", GorunUUID: "run-3", Server: "web-1", Task: "upload", State: 1})
+	state.Apply(store.Event{
 		Type: "copy_progress", GorunUUID: "run-3", Server: "web-1", Task: "upload",
 		File: "/srv/app/release.tar.gz", Bytes: 440 << 20, Total: 1 << 30, Percent: 42.97, BytesPerSecond: 12 << 20,
 	})
@@ -155,7 +157,7 @@ func TestDashboardShowsCopyProgress(t *testing.T) {
 		}
 	}
 
-	state.Apply(Event{Type: "task", GorunUUID: "run-3", Server: "web-1", Task: "upload", State: 2})
+	state.Apply(store.Event{Type: "task", GorunUUID: "run-3", Server: "web-1", Task: "upload", State: 2})
 	if state.Processes["run-3"].Servers["web-1"].Tasks["upload"].Copy != nil {
 		t.Error("a finished task still shows its copy")
 	}

@@ -4,6 +4,8 @@ import (
 	"cmp"
 	"slices"
 	"strconv"
+
+	"github.com/jenmud/gorun/internal/store"
 )
 
 type TaskInfo struct {
@@ -89,7 +91,7 @@ func (s *DashboardState) ClearFinished() {
 	s.ProcessOrder = filtered
 }
 
-func (s *DashboardState) Apply(ev Event) {
+func (s *DashboardState) Apply(ev store.Event) {
 	uuid := ev.GorunUUID
 	if uuid == "" {
 		uuid = "unknown"
@@ -114,7 +116,7 @@ func (s *DashboardState) Apply(ev Event) {
 		}
 		srv := p.Servers[ev.Server]
 		srv.Address = ev.Address
-		meta := make(map[string]TaskMeta, len(ev.TaskMeta))
+		meta := make(map[string]store.TaskMeta, len(ev.TaskMeta))
 		for _, m := range ev.TaskMeta {
 			meta[m.Name] = m
 		}

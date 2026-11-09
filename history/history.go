@@ -20,7 +20,6 @@ import (
 
 	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/internal/envvars"
-	inats "github.com/jenmud/gorun/internal/nats"
 	"github.com/jenmud/gorun/internal/store"
 )
 
@@ -95,11 +94,11 @@ func (s *Store) Record(event any) {
 	if err != nil {
 		return
 	}
-	var ev inats.Event
+	var ev store.Event
 	if err := json.Unmarshal(data, &ev); err != nil {
 		return
 	}
-	inats.UpdateDatabase(ctx, s.st, &ev)
+	s.st.Apply(ctx, &ev)
 }
 
 // Runs lists every saved run, newest first.

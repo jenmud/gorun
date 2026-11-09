@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -20,11 +20,27 @@ import (
 	"github.com/a-h/templ"
 	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/cmd/web/ui"
+	"github.com/jenmud/gorun/history"
 	"github.com/jenmud/gorun/internal/envvars"
 	inats "github.com/jenmud/gorun/internal/nats"
 	"github.com/jenmud/gorun/internal/natsserver"
 	"github.com/jenmud/gorun/internal/store"
 	"github.com/nats-io/nats.go"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
+)
+
+// Metrics for the events the service receives, from NATS or from its own scheduled runs.
+var (
+	meter = otel.Meter("gorun")
+
+	eventTypes, _ = meter.Int64Counter("gorun.nats.events.by_type",
+		metric.WithDescription("Number of events by type"), metric.WithUnit("{event}"))
+	eventDuration, _ = meter.Float64Histogram("gorun.nats.event.processing.duration",
+		metric.WithDescription("Time taken to apply an event"), metric.WithUnit("s"))
+	unmarshalErrors, _ = meter.Int64Counter("gorun.nats.message.unmarshal.errors",
+		metric.WithDescription("Number of events that could not be read"), metric.WithUnit("{error}"))
 )
 
 // app holds the state the handlers share. Each piece is guarded by mu.
@@ -174,26 +190,14 @@ func topicName() string {
 
 // openStore opens the history database, or returns nil so the UI still works without it.
 func openStore() *store.Store {
-	dbPath := envvars.Get("GORUN_DB_PATH")
-	if dbPath == "" {
-		if home, err := os.UserHomeDir(); err == nil {
-			dir := home + "/.gorun"
-			_ = os.MkdirAll(dir, 0o755)
-			dbPath = dir + "/gorun.db"
-		} else {
-			dbPath = "gorun.db"
-		}
-	} else if strings.HasPrefix(dbPath, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			dbPath = home + dbPath[1:]
-		}
-	}
-	st, err := store.Open(dbPath)
+	path := history.DefaultPath()
+	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	st, err := store.Open(path)
 	if err != nil {
 		log.Printf("gorun web: history disabled: %v", err)
 		return nil
 	}
-	log.Printf("gorun web: history at %s", dbPath)
+	log.Printf("gorun web: history at %s", path)
 	return st
 }
 
@@ -219,13 +223,18 @@ var _ gorun.Recorder = (*app)(nil)
 // change to every open page. NATS delivers events this way; so do scheduled runs when NATS is
 // down, so their history and live view don't depend on NATS.
 func (a *app) applyEvent(data []byte) {
-	var ev inats.Event
+	start := time.Now()
+	var ev store.Event
 	if err := json.Unmarshal(data, &ev); err != nil {
+		unmarshalErrors.Add(context.Background(), 1)
 		return
 	}
+	kind := metric.WithAttributes(attribute.String("type", ev.Type))
+	eventTypes.Add(context.Background(), 1, kind)
+	defer func() { eventDuration.Record(context.Background(), time.Since(start).Seconds(), kind) }()
 
 	a.mu.Lock()
-	a.dash.Apply(ev.UIEvent())
+	a.dash.Apply(ev)
 	a.mu.Unlock()
 
 	if ev.Type == "copy_progress" {
@@ -234,9 +243,7 @@ func (a *app) applyEvent(data []byte) {
 		return
 	}
 
-	if a.store != nil {
-		inats.UpdateDatabase(context.Background(), a.store, &ev)
-	}
+	a.store.Apply(context.Background(), &ev)
 	if ev.Type == "process_finished" {
 		a.pushStats(context.Background())
 	}

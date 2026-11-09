@@ -510,6 +510,7 @@ in the environment):
   GORUN_NATS_CLIENT_ALLOW_RECONNECT   default: true
   GORUN_NATS_CLIENT_RECONNECT_WAIT    default: nats default (e.g. 2s)
   GORUN_NATS_CLIENT_TIMEOUT           default: nats default (e.g. 5s)
+  GORUN_NATS_SERVER_CONFIG            default: none (NATS server config for the server -web starts)
 
 OpenTelemetry SDK variables (OTEL_*) are also honoured by the instrumented build.
 Exporters are disabled unless an OTLP endpoint or exporter is configured.

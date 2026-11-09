@@ -10,45 +10,13 @@
 
 ## Web UI
 
-`gorun -web Gorunfile` starts a web server on `GORUN_ADDRESS` (default `:8080`). The Gorunfile is
-optional; without it, load one on the Config page. It has these pages:
+`gorun -web Gorunfile` runs a web service with pages for the Run picker, tasks, bundles, schedules,
+history and config. It starts its own NATS server when none is running, and it fires the
+[schedules](schedules.md) while it runs. The full guide, with examples and walkthroughs, is in
+[The web UI](web.md).
 
-- **Run** ticks servers, then tasks or bundles (not both), as the picker does, and starts them. A
-  bundle replaces each server's task list, like `-bundles`. Stats and a live dashboard update as
-  runs go; each run, server and task starts collapsed and stays as you leave it. A server that
-  can't be reached shows its error, and its tasks read "not run". The **Recent runs** bars show
-  the run id on hover and open that run on click. **Stop** cancels a run started from the page.
-  Runs read the file on disk.
-- **Tasks** lists every task with its command, settings, dependencies, the bundles that include
-  it and the servers that run it, slowest first by average time in recent runs.
-  An **Add a task** form saves a new task to its file straight away, and each task has an Edit
-  link for its command, description and flags.
-- **Bundles** lists each bundle, its tasks in order and what it expands to, with a link to run it.
-  An **Add a bundle** form and an Edit link work the same way.
-- **Schedules** lists each `[[schedule]]` with its target, timing, status and next run. Next runs
-  are UTC instants shown in your browser's time zone; the picker above the table changes the zone
-  and starts on the browser's. Edit changes a schedule in its file. Pause, resume and skip buttons act on the scheduler in this web
-  server, and skipped or missed runs appear in History. A banner says so when the scheduler isn't
-  running.
-  An **Add a schedule** form is on the page too.
-- **History** lists saved runs. Open one for each server's tasks, slowest first; open a task for
-  its status, exit code, duration, command, stdout, stderr, env vars and vars. A server that
-  couldn't run shows why, and its planned tasks read "not run". Run and server env vars and vars
-  show above them. **Trim history** keeps the 10 newest.
-- **Config** adds, removes, loads and saves servers, groups, tasks, bundles and schedules. Load a Gorunfile by
-  browsing the folders of the machine running gorun, or type its path. Changes wait until you
-  press **Save**, which writes each one into the file it came from.
-
-Runs and live updates need [NATS](#events-nats). The pages use [templ](https://templ.guide) and
-[Datastar](https://data-star.dev), with live updates over server-sent events.
-
-> **No login.** The web UI listens on all interfaces, so anyone who can reach the port can run
-> tasks, browse its folders and edit the Gorunfile. Keep it on a trusted network, or bind it to
-> `127.0.0.1:8080` and reach it over an SSH tunnel.
-
-Every task and bundle name in the web UI is a link to its card: a schedule's target, a bundle's
-tasks, a task's dependencies, run and history task names. The link opens that card and scrolls to
-it.
+> **No login.** The web UI listens on all interfaces by default. Keep it on a trusted network, or
+> bind it to `127.0.0.1` and reach it over an SSH tunnel.
 
 ## Logs and OpenTelemetry
 

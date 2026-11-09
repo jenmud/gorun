@@ -157,6 +157,7 @@ that draws its own progress bars. The events and the rest of the API are in
 | [The Gorunfile](docs/gorunfile.md) | understand every option: tasks, copies, secrets, servers, bundles, groups |
 | [Schedules](docs/schedules.md) | run a task or bundle on a cron pattern or at a set time, in any time zone |
 | [Running gorun](docs/running.md) | use the picker, the live view, filters, CI mode and the history |
+| [The web UI](docs/web.md) | use `gorun -web`: run, browse, add and edit tasks, bundles and schedules, and read the history |
 | [Integrations](docs/integrations.md) | use the web UI, OpenTelemetry, NATS events, the Go library and shell completion |
 | [Reference](docs/reference.md) | look up any flag, Gorunfile key, environment variable or shortcut |
 | [Recipes](recipes/README.md) | try bigger examples against a lab of a hundred SSH servers |

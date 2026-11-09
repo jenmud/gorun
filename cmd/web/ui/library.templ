@@ -17,17 +17,80 @@ templ TasksPage(d TasksPageData) {
 			<input type="search" placeholder="Filter tasks" oninput="gorunFilter(this, 'task-cards')" class={ inputClass() + " max-w-xs" }/>
 		}
 	</div>
+	@pageNotes(d.Notice, d.Error)
+	if d.EditingName != "" {
+		@taskEditPanel(d)
+	}
 	if !d.Loaded {
 		@notLoaded()
-	} else if len(d.Tasks) == 0 {
-		<p class="text-sm text-zinc-500">This Gorunfile defines no tasks.</p>
 	} else {
-		<ul id="task-cards" class="space-y-2">
-			for _, t := range d.Tasks {
-				@taskCard(t)
-			}
-		</ul>
+		@taskAddForm(d.Files)
+		if len(d.Tasks) == 0 {
+			<p class="text-sm text-zinc-500">This Gorunfile defines no tasks.</p>
+		} else {
+			<ul id="task-cards" class="space-y-2">
+				for _, t := range d.Tasks {
+					@taskCard(t)
+				}
+			</ul>
+		}
 	}
+}
+
+// pageNotes shows the outcome of a form on the page: a confirmation, or what went wrong.
+templ pageNotes(notice string, errMsg string) {
+	if notice != "" {
+		<p class="mb-4 rounded-lg border border-emerald-900 bg-emerald-950/40 px-4 py-2 text-sm text-emerald-300">{ notice }</p>
+	}
+	if errMsg != "" {
+		<p class="mb-4 rounded-lg border border-red-900 bg-red-950/40 px-4 py-2 text-sm text-red-300">{ errMsg }</p>
+	}
+}
+
+templ taskAddForm(files []FileOption) {
+	<details class="group/add mb-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-zinc-100"><span class="inline-block text-zinc-500 transition group-open/add:rotate-90">▸</span>Add a task</summary>
+		<p class="mt-1 text-xs text-zinc-500">The task is saved to its file straight away.</p>
+		<form method="post" action="/tasks/add" class="mt-3 grid gap-2 sm:grid-cols-2">
+			<input name="name" required placeholder="name, e.g. restart-web" class={ inputClass() }/>
+			<input name="description" placeholder="description" class={ inputClass() }/>
+			<textarea name="cmd" required rows="3" placeholder="command, e.g. systemctl restart web" class={ inputClass() + " font-mono sm:col-span-2" }></textarea>
+			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" class="accent-violet-600"/> run with sudo</label>
+			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" class="accent-violet-600"/> run only on local servers</label>
+			<div class="sm:col-span-2">
+				@fileSelect(files)
+			</div>
+			<div class="sm:col-span-2">
+				<button class={ addButtonClass() }>Add task</button>
+			</div>
+		</form>
+	</details>
+}
+
+templ taskEditPanel(d TasksPageData) {
+	<section class="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+		<h2 class="text-lg font-semibold text-zinc-100">Edit task <span class="font-mono">{ d.EditingName }</span></h2>
+		<p class="mt-1 text-xs text-zinc-500">The change is written to the file it came from straight away. Settings not shown here are kept.</p>
+		<form method="post" action="/tasks/edit" class="mt-4 space-y-3">
+			<input type="hidden" name="name" value={ d.EditingName }/>
+			<label class="block text-xs text-zinc-400">
+				Command
+				<textarea name="cmd" rows="4" placeholder="leave empty if the task uses cmd_file, a template or only copies files" class={ inputClass() + " font-mono" }>{ d.Edit.Cmd }</textarea>
+			</label>
+			@editField("Description", "description", d.Edit.Description, "")
+			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" checked?={ d.Edit.Sudo } class="accent-violet-600"/> run with sudo</label>
+			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" checked?={ d.Edit.Local } class="accent-violet-600"/> run only on local servers</label>
+			<div class="flex gap-2">
+				<button type="submit" class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-violet-600">Save task</button>
+				<a href="/tasks" class="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800">Cancel</a>
+			</div>
+		</form>
+	</section>
+}
+
+// pageEditPath opens a page with one of its items in the edit panel.
+templ pageEditLink(page string, name string) {
+	<a href={ pageEditPath(page, name) } class="rounded-lg px-2.5 py-1 text-xs text-accent transition hover:bg-violet-950/40">Edit</a>
 }
 
 templ taskCard(t TaskCard) {
@@ -50,6 +113,7 @@ templ taskCard(t TaskCard) {
 				if t.Details != "" {
 					<p class="text-sm text-zinc-300">{ t.Details }</p>
 				}
+				@pageEditLink("/tasks", t.Name)
 				<details class="group/cmd">
 					<summary class="flex cursor-pointer list-none items-center gap-2">
 						<span class="inline-block text-zinc-500 transition group-open/cmd:rotate-90">▸</span>
@@ -134,17 +198,63 @@ templ BundlesPage(d BundlesPageData) {
 			<input type="search" placeholder="Filter bundles" oninput="gorunFilter(this, 'bundle-cards')" class={ inputClass() + " max-w-xs" }/>
 		}
 	</div>
+	@pageNotes(d.Notice, d.Error)
+	if d.EditingName != "" {
+		@bundleEditPanel(d)
+	}
 	if !d.Loaded {
 		@notLoaded()
-	} else if len(d.Bundles) == 0 {
-		<p class="text-sm text-zinc-500">This Gorunfile defines no bundles.</p>
 	} else {
-		<ul id="bundle-cards" class="space-y-2">
-			for _, b := range d.Bundles {
-				@bundleCard(b)
-			}
-		</ul>
+		@bundleAddForm(d.Files, d.Targets)
+		if len(d.Bundles) == 0 {
+			<p class="text-sm text-zinc-500">This Gorunfile defines no bundles.</p>
+		} else {
+			<ul id="bundle-cards" class="space-y-2">
+				for _, b := range d.Bundles {
+					@bundleCard(b)
+				}
+			</ul>
+		}
 	}
+}
+
+templ bundleAddForm(files []FileOption, targets []string) {
+	<details class="group/add mb-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-zinc-100"><span class="inline-block text-zinc-500 transition group-open/add:rotate-90">▸</span>Add a bundle</summary>
+		<p class="mt-1 text-xs text-zinc-500">A named list of tasks. The bundle is saved to its file straight away.</p>
+		<form method="post" action="/bundles/add" class="mt-3 grid gap-2 sm:grid-cols-2">
+			<input name="name" required placeholder="name, e.g. baseline" class={ inputClass() }/>
+			<input name="description" placeholder="description" class={ inputClass() }/>
+			<input name="tasks" required list="bundle-targets" placeholder="tasks or @bundles, comma separated" class={ inputClass() + " sm:col-span-2" }/>
+			<datalist id="bundle-targets">
+				for _, t := range targets {
+					<option value={ t }></option>
+				}
+			</datalist>
+			<div class="sm:col-span-2">
+				@fileSelect(files)
+			</div>
+			<div class="sm:col-span-2">
+				<button class={ addButtonClass() }>Add bundle</button>
+			</div>
+		</form>
+	</details>
+}
+
+templ bundleEditPanel(d BundlesPageData) {
+	<section class="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
+		<h2 class="text-lg font-semibold text-zinc-100">Edit bundle <span class="font-mono">{ "@" + d.EditingName }</span></h2>
+		<p class="mt-1 text-xs text-zinc-500">The change is written to the file it came from straight away. Settings not shown here are kept.</p>
+		<form method="post" action="/bundles/edit" class="mt-4 space-y-3">
+			<input type="hidden" name="name" value={ d.EditingName }/>
+			@editField("Tasks", "tasks", d.Edit.Tasks, "tasks or @bundles, comma separated")
+			@editField("Description", "description", d.Edit.Description, "")
+			<div class="flex gap-2">
+				<button type="submit" class="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-violet-600">Save bundle</button>
+				<a href="/bundles" class="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 transition hover:bg-zinc-800">Cancel</a>
+			</div>
+		</form>
+	</section>
 }
 
 templ bundleCard(b BundleCard) {
@@ -159,6 +269,7 @@ templ bundleCard(b BundleCard) {
 				<span class="ml-auto text-xs text-zinc-400">{ itoa(len(b.Expanded)) } tasks</span>
 			</summary>
 			<div class="space-y-4 border-t border-zinc-800 px-4 py-4 text-xs">
+				@pageEditLink("/bundles", b.Name)
 				<details class="group/items">
 					<summary class="flex cursor-pointer list-none items-center gap-2">
 						<span class="inline-block text-zinc-500 transition group-open/items:rotate-90">▸</span>

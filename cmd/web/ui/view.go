@@ -356,6 +356,13 @@ type TasksPageData struct {
 	Tasks  []TaskCard
 	Path   string
 	Loaded bool
+	Notice string
+	Error  string
+
+	// the add form's file choices, and the task being edited, if any
+	Files       []FileOption
+	EditingName string
+	Edit        EditFields
 }
 
 // BundleItem is one entry of a bundle: a task, or another bundle.
@@ -381,4 +388,12 @@ type BundlesPageData struct {
 	Bundles []BundleCard
 	Path    string
 	Loaded  bool
+	Notice  string
+	Error   string
+
+	// the add form's file choices and task suggestions, and the bundle being edited, if any
+	Files       []FileOption
+	Targets     []string
+	EditingName string
+	Edit        EditFields
 }

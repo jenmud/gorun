@@ -56,10 +56,15 @@ func scheduleFromBody(name string, body map[string]any) gorun.Schedule {
 // checkChange reports why a schedule change would not load, against the loaded config. Other
 // kinds are checked when the file is saved and reloaded.
 func (a *app) checkChange(ch gorun.Change) error {
+	return checkChangeIn(a.cfg, ch)
+}
+
+// checkChangeIn is checkChange against a given config.
+func checkChangeIn(cfg *gorun.Config, ch gorun.Change) error {
 	if ch.Kind != kindSchedule {
 		return nil
 	}
-	return a.cfg.CheckSchedule(scheduleFromBody(ch.Name, ch.Body))
+	return cfg.CheckSchedule(scheduleFromBody(ch.Name, ch.Body))
 }
 
 // scheduleBodyIn returns the table of the named schedule in a file.

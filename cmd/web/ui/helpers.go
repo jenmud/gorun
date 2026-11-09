@@ -262,6 +262,11 @@ func browsePath(dir string) templ.SafeURL {
 	return templ.SafeURL("/config?" + url.Values{"dir": {dir}}.Encode() + "#load")
 }
 
+// pageEditPath opens a page with one of its items in its edit panel.
+func pageEditPath(page, name string) templ.SafeURL {
+	return templ.SafeURL(page + "?" + url.Values{"edit": {name}}.Encode())
+}
+
 // editPath opens the edit form for one entity on the config page.
 func editPath(kind, name string) templ.SafeURL {
 	return templ.SafeURL("/config/edit?" + url.Values{"kind": {kind}, "name": {name}}.Encode())

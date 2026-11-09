@@ -1,6 +1,7 @@
 package ui
 
-templ Layout(title string, active string, nats bool, body templ.Component) {
+// natsURL is the NATS server the page is connected to, or empty when it is not.
+templ Layout(title string, active string, natsURL string, body templ.Component) {
 	<!doctype html>
 	<html lang="en" class="dark">
 		<head>
@@ -81,10 +82,11 @@ function gorunSelect(formId, on) {
 						@navLink("/history", "History", active == "history")
 						@navLink("/config", "Config", active == "config")
 					</nav>
-					if nats {
-						<span class="ml-auto flex items-center gap-2 text-xs text-emerald-400">
+					if natsURL != "" {
+						<span class="ml-auto flex items-center gap-2 text-xs text-emerald-400" title="Connected to NATS">
 							<span class="h-2 w-2 animate-pulse rounded-full bg-emerald-400"></span>
 							live
+							<span class="font-mono text-zinc-400">{ natsURL }</span>
 						</span>
 					} else {
 						<span class="ml-auto text-xs text-amber-400">NATS is not connected: runs and live updates are off</span>

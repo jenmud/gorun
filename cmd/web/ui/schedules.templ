@@ -22,6 +22,9 @@ templ SchedulesPage(d SchedulesPageData) {
 	if d.EditingName != "" {
 		@scheduleEditPanel(d)
 	}
+	if d.Loaded {
+		@addScheduleForm("/schedules/add", d.Files, d.Targets)
+	}
 	if !d.Loaded {
 		@notLoaded()
 	} else if len(d.Rows) == 0 {

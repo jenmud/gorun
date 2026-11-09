@@ -28,10 +28,11 @@ import (
 
 // app holds the state the handlers share. Each piece is guarded by mu.
 type app struct {
-	store *store.Store
-	nc    *inats.Client
-	topic string
-	hub   *hub
+	saveMu sync.Mutex // one direct save from a page at a time, so edits can't overwrite each other
+	store  *store.Store
+	nc     *inats.Client
+	topic  string
+	hub    *hub
 
 	mu      sync.Mutex
 	dash    ui.DashboardState
@@ -132,7 +133,12 @@ func (a *app) routes() *http.ServeMux {
 	mux.HandleFunc("POST /schedules/pause", a.schedulePause)
 	mux.HandleFunc("POST /schedules/resume", a.scheduleResume)
 	mux.HandleFunc("POST /schedules/skip", a.scheduleSkip)
-	mux.HandleFunc("POST /schedules/edit", a.scheduleEdit)
+	mux.HandleFunc("POST /schedules/edit", a.editEntity(kindSchedule, "/schedules"))
+	mux.HandleFunc("POST /schedules/add", a.addEntity(kindSchedule, "/schedules"))
+	mux.HandleFunc("POST /tasks/add", a.addEntity(kindTask, "/tasks"))
+	mux.HandleFunc("POST /tasks/edit", a.editEntity(kindTask, "/tasks"))
+	mux.HandleFunc("POST /bundles/add", a.addEntity(kindBundle, "/bundles"))
+	mux.HandleFunc("POST /bundles/edit", a.editEntity(kindBundle, "/bundles"))
 	mux.HandleFunc("GET /history", a.historyPage)
 	mux.HandleFunc("GET /history/{id}", a.historyDetail)
 	mux.HandleFunc("GET /history/{id}/task", a.taskDetail)

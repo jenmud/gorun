@@ -26,23 +26,57 @@ func (a *app) tasksPage(w http.ResponseWriter, r *http.Request) {
 	a.mu.Unlock()
 
 	d := ui.TasksPageData{}
+	d.Notice, d.Error = notes(r)
 	if cfg != nil {
 		d.Loaded, d.Path = true, cfg.Path
 		d.Tasks = taskCards(cfg, a.taskAverages(r.Context()))
+		d.Files = fileOptions(cfg)
+		if name := r.URL.Query().Get("edit"); name != "" {
+			a.mu.Lock()
+			pending := slices.Clone(a.pending)
+			a.mu.Unlock()
+			if fields, msg := editPanel(cfg, pending, kindTask, name); msg != "" {
+				d.Error = msg
+			} else {
+				d.EditingName, d.Edit = name, fields
+			}
+		}
 	}
 	a.page(w, "Tasks", "tasks", ui.TasksPage(d))
 }
 
+// notes reads the message a form action left on the page: an error, or a confirmation.
+func notes(r *http.Request) (notice, errMsg string) {
+	msg, bad := flashFrom(r)
+	if bad {
+		return "", msg
+	}
+	return msg, r.URL.Query().Get("error")
+}
+
 // bundlesPage lists every bundle of the loaded file and the tasks it expands to.
-func (a *app) bundlesPage(w http.ResponseWriter, _ *http.Request) {
+func (a *app) bundlesPage(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	cfg := a.cfg
 	a.mu.Unlock()
 
 	d := ui.BundlesPageData{}
+	d.Notice, d.Error = notes(r)
 	if cfg != nil {
 		d.Loaded, d.Path = true, cfg.Path
 		d.Bundles = bundleCards(cfg)
+		d.Files = fileOptions(cfg)
+		d.Targets = targetNames(cfg)
+		if name := r.URL.Query().Get("edit"); name != "" {
+			a.mu.Lock()
+			pending := slices.Clone(a.pending)
+			a.mu.Unlock()
+			if fields, msg := editPanel(cfg, pending, kindBundle, name); msg != "" {
+				d.Error = msg
+			} else {
+				d.EditingName, d.Edit = name, fields
+			}
+		}
 	}
 	a.page(w, "Bundles", "bundles", ui.BundlesPage(d))
 }

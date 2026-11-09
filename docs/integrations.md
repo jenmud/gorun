@@ -21,12 +21,16 @@ optional; without it, load one on the Config page. It has these pages:
   Runs read the file on disk.
 - **Tasks** lists every task with its command, settings, dependencies, the bundles that include
   it and the servers that run it, slowest first by average time in recent runs.
+  An **Add a task** form saves a new task to its file straight away, and each task has an Edit
+  link for its command, description and flags.
 - **Bundles** lists each bundle, its tasks in order and what it expands to, with a link to run it.
+  An **Add a bundle** form and an Edit link work the same way.
 - **Schedules** lists each `[[schedule]]` with its target, timing, status and next run. Next runs
   are UTC instants shown in your browser's time zone; the picker above the table changes the zone
   and starts on the browser's. Edit changes a schedule in its file. Pause, resume and skip buttons act on the scheduler in this web
   server, and skipped or missed runs appear in History. A banner says so when the scheduler isn't
   running.
+  An **Add a schedule** form is on the page too.
 - **History** lists saved runs. Open one for each server's tasks, slowest first; open a task for
   its status, exit code, duration, command, stdout, stderr, env vars and vars. A server that
   couldn't run shows why, and its planned tasks read "not run". Run and server env vars and vars
@@ -72,6 +76,8 @@ the live view and history work with no setup. Its settings come from a
 [NATS server config](https://docs.nats.io/running-a-nats-service/configuration) file named by
 `GORUN_NATS_SERVER_CONFIG`; the file overrides the defaults it sets, and a host or port it leaves
 out falls back to `127.0.0.1:4222`:
+
+The header shows the address the page is connected to, next to **live**.
 
 ```conf
 # nats.conf: listen on the LAN so other machines can publish to this web service

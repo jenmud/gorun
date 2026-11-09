@@ -36,6 +36,7 @@ type SchedulesPageData struct {
 	EditingName string
 	Edit        EditFields
 	Targets     []string
+	Files       []FileOption // where a new schedule can be saved
 }
 
 // scheduleEditPath opens the schedules page with the named schedule's edit form.

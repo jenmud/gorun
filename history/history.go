@@ -1,7 +1,8 @@
-// Package history saves gorun runs to a SQLite database and reads them back. It is the same
-// history the gorun CLI and web UI keep, so a program built on the library can record its runs
-// (set Config.Recorder to a Store), show them, and have them appear in `gorun -history` and
-// `gorun -web` too. To keep runs somewhere else, write your own gorun.Recorder instead.
+// Package history is gorun's built-in SQLite implementation of gorun.Recorder: it saves runs to a
+// SQLite database and reads them back. It is the same history the gorun CLI and web UI keep, so a
+// program built on the library can record its runs (set Config.Recorder to a Store), show them,
+// and have them appear in `gorun -history` and `gorun -web` too. Using it is optional: to keep
+// runs anywhere else, implement gorun.Recorder yourself.
 package history
 
 import (

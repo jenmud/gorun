@@ -153,7 +153,8 @@ across a fleet and streams every server's progress to the browser;
 ### History
 
 The library doesn't save runs by itself: it hands every event to `Config.Recorder`, a
-`gorun.Recorder` with one method, `Record(event any)`. The `history` package's store is one. It
+`gorun.Recorder` with one method, `Record(event any)`. Use the built-in SQLite implementation in
+the `history` package, or implement the interface yourself. It
 writes to the same SQLite database as the CLI and the web UI, so runs from your program show in
 `gorun -history` and `gorun -web` too, and it reads them back so you can show history without the
 web UI. The CLI and the web UI record their own runs through the same interface.

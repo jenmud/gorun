@@ -376,6 +376,8 @@ type TaskExec struct {
 	stdout      []byte
 	stderr      []byte
 	exitCode    int
+	// progress, when set, is told how far each copy has got.
+	progress CopyProgressFunc
 	// stopped is set when the task stopped because its context was canceled or
 	// its timeout expired. Such attempts are not retried.
 	stopped bool
@@ -678,7 +680,7 @@ func (t *TaskExec) localExecute(ctx context.Context) error {
 	}
 
 	t.startedAt = time.Now()
-	if err := CopyFiles(t.server, serverArg, &t.task); err != nil {
+	if err := CopyFilesContext(ctx, t.server, serverArg, &t.task, t.progress); err != nil {
 		return t.Fail(ctx, err)
 	}
 	if !t.task.hasCommand() {
@@ -826,7 +828,7 @@ func (t *TaskExec) Execute(ctx context.Context) error {
 	)
 
 	go func() {
-		if err := CopyFiles(t.server, serverArg, &t.task); err != nil {
+		if err := CopyFilesContext(ctx, t.server, serverArg, &t.task, t.progress); err != nil {
 			result <- execResult{err: fmt.Errorf("error running the task on the remote server: %w", err)}
 			return
 		}

@@ -20,6 +20,16 @@ type TaskInfo struct {
 	Stdout      string
 	Stderr      string
 	Error       string // why it was skipped
+	Copy        *CopyInfo // the file it is copying, while it copies one
+}
+
+// CopyInfo is how far a task's copy has got.
+type CopyInfo struct {
+	File           string
+	Bytes          int64
+	Total          int64
+	Percent        float64
+	BytesPerSecond float64
 }
 
 type ServerInfo struct {
@@ -136,6 +146,7 @@ func (s *DashboardState) Apply(ev Event) {
 			srv.Order = append(srv.Order, ev.Task)
 		}
 		t.State = ev.State
+		t.Copy = nil
 		t.Duration = ev.Duration
 		t.ExitCode = ev.ExitCode
 		t.Attempt = ev.Attempt
@@ -144,6 +155,20 @@ func (s *DashboardState) Apply(ev Event) {
 		t.Stdout = ev.Stdout
 		t.Stderr = ev.Stderr
 		t.Error = ev.Error
+	case "copy_progress":
+		srv, ok := p.Servers[ev.Server]
+		if !ok {
+			return
+		}
+		t, ok := srv.Tasks[ev.Task]
+		if !ok || t.State != 1 {
+			return
+		}
+		if ev.Done {
+			t.Copy = nil
+			return
+		}
+		t.Copy = &CopyInfo{File: ev.File, Bytes: ev.Bytes, Total: ev.Total, Percent: ev.Percent, BytesPerSecond: ev.BytesPerSecond}
 	case "server_error":
 		srv, ok := p.Servers[ev.Server]
 		if !ok {
@@ -315,6 +340,9 @@ func serverSummary(p *ProcessState, srv *ServerInfo) string {
 		}
 	}
 	line := itoa(done) + "/" + itoa(len(srv.Tasks)) + " tasks"
+	if c := serverCopy(srv); c != nil {
+		line = "↑ " + copyName(c) + " " + copyPercent(c) + " · " + line
+	}
 	if failed > 0 {
 		line += " · " + itoa(failed) + " failed"
 	}
@@ -372,4 +400,14 @@ func errorTitle(t *TaskInfo) string {
 		return "Why it was skipped"
 	}
 	return "Why it failed"
+}
+
+// serverCopy is a copy one of the server's tasks is making, if any, for its summary line.
+func serverCopy(srv *ServerInfo) *CopyInfo {
+	for _, name := range srv.Order {
+		if t := srv.Tasks[name]; t != nil && t.Copy != nil {
+			return t.Copy
+		}
+	}
+	return nil
 }

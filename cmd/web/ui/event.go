@@ -35,4 +35,13 @@ type Event struct {
 	Attempt    int        `json:"attempt,omitempty"`
 	Attempts   int        `json:"attempts,omitempty"`
 	Error      string     `json:"error,omitempty"`
+
+	// copy_progress
+	File           string  `json:"file,omitempty"`
+	Bytes          int64   `json:"bytes,omitempty"`
+	Total          int64   `json:"total,omitempty"`
+	Percent        float64 `json:"percent,omitempty"`
+	BytesPerSecond float64 `json:"bytes_per_second,omitempty"`
+	Elapsed        int64   `json:"elapsed,omitempty"`
+	Done           bool    `json:"done,omitempty"`
 }

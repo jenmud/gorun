@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -33,6 +34,10 @@ type app struct {
 	nc     *inats.Client
 	topic  string
 	hub    *hub
+
+	// pushSoon is set while a coalesced dashboard push is waiting, so copy progress from many
+	// servers at once costs one render per interval, not one per event.
+	pushSoon atomic.Bool
 
 	mu      sync.Mutex
 	dash    ui.DashboardState
@@ -223,6 +228,12 @@ func (a *app) applyEvent(data []byte) {
 	a.dash.Apply(ev.UIEvent())
 	a.mu.Unlock()
 
+	if ev.Type == "copy_progress" {
+		// progress isn't kept in the history, and it comes often: coalesce the pushes
+		a.pushDashboardSoon()
+		return
+	}
+
 	if a.store != nil {
 		inats.UpdateDatabase(context.Background(), a.store, &ev)
 	}
@@ -248,6 +259,20 @@ func (a *app) pushDashboard() {
 	html := render(ui.Dashboard(a.dash))
 	a.mu.Unlock()
 	a.hub.broadcast(patch("#dashboard", html))
+}
+
+// copyPushInterval is the least time between two dashboard pushes caused by copy progress.
+const copyPushInterval = 250 * time.Millisecond
+
+// pushDashboardSoon pushes the dashboard after copyPushInterval, unless a push is already waiting.
+func (a *app) pushDashboardSoon() {
+	if a.pushSoon.Swap(true) {
+		return
+	}
+	time.AfterFunc(copyPushInterval, func() {
+		a.pushSoon.Store(false)
+		a.pushDashboard()
+	})
 }
 
 // pushStats recomputes the stats from the history and sends them to every open page.

@@ -935,6 +935,22 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 				}
 				defer func() { <-taskSlots }()
 
+				task.progress = func(p CopyProgress) {
+					c.emit(CopyProgressEvent{
+						Type:           "copy_progress",
+						GorunUUID:      c.GorunUUID,
+						Server:         server.Name,
+						Task:           name,
+						File:           p.File,
+						Bytes:          p.Bytes,
+						Total:          p.Total,
+						Percent:        p.Percent(),
+						BytesPerSecond: p.BytesPerSecond(),
+						Elapsed:        p.Elapsed,
+						Done:           p.Done,
+					})
+				}
+
 				attempts := task.task.Attempts()
 				var (
 					attempt int

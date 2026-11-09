@@ -246,6 +246,8 @@ func newSession(ctx context.Context, client *ssh.Client) (*ssh.Session, func(), 
 type scpSender struct {
 	w io.Writer
 	r *bufio.Reader
+	// wrap, when set, wraps each file's contents as they are sent, to count them.
+	wrap func(io.Reader) io.Reader
 }
 
 // ack reads the sink's reply: 0 is OK, 1 (warning) and 2 (fatal) carry a message.
@@ -276,6 +278,9 @@ func (s *scpSender) command(format string, args ...any) error {
 func (s *scpSender) file(name string, mode os.FileMode, size int64, r io.Reader) error {
 	if err := s.command("C%04o %d %s\n", mode.Perm(), size, name); err != nil {
 		return err
+	}
+	if s.wrap != nil {
+		r = s.wrap(r)
 	}
 	if _, err := io.CopyN(s.w, r, size); err != nil {
 		return err
@@ -349,13 +354,16 @@ func runRemote(client *ssh.Client, cmd string) error {
 	return nil
 }
 
-// runSCP starts `scp <flags> -t target` on the remote and lets send stream into it.
-func runSCP(client *ssh.Client, flags, target string, send func(*scpSender) error) error {
-	session, closeSession, err := newSession(context.Background(), client)
+// runSCP starts `scp <flags> -t target` on the remote and lets send stream into it. Cancelling
+// ctx closes the session, which stops a copy even while it waits on a slow connection.
+func runSCP(ctx context.Context, client *ssh.Client, flags, target string, wrap func(io.Reader) io.Reader, send func(*scpSender) error) error {
+	session, closeSession, err := newSession(ctx, client)
 	if err != nil {
 		return err
 	}
 	defer closeSession()
+	stop := context.AfterFunc(ctx, func() { _ = session.Close() })
+	defer stop()
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
@@ -371,7 +379,7 @@ func runSCP(client *ssh.Client, flags, target string, send func(*scpSender) erro
 	if err := session.Start("scp " + flags + " -t " + shellQuote(target)); err != nil {
 		return err
 	}
-	s := &scpSender{w: stdin, r: bufio.NewReader(stdout)}
+	s := &scpSender{w: stdin, r: bufio.NewReader(stdout), wrap: wrap}
 	sendErr := s.ack() // the sink announces it is ready
 	if sendErr == nil {
 		sendErr = send(s)
@@ -379,6 +387,9 @@ func runSCP(client *ssh.Client, flags, target string, send func(*scpSender) erro
 	_ = stdin.Close()
 	waitErr := session.Wait()
 
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("scp to %s: %w", target, err)
+	}
 	if err := errors.Join(sendErr, waitErr); err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
 			return fmt.Errorf("scp to %s: %w: %s", target, err, msg)
@@ -389,7 +400,7 @@ func runSCP(client *ssh.Client, flags, target string, send func(*scpSender) erro
 }
 
 // scpCopy copies r (size bytes) to remotePath. A nil client writes locally.
-func scpCopy(client *ssh.Client, r io.Reader, size int64, remotePath string, mode os.FileMode) error {
+func scpCopy(ctx context.Context, client *ssh.Client, r io.Reader, size int64, remotePath string, mode os.FileMode) error {
 	if mode == 0 {
 		mode = 0644
 	}
@@ -405,27 +416,28 @@ func scpCopy(client *ssh.Client, r io.Reader, size int64, remotePath string, mod
 		_, err = io.Copy(f, r)
 		return err
 	}
-	return runSCP(client, "", filepath.Dir(remotePath), func(s *scpSender) error {
+	return runSCP(ctx, client, "", filepath.Dir(remotePath), nil, func(s *scpSender) error {
 		return s.file(filepath.Base(remotePath), mode, size, r)
 	})
 }
 
 // scpCopyDir recursively copies the contents of localDir into remoteDir,
 // creating remoteDir (and its parents) if needed. A nil client copies locally.
-func scpCopyDir(client *ssh.Client, localDir, remoteDir string) error {
+// wrap, when not nil, wraps each file's contents as they are copied.
+func scpCopyDir(ctx context.Context, client *ssh.Client, localDir, remoteDir string, wrap func(io.Reader) io.Reader) error {
 	if client == nil {
-		return copyDirLocal(localDir, remoteDir)
+		return copyDirLocal(localDir, remoteDir, wrap)
 	}
 	if err := runRemote(client, "mkdir -p "+shellQuote(remoteDir)); err != nil {
 		return err
 	}
-	return runSCP(client, "-r -d", remoteDir, func(s *scpSender) error {
+	return runSCP(ctx, client, "-r -d", remoteDir, wrap, func(s *scpSender) error {
 		return s.dirContents(localDir)
 	})
 }
 
 // copyDirLocal recursively copies src into dst, overwriting existing files.
-func copyDirLocal(src, dst string) error {
+func copyDirLocal(src, dst string, wrap func(io.Reader) io.Reader) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return err
@@ -444,7 +456,7 @@ func copyDirLocal(src, dst string) error {
 			return err
 		}
 		if info.IsDir() {
-			if err := copyDirLocal(from, to); err != nil {
+			if err := copyDirLocal(from, to, wrap); err != nil {
 				return err
 			}
 			continue
@@ -458,7 +470,11 @@ func copyDirLocal(src, dst string) error {
 			in.Close()
 			return err
 		}
-		if _, err := io.Copy(out, in); err != nil {
+		var r io.Reader = in
+		if wrap != nil {
+			r = wrap(in)
+		}
+		if _, err := io.Copy(out, r); err != nil {
 			in.Close()
 			out.Close()
 			return err
@@ -477,6 +493,17 @@ func copyDirLocal(src, dst string) error {
 // CopyFiles copies files for a task to a server. Templates are executed with
 // server as their data, the same as cmd_template.
 func CopyFiles(client *ssh.Client, server any, task *Task) error {
+	return CopyFilesContext(context.Background(), client, server, task, nil)
+}
+
+// CopyFilesContext is CopyFiles with a context and a progress callback. Cancelling ctx stops
+// a copy part way. progress, when not nil, is told how far each file and directory copy has
+// got: once at the start, then at most every quarter of a second, and once more when the copy
+// is done. Inline content and templates are not reported.
+func CopyFilesContext(ctx context.Context, client *ssh.Client, server any, task *Task, progress CopyProgressFunc) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	copies := task.getCopies()
 	for _, c := range copies {
 		cc := c
@@ -503,7 +530,7 @@ func CopyFiles(client *ssh.Client, server any, task *Task) error {
 
 		if cc.Content != "" {
 			data := []byte(cc.Content)
-			if err := scpCopy(client, bytes.NewReader(data), int64(len(data)), dst, 0); err != nil {
+			if err := scpCopy(ctx, client, bytes.NewReader(data), int64(len(data)), dst, 0); err != nil {
 				return err
 			}
 			continue
@@ -522,7 +549,7 @@ func CopyFiles(client *ssh.Client, server any, task *Task) error {
 				return err
 			}
 			data := buf.Bytes()
-			if err := scpCopy(client, bytes.NewReader(data), int64(len(data)), dst, 0); err != nil {
+			if err := scpCopy(ctx, client, bytes.NewReader(data), int64(len(data)), dst, 0); err != nil {
 				return err
 			}
 			continue
@@ -533,20 +560,28 @@ func CopyFiles(client *ssh.Client, server any, task *Task) error {
 				return err
 			}
 			if info.IsDir() {
-				if err := scpCopyDir(client, srcPath, dst); err != nil {
+				total, err := dirSize(srcPath)
+				if err != nil {
 					return err
 				}
+				tr := newCopyTracker(ctx, progress, dst, total)
+				if err := scpCopyDir(ctx, client, srcPath, dst, tr.wrap); err != nil {
+					return err
+				}
+				tr.done()
 				continue
 			}
 			f, err := os.Open(srcPath)
 			if err != nil {
 				return err
 			}
-			err = scpCopy(client, f, info.Size(), dst, info.Mode().Perm())
+			tr := newCopyTracker(ctx, progress, dst, info.Size())
+			err = scpCopy(ctx, client, tr.wrap(f), info.Size(), dst, info.Mode().Perm())
 			f.Close()
 			if err != nil {
 				return err
 			}
+			tr.done()
 			continue
 		}
 		return fmt.Errorf("no source for copy")

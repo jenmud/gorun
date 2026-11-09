@@ -43,6 +43,15 @@ type Event struct {
 	Vars       map[string]any    `json:"vars,omitempty"`
 	Error      string            `json:"error,omitempty"`
 	Includes   []store.Include   `json:"includes,omitempty"`
+
+	// copy_progress
+	File           string  `json:"file,omitempty"`
+	Bytes          int64   `json:"bytes,omitempty"`
+	Total          int64   `json:"total,omitempty"`
+	Percent        float64 `json:"percent,omitempty"`
+	BytesPerSecond float64 `json:"bytes_per_second,omitempty"`
+	Elapsed        int64   `json:"elapsed,omitempty"`
+	Done           bool    `json:"done,omitempty"`
 }
 
 // TaskMeta carries the documentation attached to a task in a plan event.
@@ -84,6 +93,14 @@ func (e Event) UIEvent() ui.Event {
 		Attempt:    e.Attempt,
 		Attempts:   e.Attempts,
 		Error:      e.Error,
+
+		File:           e.File,
+		Bytes:          e.Bytes,
+		Total:          e.Total,
+		Percent:        e.Percent,
+		BytesPerSecond: e.BytesPerSecond,
+		Elapsed:        e.Elapsed,
+		Done:           e.Done,
 	}
 }
 

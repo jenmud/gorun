@@ -17,6 +17,9 @@ type plainPrinter struct {
 	mu      sync.Mutex
 	w       io.Writer
 	verbose bool
+	// copied is the last tenth of each copy printed, by server, task and file, so a big upload
+	// prints a line every 10% and not every update.
+	copied map[string]int
 }
 
 func (p *plainPrinter) event(event any) {
@@ -62,8 +65,39 @@ func (p *plainPrinter) event(event any) {
 		}
 	case gorun.ServerErrorEvent:
 		fmt.Fprintf(p.w, "%s: FAILED: %v\n", ev.Server, ev.Err)
+	case gorun.CopyProgressEvent:
+		p.copyProgress(ev)
 	}
 }
+
+// copyProgress prints a line as a copy starts, at every 10%, and when it is done. Small copies,
+// which finish before their first update, print only the done line.
+func (p *plainPrinter) copyProgress(ev gorun.CopyProgressEvent) {
+	if p.copied == nil {
+		p.copied = map[string]int{}
+	}
+	key := ev.Server + "\x00" + ev.Task + "\x00" + ev.File
+	if ev.Done {
+		delete(p.copied, key)
+		fmt.Fprintf(p.w, "%s: %s %s\n", ev.Server, ev.Task, copyFinished(ev))
+		return
+	}
+	tenth := int(ev.Percent / 10)
+	if last, ok := p.copied[key]; ok && tenth <= last {
+		return
+	}
+	p.copied[key] = tenth
+	if ev.Bytes == 0 {
+		if ev.Total >= copyAnnounceSize {
+			fmt.Fprintf(p.w, "%s: %s sending %s (%s)\n", ev.Server, ev.Task, copyName(ev), formatBytes(ev.Total))
+		}
+		return
+	}
+	fmt.Fprintf(p.w, "%s: %s sending %s %d%% (%s)\n", ev.Server, ev.Task, copyName(ev), int(ev.Percent), copySizes(ev))
+}
+
+// copyAnnounceSize is how big a copy must be for -plain to say it is starting.
+const copyAnnounceSize = 1 << 20
 
 // output prints the last n lines of a task's output, indented under the task.
 func (p *plainPrinter) output(name, s string, n int) {

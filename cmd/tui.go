@@ -34,6 +34,7 @@ var (
 	okStyle          = lipgloss.NewStyle().Foreground(colorOK)
 	failStyle        = lipgloss.NewStyle().Foreground(colorFail).Bold(true)
 	skipStyle        = lipgloss.NewStyle().Foreground(colorSkip)
+	copyStyle        = lipgloss.NewStyle().Foreground(colorAccent).Bold(true)
 	cursorStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("#DDD6FE")).Bold(true)
 	selectedRowStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Background(lipgloss.Color("#3B2A66")).Bold(true)
 
@@ -56,6 +57,8 @@ type taskView struct {
 	started     time.Time
 	event       gorun.TaskEvent
 	expanded    bool
+	// copy is the latest progress of the file the task is copying, while it copies one.
+	copy *gorun.CopyProgressEvent
 }
 
 type serverView struct {
@@ -249,6 +252,7 @@ func (m tuiModel) applyEvent(event any) tuiModel {
 				}
 				t.state = msg.State
 				t.event = msg
+				t.copy = nil
 				if msg.State == gorun.TaskRunning {
 					t.started = time.Now()
 					s.runningCount++
@@ -270,6 +274,18 @@ func (m tuiModel) applyEvent(event any) tuiModel {
 		if s := m.server(msg.Server); s != nil {
 			s.err = msg.Err
 		}
+
+	case gorun.CopyProgressEvent:
+		if s := m.server(msg.Server); s != nil {
+			if t := s.task(msg.Task); t != nil && t.state == gorun.TaskRunning {
+				if msg.Done {
+					t.copy = nil
+				} else {
+					ev := msg
+					t.copy = &ev
+				}
+			}
+		}
 	}
 	return m
 }
@@ -287,7 +303,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// quit to finish, keep applying them so progress stays up to date.
 	if m.forceQuit {
 		switch msg.(type) {
-		case tuiBatchMsg, boxesRenderedMsg, gorun.TaskEvent, gorun.PlanEvent, gorun.ServerErrorEvent, gorun.ProcessFinishedEvent:
+		case tuiBatchMsg, boxesRenderedMsg, gorun.TaskEvent, gorun.PlanEvent, gorun.ServerErrorEvent, gorun.ProcessFinishedEvent, gorun.CopyProgressEvent:
 			return m, nil
 		}
 	}
@@ -513,6 +529,9 @@ func (m tuiModel) serverSummary(s *serverView) string {
 		for _, t := range s.tasks {
 			if t.state == gorun.TaskRunning {
 				status = m.spinner.View() + " " + t.name + " " + timeStyle.Render(formatDuration(time.Since(t.started)))
+				if t.copy != nil {
+					status = m.spinner.View() + " " + t.name + " " + m.copyStatus(t.copy, false)
+				}
 				break
 			}
 		}
@@ -950,6 +969,9 @@ func (m tuiModel) taskStatus(t *taskView) string {
 			attempt = fmt.Sprintf("retry %d/%d · ", t.event.Attempt, t.event.Attempts)
 		}
 		detail = mutedStyle.Render(attempt) + timeStyle.Render(formatDuration(time.Since(t.started)))
+		if t.copy != nil {
+			detail = mutedStyle.Render(attempt) + m.copyStatus(t.copy, true) + " " + timeStyle.Render(formatDuration(time.Since(t.started)))
+		}
 	case gorun.TaskDone:
 		icon = okStyle.Render("✓")
 		detail = mutedStyle.Render(attempt) + timeStyle.Render(formatDuration(t.event.Duration))
@@ -962,7 +984,7 @@ func (m tuiModel) taskStatus(t *taskView) string {
 	}
 
 	description := ""
-	if t.description != "" {
+	if t.description != "" && t.copy == nil { // a copy's progress needs the room
 		// Leave room for the icon, name, duration and toggle so rows don't wrap.
 		width := max(10, min(48, m.width-44))
 		description = " " + mutedStyle.Render(truncate(t.description, width))
@@ -1283,4 +1305,17 @@ func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, v
 	}
 
 	return nil
+}
+
+// copyStatus shows how far a copy has got: "↑ release.tar.gz ■■■■□□□□ 43% 440.0 MB / 1.0 GB · 12.3 MB/s".
+// The compact view's server line leaves out the file name, which the task row shows.
+func (m tuiModel) copyStatus(ev *gorun.CopyProgressEvent, withName bool) string {
+	bar := m.okBar
+	bar.SetWidth(12)
+	pct := ev.Percent / 100
+	out := copyStyle.Render("↑ ")
+	if withName {
+		out += copyName(*ev) + " "
+	}
+	return out + bar.ViewAs(pct) + " " + fmt.Sprintf("%3d%%", int(ev.Percent)) + " " + mutedStyle.Render(copySizes(*ev))
 }

@@ -144,6 +144,27 @@ func (e TaskEvent) MarshalJSON() ([]byte, error) {
 	}{taskEventJSON(e), errText(e.Err)})
 }
 
+// CopyProgressEvent is sent while a task copies a file or directory to its server: once at 0%,
+// then at most every quarter of a second, and once more with Done set when the copy has
+// finished. A copy that fails sends no Done event; the task's failed event follows instead.
+// Copies of inline content and templates are not reported.
+type CopyProgressEvent struct {
+	Type      string `json:"type"` // "copy_progress"
+	GorunUUID string `json:"gorun_uuid"`
+	Server    string `json:"server"`
+	Task      string `json:"task"`
+	// File is the destination on the server, as the task's copy names it.
+	File string `json:"file"`
+	// Bytes is how many bytes have been sent so far, out of Total. For a directory, Total is
+	// the size of every file in it.
+	Bytes          int64         `json:"bytes"`
+	Total          int64         `json:"total"`
+	Percent        float64       `json:"percent"`
+	BytesPerSecond float64       `json:"bytes_per_second"`
+	Elapsed        time.Duration `json:"elapsed"`
+	Done           bool          `json:"done"`
+}
+
 // ServerErrorEvent is sent when a server can't run its tasks at all (e.g. SSH connection failed).
 type ServerErrorEvent struct {
 	Type      string `json:"type"`

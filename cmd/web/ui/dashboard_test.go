@@ -133,3 +133,30 @@ func TestFinishedRunListsSlowestTaskFirst(t *testing.T) {
 		t.Errorf("finished order = %v, want slow,mid,fast", names)
 	}
 }
+
+func TestDashboardShowsCopyProgress(t *testing.T) {
+	var state DashboardState
+	state.Apply(Event{Type: "process_started", GorunUUID: "run-3", Title: "demo"})
+	state.Apply(Event{Type: "plan", GorunUUID: "run-3", Server: "web-1", Tasks: []string{"upload"}})
+	state.Apply(Event{Type: "task", GorunUUID: "run-3", Server: "web-1", Task: "upload", State: 1})
+	state.Apply(Event{
+		Type: "copy_progress", GorunUUID: "run-3", Server: "web-1", Task: "upload",
+		File: "/srv/app/release.tar.gz", Bytes: 440 << 20, Total: 1 << 30, Percent: 42.97, BytesPerSecond: 12 << 20,
+	})
+
+	var buf bytes.Buffer
+	if err := Dashboard(state).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	for _, want := range []string{"↑ release.tar.gz", "440.0 MB / 1.0 GB · 12.0 MB/s", `aria-valuenow="42"`, "width: 43.0%", "↑ release.tar.gz 42% · 0/1 tasks"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("dashboard does not show %q", want)
+		}
+	}
+
+	state.Apply(Event{Type: "task", GorunUUID: "run-3", Server: "web-1", Task: "upload", State: 2})
+	if state.Processes["run-3"].Servers["web-1"].Tasks["upload"].Copy != nil {
+		t.Error("a finished task still shows its copy")
+	}
+}

@@ -111,8 +111,15 @@ templ taskRow(p *ProcessState, srv *ServerInfo, t *TaskInfo) {
 				if t.State == 3 {
 					<span class="rounded bg-red-500/15 px-1.5 py-0.5 font-mono text-[11px] text-red-300 ring-1 ring-red-500/40">exit { itoa(t.ExitCode) }</span>
 				}
-				<span class="ml-auto text-xs text-zinc-500">{ taskStatus(p, srv, t) }</span>
+				if t.Copy != nil {
+					<span class="ml-auto font-mono text-xs text-accent">{ copyPercent(t.Copy) }</span>
+				} else {
+					<span class="ml-auto text-xs text-zinc-500">{ taskStatus(p, srv, t) }</span>
+				}
 			</summary>
+			if t.Copy != nil {
+				@copyBar(t.Copy)
+			}
 			<div class="mt-2 space-y-2 border-l border-zinc-800 pl-3 text-xs">
 				<p class="text-zinc-400">{ taskHint(p, srv, t) }</p>
 				if t.Description != "" {
@@ -145,4 +152,17 @@ templ taskRow(p *ProcessState, srv *ServerInfo, t *TaskInfo) {
 			</div>
 		</details>
 	</li>
+}
+
+// copyBar shows how far a running task's copy has got: the file, a bar, the sizes and the rate.
+templ copyBar(c *CopyInfo) {
+	<div class="mt-1 pl-5 text-[11px]" data-copy={ c.File }>
+		<div class="flex items-center gap-2 text-zinc-400">
+			<span class="truncate font-mono" title={ c.File }>↑ { copyName(c) }</span>
+			<span class="ml-auto shrink-0 font-mono">{ copySizes(c) }</span>
+		</div>
+		<div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-zinc-800" role="progressbar" aria-label={ "Copying " + copyName(c) } aria-valuemin="0" aria-valuemax="100" aria-valuenow={ itoa(int(c.Percent)) }>
+			<div class="h-full rounded-full bg-accent transition-all duration-200" style={ copyWidth(c) }></div>
+		</div>
+	</div>
 }

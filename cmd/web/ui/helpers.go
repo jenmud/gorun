@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"net/url"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -429,4 +430,36 @@ func shortCommit(commit string) string {
 		return commit[:12]
 	}
 	return commit
+}
+
+// formatBytes shows a size the way scp does: 1024-based, with one decimal from KB up.
+func formatBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for m := n / unit; m >= unit && exp < 4; m /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTP"[exp])
+}
+
+// copyName is the file a copy writes, without its directory.
+func copyName(c *CopyInfo) string { return path.Base(c.File) }
+
+// copyPercent is a copy's progress as a whole percentage, e.g. "43%".
+func copyPercent(c *CopyInfo) string { return itoa(int(c.Percent)) + "%" }
+
+// copyWidth is the CSS width of a copy's progress bar.
+func copyWidth(c *CopyInfo) string { return fmt.Sprintf("width: %.1f%%", c.Percent) }
+
+// copySizes is "440.0 MB / 1.0 GB · 12.3 MB/s".
+func copySizes(c *CopyInfo) string {
+	s := formatBytes(c.Bytes) + " / " + formatBytes(c.Total)
+	if c.BytesPerSecond > 0 {
+		s += " · " + formatBytes(int64(c.BytesPerSecond)) + "/s"
+	}
+	return s
 }

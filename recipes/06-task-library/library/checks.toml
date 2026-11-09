@@ -1,0 +1,24 @@
+# A shared task library: tasks and bundles only, written once and included from any Gorunfile.
+# A library task's paths are relative to the root of the repository it lives in. This library
+# sits inside the gorun repository, so its script path starts with recipes/; in a repository of
+# its own it would be scripts/hello.sh.
+
+[tasks.lib-hello]
+description = "Say hello from the shared library"
+cmd_file = "recipes/06-task-library/library/scripts/hello.sh"
+local = true
+
+[tasks.lib-uptime]
+description = "Show how long this machine has been up"
+cmd = "uptime"
+local = true
+
+[tasks.lib-disk]
+description = "Show free space on the root filesystem"
+cmd = "df -h /"
+local = true
+depends_on = ["lib-hello"]
+
+[bundles.lib-checks]
+description = "Quick read-only checks, from the shared library"
+tasks = ["lib-hello", "lib-uptime", "lib-disk"]

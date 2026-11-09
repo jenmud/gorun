@@ -482,6 +482,57 @@ include = [
 
 Check the result with `gorun Gorunfile --list-servers`, or `--list-tasks` for the task library.
 
+## Tasks from a git repository
+
+Write a task once, keep it in a git repository, and use it from any Gorunfile. Include it with a
+`git::` source, the syntax Terraform and Packer use for modules:
+
+```toml
+include = [
+  "git::https://github.com/you/task-library.git//web/*.toml?ref=v1.2.0",
+  "git::git@bitbucket.org:you/task-library.git//db/*.toml?ref=v1.2.0",   # over SSH
+]
+
+[servers]
+tasks = ["@web-baseline"]                 # a bundle from the library
+```
+
+- **`git::<repository>//<files>?ref=<version>`.** The repository is an `https://` or `ssh://`
+  URL, or `git@host:org/repo.git`. After `//` comes a path or glob inside it; without one, gorun
+  reads `*.toml` at the top of the repository. `git://` isn't accepted: it is unauthenticated and
+  unencrypted.
+- **`?ref=` is required**: a tag, a branch or a commit hash. The Gorunfile always says which
+  version of the tasks it wants.
+- **`Gorunfile.lock`** records the commit each include resolved to. It is written the first time
+  an include is used, next to the Gorunfile; commit it. From then on every run uses the locked
+  commit, so a moved tag or a new commit on a branch changes nothing until you run
+  `gorun Gorunfile --update-includes`, which looks every ref up again, rewrites the lock file and
+  prints the commits.
+- **Credentials** are git's own: your SSH keys, credential helper and `~/.gitconfig` are used, and
+  nothing goes in the Gorunfile. gorun never prompts; a repository that needs credentials you
+  haven't set up fails with git's message.
+- **Cached and offline.** Each commit is fetched once into gorun's cache (`~/.cache/gorun`, or
+  `GORUN_CACHE_DIR`). With the lock file and a filled cache, gorun needs no network.
+- **Only tasks and bundles.** A file from a git repository can't add servers, groups, schedules or
+  global `envvars` and `vars`, so a shared library never changes where, when or with what your
+  commands run. It may include other files from the same repository, or other git repositories.
+- **Paths are the library's.** A library task's `cmd_file`, `cmd_template_file` and copy sources
+  are relative to the root of its repository.
+- Names follow the usual rule: a name defined both in the library and in your files is an error.
+
+A task library is an ordinary repository of TOML files, for example:
+
+```
+task-library/
+  web/base.toml        # [tasks.timezone], [tasks.packages], [bundles.web-baseline]
+  web/nginx.toml
+  scripts/nginx.sh     # cmd_file = "scripts/nginx.sh" in web/nginx.toml
+```
+
+Programs built on the gorun library get the same: `LoadFile` fetches and caches git includes and
+writes the lock file. Set `Config.UpdateIncludes` to look refs up again, and read
+`Config.Includes` for the commit each one used.
+
 See [recipes/large-inventory](../recipes/large-inventory) for a complete example that splits tasks,
 groups and hosts across multiple files.
 

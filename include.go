@@ -35,7 +35,12 @@ type loader struct {
 	owners       map[string]string // "kind name" -> the file that defined it
 	loaded       map[string]bool   // files already merged, so each is read once
 	stack        []string          // files being read, to catch include cycles
+	git          *gitIncludes      // git includes and their lock file, once the first is seen
 }
+
+// gitAllowedKeys are what a file from a git include may define: shared tasks and bundles. Servers,
+// groups, schedules and global envvars or vars would change where, when or how your commands run.
+var gitAllowedKeys = map[string]bool{"tasks": true, "bundles": true, "include": true}
 
 func newLoader(c *Config) *loader {
 	return &loader{cfg: c, owners: map[string]string{}, loaded: map[string]bool{}}
@@ -84,6 +89,18 @@ func (l *loader) read(r io.Reader, path string, root bool) error {
 		}
 	}
 
+	checkout := l.git.within(path)
+	if checkout != "" {
+		for _, key := range md.Keys() {
+			if len(key) > 0 && !gitAllowedKeys[key[0]] {
+				return fmt.Errorf("a file from a git include can define only tasks and bundles, not %s", key[0])
+			}
+		}
+		// a library's relative paths (cmd_file, copy sources) are relative to its repository
+		lib := Config{Tasks: f.Tasks}
+		lib.ResolvePaths(checkout)
+	}
+
 	if root {
 		*l.cfg = f.Config
 		l.defaultTasks = f.Servers.Tasks
@@ -107,7 +124,7 @@ func (l *loader) read(r io.Reader, path string, root bool) error {
 		return fmt.Errorf("include needs a file: use LoadFile, not Load")
 	}
 	for _, pattern := range f.Include {
-		files, err := expandInclude(filepath.Dir(path), pattern)
+		files, err := l.includeFiles(path, checkout, pattern)
 		if err != nil {
 			return err
 		}
@@ -118,6 +135,42 @@ func (l *loader) read(r io.Reader, path string, root bool) error {
 		}
 	}
 	return nil
+}
+
+// includeFiles lists the files an include pattern names in the file at path. A git include is
+// fetched at its pinned commit; a local pattern in a file from a git include must stay inside that
+// repository's checkout.
+func (l *loader) includeFiles(path, checkout, pattern string) ([]string, error) {
+	if isGitInclude(pattern) {
+		if l.git == nil {
+			g, err := newGitIncludes(l.cfg.Path, l.cfg.UpdateIncludes)
+			if err != nil {
+				return nil, err
+			}
+			l.git = g
+		}
+		return l.git.files(pattern)
+	}
+	inside := func(p string) bool {
+		return p == checkout || strings.HasPrefix(p, checkout+string(filepath.Separator))
+	}
+	if checkout != "" && (filepath.IsAbs(pattern) || !inside(filepath.Join(filepath.Dir(path), pattern))) {
+		return nil, fmt.Errorf("include %q reaches outside its git repository", pattern)
+	}
+	files, err := expandInclude(filepath.Dir(path), pattern)
+	if err != nil || checkout == "" {
+		return files, err
+	}
+	for _, file := range files {
+		real, err := filepath.EvalSymlinks(file)
+		if err != nil {
+			return nil, err
+		}
+		if !inside(real) { // a symlink in the repository pointing out of it
+			return nil, fmt.Errorf("include %q reaches outside its git repository", pattern)
+		}
+	}
+	return files, nil
 }
 
 // readFile reads one included file, unless it is already loaded or would make a cycle.
@@ -258,6 +311,14 @@ func (l *loader) finish() error {
 
 	if err := c.validateLibrary(); err != nil {
 		return fmt.Errorf("error with loading config: %w", err)
+	}
+
+	// only a file that loads is worth pinning
+	if l.git != nil {
+		if err := l.git.writeLock(); err != nil {
+			return fmt.Errorf("error with loading config: %w", err)
+		}
+		c.Includes = l.git.sources
 	}
 
 	c.Servers = nil

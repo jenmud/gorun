@@ -38,6 +38,7 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 | `-list-bundles` | list bundles and what they expand to (a collapsible tree in a terminal) |
 | `-dump` | print a starting Gorunfile |
 | `-dump-tasks DIR` | dump each task as a runnable shell file in DIR |
+| `-update-includes` | look up every git include's ref again, update `Gorunfile.lock`, print the commits and exit |
 | `-history` | browse past runs |
 | `-web [Gorunfile]` | start the web UI, optionally loading a Gorunfile |
 | `-complete <kind>` | print shell completion candidates |
@@ -52,6 +53,7 @@ already set.
 |---|---|---|
 | `GORUN_NAME` | `gorun` | name for OpenTelemetry and NATS |
 | `GORUN_DB_PATH` | `~/.gorun/gorun.db` | history database (see [History](running.md#history) for how it is found) |
+| `GORUN_CACHE_DIR` | `~/.cache/gorun` | where git includes are fetched and kept |
 | `GORUN_LOG_FILE` | `~/.gorun/gorun.log` | log file |
 | `GORUN_ADDRESS` | `:8080` | web UI listen address |
 | `GORUN_EVENT_TOPIC` | `gorun.events` | NATS topic for events |
@@ -75,7 +77,7 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | Key | Description |
 |---|---|
 | `title` | shown in the picker, the TUI and the history |
-| `include` | list of files or globs to merge in, relative to the file; [splitting a large Gorunfile](gorunfile.md#splitting-a-large-gorunfile) |
+| `include` | list of files or globs to merge in, relative to the file ([splitting a large Gorunfile](gorunfile.md#splitting-a-large-gorunfile)), or `git::` repositories pinned with `?ref=` ([tasks from a git repository](gorunfile.md#tasks-from-a-git-repository)) |
 | `log_level` | `debug`, `info`, `warn` or `error`; servers and tasks inherit it |
 | `max_parallel` | servers at once; `0` (default) means all |
 | `max_task_parallel` | tasks at once per host; `0` (default) means one at a time, `-1` means all |

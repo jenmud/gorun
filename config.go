@@ -98,6 +98,13 @@ type Config struct {
 	// Recorder, when set, also receives every event, to keep it as history or anywhere else.
 	Recorder Recorder `toml:"-"`
 
+	// UpdateIncludes makes LoadFile look up every git include's ref again, instead of using the
+	// commit in the lock file, and save the new commits (the -update-includes flag).
+	UpdateIncludes bool `toml:"-"`
+
+	// Includes are the git includes LoadFile read, with the commit each one used.
+	Includes []IncludeSource `toml:"-"`
+
 	// SelectedTasks, when non-empty, limits execution to these tasks (and their
 	// dependencies). Bundle references ("@name") are expanded. Used by the --task CLI flag.
 	SelectedTasks []string `toml:"-"`

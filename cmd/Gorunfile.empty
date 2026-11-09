@@ -14,6 +14,10 @@ log_level = "info"                # debug | info | warn | error; servers and tas
 # max_task_parallel = -1            # tasks at once per host; 0 (default) = one at a time, -1 = all
 envvars = { APP_ENV = "development" }   # exported to every task (a task's own envvars win)
 # vars = { region = "home" }             # template data for every task on this run (a task's own vars win)
+# include = [
+#   "tasks/*.toml",                                                # local files, relative to this one
+#   "git::https://github.com/you/tasks.git//web/*.toml?ref=v1.2.0", # tasks from a git repository, pinned
+# ]
 
 # Global SSH settings: only config_file is used. Setting it gives every host SSH settings,
 # so hosts without their own (like localhost below) would run over SSH too and skip their

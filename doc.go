@@ -83,6 +83,14 @@
 // next occurrence. [Scheduler.Status] reports each schedule, and every decision is sent to the
 // callback as a [ScheduleEvent].
 //
+// # Git includes
+//
+// An include of the form git::<repository>//<files>?ref=<version> reads tasks and bundles from a
+// git repository, the way Terraform reads modules. LoadFile fetches each commit once into a cache
+// (GORUN_CACHE_DIR), records the commit each ref resolved to in a lock file next to the Gorunfile,
+// and uses the locked commit from then on. Set [Config.UpdateIncludes] to look refs up again;
+// [Config.Includes] lists what was used.
+//
 // # History
 //
 // Set [Config.Recorder] to keep a run's events: a [Recorder] receives every event, alongside

@@ -151,6 +151,7 @@ func main() {
 	listServerGroups := flag.Bool("list-server-groups", false, "list server groups and the servers that have them and exit")
 	listBundles := flag.Bool("list-bundles", false, "list task bundles and what they expand to and exit")
 	dumpTasksDir := flag.String("dump-tasks", "", "dump each task as a file in DIR and exit")
+	updateIncludes := flag.Bool("update-includes", false, "look up every git include's ref again, update the lock file and exit")
 	complete := flag.String("complete", "", "print shell completion candidates (tasks, bundles, servers, tags or groups) and exit")
 
 	flag.Usage = printUsage
@@ -226,10 +227,19 @@ func main() {
 	}
 	gorun.StartNATS()
 
-	cfg := gorun.Config{}
+	cfg := gorun.Config{UpdateIncludes: *updateIncludes}
 	err := cfg.LoadFile(filename)
 	if err != nil {
 		fatal(fmt.Errorf("%s: %w", filename, err))
+	}
+	if *updateIncludes {
+		if len(cfg.Includes) == 0 {
+			fmt.Println("no git includes")
+		}
+		for _, inc := range cfg.Includes {
+			fmt.Printf("%s @ %s -> %s\n", inc.Source, inc.Ref, inc.Commit)
+		}
+		return
 	}
 
 	// relative paths in the config are relative to the config file, not the working directory
@@ -484,6 +494,7 @@ Options:
   -list-bundles  list task bundles and what they expand to and exit (a collapsible tree in a terminal)
   -dump     print a starting Gorunfile that works as-is and documents every option
   -dump-tasks DIR  dump each task as a file in DIR and exit
+  -update-includes  look up every git include's ref again, update the lock file and exit
   -version  print version and exit
   -web      start the web server
   -history  view historical runs
@@ -495,6 +506,7 @@ in the environment):
   GORUN_NAME                          default: gorun
   GORUN_ADDRESS                       default: :8080 (web server listen address)
   GORUN_DB_PATH                       default: ~/.gorun/gorun.db (falls back to gorun.db)
+  GORUN_CACHE_DIR                     default: ~/.cache/gorun (git includes are kept here)
   GORUN_LOG_FILE                      default: ~/.gorun/gorun.log (appended to on every run)
   GORUN_EVENT_TOPIC                   default: gorun.events
   GORUN_SKIP_NATS                     default: unset (set to skip NATS publishing)

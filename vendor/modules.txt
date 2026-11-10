@@ -97,6 +97,9 @@ github.com/klauspost/compress/internal/le
 github.com/klauspost/compress/internal/race
 github.com/klauspost/compress/internal/regmask
 github.com/klauspost/compress/s2
+# github.com/kr/fs v0.1.0
+## explicit
+github.com/kr/fs
 # github.com/lucasb-eyer/go-colorful v1.4.1
 ## explicit; go 1.12
 github.com/lucasb-eyer/go-colorful
@@ -143,6 +146,11 @@ github.com/nats-io/nuid
 # github.com/ncruces/go-strftime v1.1.0
 ## explicit; go 1.24
 github.com/ncruces/go-strftime
+# github.com/pkg/sftp v1.13.12
+## explicit; go 1.25.0
+github.com/pkg/sftp
+github.com/pkg/sftp/internal/encoding/ssh/filexfer
+github.com/pkg/sftp/internal/encoding/ssh/filexfer/openssh
 # github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec
 ## explicit; go 1.12
 github.com/remyoudompheng/bigfft

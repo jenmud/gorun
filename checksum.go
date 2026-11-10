@@ -5,41 +5,51 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"text/template"
 	"time"
+
+	"github.com/pkg/sftp"
 )
 
-// copyDigest is what one copy would put on the server: its target and the MD5 of each file,
-// by path relative to the target ("" for a single file).
+// fileDigest is one file a copy would write: its size and MD5.
+type fileDigest struct {
+	size int64
+	md5  string
+}
+
+// copyDigest is what one copy would put on the server: its target and each file, by path
+// relative to the target ("" for a single file).
 type copyDigest struct {
 	dst   string
 	dir   bool
-	files map[string]string
+	files map[string]fileDigest
 }
 
-// copyDigests works out the MD5 of everything the task's copies would write: inline content, a
-// template rendered for server, a file, or every file of a directory.
+// copyDigests works out what the task's copies would write: inline content, a template rendered
+// for server, a file, or every file of a directory.
 func copyDigests(task *Task, server any) ([]copyDigest, error) {
 	var out []copyDigest
 	for _, c := range task.copies() {
-		d := copyDigest{dst: c.target(), files: map[string]string{}}
+		d := copyDigest{dst: c.target(), files: map[string]fileDigest{}}
 		switch {
 		case c.Content != "":
-			d.files[""] = md5Hex([]byte(c.Content))
+			d.files[""] = digestOf([]byte(c.Content))
 		case c.SrcTpl != "":
 			data, err := renderCopyTemplate(task, server, c.SrcTpl)
 			if err != nil {
 				return nil, err
 			}
-			d.files[""] = md5Hex(data)
+			d.files[""] = digestOf(data)
 		case c.Src == "":
 			return nil, fmt.Errorf("no source for copy")
 		default:
@@ -50,7 +60,7 @@ func copyDigests(task *Task, server any) ([]copyDigest, error) {
 			if d.dir = info.IsDir(); d.dir {
 				err = dirDigests(c.Src, "", d.files)
 			} else {
-				d.files[""], err = fileMD5(c.Src)
+				d.files[""], err = fileDigestOf(osFiles{}, c.Src, info.Size())
 			}
 			if err != nil {
 				return nil, err
@@ -61,15 +71,15 @@ func copyDigests(task *Task, server any) ([]copyDigest, error) {
 	return out, nil
 }
 
-// dirDigests adds the MD5 of every regular file under dir to files, by path relative to the
-// copy's source, following symlinks as the copy does.
-func dirDigests(dir, rel string, files map[string]string) error {
+// dirDigests adds every regular file under dir to files, by path relative to the copy's source,
+// following symlinks as the copy does.
+func dirDigests(dir, rel string, files map[string]fileDigest) error {
 	entries, err := os.ReadDir(filepath.Join(dir, rel))
 	if err != nil {
 		return err
 	}
 	for _, e := range entries {
-		name := filepath.ToSlash(filepath.Join(rel, e.Name()))
+		name := path.Join(filepath.ToSlash(rel), e.Name())
 		info, err := os.Stat(filepath.Join(dir, name))
 		if err != nil {
 			return err
@@ -80,7 +90,7 @@ func dirDigests(dir, rel string, files map[string]string) error {
 				return err
 			}
 		case info.Mode().IsRegular():
-			if files[name], err = fileMD5(filepath.Join(dir, name)); err != nil {
+			if files[name], err = fileDigestOf(osFiles{}, filepath.Join(dir, name), info.Size()); err != nil {
 				return err
 			}
 		}
@@ -88,23 +98,24 @@ func dirDigests(dir, rel string, files map[string]string) error {
 	return nil
 }
 
-func md5Hex(data []byte) string {
+// digestOf is the size and MD5 of data.
+func digestOf(data []byte) fileDigest {
 	sum := md5.Sum(data)
-	return hex.EncodeToString(sum[:])
+	return fileDigest{size: int64(len(data)), md5: hex.EncodeToString(sum[:])}
 }
 
-// fileMD5 is the MD5 of the file at path, or "" when it can't be read.
-func fileMD5(path string) (string, error) {
-	f, err := os.Open(path)
+// fileDigestOf reads the file at name from files and returns its size and MD5.
+func fileDigestOf(files fileSystem, name string, size int64) (fileDigest, error) {
+	f, err := files.Open(name)
 	if err != nil {
-		return "", err
+		return fileDigest{}, err
 	}
 	defer func() { _ = f.Close() }()
 	h := md5.New()
 	if _, err := io.Copy(h, f); err != nil {
-		return "", err
+		return fileDigest{}, err
 	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return fileDigest{size: size, md5: hex.EncodeToString(h.Sum(nil))}, nil
 }
 
 // renderCopyTemplate renders a copy's template for server, as the copy itself does.
@@ -124,80 +135,85 @@ func renderCopyTemplate(task *Task, server any, path string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// digestScript is a POSIX sh script that prints the MD5 of what is at each copy's target on the
-// server: a "== <n>" line per copy, then "<md5> <path>" lines. It uses md5sum, or md5 -r on
-// macOS, and prints nothing for a target that isn't there.
-func digestScript(digests []copyDigest) string {
-	var b strings.Builder
-	// a missing target, or a server with neither tool, prints nothing: that copy counts as changed
-	b.WriteString(`h() { md5sum "$1" 2>/dev/null || md5 -r "$1" 2>/dev/null || true; }` + "\n")
-	for i, d := range digests {
-		fmt.Fprintf(&b, "echo '== %d'\n", i)
-		if d.dir {
-			fmt.Fprintf(&b, "(cd %s 2>/dev/null && find . -type f | while IFS= read -r f; do h \"$f\"; done)\n", shellQuote(d.dst))
-		} else {
-			fmt.Fprintf(&b, "h %s\n", shellQuote(d.dst))
-		}
-	}
-	b.WriteString("true\n")
-	return "sh -c " + shellQuote(b.String())
+// fileSystem is where the copied files are read back from: this machine, or a server over SFTP.
+type fileSystem interface {
+	Stat(name string) (fs.FileInfo, error)
+	Open(name string) (io.ReadCloser, error)
 }
 
-// parseDigests reads digestScript's output: for each copy, the MD5 of each file by its path
-// relative to the copy's target ("" for a single file).
-func parseDigests(output string, n int) []map[string]string {
-	out := make([]map[string]string, n)
-	for i := range out {
-		out[i] = map[string]string{}
+// osFiles reads files on this machine.
+type osFiles struct{}
+
+func (osFiles) Stat(name string) (fs.FileInfo, error)   { return os.Stat(name) }
+func (osFiles) Open(name string) (io.ReadCloser, error) { return os.Open(name) }
+
+// sftpFiles reads files on a server over SFTP.
+type sftpFiles struct{ c *sftp.Client }
+
+func (s sftpFiles) Stat(name string) (fs.FileInfo, error)   { return s.c.Stat(name) }
+func (s sftpFiles) Open(name string) (io.ReadCloser, error) { return s.c.Open(name) }
+
+// serverFiles opens the files of the task's server: an SFTP session over its connection (using
+// one of its session slots), or this machine's files for a local server. Cancelling ctx closes
+// the session. The returned func releases it.
+func (t *TaskExec) serverFiles(ctx context.Context) (fileSystem, func(), error) {
+	if t.server == nil {
+		return osFiles{}, func() {}, nil
 	}
-	current := -1
-	for _, line := range strings.Split(output, "\n") {
-		if rest, ok := strings.CutPrefix(line, "== "); ok {
-			current, _ = strconv.Atoi(strings.TrimSpace(rest))
-			continue
-		}
-		hash, path, ok := strings.Cut(strings.TrimSpace(line), " ")
-		if !ok || current < 0 || current >= n {
-			continue
-		}
-		path = strings.TrimPrefix(strings.TrimSpace(path), "./")
-		if !strings.HasPrefix(line, hash) || len(hash) != 32 {
-			continue
-		}
-		out[current][path] = hash
+	session, closeSession, err := newSession(ctx, t.server)
+	if err != nil {
+		return nil, nil, err
 	}
-	return out
+	stdin, err1 := session.StdinPipe()
+	stdout, err2 := session.StdoutPipe()
+	if err := errors.Join(err1, err2, session.RequestSubsystem("sftp")); err != nil {
+		closeSession()
+		return nil, nil, fmt.Errorf("the server doesn't offer SFTP: %w", err)
+	}
+	client, err := sftp.NewClientPipe(stdout, stdin)
+	if err != nil {
+		closeSession()
+		return nil, nil, fmt.Errorf("start SFTP: %w", err)
+	}
+	stop := context.AfterFunc(ctx, func() { _ = client.Close() })
+	return sftpFiles{client}, func() {
+		stop()
+		_ = client.Close()
+		closeSession()
+	}, nil
 }
 
-// compareCopies checks whether the server already has what the task's copies would write, by
-// comparing MD5s. It reports which copies differ, as a check result: exit 0 when none do.
-func (t *TaskExec) compareCopies(ctx context.Context, run runFunc) (*StepResult, error) {
+// compareCopies checks whether the server already has what the task's copies would write. Both
+// sides are hashed with MD5 in Go, so it works whatever the server runs: the server's files are
+// read back over SFTP, but only when their size matches, as a different size is already a change.
+// It reports each copy as same or changed, as a check result: exit 0 when nothing changed.
+func (t *TaskExec) compareCopies(ctx context.Context) (*StepResult, error) {
 	started := time.Now()
 	local, err := copyDigests(&t.task, t.target)
 	if err != nil {
 		return nil, fmt.Errorf("compare copies: %w", err)
 	}
-	script := digestScript(local)
-	stdout, stderr, err := run(ctx, script, false)
+	files, release, err := t.serverFiles(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("compare copies: %w", err)
 	}
-	remote := parseDigests(string(stdout), len(local))
+	defer release()
 
-	res := &StepResult{Command: "compare copies (md5)", Stderr: string(stderr)}
+	res := &StepResult{Command: "compare copies (md5)"}
 	var report strings.Builder
-	for i, d := range local {
+	for _, d := range local {
 		changed := []string{}
-		for _, path := range slices.Sorted(maps.Keys(d.files)) {
-			got := remote[i][path]
-			if !d.dir {
-				// a single file is listed under its target path, however md5sum prints it
-				for _, hash := range remote[i] {
-					got = hash
-				}
+		for _, rel := range slices.Sorted(maps.Keys(d.files)) {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
 			}
-			if got != d.files[path] {
-				changed = append(changed, path)
+			want := d.files[rel]
+			name := d.dst
+			if rel != "" {
+				name = path.Join(filepath.ToSlash(d.dst), rel)
+			}
+			if !sameFile(files, name, want) {
+				changed = append(changed, rel)
 			}
 		}
 		switch {
@@ -212,9 +228,23 @@ func (t *TaskExec) compareCopies(ctx context.Context, run runFunc) (*StepResult,
 			res.ExitCode = 1
 		}
 	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
 	res.Stdout = report.String()
 	res.Duration = time.Since(started)
 	return res, nil
+}
+
+// sameFile reports whether the file at name has want's size and MD5. A file that is missing or
+// can't be read counts as changed.
+func sameFile(files fileSystem, name string, want fileDigest) bool {
+	info, err := files.Stat(name)
+	if err != nil || !info.Mode().IsRegular() || info.Size() != want.size {
+		return false
+	}
+	got, err := fileDigestOf(files, name, info.Size())
+	return err == nil && got.md5 == want.md5
 }
 
 // firstN returns up to n items of list, and "…" when there are more.

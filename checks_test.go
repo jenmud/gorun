@@ -327,12 +327,3 @@ func TestForceAndCheckOnlyCantBeUsedTogether(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
-
-func TestParseDigestsReadsMd5sumAndMacOS(t *testing.T) {
-	out := "== 0\nd41d8cd98f00b204e9800998ecf8427e  /etc/app.conf\n== 1\n" +
-		"0cc175b9c0f1b6a831c399e269772661 ./css/app.css\n92eb5ffee6ae2fec3ad71c777531578f  ./index.html\n== 2\n"
-	got := parseDigests(out, 3)
-	if got[0]["/etc/app.conf"] != "d41d8cd98f00b204e9800998ecf8427e" || got[1]["css/app.css"] == "" || got[1]["index.html"] == "" || len(got[2]) != 0 {
-		t.Errorf("parseDigests = %v", got)
-	}
-}

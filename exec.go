@@ -191,7 +191,7 @@ func (t *TaskExec) phases(ctx context.Context, local bool) error {
 // results go into one check result.
 func (t *TaskExec) runCheck(ctx context.Context, run runFunc) (bool, error) {
 	if t.task.CheckCopies {
-		res, err := t.compareCopies(ctx, run)
+		res, err := t.compareCopies(ctx)
 		if err != nil {
 			return false, err
 		}

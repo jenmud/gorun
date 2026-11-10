@@ -68,12 +68,17 @@ marked *check only*. Runs read the Gorunfile on disk, so save first.
 ### Tasks
 
 Every task with its command, settings, dependencies, the bundles that include it and the servers
-that run it, slowest first by recent average.
+that run it, slowest first by recent average. A task's card shows its **check** and **verify**
+under its command, open, with what each does; a task without them says so. The `check` and
+`verify` badges mark the tasks that have them.
 
-- **Add a task**: name, command, description, sudo, local, and the file to save into. It is written
-  to the file straight away.
-- **Edit** on a task: change the command, description and flags. Settings the form doesn't show,
-  such as copies or templates, are kept.
+- **Add a task**: name, command, check, verify, description, sudo, local, and the file to save
+  into. It is written to the file straight away.
+- **Edit** on a task: change the command, check, verify, description and flags, and turn
+  `check_copies` on or off. Clear the check or verify to remove it. Settings the form doesn't
+  show, such as copies or templates, are kept.
+
+The Config page's **Add a task** form and **Edit** dialog have the same check and verify fields.
 
 ### Bundles
 

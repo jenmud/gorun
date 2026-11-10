@@ -252,6 +252,8 @@ func TestTasksTreeShowsScrollableCommandAndVariables(t *testing.T) {
 				Local:       true,
 				LogLevel:    "debug",
 				Copy:        []gorun.Copy{{Src: "source", Dst: "destination"}},
+				Check:       "test -x dist/app",
+				Verify:      "dist/app --version",
 			},
 			"beta": {Name: "beta", Cmd: "echo beta"},
 		},
@@ -263,7 +265,7 @@ func TestTasksTreeShowsScrollableCommandAndVariables(t *testing.T) {
 	collapsed := strings.Join(m.taskDetailLines(80), "\n")
 	for _, want := range []string{
 		"Description", "Compile the application", "Details", "Builds all packages",
-		"▸ Command · cmd [expand]", "▸ Execution settings [expand]", "▸ Env vars · config + task (2) [expand]",
+		"▸ Command · cmd [expand]", "▸ Check · test -x dist/app [expand]", "▸ Verify · dist/app --version [expand]", "▸ Execution settings [expand]", "▸ Env vars · config + task (2) [expand]",
 		"▸ Config vars · server templates (1) [expand]", "▸ Task vars (1) [expand]",
 	} {
 		if !strings.Contains(collapsed, want) {
@@ -280,10 +282,10 @@ func TestTasksTreeShowsScrollableCommandAndVariables(t *testing.T) {
 	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "▶ ▸ Command · cmd [expand]") {
 		t.Fatalf("focused detail section should show a pointer and expand hint:\n%s", view)
 	}
-	m = pressTree(m, "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter")
+	m = pressTree(m, "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter")
 	allDetails := strings.Join(m.taskDetailLines(80), "\n")
 	for _, want := range []string{
-		"echo build line global task ${MISSING}", `\${ESCAPED}`, "$${DOUBLE}", "┌", "┬", "SETTING", "Timeout", "45s", "Retries", "2 extra · 3 attempts", "Retry delay", "250ms",
+		"echo build line global task ${MISSING}", `\${ESCAPED}`, "exit 0 means nothing to do", "a non-zero exit fails the task", "$${DOUBLE}", "┌", "┬", "SETTING", "Timeout", "45s", "Retries", "2 extra · 3 attempts", "Retry delay", "250ms",
 		"Rerun", "unsafe", "Retry unsafe", "yes", "Shell", "bash -e", "Sudo", "Local only", "Log level", "debug",
 		"Depends on", "File copies", "NAME", "VALUE", "BASE", "global", "SHARED", "task", "Config vars · server templates", `"region": "eu"`, "Task vars", `"port": 8080`,
 	} {
@@ -525,5 +527,19 @@ tasks = ["@check"]
 	m.applyBundles()
 	if diff := cmp.Diff(map[string][]string{"laptop": {"lint"}}, tasksOf()); diff != "" {
 		t.Errorf("@check should only run on the local server (-want +got):\n%s", diff)
+	}
+}
+
+// A task without a check or verify says so in the task pane, so it's clear it always runs.
+func TestTasksTreeSaysWhenThereIsNoCheckOrVerify(t *testing.T) {
+	cfg := gorun.Config{Tasks: map[string]gorun.Task{"beta": {Name: "beta", Cmd: "echo beta"}}}
+	m := newTreeModel("test", "tasks", taskTreeNodes(&cfg, nil))
+	m.embedded = true
+	m.width, m.height = 100, 30
+	lines := ansi.Strip(strings.Join(m.taskDetailLines(80), "\n"))
+	for _, want := range []string{"▸ Check · none [expand]", "▸ Verify · none [expand]"} {
+		if !strings.Contains(lines, want) {
+			t.Errorf("missing %q:\n%s", want, lines)
+		}
 	}
 }

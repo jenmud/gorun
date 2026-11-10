@@ -175,7 +175,8 @@ type ConfigPageData struct {
 type EditFields struct {
 	Hostname, Groups, Tags, SSHUser, IdentityFile string
 	Cmd, Description, Tasks                       string
-	Sudo, Local                                   bool
+	Check, Verify                                 string
+	Sudo, Local, CheckCopies                      bool
 	Target, Cron, At, Timezone, Missed            string
 }
 
@@ -361,6 +362,9 @@ type TaskCard struct {
 	Average       time.Duration
 	CommandSource string
 	Command       string
+	Check         string // the check, run first; empty when the task has none
+	CheckCopies   bool   // it compares its copies with the server's
+	Verify        string // the verify, run after the command
 	Options       []Option
 	DependsOn     []string
 	InBundles     []string

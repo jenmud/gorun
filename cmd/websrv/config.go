@@ -242,6 +242,7 @@ func editFields(body map[string]any) ui.EditFields {
 	ssh, _ := body["ssh"].(map[string]any)
 	sudo, _ := body["sudo"].(bool)
 	local, _ := body["local"].(bool)
+	checkCopies, _ := body["check_copies"].(bool)
 	return ui.EditFields{
 		Hostname:     str(body, "hostname"),
 		Groups:       list("groups"),
@@ -249,6 +250,9 @@ func editFields(body map[string]any) ui.EditFields {
 		SSHUser:      str(ssh, "username"),
 		IdentityFile: str(ssh, "identityfile"),
 		Cmd:          str(body, "cmd"),
+		Check:        str(body, "check"),
+		Verify:       str(body, "verify"),
+		CheckCopies:  checkCopies,
 		Description:  str(body, "description"),
 		Tasks:        list("tasks"),
 		Sudo:         sudo,
@@ -314,9 +318,12 @@ func applyEdit(kind string, body map[string]any, form url.Values) error {
 		putSSH()
 	case kindTask:
 		put(body, "cmd", form.Get("cmd"))
+		put(body, "check", form.Get("check"))
+		put(body, "verify", form.Get("verify"))
 		put(body, "description", form.Get("description"))
 		putFlag("sudo")
 		putFlag("local")
+		putFlag("check_copies")
 	case kindBundle:
 		putList("tasks")
 		if _, ok := body["tasks"]; !ok {
@@ -784,6 +791,8 @@ func newChange(kind, name, file string, form url.Values) (gorun.Change, error) {
 			return gorun.Change{}, errors.New("a task needs a command")
 		}
 		body["cmd"] = cmd
+		setIf(body, "check", form.Get("check"))
+		setIf(body, "verify", form.Get("verify"))
 		setIf(body, "description", form.Get("description"))
 		if form.Get("sudo") != "" {
 			body["sudo"] = true

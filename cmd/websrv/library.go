@@ -147,6 +147,9 @@ func taskCards(cfg *gorun.Config, avg map[string]time.Duration) []ui.TaskCard {
 			Badges:      taskBadges(t),
 			Average:     avg[name],
 			Options:     executionOptions(t),
+			Check:       t.Check,
+			CheckCopies: t.CheckCopies,
+			Verify:      t.Verify,
 			DependsOn:   t.DependsOn,
 			InBundles:   inBundles[name],
 			RunsOn:      runsOn[name],
@@ -189,6 +192,12 @@ func taskBadges(t gorun.Task) []string {
 	}
 	if t.Local {
 		b = append(b, "local only")
+	}
+	if t.Check != "" || t.CheckCopies {
+		b = append(b, "check")
+	}
+	if t.Verify != "" {
+		b = append(b, "verify")
 	}
 	if t.Rerun == gorun.RerunUnsafe {
 		b = append(b, "not safe to rerun")

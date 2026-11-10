@@ -511,3 +511,11 @@ func planCheck(t *TaskInfo) string {
 func inPhase(t *TaskInfo, phase string) bool {
 	return t.State == store.StateRunning && t.Phase == phase
 }
+
+// cardCheck is a task card's check: its command, with the copy comparison first when it has one.
+func cardCheck(t TaskCard) string {
+	if !t.CheckCopies {
+		return t.Check
+	}
+	return strings.TrimSuffix("compare copies (md5); "+t.Check, "; ")
+}

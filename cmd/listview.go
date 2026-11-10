@@ -314,6 +314,8 @@ func (m treeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func taskSectionAt(i int) taskSection {
 	return [...]taskSection{
 		taskSectionCommand,
+		taskSectionCheck,
+		taskSectionVerify,
 		taskSectionExecution,
 		taskSectionEnvVars,
 		taskSectionConfigVars,
@@ -547,6 +549,7 @@ type taskDetail struct {
 	description   string
 	details       string
 	execution     []taskOption
+	check, verify string // the task's check (with its copy comparison) and verify; "" for none
 	command       string
 	commandSource string
 	commandFile   string
@@ -573,9 +576,11 @@ const (
 	taskSectionEnvVars
 	taskSectionConfigVars
 	taskSectionTaskVars
+	taskSectionCheck
+	taskSectionVerify
 )
 
-const taskSectionCount = 5
+const taskSectionCount = 7
 
 // newTaskDetail gathers what the task pane shows for task.
 func newTaskDetail(cfg *gorun.Config, task gorun.Task) *taskDetail {
@@ -583,6 +588,8 @@ func newTaskDetail(cfg *gorun.Config, task gorun.Task) *taskDetail {
 		description:   task.Description,
 		details:       task.Details,
 		execution:     taskExecutionOptions(task),
+		check:         taskCheckText(task),
+		verify:        task.Verify,
 		commandSource: "none",
 		commandLoaded: true,
 		envVars:       map[string]string{},
@@ -745,6 +752,19 @@ func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 		}
 		appendSection(0, taskSectionCommand, "Command · "+d.commandSource, commandContent)
 
+		// a check or verify names its command in the heading, so it shows even when folded
+		stepSection := func(index int, section taskSection, label, command, about, none string) {
+			if command == "" {
+				appendSection(index, section, label+" · none", []string{none})
+				return
+			}
+			heading := label + " · " + firstLine(command)
+			appendSection(index, section, heading, append(wrapDetailText(command, max(width-4, 1)), mutedStyle.Render(about)))
+		}
+		stepSection(1, taskSectionCheck, "Check", d.check, "runs first: exit 0 means nothing to do, so the task is skipped as unchanged",
+			"(none: the task always runs)")
+		stepSection(2, taskSectionVerify, "Verify", d.verify, "runs after the command: a non-zero exit fails the task", "(none)")
+
 		executionRows := make([][2]string, 0, len(d.execution))
 		for _, option := range d.execution {
 			executionRows = append(executionRows, [2]string{option.name, option.value})
@@ -753,7 +773,7 @@ func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 		if d.expanded&taskSections(taskSectionExecution) != 0 {
 			executionContent = detailTableLines("SETTING", "VALUE", executionRows, max(width-4, 1))
 		}
-		appendSection(1, taskSectionExecution, "Execution settings", executionContent)
+		appendSection(3, taskSectionExecution, "Execution settings", executionContent)
 
 		envRows := make([][2]string, 0, len(d.envVars))
 		for _, key := range slices.Sorted(maps.Keys(d.envVars)) {
@@ -763,7 +783,7 @@ func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 		if d.expanded&taskSections(taskSectionEnvVars) != 0 {
 			envContent = detailTableLines("NAME", "VALUE", envRows, max(width-4, 1))
 		}
-		appendSection(2, taskSectionEnvVars, fmt.Sprintf("Env vars · config + task (%d)", len(d.envVars)), envContent)
+		appendSection(4, taskSectionEnvVars, fmt.Sprintf("Env vars · config + task (%d)", len(d.envVars)), envContent)
 
 		var configVarsContent []string
 		if d.expanded&taskSections(taskSectionConfigVars) != 0 {
@@ -772,7 +792,7 @@ func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 				configVarsContent = []string{"(none configured)"}
 			}
 		}
-		appendSection(3, taskSectionConfigVars, fmt.Sprintf("Config vars · server templates (%d)", len(d.configVars)), configVarsContent)
+		appendSection(5, taskSectionConfigVars, fmt.Sprintf("Config vars · server templates (%d)", len(d.configVars)), configVarsContent)
 
 		var taskVarsContent []string
 		if d.expanded&taskSections(taskSectionTaskVars) != 0 {
@@ -781,7 +801,7 @@ func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 				taskVarsContent = []string{"(none configured)"}
 			}
 		}
-		appendSection(4, taskSectionTaskVars, fmt.Sprintf("Task vars (%d)", len(d.taskVars)), taskVarsContent)
+		appendSection(6, taskSectionTaskVars, fmt.Sprintf("Task vars (%d)", len(d.taskVars)), taskVarsContent)
 		d.renderedWidth, d.renderedState, d.renderedLines = width, d.expanded, lines
 	}
 
@@ -1067,4 +1087,12 @@ func bundleTreeNodes(cfg *gorun.Config) []*treeNode {
 		nodes = append(nodes, n)
 	}
 	return nodes
+}
+
+// taskCheckText is a task's check as it runs: the copy comparison first, when it has one.
+func taskCheckText(task gorun.Task) string {
+	if !task.CheckCopies {
+		return task.Check
+	}
+	return strings.TrimSuffix("compare copies (md5); "+task.Check, "; ")
 }

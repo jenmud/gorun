@@ -55,6 +55,7 @@ templ taskAddForm(files []FileOption) {
 			<input name="name" required placeholder="name, e.g. restart-web" class={ inputClass() }/>
 			<input name="description" placeholder="description" class={ inputClass() }/>
 			<textarea name="cmd" required rows="3" placeholder="command, e.g. systemctl restart web" class={ inputClass() + " font-mono sm:col-span-2" }></textarea>
+			@taskCheckFields(EditFields{}, false)
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" class="accent-violet-600"/> run with sudo</label>
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" class="accent-violet-600"/> run only on local servers</label>
 			<div class="sm:col-span-2">
@@ -67,6 +68,22 @@ templ taskAddForm(files []FileOption) {
 	</details>
 }
 
+// taskCheckFields are a task's check and verify in its add and edit forms. The edit form also
+// offers check_copies, so editing a task never drops it; a new task from a form copies nothing.
+templ taskCheckFields(e EditFields, edit bool) {
+	<label class="block text-xs text-zinc-400 sm:col-span-2">
+		Check <span class="text-zinc-600">runs first: exit 0 means nothing to do, so the task is skipped as unchanged</span>
+		<input name="check" value={ e.Check } placeholder="e.g. dpkg -s nginx (leave empty: the task always runs)" class={ inputClass() + " font-mono" }/>
+	</label>
+	<label class="block text-xs text-zinc-400 sm:col-span-2">
+		Verify <span class="text-zinc-600">runs after the command: a non-zero exit fails the task</span>
+		<input name="verify" value={ e.Verify } placeholder="e.g. systemctl is-active nginx" class={ inputClass() + " font-mono" }/>
+	</label>
+	if edit {
+		<label class="flex items-center gap-2 text-xs text-zinc-300 sm:col-span-2"><input type="checkbox" name="check_copies" checked?={ e.CheckCopies } class="accent-violet-600"/> check copies: skip the task when the server already has every file it copies (MD5)</label>
+	}
+}
+
 templ taskEditPanel(d TasksPageData) {
 	<section class="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
 		<h2 class="text-lg font-semibold text-zinc-100">Edit task <span class="font-mono">{ d.EditingName }</span></h2>
@@ -77,6 +94,7 @@ templ taskEditPanel(d TasksPageData) {
 				Command
 				<textarea name="cmd" rows="4" placeholder="leave empty if the task uses cmd_file, a template or only copies files" class={ inputClass() + " font-mono" }>{ d.Edit.Cmd }</textarea>
 			</label>
+			@taskCheckFields(d.Edit, true)
 			@editField("Description", "description", d.Edit.Description, "")
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" checked?={ d.Edit.Sudo } class="accent-violet-600"/> run with sudo</label>
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" checked?={ d.Edit.Local } class="accent-violet-600"/> run only on local servers</label>
@@ -122,6 +140,8 @@ templ taskCard(t TaskCard) {
 					</summary>
 					<pre class="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">{ t.Command }</pre>
 				</details>
+				@cardStep("Check", cardCheck(t), "runs first: exit 0 means nothing to do, so the task is skipped as unchanged", "none: the task always runs")
+				@cardStep("Verify", t.Verify, "runs after the command: a non-zero exit fails the task", "none")
 				if len(t.Options) > 0 {
 					<details class="group/opts">
 						<summary class="flex cursor-pointer list-none items-center gap-2">
@@ -330,4 +350,21 @@ templ bundleCard(b BundleCard) {
 			</div>
 		</details>
 	</li>
+}
+
+// cardStep is a task's check or verify on its card: the command, open so it is seen at once,
+// and what it does; or that the task has none.
+templ cardStep(label, command, about, none string) {
+	if command == "" {
+		<p class="flex items-center gap-2"><span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ label }</span><span class="text-zinc-500">{ none }</span></p>
+	} else {
+		<details open class="group/step">
+			<summary class="flex cursor-pointer list-none items-center gap-2">
+				<span class="inline-block text-zinc-500 transition group-open/step:rotate-90">▸</span>
+				<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ label }</span>
+				<span class="text-[11px] text-zinc-600">{ about }</span>
+			</summary>
+			<pre class="mt-2 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">{ command }</pre>
+		</details>
+	}
 }

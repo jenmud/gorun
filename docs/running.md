@@ -47,8 +47,9 @@ enter.
 The **Tasks** tab keeps the dependency tree on the left and previews the selected task on the
 right: its description, details, command (including command-file contents), execution settings,
 config/task env vars, and config/task vars. Command previews substitute configured `${NAME}` values;
-unresolved placeholders stay as written. Description and details stay open; the other sections
-start collapsed. Execution settings and env vars appear as tables when expanded. Press **tab** to
+unresolved placeholders stay as written. Under the command are the task's **Check** and
+**Verify**: each heading names its command, so it shows even folded, and a task without one
+says `none`. Description and details stay open; the other sections start collapsed. Execution settings and env vars appear as tables when expanded. Press **tab** to
 focus the details pane, **↑/↓** to select a section, and **enter** or **→** to expand/collapse it.
 Use **pgup/pgdn** or **home/end** to scroll the details, then press **tab** to return to the tree.
 Press **ctrl+e** on a file-backed task to open its `cmd_file` or `cmd_template_file` in `$EDITOR`

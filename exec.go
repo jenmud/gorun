@@ -30,13 +30,14 @@ const (
 
 // TaskExec runs one task on one server, and holds the result of its latest attempt.
 type TaskExec struct {
-	task     Task
-	server   *ssh.Client // nil runs the task on this machine
-	target   *Server     // the server templates are rendered for
-	logger   *slog.Logger
-	progress CopyProgressFunc // when set, is told how far each copy has got
-	onPhase  func(Phase)      // when set, is told as each phase of an attempt starts
-	force    bool             // skip the check and always run the command
+	task      Task
+	server    *ssh.Client // nil runs the task on this machine
+	target    *Server     // the server templates are rendered for
+	logger    *slog.Logger
+	progress  CopyProgressFunc // when set, is told how far each copy has got
+	onPhase   func(Phase)      // when set, is told as each phase of an attempt starts
+	force     bool             // skip the check and always run the command
+	checkOnly bool             // run only the check: never the copies, command or verify
 
 	command   string // the command as written, with templates rendered
 	startedAt time.Time
@@ -47,6 +48,7 @@ type TaskExec struct {
 	check     *StepResult // the check's result, when it ran
 	verify    *StepResult // the verify's result, when it ran
 	unchanged bool        // the check found nothing to do
+	wouldRun  bool        // a check-only run found the task has something to do
 	// stopped is set when the task stopped because its context was canceled or
 	// its timeout expired. Such attempts are not retried.
 	stopped bool
@@ -144,17 +146,20 @@ func (t *TaskExec) phases(ctx context.Context, local bool) error {
 		run = t.runLocal
 	}
 
-	if t.task.Check != "" && !t.force {
+	if t.task.hasCheck() && !t.force {
 		t.enter(PhaseCheck)
-		var err error
-		if t.check, err = t.step(ctx, run, t.task.Check); err == nil {
+		changed, err := t.runCheck(ctx, run)
+		if err != nil {
+			return fmt.Errorf("check failed: %w", err)
+		}
+		if !changed {
 			t.unchanged = true
 			return nil
 		}
-		// any exit code but 0 means there is work to do; a check that couldn't run fails the task
-		if !hasExitStatus(err) || ctx.Err() != nil {
-			return fmt.Errorf("check failed: %w", err)
-		}
+	}
+	if t.checkOnly {
+		t.wouldRun = true
+		return nil
 	}
 
 	t.enter(PhaseRun)
@@ -179,6 +184,38 @@ func (t *TaskExec) phases(ctx context.Context, local bool) error {
 		}
 	}
 	return nil
+}
+
+// runCheck runs the task's copy comparison and check command, and reports whether there is
+// anything to do. Any exit code but 0 means yes; a check that couldn't run is an error. Both
+// results go into one check result.
+func (t *TaskExec) runCheck(ctx context.Context, run runFunc) (bool, error) {
+	if t.task.CheckCopies {
+		res, err := t.compareCopies(ctx, run)
+		if err != nil {
+			return false, err
+		}
+		t.check = res
+		if res.ExitCode != 0 || t.task.Check == "" {
+			return res.ExitCode != 0, nil
+		}
+	}
+
+	res, err := t.step(ctx, run, t.task.Check)
+	if copies := t.check; copies != nil {
+		res.Command = copies.Command + "; " + res.Command
+		res.Stdout = copies.Stdout + res.Stdout
+		res.Stderr = copies.Stderr + res.Stderr
+		res.Duration += copies.Duration
+	}
+	t.check = res
+	switch {
+	case err == nil:
+		return false, nil
+	case hasExitStatus(err) && ctx.Err() == nil:
+		return true, nil
+	}
+	return false, err
 }
 
 // enter starts a phase, and tells onPhase.
@@ -413,7 +450,7 @@ func stepFailure(phase Phase, err error, check, verify *StepResult) string {
 // again with a clean exit code, output and command.
 func (t *TaskExec) resetForRetry() {
 	t.stdout, t.stderr, t.exitCode, t.command, t.stopped = nil, nil, 0, "", false
-	t.phase, t.check, t.verify, t.unchanged = "", nil, nil, false
+	t.phase, t.check, t.verify, t.unchanged, t.wouldRun = "", nil, nil, false, false
 	t.startedAt = time.Time{}
 }
 

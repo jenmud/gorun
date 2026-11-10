@@ -157,6 +157,7 @@ func runRow(s store.RunSummary) ui.RunRow {
 		Failed:     s.Failed,
 		Skipped:    s.Skipped,
 		Schedule:   s.Schedule,
+		CheckOnly:  s.CheckOnly,
 	}
 }
 

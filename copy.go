@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/template"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -261,11 +260,7 @@ func CopyFilesContext(ctx context.Context, client *ssh.Client, server any, task 
 		ctx = context.Background()
 	}
 	for _, c := range task.copies() {
-		dst := c.Dst
-		if dst == "" && c.Dir != "" && c.Src != "" {
-			dst = filepath.Join(c.Dir, filepath.Base(c.Src))
-		}
-		if err := copyOne(ctx, client, server, task, c, dst, progress); err != nil {
+		if err := copyOne(ctx, client, server, task, c, c.target(), progress); err != nil {
 			return err
 		}
 	}
@@ -281,19 +276,11 @@ func copyOne(ctx context.Context, client *ssh.Client, server any, task *Task, c 
 	case c.Content != "":
 		return text([]byte(c.Content))
 	case c.SrcTpl != "":
-		source, err := os.ReadFile(c.SrcTpl)
+		data, err := renderCopyTemplate(task, server, c.SrcTpl)
 		if err != nil {
 			return err
 		}
-		tmpl, err := template.New(filepath.Base(c.SrcTpl)).Parse(string(source))
-		if err != nil {
-			return err
-		}
-		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, task.templateData(server)); err != nil {
-			return err
-		}
-		return text(buf.Bytes())
+		return text(data)
 	case c.Src == "":
 		return fmt.Errorf("no source for copy")
 	}

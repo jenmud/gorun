@@ -370,14 +370,20 @@ func (m historyModel) detailSections() ([]string, []historySection) {
 			command = append(command, prefix+strings.ReplaceAll(strings.TrimRight(line, "\r"), "\t", "    "))
 		}
 	}
+	// a check and a verify are shown like the command: its command, stdout and stderr
+	addStep := func(key, title string, s *store.Step) {
+		add(taskScope+key+"-command", title+" command · "+stepLabel(s), []string{"$ " + s.Command})
+		add(taskScope+key+"-stdout", title+" stdout", outputLines(s.Stdout))
+		add(taskScope+key+"-stderr", title+" stderr", outputLines(s.Stderr))
+	}
 	if task.Check != nil {
-		add(taskScope+"check", "Check · "+stepLabel(task.Check), stepLines(task.Check))
+		addStep("check", "Check", task.Check)
 	}
 	add(taskScope+"command", "Command", command)
 	add(taskScope+"stdout", "Stdout", outputLines(task.Stdout))
 	add(taskScope+"stderr", "Stderr", outputLines(task.Stderr))
 	if task.Verify != nil {
-		add(taskScope+"verify", "Verify · "+stepLabel(task.Verify), stepLines(task.Verify))
+		addStep("verify", "Verify", task.Verify)
 	}
 	return meta, sections
 }
@@ -395,15 +401,6 @@ func stepLabel(s *store.Step) string {
 	return fmt.Sprintf("exit %d, %s", s.ExitCode, time.Duration(s.Duration).Round(time.Millisecond))
 }
 
-// stepLines shows a check or verify: the command, then its output.
-func stepLines(s *store.Step) []string {
-	lines := []string{"$ " + s.Command}
-	if out := strings.TrimRight(s.Stdout+s.Stderr, "\n"); out != "" {
-		lines = append(lines, strings.Split(out, "\n")...)
-	}
-	return lines
-}
-
 // historyTaskState renders a task's state as a coloured label.
 func historyTaskState(state int) string {
 	switch state {
@@ -417,6 +414,8 @@ func historyTaskState(state int) string {
 		return skipStyle.Render("⊘ skipped")
 	case store.StateUnchanged:
 		return mutedStyle.Render("= unchanged")
+	case store.StateWouldRun:
+		return skipStyle.Render("~ would run")
 	default:
 		return mutedStyle.Render("○ pending")
 	}
@@ -1038,6 +1037,8 @@ func (m historyModel) historyDetailView(title, muted, ok, fail, skip, timing lip
 				mark = skip.Render("●")
 			case store.StateUnchanged:
 				mark = muted.Render("=")
+			case store.StateWouldRun:
+				mark = skip.Render("~")
 			}
 			line = pointer + "  " + mark + " " + task.Name + timing.Render("  "+task.Duration.Round(time.Millisecond).String())
 		}

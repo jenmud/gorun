@@ -91,6 +91,7 @@ type RunRow struct {
 	Failed     int
 	Skipped    int
 	Schedule   string // the schedule that started the run, or empty
+	CheckOnly  bool   // a check-only run, which changed nothing
 }
 
 // HistoryPageData is everything the history list shows.
@@ -218,6 +219,8 @@ func stateLabel(state int) string {
 		return "skipped"
 	case store.StateUnchanged:
 		return "unchanged"
+	case store.StateWouldRun:
+		return "would run"
 	default:
 		return "unknown"
 	}
@@ -236,6 +239,8 @@ func stateIcon(state int) string {
 		return "⊘"
 	case store.StateUnchanged:
 		return "="
+	case store.StateWouldRun:
+		return "~"
 	default:
 		return "○"
 	}
@@ -254,6 +259,8 @@ func stateClass(state int) string {
 		return "text-amber-400"
 	case store.StateUnchanged:
 		return "text-sky-400"
+	case store.StateWouldRun:
+		return "text-amber-300"
 	default:
 		return "text-zinc-500"
 	}
@@ -310,6 +317,8 @@ func hintFor(state int) string {
 		return "Skipped because something it depends on failed."
 	case store.StateUnchanged:
 		return "Unchanged: its check found nothing to do, so its command didn't run."
+	case store.StateWouldRun:
+		return "Would run: this was a check-only run, and its check found something to do (or it has no check). Nothing was changed."
 	case store.StateRunning:
 		return "Running now. Output appears when it finishes."
 	default:

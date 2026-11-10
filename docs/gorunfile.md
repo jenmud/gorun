@@ -325,17 +325,47 @@ sudo   = true
 | anything else | runs the task |
 | can't finish (timeout, lost connection) | fails the task, rather than run it blind |
 
+- **A task without a `check` (or `check_copies`) always runs.** That is the default: leave both
+  out for a task that must run every time.
 - **Unchanged is a success.** Tasks that depend on it still run, and the run still passes.
 - **Verify failing fails the task**, with the verify's exit code. Its reason and the end of its
   output are added to the task's stderr, and tasks that depend on it are skipped.
 - **Force:** `--force` on the command line, or **Force** on the web UI's Run page, runs every
   task whatever its check says: checks don't run, so nothing ends unchanged. Verifies still run.
+- **Check only:** `--check`, or **Check only** on the Run page, is a dry run: only the checks
+  run, and nothing is copied, run or verified. Each task ends *unchanged* or *would run*
+  (its check found something to do, or it has no check), and history marks the run
+  *check only*. A dependent task's check sees the server as it is now, before anything it
+  depends on would have changed it. `--check` and `--force` can't be used together.
 - Checks and verifies run the way `cmd` does: same server, `shell`, `sudo`, envvars and
   `timeout`. The timeout covers all three. A retry runs the check again.
-- A check runs before the task's copies, so it can't look at the files being copied.
+- A check runs before the task's copies, so it can't look at the files being copied; use
+  `check_copies` for that.
 - They are plain commands, like `cmd`: they aren't templates.
 - The live view shows *checking* and *verifying* as they run, and a task the check skipped
   as `=` *unchanged*. History keeps each one's command, exit code and output.
+
+#### Comparing copies
+
+For a task that copies files, `check_copies = true` compares the MD5 of each file it would copy
+(a rendered template, inline content, a file, or every file of a folder) with the file already
+on the server. When they all match, the task is unchanged: nothing is copied and its command
+doesn't run.
+
+```toml
+[tasks.site]
+check_copies = true
+cmd = "systemctl reload nginx"            # only when a file changed
+copy = [{ src = "site", dst = "/srv/www" }]
+```
+
+- With a `check` as well, the task is unchanged only when the copies match **and** the check
+  exits 0.
+- The check's output lists each copy as `same` or `changed`, and for a folder, which files.
+- Files on the server that the copy doesn't include are ignored, as the copy ignores them.
+- It reads the files with `md5sum`, or `md5 -r` on macOS. A server with neither, or a file that
+  isn't there, counts as changed, so the task runs.
+- Only the contents are compared, not file modes.
 
 ### Descriptions and rerun safety
 

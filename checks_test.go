@@ -14,7 +14,14 @@ import (
 // runChecks runs tasks on a local server and returns every task event, in order.
 func runChecks(t *testing.T, force bool, tasks ...Task) ([]TaskEvent, ProcessFinishedEvent, error) {
 	t.Helper()
-	cfg := &Config{Tasks: map[string]Task{}, Force: force}
+	return runChecksWith(t, func(c *Config) { c.Force = force }, tasks...)
+}
+
+// runChecksWith is runChecks with the config set up by configure.
+func runChecksWith(t *testing.T, configure func(*Config), tasks ...Task) ([]TaskEvent, ProcessFinishedEvent, error) {
+	t.Helper()
+	cfg := &Config{Tasks: map[string]Task{}}
+	configure(cfg)
 	names := []string{}
 	for _, task := range tasks {
 		task.Local = true
@@ -211,4 +218,121 @@ func phaseStrings(ps []Phase) []string {
 		out[i] = string(p)
 	}
 	return out
+}
+
+func TestCheckCopiesSkipsATaskWhoseFilesAreAlreadyThere(t *testing.T) {
+	src, out := t.TempDir(), t.TempDir()
+	conf := filepath.Join(src, "app.conf")
+	site := filepath.Join(src, "site")
+	if err := os.MkdirAll(filepath.Join(site, "css"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(path, text string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(conf, "port = 8080\n")
+	write(filepath.Join(site, "index.html"), "<h1>hi</h1>")
+	write(filepath.Join(site, "css", "app.css"), "body{}")
+	task := Task{Name: "ship", CheckCopies: true, Cmd: "echo installed", Copy: []Copy{
+		{Src: conf, Dst: filepath.Join(out, "app.conf")},
+		{Src: site, Dst: filepath.Join(out, "site")},
+		{Content: "inline", Dst: filepath.Join(out, "note.txt")},
+	}}
+	state := func() TaskEvent {
+		t.Helper()
+		events, _, err := runChecks(t, false, task)
+		if err != nil {
+			ev := final(events, "ship")
+			t.Fatalf("%v: %v, stderr %q, check %+v", err, ev.Err, ev.Stderr, ev.Check)
+		}
+		return final(events, "ship")
+	}
+
+	if ev := state(); ev.State != TaskDone || ev.Check == nil || ev.Check.ExitCode != 1 {
+		t.Fatalf("first run: state %d, check %+v; want the files copied", ev.State, ev.Check)
+	}
+	ev := state()
+	if ev.State != TaskUnchanged || strings.Contains(ev.Check.Stdout, "changed") {
+		t.Fatalf("second run: state %d, check %q; want unchanged", ev.State, ev.Check.Stdout)
+	}
+
+	// one file of the folder changes: the task runs again, and the report names the file
+	write(filepath.Join(site, "css", "app.css"), "body{color:red}")
+	ev = state()
+	if ev.State != TaskDone || !strings.Contains(ev.Check.Stdout, "css/app.css") {
+		t.Fatalf("after a change: state %d, check %q; want it run, naming css/app.css", ev.State, ev.Check.Stdout)
+	}
+}
+
+func TestCheckCopiesAndCheckMustBothSayNothingToDo(t *testing.T) {
+	src, out := t.TempDir(), t.TempDir()
+	conf := filepath.Join(src, "app.conf")
+	if err := os.WriteFile(conf, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	task := Task{Name: "ship", CheckCopies: true, Check: "echo service down; exit 1", Cmd: "true",
+		Copy: []Copy{{Src: conf, Dst: filepath.Join(out, "app.conf")}}}
+	for range 2 {
+		if _, _, err := runChecks(t, false, task); err != nil {
+			t.Fatal(err)
+		}
+	}
+	events, _, _ := runChecks(t, false, task)
+	ev := final(events, "ship")
+	if ev.State != TaskDone || ev.Check.ExitCode != 1 || !strings.Contains(ev.Check.Stdout, "same") || !strings.Contains(ev.Check.Stdout, "service down") {
+		t.Errorf("state %d, check %+v; want it run because the check said so, with both reports", ev.State, ev.Check)
+	}
+}
+
+func TestCheckOnlyNeverChangesAnything(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "ran")
+	copied := filepath.Join(dir, "copied")
+	events, finished, err := runChecksWith(t, func(c *Config) { c.CheckOnly = true },
+		Task{Name: "fine", Check: "true", Cmd: "touch " + marker},
+		Task{Name: "drifted", Check: "echo version is 2.3; exit 1", Cmd: "touch " + marker, Verify: "touch " + marker},
+		Task{Name: "always", Cmd: "touch " + marker, Copy: []Copy{{Content: "x", Dst: copied}}},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("a command or verify ran in a check-only run")
+	}
+	if _, err := os.Stat(copied); err == nil {
+		t.Error("a copy was made in a check-only run")
+	}
+	for name, want := range map[string]TaskState{"fine": TaskUnchanged, "drifted": TaskWouldRun, "always": TaskWouldRun} {
+		if got := final(events, name).State; got != want {
+			t.Errorf("%s: state %d, want %d", name, got, want)
+		}
+	}
+	if ev := final(events, "drifted"); ev.Check == nil || !strings.Contains(ev.Check.Stdout, "2.3") {
+		t.Errorf("drifted check = %+v, want its output kept", ev.Check)
+	}
+	if ev := final(events, "always"); ev.Check != nil || len(phases(events, "always")) != 0 {
+		t.Errorf("a task with no check ran a phase: %+v", ev)
+	}
+	if finished.WouldRun != 2 || finished.Unchanged != 1 || !finished.Success {
+		t.Errorf("finished = %+v, want 2 would run, 1 unchanged, success", finished)
+	}
+}
+
+func TestForceAndCheckOnlyCantBeUsedTogether(t *testing.T) {
+	_, _, err := runChecksWith(t, func(c *Config) { c.Force, c.CheckOnly = true, true }, Task{Name: "a", Cmd: "true"})
+	if err == nil || !strings.Contains(err.Error(), "can't be used together") {
+		t.Errorf("err = %v", err)
+	}
+}
+
+func TestParseDigestsReadsMd5sumAndMacOS(t *testing.T) {
+	out := "== 0\nd41d8cd98f00b204e9800998ecf8427e  /etc/app.conf\n== 1\n" +
+		"0cc175b9c0f1b6a831c399e269772661 ./css/app.css\n92eb5ffee6ae2fec3ad71c777531578f  ./index.html\n== 2\n"
+	got := parseDigests(out, 3)
+	if got[0]["/etc/app.conf"] != "d41d8cd98f00b204e9800998ecf8427e" || got[1]["css/app.css"] == "" || got[1]["index.html"] == "" || len(got[2]) != 0 {
+		t.Errorf("parseDigests = %v", got)
+	}
 }

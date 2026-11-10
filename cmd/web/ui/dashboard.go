@@ -59,6 +59,7 @@ type ProcessState struct {
 	Duration    int64
 	StartedAt   string
 	Schedule    string // the schedule that started the run, or empty
+	CheckOnly   bool   // a check-only run: only checks ran
 }
 
 // DashboardState is every run the live dashboard shows, in the order they started. Apply keeps it up to date from run events.
@@ -110,6 +111,7 @@ func (s *DashboardState) Apply(ev store.Event) {
 		p.Title = ev.Title
 		p.StartedAt = ev.StartedAt
 		p.Schedule = ev.Schedule
+		p.CheckOnly = ev.CheckOnly
 		p.Servers = make(map[string]*ServerInfo)
 		p.ServerOrder = nil
 		p.Finished = false

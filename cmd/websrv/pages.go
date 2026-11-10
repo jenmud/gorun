@@ -136,7 +136,11 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 
 	uuid := fmt.Sprintf("web-%d-%d", os.Getpid(), time.Now().UnixNano())
 	cfg.GorunUUID = uuid
-	cfg.Force = r.PostFormValue("force") != ""
+	cfg.Force, cfg.CheckOnly = r.PostFormValue("force") != "", r.PostFormValue("check") != ""
+	if cfg.Force && cfg.CheckOnly {
+		redirectWith(w, r, "/", "Force and check only can't be used together.", true)
+		return
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	a.mu.Lock()
 	a.runs[uuid] = cancel

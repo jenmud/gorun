@@ -78,6 +78,10 @@ type Config struct {
 	// run, so tasks never end unchanged. Verify commands still run.
 	Force bool `toml:"-"`
 
+	// CheckOnly runs only the tasks' checks, as a dry run: copies, commands and verifies never
+	// run. A task whose check finds something to do, or that has no check, ends TaskWouldRun.
+	CheckOnly bool `toml:"-"`
+
 	// SelectedTasks, when non-empty, limits execution to these tasks (and their
 	// dependencies). Bundle references ("@name") are expanded. Used by the --task CLI flag.
 	SelectedTasks []string `toml:"-"`

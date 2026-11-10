@@ -73,6 +73,7 @@ type serverView struct {
 	failedCount    int
 	skippedCount   int
 	unchangedCount int
+	wouldRunCount  int
 	runningCount   int
 	open           bool // the compact view lists this server's tasks
 }
@@ -102,10 +103,12 @@ func (s *serverView) count(states ...gorun.TaskState) int {
 			return s.skippedCount
 		case gorun.TaskUnchanged:
 			return s.unchangedCount
+		case gorun.TaskWouldRun:
+			return s.wouldRunCount
 		case gorun.TaskRunning:
 			return s.runningCount
 		case gorun.TaskPending:
-			return len(s.tasks) - s.doneCount - s.failedCount - s.skippedCount - s.unchangedCount - s.runningCount
+			return len(s.tasks) - s.doneCount - s.failedCount - s.skippedCount - s.unchangedCount - s.wouldRunCount - s.runningCount
 		}
 	}
 	n := 0
@@ -129,6 +132,7 @@ type tuiBatchMsg struct {
 // tuiModel is the bubbletea model for a gorun deployment.
 type tuiModel struct {
 	title          string
+	checkOnly      bool // a --check run: only checks run
 	servers        []*serverView
 	serverMap      map[string]*serverView
 	flatTasksCache []*taskView
@@ -282,6 +286,8 @@ func (m tuiModel) applyEvent(event any) tuiModel {
 					t.expanded = true
 				case gorun.TaskUnchanged:
 					s.unchangedCount++
+				case gorun.TaskWouldRun:
+					s.wouldRunCount++
 				}
 			}
 		}
@@ -514,13 +520,17 @@ func (m tuiModel) View() tea.View {
 
 // header draws the title line.
 func (m tuiModel) header() string {
-	return titleStyle.Render("gorun") + " " + mutedStyle.Render(m.title)
+	header := titleStyle.Render("gorun") + " " + mutedStyle.Render(m.title)
+	if m.checkOnly {
+		header += " " + skipStyle.Render("· check only: nothing will change")
+	}
+	return header
 }
 
 // serverSummary renders the server name, progress bar and current status.
 func (m tuiModel) serverSummary(s *serverView) string {
 	total := len(s.tasks)
-	finished := s.count(gorun.TaskDone, gorun.TaskFailed, gorun.TaskSkipped, gorun.TaskUnchanged)
+	finished := s.count(gorun.TaskDone, gorun.TaskFailed, gorun.TaskSkipped, gorun.TaskUnchanged, gorun.TaskWouldRun)
 
 	percent := 0.0
 	if total > 0 {
@@ -1012,6 +1022,13 @@ func (m tuiModel) taskStatus(t *taskView) string {
 	case gorun.TaskUnchanged:
 		icon = mutedStyle.Render("=")
 		detail = mutedStyle.Render("unchanged · "+attempt) + timeStyle.Render(formatDuration(t.event.Duration))
+	case gorun.TaskWouldRun:
+		icon = skipStyle.Render("~")
+		why := "no check"
+		if t.event.Check != nil {
+			why = "check found changes"
+		}
+		detail = skipStyle.Render("would run") + mutedStyle.Render(" · "+why)
 	case gorun.TaskFailed:
 		icon = failStyle.Render("✗")
 		if t.event.Phase == gorun.PhaseCheck || t.event.Phase == gorun.PhaseVerify {
@@ -1166,12 +1183,13 @@ func (m tuiModel) renderServerErrorBox(server string, err error) string {
 // footer draws the run's totals once it is over, and the key help.
 func (m tuiModel) footer() string {
 	if m.done || m.quitting {
-		total, failed, skipped, unchanged := 0, 0, 0, 0
+		total, failed, skipped, unchanged, wouldRun := 0, 0, 0, 0, 0
 		for _, s := range m.servers {
 			total += len(s.tasks)
 			failed += s.count(gorun.TaskFailed)
 			skipped += s.count(gorun.TaskSkipped)
 			unchanged += s.count(gorun.TaskUnchanged)
+			wouldRun += s.count(gorun.TaskWouldRun)
 		}
 
 		elapsed := m.elapsed
@@ -1191,6 +1209,9 @@ func (m tuiModel) footer() string {
 				summary += skipStyle.Render(fmt.Sprintf(", %d skipped", skipped))
 			}
 			summary += mutedStyle.Render(" in ") + timeStyle.Render(formatDuration(elapsed))
+		case m.checkOnly:
+			summary = okStyle.Render("✓ checked") + mutedStyle.Render(fmt.Sprintf(": %d would run, %d unchanged, nothing changed", wouldRun, unchanged)) +
+				mutedStyle.Render(" in ") + timeStyle.Render(formatDuration(elapsed))
 		default:
 			summary = okStyle.Render(fmt.Sprintf("✓ all %d tasks completed", total))
 			if unchanged > 0 {
@@ -1271,7 +1292,9 @@ func highlightSelectedRow(line string, width int) string {
 // main sends the logs to the log file (or discards them) first, as they would corrupt the TUI.
 func runTUI(ctx context.Context, cancel context.CancelFunc, cfg *gorun.Config, verbose bool) error {
 	defer drainTerminalInput()
-	p := tea.NewProgram(newTUIModel(cfg.Title, verbose, cancel), tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1")))
+	model := newTUIModel(cfg.Title, verbose, cancel)
+	model.checkOnly = cfg.CheckOnly
+	p := tea.NewProgram(model, tea.WithEnvironment(append(os.Environ(), "SSH_TTY=1")))
 
 	h, herr := history.Open(getHistoryDBPath())
 	if herr == nil {

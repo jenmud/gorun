@@ -53,9 +53,11 @@ each server's progress live.
   a tag or commit and locked in `Gorunfile.lock`:
   `include = ["git::https://github.com/you/tasks.git//web/*.toml?ref=v1.2.0"]`. See the
   [task library recipe](recipes/06-task-library/README.md).
-- **Run only when needed.** A task's `check` says whether there is anything to do: when there
-  isn't, the task is marked unchanged and skipped. A `verify` confirms the change took.
-  `--force` runs everything anyway. See [checks](docs/gorunfile.md#checks-run-only-when-needed).
+- **Run only when needed.** A task's `check` says whether there is anything to do, or
+  `check_copies` compares the MD5 of its files with the server's: when nothing changed, the task
+  is marked unchanged and skipped. A `verify` confirms the change took. `--check` is a dry run
+  that only runs the checks; `--force` runs everything anyway. See
+  [checks](docs/gorunfile.md#checks-run-only-when-needed).
 - **Big uploads.** Copy a file or a whole directory to every server and watch each upload's
   percentage, size and speed in the terminal and the web UI. See
   [upload progress](docs/gorunfile.md#upload-progress) and the

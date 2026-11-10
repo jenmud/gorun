@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"text/template"
 	"time"
@@ -46,6 +47,14 @@ type Copy struct {
 	Dest     string `toml:"dest,omitempty"`
 	Mode     string `toml:"mode,omitempty"`
 	Perm     string `toml:"perm,omitempty"`
+}
+
+// target is where the copy goes on the server: Dst, or Dir with the source's name.
+func (c Copy) target() string {
+	if c.Dst == "" && c.Dir != "" && c.Src != "" {
+		return filepath.Join(c.Dir, filepath.Base(c.Src))
+	}
+	return c.Dst
 }
 
 // normalized returns the copy with its alternative keys folded into Src, SrcTpl and Dst.
@@ -97,6 +106,9 @@ type Task struct {
 	// code means yes, so the task runs. A check that can't run at all (or times out) fails the
 	// task. Config.Force skips the check.
 	Check string `toml:"check,omitempty"`
+	// CheckCopies compares the MD5 of each file the task copies with the file on the server.
+	// When they all match, and Check (if set) exits 0 too, the task is unchanged.
+	CheckCopies bool `toml:"check_copies,omitempty"`
 	// Verify runs after the task's command succeeds, to confirm the change took: a non-zero
 	// exit fails the task.
 	Verify string `toml:"verify,omitempty"`
@@ -149,6 +161,11 @@ func (t Task) copies() []Copy {
 // commandSources are the task's four ways to give a command, of which at most one may be set.
 func (t Task) commandSources() []string {
 	return []string{t.Cmd, t.CmdFile, t.CmdTemplate, t.CmdTemplateFile}
+}
+
+// hasCheck reports whether the task checks whether there is anything to do before it runs.
+func (t Task) hasCheck() bool {
+	return t.Check != "" || t.CheckCopies
 }
 
 // hasCommand reports whether the task runs a command (as opposed to only copying files).
@@ -266,6 +283,8 @@ func (t Task) validate() error {
 		return fmt.Errorf("command file %s does not exist", t.CmdFile)
 	case missing(t.CmdTemplateFile):
 		return fmt.Errorf("command template file %s does not exist", t.CmdTemplateFile)
+	case t.CheckCopies && len(copies) == 0:
+		return fmt.Errorf("task %s sets check_copies but copies nothing", t.Name)
 	}
 
 	for _, c := range copies {

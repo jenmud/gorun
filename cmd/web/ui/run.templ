@@ -31,6 +31,10 @@ templ runPicker(d RunPageData) {
 			<input type="checkbox" name="force" value="1" class="mt-0.5 accent-violet-600"/>
 			<span><span class="font-medium text-zinc-200">Force</span>: run tasks even when their check says nothing needs to change</span>
 		</label>
+		<label class="flex items-start gap-2 text-xs text-zinc-400" title="A dry run: run each task's check and report which tasks would run">
+			<input type="checkbox" name="check" value="1" class="mt-0.5 accent-violet-600"/>
+			<span><span class="font-medium text-zinc-200">Check only</span>: a dry run. Run the checks and show which tasks would run, without changing anything</span>
+		</label>
 		<section>
 			<div class="mb-2 flex items-center justify-between gap-2">
 				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Servers</h3>

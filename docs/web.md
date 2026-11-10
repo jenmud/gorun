@@ -61,7 +61,9 @@ update as runs go. Each run, server and task starts collapsed. A task that is up
 a bar with the size and rate, and a closed server shows the upload on its line
 ([screenshot](screenshot-web-upload.png)). **Recent runs** bars link to the
 run; **Stop** cancels a run started from the page. **Force** runs every task even when its
-[check](gorunfile.md#checks-run-only-when-needed) says there is nothing to do. Runs read the Gorunfile on disk, so save first.
+[check](gorunfile.md#checks-run-only-when-needed) says there is nothing to do, and **Check only**
+is a dry run that only runs the checks: its tasks end *unchanged* or *would run*, and the run is
+marked *check only*. Runs read the Gorunfile on disk, so save first.
 
 ### Tasks
 

@@ -67,6 +67,15 @@ func (p *plainPrinter) event(event any) {
 			if p.verbose && ev.Check != nil {
 				p.output("check output", ev.Check.Stdout+ev.Check.Stderr, outputTailLines)
 			}
+		case gorun.TaskWouldRun:
+			why := "no check, so it always runs"
+			if ev.Check != nil {
+				why = "check found something to do"
+			}
+			fmt.Fprintf(p.w, "%s: %s would run (%s)\n", ev.Server, ev.Task, why)
+			if p.verbose && ev.Check != nil {
+				p.output("check output", ev.Check.Stdout+ev.Check.Stderr, outputTailLines)
+			}
 		case gorun.TaskSkipped:
 			fmt.Fprintf(p.w, "%s: %s skipped\n", ev.Server, ev.Task)
 			if ev.Err != nil {
@@ -75,6 +84,14 @@ func (p *plainPrinter) event(event any) {
 		}
 	case gorun.ServerErrorEvent:
 		fmt.Fprintf(p.w, "%s: FAILED: %v\n", ev.Server, ev.Err)
+	case gorun.ProcessStartedEvent:
+		if ev.CheckOnly {
+			fmt.Fprintln(p.w, "check only: running checks, nothing will change")
+		}
+	case gorun.ProcessFinishedEvent:
+		if ev.WouldRun > 0 || ev.Unchanged > 0 {
+			fmt.Fprintf(p.w, "%d would run, %d unchanged\n", ev.WouldRun, ev.Unchanged)
+		}
 	case gorun.CopyProgressEvent:
 		p.copyProgress(ev)
 	}

@@ -20,6 +20,8 @@ type Event struct {
 	PID        int       `json:"pid"`
 	Includes   []Include `json:"includes,omitempty"`
 	Schedule   string    `json:"schedule,omitempty"`
+	CheckOnly  bool      `json:"check_only,omitempty"`
+	WouldRun   int       `json:"would_run"`
 	Success    bool      `json:"success"`
 	TotalTasks int       `json:"total_tasks"`
 	Unchanged  int       `json:"unchanged"`
@@ -91,6 +93,9 @@ func (s *Store) Apply(ctx context.Context, ev *Event) {
 		check("create run", s.CreateRun(ctx, ev.GorunUUID, ev.Title, ev.Hostname, ev.PID, parseTime(ev.StartedAt)))
 		for _, server := range ev.Servers {
 			check("add server", s.AddServer(ctx, ev.GorunUUID, server, ""))
+		}
+		if ev.CheckOnly {
+			check("mark run check-only", s.SetRunCheckOnly(ctx, ev.GorunUUID))
 		}
 		if ev.Schedule != "" {
 			check("set run schedule", s.SetRunSchedule(ctx, ev.GorunUUID, ev.Schedule))

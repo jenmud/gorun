@@ -67,7 +67,7 @@ Every event has a `type` and the run's `gorun_uuid`:
 
 | Type | Sent | Fields |
 |---|---|---|
-| `process_started` | when a run starts | `title`, `servers`, `started_at`, `hostname`, `pid`, `schedule` (when a schedule started it) |
+| `process_started` | when a run starts | `title`, `servers`, `started_at`, `hostname`, `pid`, `schedule` (when a schedule started it), `check_only` |
 | `plan` | per server, before it starts | `server`, `address`, `tasks`, `task_meta` |
 | `task` | every task state change | `server`, `task`, `state`, `command`, `stdout`, `stderr`, `exit_code`, `duration`, `attempt`, `attempts`, `phase`, `check`, `verify` |
 | `server_error` | a server couldn't run (e.g. SSH failed) | `server` |

@@ -32,6 +32,7 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 | `-bundles <name>` | replace each selected server's task list with these bundle(s); repeatable, globs allowed |
 | `-parallel <n>` | at most n servers at a time; `0` means all (overrides `max_parallel`) |
 | `-force` | run every task even when its [check](gorunfile.md#checks-run-only-when-needed) says there is nothing to do |
+| `-check` | a dry run: only run the [checks](gorunfile.md#checks-run-only-when-needed), and report which tasks would run |
 | `-list-servers` | list servers with their groups, tags and task lists (a collapsible tree in a terminal) |
 | `-list-tasks` | list tasks as a dependency tree (collapsible in a terminal) |
 | `-list-tags` | list tags and their servers (a collapsible tree in a terminal) |
@@ -100,7 +101,7 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | `log_level` | log level for this task |
 | `timeout` | Go duration, default `30m` |
 | `retries`, `retry_delay`, `retry_unsafe` | [retries](gorunfile.md#retries) |
-| `check`, `verify` | [checks](gorunfile.md#checks-run-only-when-needed): skip the task when there is nothing to do, and confirm the change afterwards |
+| `check`, `check_copies`, `verify` | [checks](gorunfile.md#checks-run-only-when-needed): skip the task when there is nothing to do (a command, or an MD5 comparison of its copies), and confirm the change afterwards |
 | `description`, `details`, `rerun` | [descriptions and rerun safety](gorunfile.md#descriptions-and-rerun-safety) |
 | `local` | run only on local (no-SSH) servers; without it, the task runs only over SSH |
 

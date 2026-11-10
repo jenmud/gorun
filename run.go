@@ -42,6 +42,9 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 	if c.MaxParallel < 0 {
 		return errors.New("max_parallel must not be negative")
 	}
+	if c.Force && c.CheckOnly {
+		return errors.New("force and check-only can't be used together")
+	}
 	hostname, _ := os.Hostname()
 	if c.GorunUUID == "" {
 		c.GorunUUID = fmt.Sprintf("%s-%d-%d", hostname, os.Getpid(), time.Now().UnixNano())
@@ -71,6 +74,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		Vars:      c.Vars,
 		Includes:  c.Includes,
 		Schedule:  c.Schedule,
+		CheckOnly: c.CheckOnly,
 	})
 	// every server's plan is announced before any task starts
 	for _, s := range servers {
@@ -111,6 +115,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		Failed:     failed,
 		Skipped:    int(r.skipped.Load()),
 		Unchanged:  int(r.unchanged.Load()),
+		WouldRun:   int(r.wouldRun.Load()),
 		FinishedAt: time.Now(),
 	})
 	if failed > 0 {
@@ -190,8 +195,8 @@ func withDefaults[V any](m, defaults map[string]V) map[string]V {
 
 // run is the state shared by every server of one Run.
 type run struct {
-	cfg                        *Config
-	failed, skipped, unchanged atomic.Int64 // tasks, counted for ProcessFinishedEvent
+	cfg                                  *Config
+	failed, skipped, unchanged, wouldRun atomic.Int64 // tasks, counted for ProcessFinishedEvent
 }
 
 // runServer connects to the server and runs its tasks: one at a time by default, or up to
@@ -246,7 +251,7 @@ func (r *run) runServer(ctx context.Context, server Server) {
 	}
 	for _, t := range tasks {
 		t.target = &server
-		t.force = c.Force
+		t.force, t.checkOnly = c.Force, c.CheckOnly
 		t.logger = t.logger.With(slog.String("gorun_uuid", c.GorunUUID))
 		sr.done[t.task.Name] = make(chan struct{})
 	}
@@ -390,6 +395,9 @@ func (sr *serverRun) runTask(ctx context.Context, task *TaskExec) {
 			switch phase {
 			case PhaseCheck:
 				running.Command = task.task.Check
+				if task.task.CheckCopies {
+					running.Command = strings.TrimSuffix("compare copies (md5); "+task.task.Check, "; ")
+				}
 			case PhaseVerify:
 				running.Command = task.task.Verify
 			default:
@@ -428,6 +436,9 @@ func (sr *serverRun) runTask(ctx context.Context, task *TaskExec) {
 	case task.unchanged:
 		sr.unchanged.Add(1)
 		ev.State = TaskUnchanged
+	case task.wouldRun:
+		sr.wouldRun.Add(1)
+		ev.State = TaskWouldRun
 	}
 	ev.Phase, ev.Check, ev.Verify = task.phase, task.check, task.verify
 	if ev.Command = task.command; ev.Command == "" {

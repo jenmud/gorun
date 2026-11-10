@@ -126,6 +126,7 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
 | `StartedAt` | when the run started |
 | `Hostname`, `PID` | the machine and process running it |
 | `EnvVars`, `Vars` | the Gorunfile's top-level `envvars` and `vars` |
+| `CheckOnly` | set for a check-only run (`--check`): only checks ran, and nothing changed |
 | `Includes` | the [git includes](gorunfile.md#tasks-from-a-git-repository) the Gorunfile read: each one's `Source`, `Ref` and the `Commit` it used |
 | `Schedule` | the [schedule](schedules.md) that started the run, or empty when it was started any other way |
 
@@ -143,7 +144,7 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
 | Field | Meaning |
 |---|---|
 | `Server`, `Task` | which task, on which server |
-| `State` | `TaskRunning`, `TaskDone`, `TaskFailed`, `TaskSkipped` or `TaskUnchanged` |
+| `State` | `TaskRunning`, `TaskDone`, `TaskFailed`, `TaskSkipped`, `TaskUnchanged` or `TaskWouldRun` |
 | `Phase` | `PhaseCheck`, `PhaseRun` or `PhaseVerify`: the step a running event starts, or on the final event the step that decided the outcome. Empty for a task that never started |
 | `Check`, `Verify` | the [check and verify](gorunfile.md#checks-run-only-when-needed) results, when they ran: each one's `Command`, `ExitCode`, `Stdout`, `Stderr` and `Duration` |
 | `Command` | the command as run, with templates rendered; on a running event, the command that phase runs |
@@ -161,6 +162,8 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
   so you can show why it is running again.
 - **Done** and **failed** are sent once, with the output, exit code and duration. A task that
   failed its check or verify has `Phase` set to that step and its `ExitCode`.
+- **Would run** is sent once per task in a check-only run (`--check`), when its check found
+  something to do, or it has no check. Nothing ran but the check: `Check` has its output.
 - **Unchanged** is sent once when the task's check exited 0, so its command didn't run. It is a
   success: `ExitCode` is 0, `Stdout` and `Stderr` are empty, and `Check` has the check's output.
 - **Skipped** is sent once when a task doesn't run: a task it depends on failed, an earlier task
@@ -220,6 +223,7 @@ To copy files from your own code, outside a run, `gorun.CopyFilesContext` takes 
 | `TotalTasks` | how many tasks were planned, across every server |
 | `Failed`, `Skipped` | how many failed (including every task of a server that couldn't run) and were skipped |
 | `Unchanged` | how many ended unchanged, because their check found nothing to do |
+| `WouldRun` | in a check-only run, how many would run |
 
 ### Not sent by `Run`
 

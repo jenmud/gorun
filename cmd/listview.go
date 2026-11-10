@@ -667,6 +667,7 @@ func taskExecutionOptions(task gorun.Task) []taskOption {
 		{name: "Depends on", value: dependsOn},
 		{name: "File copies", value: fmt.Sprint(copies)},
 		{name: "Check", value: cmp.Or(task.Check, "none")},
+		{name: "Check copies", value: yesNo(task.CheckCopies)},
 		{name: "Verify", value: cmp.Or(task.Verify, "none")},
 	}
 }

@@ -50,9 +50,14 @@ templ historyRow(r RunRow) {
 		<td class="px-4 py-3"><span class={ runBadgeClass(r.State) }>{ runBadgeLabel(r.State) }</span></td>
 		<td class="px-4 py-3">
 			<a href={ runPath(r.ID) } class="font-medium text-zinc-100 hover:text-accent">{ r.Title }</a>
-			if r.Schedule != "" {
-				<div class="mt-1">
-					@scheduleBadge(r.Schedule)
+			if r.Schedule != "" || r.CheckOnly {
+				<div class="mt-1 flex flex-wrap gap-1">
+					if r.Schedule != "" {
+						@scheduleBadge(r.Schedule)
+					}
+					if r.CheckOnly {
+						@checkOnlyBadge()
+					}
 				</div>
 			}
 			<div class="font-mono text-xs text-zinc-500">{ r.Hostname }</div>
@@ -82,6 +87,9 @@ templ HistoryDetailPage(d RunDetailData) {
 				<h1 class="truncate text-xl font-semibold text-zinc-100">{ d.Summary.Title }</h1>
 				if d.Summary.Schedule != "" {
 					@scheduleBadge(d.Summary.Schedule)
+				}
+				if d.Summary.CheckOnly {
+					@checkOnlyBadge()
 				}
 			</div>
 			<p class="mt-1 font-mono text-xs text-zinc-500">{ d.Summary.ID }</p>
@@ -188,7 +196,7 @@ templ taskInspector(t TaskView) {
 				<span class={ taskViewClass(t) }>{ taskViewIcon(t) } { taskViewLabel(t) }</span>
 			}
 			@fact("Exit code") {
-				if !t.NotRun && (t.State == 2 || t.State == 3 || t.State == 5) {
+				if !t.NotRun && (t.State == 2 || t.State == 3 || t.State == 5 || t.State == 6) {
 					<span class={ exitClass(t.ExitCode) }>{ itoa(t.ExitCode) }</span>
 				} else {
 					<span class="text-zinc-500">—</span>
@@ -206,7 +214,7 @@ templ taskInspector(t TaskView) {
 		</dl>
 		<p class="text-zinc-400">{ taskViewHint(t, t.ServerFailed) }</p>
 		if t.Check != nil {
-			@stepFold("Check", t.Check)
+			@stepFolds("Check", t.Check)
 		}
 		@fold("", "Command", "") {
 			if t.Command != "" {
@@ -230,23 +238,37 @@ templ taskInspector(t TaskView) {
 			}
 		}
 		if t.Verify != nil {
-			@stepFold("Verify", t.Verify)
+			@stepFolds("Verify", t.Verify)
 		}
 		@varsPanel("Task", t.EnvVars, t.Vars)
 	</div>
 }
 
-// stepFold shows a check or verify command: what ran, its exit code and its output.
-templ stepFold(title string, s *store.Step) {
-	@fold("", title, stepSummary(s)) {
+// stepFolds shows a check or verify like the task's own command and output: its command, its
+// stdout and its stderr, each in its own drop-down.
+templ stepFolds(title string, s *store.Step) {
+	@fold("", title+" command", stepSummary(s)) {
 		<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">$ { s.Command }</pre>
+	}
+	@fold("", title+" stdout", lineCount(s.Stdout)) {
 		if s.Stdout != "" {
-			<pre class="mt-2 max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ s.Stdout }</pre>
-		}
-		if s.Stderr != "" {
-			<pre class="mt-2 max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ s.Stderr }</pre>
+			<pre class="max-h-96 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ s.Stdout }</pre>
+		} else {
+			<p class="text-zinc-500">No output.</p>
 		}
 	}
+	@fold("", title+" stderr", lineCount(s.Stderr)) {
+		if s.Stderr != "" {
+			<pre class="max-h-96 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ s.Stderr }</pre>
+		} else {
+			<p class="text-zinc-500">No output.</p>
+		}
+	}
+}
+
+// checkOnlyBadge marks a check-only run, which changed nothing.
+templ checkOnlyBadge() {
+	<span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300 ring-1 ring-amber-500/40" title="Only checks ran: nothing was changed">check only</span>
 }
 
 templ fact(label string) {

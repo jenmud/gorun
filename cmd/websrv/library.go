@@ -266,6 +266,7 @@ func executionOptions(t gorun.Task) []ui.Option {
 		{Name: "Log level", Value: or(t.LogLevel, "inherit")},
 		{Name: "File copies", Value: fmt.Sprint(copies)},
 		{Name: "Check", Value: or(t.Check, "none")},
+		{Name: "Check copies", Value: yes(t.CheckCopies)},
 		{Name: "Verify", Value: or(t.Verify, "none")},
 	}
 }

@@ -19,6 +19,7 @@ const (
 	StateFailed
 	StateSkipped
 	StateUnchanged
+	StateWouldRun
 )
 
 // RunSummary is one run: when it started and finished, and how its tasks went.
@@ -38,6 +39,8 @@ type RunSummary struct {
 	Duration   time.Duration
 	// Schedule is the schedule that started the run, or empty.
 	Schedule string
+	// CheckOnly is set for a check-only run (--check), which changed nothing.
+	CheckOnly bool
 }
 
 // TaskDetail is one task on one server in a run.
@@ -164,6 +167,7 @@ var addedColumns = [][2]string{
 	{"runs", "includes"},
 	{"runs", "schedule"},
 	{"tasks", "steps"},
+	{"runs", "check_only"},
 }
 
 // migrate creates the tables and adds the columns newer versions need.
@@ -220,6 +224,11 @@ func (s *Store) SetRunEnvVars(ctx context.Context, runID string, envvars map[str
 // SetRunSchedule records the schedule that started a run.
 func (s *Store) SetRunSchedule(ctx context.Context, runID, schedule string) error {
 	return s.exec(ctx, `UPDATE runs SET schedule=? WHERE id=?`, schedule, runID)
+}
+
+// SetRunCheckOnly marks a run as check-only: only checks ran, and nothing changed.
+func (s *Store) SetRunCheckOnly(ctx context.Context, runID string) error {
+	return s.exec(ctx, `UPDATE runs SET check_only='1' WHERE id=?`, runID)
 }
 
 // SetRunIncludes stores the git includes a run read, with their commits.
@@ -279,13 +288,13 @@ func (s *Store) SetTaskEnvVars(ctx context.Context, runID, server, name string, 
 }
 
 // runColumns are the columns scanRun reads, in order.
-const runColumns = `id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns,schedule`
+const runColumns = `id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns,schedule,check_only`
 
 // scanRun reads runColumns, followed by any extra columns, into r.
 func scanRun(scan func(...any) error, r *RunSummary, extra ...any) error {
-	var started, finished, schedule sql.NullString
+	var started, finished, schedule, checkOnly sql.NullString
 	var pid, success, total, failed, skipped, duration sql.NullInt64
-	dest := append([]any{&r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &success, &total, &failed, &skipped, &duration, &schedule}, extra...)
+	dest := append([]any{&r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &success, &total, &failed, &skipped, &duration, &schedule, &checkOnly}, extra...)
 	if err := scan(dest...); err != nil {
 		return err
 	}
@@ -301,6 +310,7 @@ func scanRun(scan func(...any) error, r *RunSummary, extra ...any) error {
 	r.Skipped = int(skipped.Int64)
 	r.Duration = time.Duration(duration.Int64)
 	r.Schedule = schedule.String
+	r.CheckOnly = checkOnly.String == "1"
 	return nil
 }
 

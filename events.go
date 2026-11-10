@@ -48,6 +48,7 @@ const (
 	TaskFailed                     // failed: the command, its check or its verify failed
 	TaskSkipped                    // not run: a task it depends on failed, or the run was cancelled
 	TaskUnchanged                  // its check found nothing to do, so its command didn't run; a success
+	TaskWouldRun                   // a check-only run: its check found something to do, or it has no check
 )
 
 // Phase is the step of a task an event is about. A task with a check runs it first, then (when
@@ -81,6 +82,9 @@ type ProcessStartedEvent struct {
 	EnvVars   map[string]string `json:"envvars,omitempty"`
 	Vars      map[string]any    `json:"vars,omitempty"`
 
+	// CheckOnly is set for a check-only run (--check): only checks run, and nothing changes.
+	CheckOnly bool `json:"check_only,omitempty"`
+
 	// Includes are the git includes the Gorunfile read, with the commit each one used, so a run
 	// records exactly which version of a task library it ran.
 	Includes []IncludeSource `json:"includes,omitempty"`
@@ -100,6 +104,7 @@ type ProcessFinishedEvent struct {
 	Failed     int           `json:"failed"`
 	Skipped    int           `json:"skipped"`
 	Unchanged  int           `json:"unchanged"` // tasks whose check found nothing to do
+	WouldRun   int           `json:"would_run"` // in a check-only run, tasks that would run
 	FinishedAt time.Time     `json:"finished_at"`
 }
 

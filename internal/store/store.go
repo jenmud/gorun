@@ -379,7 +379,9 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 		return nil, err
 	}
 
-	tasks, err := s.db.QueryContext(ctx, `SELECT server,name,state,exit_code,duration_ns FROM tasks WHERE run_id=?`, id)
+	// each task's check and verify come with the list, so a view can show them straight away;
+	// the command's own output waits for GetTask
+	tasks, err := s.db.QueryContext(ctx, `SELECT server,name,state,exit_code,duration_ns,steps FROM tasks WHERE run_id=?`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -387,10 +389,14 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	for tasks.Next() {
 		var t TaskDetail
 		var duration sql.NullInt64
-		if err := tasks.Scan(&t.Server, &t.Name, &t.State, &t.ExitCode, &duration); err != nil {
+		var stepsCol sql.NullString
+		if err := tasks.Scan(&t.Server, &t.Name, &t.State, &t.ExitCode, &duration, &stepsCol); err != nil {
 			return nil, err
 		}
 		t.Duration = time.Duration(duration.Int64)
+		var st steps
+		fromJSON(stepsCol, &st)
+		t.Check, t.Verify = st.Check, st.Verify
 		r.Tasks = append(r.Tasks, t)
 	}
 	return &r, tasks.Err()

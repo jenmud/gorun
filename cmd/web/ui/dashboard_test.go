@@ -162,3 +162,39 @@ func TestDashboardShowsCopyProgress(t *testing.T) {
 		t.Error("a finished task still shows its copy")
 	}
 }
+
+// A live task shows its check and verify: from the plan before they run, which one is
+// running, and their command and output once they have.
+func TestDashboardShowsCheckAndVerify(t *testing.T) {
+	var state DashboardState
+	state.Apply(store.Event{Type: "process_started", GorunUUID: "run-1", Title: "demo"})
+	state.Apply(store.Event{Type: "plan", GorunUUID: "run-1", Server: "web-1", Tasks: []string{"install"},
+		TaskMeta: []store.TaskMeta{{Name: "install", Check: "dpkg -s nginx", Verify: "nginx -v"}}})
+	render := func() string {
+		var buf bytes.Buffer
+		if err := Dashboard(state).Render(context.Background(), &buf); err != nil {
+			t.Fatal(err)
+		}
+		return buf.String()
+	}
+	if html := render(); !strings.Contains(html, "$ dpkg -s nginx") || !strings.Contains(html, "$ nginx -v") {
+		t.Errorf("planned check and verify missing:\n%s", html)
+	}
+	state.Apply(store.Event{Type: "task", GorunUUID: "run-1", Server: "web-1", Task: "install", State: store.StateRunning, Phase: "check", Command: "dpkg -s nginx"})
+	if html := render(); !strings.Contains(html, "checking…") {
+		t.Errorf("running check not marked")
+	}
+	if task := state.Processes["run-1"].Servers["web-1"].Tasks["install"]; task.Command != "" {
+		t.Errorf("a running check's command shown as the task's: %q", task.Command)
+	}
+	state.Apply(store.Event{Type: "task", GorunUUID: "run-1", Server: "web-1", Task: "install", State: store.StateDone,
+		Command: "apt-get install -y nginx",
+		Check:   &store.Step{Command: "dpkg -s nginx", ExitCode: 1, Stderr: "not installed"},
+		Verify:  &store.Step{Command: "nginx -v", Stdout: "nginx/1.24"}})
+	html := render()
+	for _, want := range []string{"Check command", "not installed", "Verify command", "nginx/1.24", "apt-get install -y nginx"} {
+		if !strings.Contains(html, want) {
+			t.Errorf("%q missing after the run", want)
+		}
+	}
+}

@@ -22,8 +22,13 @@ type TaskInfo struct {
 	Command     string
 	Stdout      string
 	Stderr      string
-	Error       string    // why it was skipped
-	Phase       string    // the step it is in: check, run or verify
+	Error       string // why it was skipped
+	Phase       string // the step it is in: check, run or verify
+	CheckCmd    string // its check, from the plan, shown before it runs
+	CheckCopies bool   // it compares its copies with the server's
+	VerifyCmd   string // its verify, from the plan
+	Check       *store.Step
+	Verify      *store.Step
 	Copy        *CopyInfo // the file it is copying, while it copies one
 }
 
@@ -140,6 +145,7 @@ func (s *DashboardState) Apply(ev store.Event) {
 				t.Description = m.Description
 				t.Details = m.Details
 				t.Rerun = m.Rerun
+				t.CheckCmd, t.CheckCopies, t.VerifyCmd = m.Check, m.CheckCopies, m.Verify
 			}
 		}
 	case "task":
@@ -164,7 +170,10 @@ func (s *DashboardState) Apply(ev store.Event) {
 		t.ExitCode = ev.ExitCode
 		t.Attempt = ev.Attempt
 		t.Attempts = ev.Attempts
-		t.Command = ev.Command
+		if ev.Phase != "check" && ev.Phase != "verify" || ev.State != store.StateRunning {
+			t.Command = ev.Command // a running check or verify carries its own command, not the task's
+		}
+		t.Check, t.Verify = ev.Check, ev.Verify
 		t.Stdout = ev.Stdout
 		t.Stderr = ev.Stderr
 		t.Error = ev.Error

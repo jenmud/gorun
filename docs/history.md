@@ -136,7 +136,7 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
 |---|---|
 | `Server`, `Address` | the server, and the address gorun connects to (`local` for a local server) |
 | `Tasks` | the task names it will run, in order |
-| `TaskMeta` | each task's `Name`, `Description`, `Details` and `Rerun` setting |
+| `TaskMeta` | each task's `Name`, `Description`, `Details` and `Rerun` setting, and its `Check`, `CheckCopies` and `Verify`, so a view can show them before they run |
 | `EnvVars`, `Vars` | the server's envvars and vars, including its groups' and the global ones |
 
 ### `TaskEvent` (`task`)
@@ -159,7 +159,9 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
 - **Running** is sent as each phase of an attempt starts: the check, then the command, then the
   verify, for a task that has them, and just the command otherwise. A retry's first running
   event has `Attempt` above 1 and carries the previous attempt's `ExitCode`, `Stderr` and `Err`,
-  so you can show why it is running again.
+  so you can show why it is running again. Once the check has run, the command's and the
+  verify's running events carry its result in `Check`, and the verify's running event carries
+  the command's `Stdout` and `Stderr`, so a view can show each step as soon as it is done.
 - **Done** and **failed** are sent once, with the output, exit code and duration. A task that
   failed its check or verify has `Phase` set to that step and its `ExitCode`.
 - **Would run** is sent once per task in a check-only run (`--check`), when its check found

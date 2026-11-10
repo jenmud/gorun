@@ -54,10 +54,16 @@ type taskView struct {
 	description string
 	details     string
 	rerun       string
-	state       gorun.TaskState
-	started     time.Time
-	event       gorun.TaskEvent
-	expanded    bool
+	// check, checkCopies and verify are the task's check and verify, from its plan
+	check       string
+	checkCopies bool
+	verify      string
+	// command is the command the task ran (its run phase), once it has started it
+	command  string
+	state    gorun.TaskState
+	started  time.Time
+	event    gorun.TaskEvent
+	expanded bool
 	// copy is the latest progress of the file the task is copying, while it copies one.
 	copy *gorun.CopyProgressEvent
 }
@@ -247,6 +253,7 @@ func (m tuiModel) applyEvent(event any) tuiModel {
 				tv.description = tm.Description
 				tv.details = tm.Details
 				tv.rerun = tm.Rerun
+				tv.check, tv.checkCopies, tv.verify = tm.Check, tm.CheckCopies, tm.Verify
 			}
 			s.tasks = append(s.tasks, tv)
 			s.taskMap[name] = tv
@@ -271,6 +278,9 @@ func (m tuiModel) applyEvent(event any) tuiModel {
 				t.state = msg.State
 				t.event = msg
 				t.copy = nil
+				if msg.State == gorun.TaskRunning && msg.Phase == gorun.PhaseRun && msg.Command != "" {
+					t.command = msg.Command
+				}
 				if msg.State == gorun.TaskRunning {
 					t.started = time.Now()
 					s.runningCount++
@@ -802,7 +812,7 @@ func (it boxItem) sig(width int) string {
 	if it.serverErr != nil {
 		errText = it.serverErr.Error()
 	}
-	return fmt.Sprintf("%d|%d|%d|%d|%d|%d|%s|%d|%d|%d", width, it.task.state, ev.ExitCode, ev.Duration, ev.Attempt, ev.Attempts, errText, len(ev.Stdout), len(ev.Stderr), len(it.skipped))
+	return fmt.Sprintf("%d|%d|%d|%d|%d|%d|%s|%d|%d|%d|%s|%t|%t", width, it.task.state, ev.ExitCode, ev.Duration, ev.Attempt, ev.Attempts, errText, len(ev.Stdout), len(ev.Stderr), len(it.skipped), ev.Phase, ev.Check != nil, ev.Verify != nil)
 }
 
 // boxSnapshot is a copy of what the compact view's boxes show, rendered off the UI loop.
@@ -1090,12 +1100,7 @@ func (m tuiModel) outputBox(t *taskView) string {
 	if t.state == gorun.TaskRunning && t.event.Err != nil && t.event.Attempts > 1 {
 		sections = append(sections, failStyle.Render(fmt.Sprintf("attempt %d/%d failed: ", t.event.Attempt-1, t.event.Attempts))+t.event.Err.Error())
 	}
-	if out := tail(t.event.Stdout, outputTailLines); out != "" {
-		sections = append(sections, mutedStyle.Render("stdout")+"\n"+out)
-	}
-	if out := tail(t.event.Stderr, outputTailLines); out != "" {
-		sections = append(sections, mutedStyle.Render("stderr")+"\n"+out)
-	}
+	sections = append(sections, m.stepSections(t, outputTailLines)...)
 	if len(sections) == 0 {
 		if t.state == gorun.TaskPending || t.state == gorun.TaskRunning {
 			sections = append(sections, mutedStyle.Render("(no description or output yet)"))
@@ -1105,6 +1110,82 @@ func (m tuiModel) outputBox(t *taskView) string {
 	}
 
 	return outputBoxStyle.Width(m.boxWidth()).Render(strings.Join(sections, "\n\n"))
+}
+
+// stepSections are a task's check, command and verify, in the order they run: each one's
+// command, how it went once it has run, and the end of its output. A task with no check or
+// verify shows just its output, as before.
+func (m tuiModel) stepSections(t *taskView, lines int) []string {
+	ev := t.event
+	running := func(p gorun.Phase) bool { return t.state == gorun.TaskRunning && ev.Phase == p }
+	output := func(stdout, stderr string) string {
+		parts := []string{}
+		if out := tail(stdout, lines); out != "" {
+			parts = append(parts, mutedStyle.Render("stdout")+"\n"+out)
+		}
+		if out := tail(stderr, lines); out != "" {
+			parts = append(parts, mutedStyle.Render("stderr")+"\n"+out)
+		}
+		return strings.Join(parts, "\n")
+	}
+	step := func(label, command string, res *gorun.StepResult, phase gorun.Phase) string {
+		if res != nil {
+			command = res.Command
+		}
+		head := serverStyle.Render(label) + "  " + mutedStyle.Render("$ "+command)
+		switch {
+		case res != nil:
+			head += mutedStyle.Render(fmt.Sprintf("  · exit %d · ", res.ExitCode)) + timeStyle.Render(formatDuration(res.Duration))
+			if out := output(res.Stdout, res.Stderr); out != "" {
+				head += "\n" + out
+			}
+		case running(phase):
+			head += "  " + skipStyle.Render(phaseLabel(phase)+"…")
+		}
+		return head
+	}
+
+	sections := []string{}
+	check := t.check
+	if t.checkCopies {
+		check = strings.TrimSuffix("compare copies (md5); "+check, "; ")
+	}
+	if check != "" || ev.Check != nil {
+		sections = append(sections, step("check", check, ev.Check, gorun.PhaseCheck))
+	}
+	hasSteps := len(sections) > 0 || t.verify != "" || ev.Verify != nil
+	out := output(ev.Stdout, ev.Stderr)
+	switch {
+	case !hasSteps:
+		if out != "" {
+			sections = append(sections, out)
+		}
+	case t.command != "" || out != "" || running(gorun.PhaseRun):
+		head := serverStyle.Render("command")
+		if t.command != "" {
+			head += "  " + mutedStyle.Render("$ "+firstLine(t.command))
+		}
+		if running(gorun.PhaseRun) {
+			head += "  " + skipStyle.Render("running…")
+		}
+		if out != "" {
+			head += "\n" + out
+		}
+		sections = append(sections, head)
+	}
+	if t.verify != "" || ev.Verify != nil {
+		sections = append(sections, step("verify", t.verify, ev.Verify, gorun.PhaseVerify))
+	}
+	return sections
+}
+
+// firstLine is the first line of s, marked when there is more.
+func firstLine(s string) string {
+	line, rest, more := strings.Cut(strings.TrimSpace(s), "\n")
+	if more && strings.TrimSpace(rest) != "" {
+		return line + " …"
+	}
+	return line
 }
 
 // failureBox renders why a task failed: the error, then the tail of stderr (or stdout).
@@ -1144,7 +1225,10 @@ func (m tuiModel) renderFailureBox(server string, t *taskView, skipped []string)
 	if t.event.Err != nil {
 		sections = append(sections, failStyle.Render("reason: ")+t.event.Err.Error())
 	}
-	if out := tail(t.event.Stderr, failTailLines); out != "" && (t.event.Err == nil || strings.TrimSpace(out) != t.event.Err.Error()) {
+	if t.event.Check != nil || t.event.Verify != nil {
+		// a check or verify took part: show each step with its output, so the cause is clear
+		sections = append(sections, m.stepSections(t, failTailLines)...)
+	} else if out := tail(t.event.Stderr, failTailLines); out != "" && (t.event.Err == nil || strings.TrimSpace(out) != t.event.Err.Error()) {
 		sections = append(sections, mutedStyle.Render("stderr")+"\n"+out)
 	} else if out := tail(t.event.Stdout, failTailLines); out != "" {
 		sections = append(sections, mutedStyle.Render("stdout")+"\n"+out)

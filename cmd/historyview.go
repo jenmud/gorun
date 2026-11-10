@@ -565,14 +565,8 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.run != nil {
 			for i := range m.run.Tasks {
 				if m.run.Tasks[i].Server == msg.task.Server && m.run.Tasks[i].Name == msg.task.Name {
-					m.run.Tasks[i].Command = msg.task.Command
-					m.run.Tasks[i].Stdout = msg.task.Stdout
-					m.run.Tasks[i].Stderr = msg.task.Stderr
-					m.run.Tasks[i].ExitCode = msg.task.ExitCode
-					m.run.Tasks[i].Duration = msg.task.Duration
-					m.run.Tasks[i].State = msg.task.State
-					m.run.Tasks[i].EnvVars = msg.task.EnvVars
-					m.run.Tasks[i].Vars = msg.task.Vars
+					// the whole task: command, output, envvars, vars, and its check and verify
+					m.run.Tasks[i] = msg.task
 					if m.pendingCopy {
 						cmdToCopy = msg.task.Command
 					}

@@ -134,6 +134,15 @@ templ taskRow(p *ProcessState, srv *ServerInfo, t *TaskInfo) {
 				if t.Rerun != "" {
 					<p class="text-amber-400">{ rerunLabel(t.Rerun) }</p>
 				}
+				if t.Check != nil {
+					@stepFolds(p.UUID+"/"+srv.Name+"/"+t.Name+"/check", "Check", t.Check)
+				} else if planCheck(t) != "" {
+					<p class="font-mono text-zinc-500"><span class="font-sans text-[11px] font-semibold uppercase tracking-wider">Check</span> $ { planCheck(t) }
+						if inPhase(t, "check") {
+							<span class="font-sans text-amber-400"> checking…</span>
+						}
+					</p>
+				}
 				if t.Command != "" {
 					@fold(p.UUID+"/"+srv.Name+"/"+t.Name+"/cmd", "Command", "") {
 						<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">$ { t.Command }</pre>
@@ -151,6 +160,15 @@ templ taskRow(p *ProcessState, srv *ServerInfo, t *TaskInfo) {
 					@fold(p.UUID+"/"+srv.Name+"/"+t.Name+"/err", "Stderr", lineCount(t.Stderr)) {
 						<pre class="max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ t.Stderr }</pre>
 					}
+				}
+				if t.Verify != nil {
+					@stepFolds(p.UUID+"/"+srv.Name+"/"+t.Name+"/verify", "Verify", t.Verify)
+				} else if t.VerifyCmd != "" {
+					<p class="font-mono text-zinc-500"><span class="font-sans text-[11px] font-semibold uppercase tracking-wider">Verify</span> $ { t.VerifyCmd }
+						if inPhase(t, "verify") {
+							<span class="font-sans text-amber-400"> verifying…</span>
+						}
+					</p>
 				}
 			</div>
 		</details>

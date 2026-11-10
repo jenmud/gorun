@@ -214,7 +214,7 @@ templ taskInspector(t TaskView) {
 		</dl>
 		<p class="text-zinc-400">{ taskViewHint(t, t.ServerFailed) }</p>
 		if t.Check != nil {
-			@stepFolds("Check", t.Check)
+			@stepFolds("", "Check", t.Check)
 		}
 		@fold("", "Command", "") {
 			if t.Command != "" {
@@ -238,7 +238,7 @@ templ taskInspector(t TaskView) {
 			}
 		}
 		if t.Verify != nil {
-			@stepFolds("Verify", t.Verify)
+			@stepFolds("", "Verify", t.Verify)
 		}
 		@varsPanel("Task", t.EnvVars, t.Vars)
 	</div>
@@ -246,18 +246,18 @@ templ taskInspector(t TaskView) {
 
 // stepFolds shows a check or verify like the task's own command and output: its command, its
 // stdout and its stderr, each in its own drop-down.
-templ stepFolds(title string, s *store.Step) {
-	@fold("", title+" command", stepSummary(s)) {
+templ stepFolds(key, title string, s *store.Step) {
+	@fold(foldKey(key, "cmd"), title+" command", stepSummary(s)) {
 		<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">$ { s.Command }</pre>
 	}
-	@fold("", title+" stdout", lineCount(s.Stdout)) {
+	@fold(foldKey(key, "out"), title+" stdout", lineCount(s.Stdout)) {
 		if s.Stdout != "" {
 			<pre class="max-h-96 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ s.Stdout }</pre>
 		} else {
 			<p class="text-zinc-500">No output.</p>
 		}
 	}
-	@fold("", title+" stderr", lineCount(s.Stderr)) {
+	@fold(foldKey(key, "err"), title+" stderr", lineCount(s.Stderr)) {
 		if s.Stderr != "" {
 			<pre class="max-h-96 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ s.Stderr }</pre>
 		} else {

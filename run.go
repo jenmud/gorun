@@ -81,7 +81,8 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		plan := PlanEvent{Type: "plan", GorunUUID: c.GorunUUID, Server: s.Name, Address: s.Address(), Tasks: []string{}, EnvVars: s.EnvVars, Vars: s.Vars}
 		for _, t := range s.Tasks {
 			plan.Tasks = append(plan.Tasks, t.Name)
-			plan.TaskMeta = append(plan.TaskMeta, TaskMeta{Name: t.Name, Description: t.Description, Details: t.Details, Rerun: t.Rerun})
+			plan.TaskMeta = append(plan.TaskMeta, TaskMeta{Name: t.Name, Description: t.Description, Details: t.Details, Rerun: t.Rerun,
+				Check: t.Check, CheckCopies: t.CheckCopies, Verify: t.Verify})
 		}
 		c.emit(plan)
 	}
@@ -402,6 +403,12 @@ func (sr *serverRun) runTask(ctx context.Context, task *TaskExec) {
 				running.Command = task.task.Verify
 			default:
 				running.Command, _ = task.task.CommandFor(server)
+			}
+			if phase != PhaseCheck {
+				running.Check = task.check // the check has run: views can show how it went
+			}
+			if phase == PhaseVerify {
+				running.Stdout, running.Stderr = string(task.stdout), string(task.stderr) // and so has the command
 			}
 			numbered(&running, attempt)
 			if first {

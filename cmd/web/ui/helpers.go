@@ -489,3 +489,25 @@ func copySizes(c *CopyInfo) string {
 func stepSummary(s *store.Step) string {
 	return "exit " + itoa(s.ExitCode) + " · " + formatDuration(time.Duration(s.Duration))
 }
+
+// foldKey keys one of a step's folds, so it stays open across live updates; "" for none.
+func foldKey(key, part string) string {
+	if key == "" {
+		return ""
+	}
+	return key + "/" + part
+}
+
+// planCheck is the check a task will run, as its plan describes it.
+func planCheck(t *TaskInfo) string {
+	check := t.CheckCmd
+	if t.CheckCopies {
+		check = strings.TrimSuffix("compare copies (md5); "+check, "; ")
+	}
+	return check
+}
+
+// inPhase reports whether a task is running the given phase: check, run or verify.
+func inPhase(t *TaskInfo, phase string) bool {
+	return t.State == store.StateRunning && t.Phase == phase
+}

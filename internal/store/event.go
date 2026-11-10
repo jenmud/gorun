@@ -74,6 +74,9 @@ type TaskMeta struct {
 	Description string `json:"description,omitempty"`
 	Details     string `json:"details,omitempty"`
 	Rerun       string `json:"rerun,omitempty"`
+	Check       string `json:"check,omitempty"`
+	CheckCopies bool   `json:"check_copies,omitempty"`
+	Verify      string `json:"verify,omitempty"`
 }
 
 // Apply saves one event. Events can be replayed: a plan never resets a task that already ran.

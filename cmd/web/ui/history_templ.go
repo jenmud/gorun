@@ -1186,7 +1186,7 @@ func taskInspector(t TaskView) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if t.Check != nil {
-			templ_7745c5c3_Err = stepFolds("Check", t.Check).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = stepFolds("", "Check", t.Check).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1318,7 +1318,7 @@ func taskInspector(t TaskView) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if t.Verify != nil {
-			templ_7745c5c3_Err = stepFolds("Verify", t.Verify).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = stepFolds("", "Verify", t.Verify).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1337,7 +1337,7 @@ func taskInspector(t TaskView) templ.Component {
 
 // stepFolds shows a check or verify like the task's own command and output: its command, its
 // stdout and its stderr, each in its own drop-down.
-func stepFolds(title string, s *store.Step) templ.Component {
+func stepFolds(key, title string, s *store.Step) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -1389,7 +1389,7 @@ func stepFolds(title string, s *store.Step) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = fold("", title+" command", stepSummary(s)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var72), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = fold(foldKey(key, "cmd"), title+" command", stepSummary(s)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var72), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1431,7 +1431,7 @@ func stepFolds(title string, s *store.Step) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = fold("", title+" stdout", lineCount(s.Stdout)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var74), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = fold(foldKey(key, "out"), title+" stdout", lineCount(s.Stdout)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var74), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1473,7 +1473,7 @@ func stepFolds(title string, s *store.Step) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = fold("", title+" stderr", lineCount(s.Stderr)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var76), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = fold(foldKey(key, "err"), title+" stderr", lineCount(s.Stderr)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var76), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -29,8 +29,14 @@ You write tasks as shell commands in a **Gorunfile**, and say which servers run 
 cmd = "apt-get update && apt-get upgrade -y"
 sudo = true
 
+[tasks.nginx]
+check = "dpkg -s nginx"                       # exit 0: already installed, so skip it
+cmd = "apt-get install -y nginx"
+verify = "systemctl is-active nginx"          # non-zero: the install didn't take, so fail
+sudo = true
+
 [servers]
-tasks = ["update"]
+tasks = ["update", "nginx"]
 
 [servers.hosts.web-1]
 hostname = "web-1.example.com"
@@ -39,11 +45,20 @@ hostname = "web-1.example.com"
 ```
 
 Then `gorun Gorunfile` lets you pick the servers, runs the tasks on all of them at once, and shows
-each server's progress live.
+each server's progress live. Run it again and `nginx` shows as *unchanged* on every server that
+already has it; `gorun Gorunfile --check` tells you which servers would change, without touching
+any of them.
 
 - **Plain commands.** A task is a shell command or script. When something breaks, you can copy
   the command and run it by hand.
 - **Parallel.** Every server runs at the same time. A failure stops that server, not the others.
+- **Only what's needed, and proven.** A task's `check` runs first: exit 0 means there is
+  nothing to do, so the task is marked *unchanged* and skipped. `check_copies` does the same for
+  files, comparing MD5s with the server's copies (the server hashes its own, so a rerun of a
+  multi-GB upload sends nothing). A `verify` runs after the command and fails the task if the
+  change didn't take. `--check` is a dry run that only runs the checks; `--force` runs everything
+  anyway. A task without a check always runs, as before. See
+  [checks](docs/gorunfile.md#checks-run-only-when-needed).
 - **Nothing runs by accident.** You pick servers and tasks in a picker first, and every task has a
   timeout.
 - **Grows with you.** Dependencies, bundles, server groups, tags, templates with per-task
@@ -53,11 +68,6 @@ each server's progress live.
   a tag or commit and locked in `Gorunfile.lock`:
   `include = ["git::https://github.com/you/tasks.git//web/*.toml?ref=v1.2.0"]`. See the
   [task library recipe](recipes/06-task-library/README.md).
-- **Run only when needed.** A task's `check` says whether there is anything to do, or
-  `check_copies` compares the MD5 of its files with the server's: when nothing changed, the task
-  is marked unchanged and skipped. A `verify` confirms the change took. `--check` is a dry run
-  that only runs the checks; `--force` runs everything anyway. See
-  [checks](docs/gorunfile.md#checks-run-only-when-needed).
 - **Big uploads.** Copy a file or a whole directory to every server and watch each upload's
   percentage, size and speed in the terminal and the web UI. See
   [upload progress](docs/gorunfile.md#upload-progress) and the
@@ -76,9 +86,11 @@ each server's progress live.
 - **Web UI.** `gorun -web` shows the tasks, bundles, schedules and history, and lets you add and
   edit them, with names linked to where they're defined. It starts its own NATS server when none
   is running.
-**When to use something else:** gorun runs commands; it doesn't enforce state. It has no modules,
-facts, drift detection, dry runs, dynamic inventories or secrets vault. For that, use Ansible,
-Salt, Puppet or Nix.
+
+**When to use something else:** gorun runs commands. Checks let a task skip itself and `--check`
+shows what would change, but the checks are yours to write: there are no modules that know how
+to manage a package or a file, no facts, no dynamic inventories and no secrets vault. For that,
+use Ansible, Salt, Puppet or Nix.
 
 ## Install
 
@@ -110,6 +122,7 @@ Prebuilt binaries are for Linux x86-64; elsewhere the script builds from source.
 gorun -dump > Gorunfile      # write a starting Gorunfile; it runs as-is on this machine
 gorun Gorunfile              # pick what to run: space selects, enter runs
 gorun Gorunfile --run        # or run everything, without the picker
+gorun Gorunfile --run --check  # dry run: which tasks would run, changing nothing
 ```
 
 The starting file runs on your own machine, and documents every option in comments. Its tasks are
@@ -149,11 +162,14 @@ if err := cfg.LoadFile("Gorunfile"); err != nil {
 }
 cfg.OnEvent = func(event any) { // called from one goroutine per server
 	if ev, ok := event.(gorun.TaskEvent); ok && ev.State != gorun.TaskRunning {
-		fmt.Printf("%s: %s exit %d\n", ev.Server, ev.Task, ev.ExitCode)
+		fmt.Printf("%s: %s %s, exit %d\n", ev.Server, ev.Task, ev.State, ev.ExitCode) // done, unchanged, failed…
 	}
 }
 err := cfg.Run(context.Background())
 ```
+
+Set `cfg.CheckOnly` for a dry run, or `cfg.Force` to skip the checks. A task's event carries its
+check's and verify's results in `ev.Check` and `ev.Verify`.
 
 To save runs, set `Config.Recorder`. The `history` package's store is a recorder that writes to
 the same database as the CLI and web UI, so your program's runs show up there too, and it reads

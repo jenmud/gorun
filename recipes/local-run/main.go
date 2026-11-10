@@ -34,9 +34,16 @@ func main() {
 		fmt.Printf("%s: %v (local=%v)\n", s.Name, taskNames(s.Tasks), s.IsLocal())
 	}
 
+	// Print each task's outcome. A task whose check found nothing to do ends as unchanged; its
+	// check's result is in ev.Check, and a verify's in ev.Verify.
 	cfg.OnEvent = func(event any) {
-		if ev, ok := event.(gorun.TaskEvent); ok && ev.State != gorun.TaskRunning {
-			fmt.Printf("%s: %s exit %d\n", ev.Server, ev.Task, ev.ExitCode)
+		ev, ok := event.(gorun.TaskEvent)
+		if !ok || ev.State == gorun.TaskRunning {
+			return
+		}
+		fmt.Printf("%s: %s %s (exit %d)\n", ev.Server, ev.Task, ev.State, ev.ExitCode)
+		if ev.Verify != nil {
+			fmt.Printf("    verified: %s (exit %d)\n", ev.Verify.Command, ev.Verify.ExitCode)
 		}
 	}
 

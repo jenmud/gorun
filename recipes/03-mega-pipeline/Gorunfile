@@ -2,57 +2,78 @@ title = "Recipe 3: mega pipeline"
 log_level = "info"
 max_task_parallel = -1
 
+# Every step that builds something has a check, so the first run builds it all and a rerun only
+# runs the tests: the rest show as unchanged. Steps that change something have a verify, so a
+# step that didn't produce its file fails there instead of further down. Run --check for a dry
+# run, --force to rebuild everything, and --task cleanup to start again from nothing.
+
 # Tier 0
 [tasks.bootstrap]
 description = "bootstrap"
 details = "Runs the bootstrap step of the recipe."
-cmd = "rm -rf /tmp/recipe3 && mkdir -p /tmp/recipe3/bin /tmp/recipe3/cfg /tmp/recipe3/test && echo bootstrap ok"
+check = "test -d /tmp/recipe3/bin && test -d /tmp/recipe3/cfg && test -d /tmp/recipe3/test"
+cmd = "mkdir -p /tmp/recipe3/bin /tmp/recipe3/cfg /tmp/recipe3/test && echo bootstrap ok"
 
 # Tier 1: three independent installs
 [tasks.install-a]
 description = "install-a"
 details = "Runs the install-a step of the recipe."
+check = "test -f /tmp/recipe3/bin/a"
 cmd = "sleep 1; echo 'a' > /tmp/recipe3/bin/a; echo install-a ok"
+verify = "grep -qx a /tmp/recipe3/bin/a"
 depends_on = ["bootstrap"]
 
 [tasks.install-b]
 description = "install-b"
 details = "Runs the install-b step of the recipe."
+check = "test -f /tmp/recipe3/bin/b"
 cmd = "sleep 1; echo 'b' > /tmp/recipe3/bin/b; echo install-b ok"
+verify = "grep -qx b /tmp/recipe3/bin/b"
 depends_on = ["bootstrap"]
 
 [tasks.install-c]
 description = "install-c"
 details = "Runs the install-c step of the recipe."
+check = "test -f /tmp/recipe3/bin/c"
 cmd = "sleep 1; echo 'c' > /tmp/recipe3/bin/c; echo install-c ok"
+verify = "grep -qx c /tmp/recipe3/bin/c"
 depends_on = ["bootstrap"]
 
 # Tier 2: configs, some depending on one install, one on two
 [tasks.config-a]
 description = "config-a"
 details = "Runs the config-a step of the recipe."
+check = "grep -qx cfg-a /tmp/recipe3/cfg/a"
 cmd = "echo cfg-a > /tmp/recipe3/cfg/a; echo config-a ok"
+verify = "grep -qx cfg-a /tmp/recipe3/cfg/a"
 depends_on = ["install-a"]
 
 [tasks.config-b]
 description = "config-b"
 details = "Runs the config-b step of the recipe."
+check = "grep -qx cfg-b /tmp/recipe3/cfg/b"
 cmd = "echo cfg-b > /tmp/recipe3/cfg/b; echo config-b ok"
+verify = "grep -qx cfg-b /tmp/recipe3/cfg/b"
 depends_on = ["install-b"]
 
 [tasks.config-c]
 description = "config-c"
 details = "Runs the config-c step of the recipe."
+check = "grep -qx cfg-c /tmp/recipe3/cfg/c"
 cmd = "echo cfg-c > /tmp/recipe3/cfg/c; echo config-c ok"
+verify = "grep -qx cfg-c /tmp/recipe3/cfg/c"
 depends_on = ["install-c"]
 
 [tasks.config-ab]
 description = "config-ab"
 details = "Runs the config-ab step of the recipe."
+# rebuilt only when an input is newer than the output, like make
+check = "test -f /tmp/recipe3/cfg/ab && test -z \"$(find /tmp/recipe3/bin/a /tmp/recipe3/bin/b -newer /tmp/recipe3/cfg/ab)\""
 cmd = "cat /tmp/recipe3/bin/a /tmp/recipe3/bin/b > /tmp/recipe3/cfg/ab; echo config-ab ok"
+verify = "test -s /tmp/recipe3/cfg/ab"
 depends_on = ["install-a", "install-b"]
 
-# Tier 3: tests
+# Tier 3: tests. They only read, so they have no check: they run every time.
 [tasks.test-a]
 description = "test-a"
 details = "Runs the test-a step of the recipe."
@@ -74,25 +95,30 @@ depends_on = ["config-c"]
 [tasks.integration]
 description = "integration"
 details = "Runs the integration step of the recipe."
-cmd = "sleep 1; cat /tmp/recipe3/cfg/* > /tmp/recipe3/cfg/all && echo integration ok"
+cmd = "sleep 1; cat /tmp/recipe3/cfg/a /tmp/recipe3/cfg/b /tmp/recipe3/cfg/c /tmp/recipe3/cfg/ab > /tmp/recipe3/test/all && echo integration ok"
 depends_on = ["config-a", "config-b", "config-c", "config-ab"]
 
 # Tier 4: packaging and deploy
 [tasks.package]
 description = "package"
 details = "Runs the package step of the recipe."
+check = "test -f /tmp/recipe3/app.tgz && test -z \"$(find /tmp/recipe3/bin /tmp/recipe3/cfg -newer /tmp/recipe3/app.tgz)\""
 cmd = "tar -czf /tmp/recipe3/app.tgz -C /tmp/recipe3 bin cfg && echo packaged"
+verify = "tar -tzf /tmp/recipe3/app.tgz cfg/ab >/dev/null"
 depends_on = ["integration"]
 
 [tasks.deploy]
 description = "deploy"
 details = "Runs the deploy step of the recipe."
+check = "cmp -s /tmp/recipe3/app.tgz /tmp/recipe3/deploy/app.tgz"
 cmd = "mkdir -p /tmp/recipe3/deploy && cp /tmp/recipe3/app.tgz /tmp/recipe3/deploy/ && echo deployed"
+verify = "cmp -s /tmp/recipe3/app.tgz /tmp/recipe3/deploy/app.tgz"
 depends_on = ["package"]
 
 [tasks.docs]
 description = "docs"
 details = "Runs the docs step of the recipe."
+check = "test -f /tmp/recipe3/docs.txt"
 cmd = "echo 'docs generated' > /tmp/recipe3/docs.txt && echo docs ok"
 depends_on = ["config-c"]
 
@@ -105,9 +131,8 @@ depends_on = ["deploy", "docs", "test-a", "test-b", "test-c"]
 
 [tasks.cleanup]
 description = "cleanup"
-details = "Runs the cleanup step of the recipe."
+details = "Removes everything, so the next run builds from nothing. Run it with --task cleanup."
 cmd = "rm -rf /tmp/recipe3 && echo cleaned up"
-depends_on = ["verify-all"]
 
 # Bundles to show reuse
 [bundles.install-all]
@@ -125,7 +150,7 @@ tags = ["lab"]
     identityfile = "../ssh-keys/id_ecdsa"
 
 [servers]
-tasks = ["cleanup"]
+tasks = ["verify-all"]
 
 [servers.hosts.server1]
 hostname = "localhost"

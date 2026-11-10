@@ -2,7 +2,8 @@
 
 This tutorial builds a Gorunfile one step at a time. It starts with a single task on your own
 machine and ends with a file that sets up Ubuntu servers from scratch and runs a web app behind
-Caddy, with secrets, retries, checks and per-region servers.
+Caddy, with secrets, retries, health checks and per-region servers. Every task skips itself when
+there is nothing to do, and confirms its change when there is.
 
 The finished file is in [`tutorial/`](tutorial/Gorunfile), with its scripts and templates.
 
@@ -14,13 +15,14 @@ The finished file is in [`tutorial/`](tutorial/Gorunfile), with its scripts and 
 4. [Send scripts and files](#4-send-scripts-and-files)
 5. [Give each server its own settings, and keep secrets out](#5-give-each-server-its-own-settings-and-keep-secrets-out)
 6. [Make it reliable](#6-make-it-reliable)
-7. [Name groups of tasks with bundles](#7-name-groups-of-tasks-with-bundles)
-8. [Regions, tags and exceptions](#8-regions-tags-and-exceptions)
-9. [Splitting large Gorunfiles (optional)](#9-splitting-large-gorunfiles-optional)
-10. [Run jobs on a schedule](#10-run-jobs-on-a-schedule)
-11. [Share tasks with other Gorunfiles](#11-share-tasks-with-other-gorunfiles)
-12. [Upload big files (optional)](#12-upload-big-files-optional)
-13. [Everyday use](#13-everyday-use)
+7. [Skip what's already done: check and verify](#7-skip-whats-already-done-check-and-verify)
+8. [Name groups of tasks with bundles](#8-name-groups-of-tasks-with-bundles)
+9. [Regions, tags and exceptions](#9-regions-tags-and-exceptions)
+10. [Splitting large Gorunfiles (optional)](#10-splitting-large-gorunfiles-optional)
+11. [Run jobs on a schedule](#11-run-jobs-on-a-schedule)
+12. [Share tasks with other Gorunfiles](#12-share-tasks-with-other-gorunfiles)
+13. [Upload big files (optional)](#13-upload-big-files-optional)
+14. [Everyday use](#14-everyday-use)
 
 You only need gorun [installed](../README.md#install). Steps 1 and 2 run on your own machine;
 from step 3 on you need a server you can `ssh` into.
@@ -314,13 +316,14 @@ retry_delay = "15s"   # wait between attempts
   isn't; it then shows ⚠ and is never retried automatically.
 
 Make your tasks safe to rerun wherever you can. Then fixing a failed deploy is just running the
-same command again. The scripts in [`tutorial/scripts`](tutorial/scripts) show the pattern: check
-first, and only change what's missing.
+same command again. The [next step](#7-skip-whats-already-done-check-and-verify) makes reruns
+cheap too: each task finds out first whether there is anything to do.
 
-Add **check tasks** that only read the server, so you can ask "is everything OK?" at any time:
+Add **health checks**: tasks that only read the server, so you can ask "is everything OK?" at any
+time:
 
 ```toml
-[tasks.check-containers]
+[tasks.health-containers]
 description = "Check the app and caddy containers are running"
 cmd = "cd /opt/myapp && test $(docker compose ps --status running --quiet | wc -l) -eq 2"
 sudo = true
@@ -329,9 +332,91 @@ retries = 3
 retry_delay = "5s"
 ```
 
-Checks don't `depends_on` any setup task, so running them never changes anything.
+Health checks don't `depends_on` any setup task, so running them never changes anything.
 
-## 7. Name groups of tasks with bundles
+## 7. Skip what's already done: check and verify
+
+Running the whole file again reinstalls nothing, because each script looks first. But that
+looking is hidden inside the scripts, so every task shows as *ok* whether it changed anything or
+not, and a change that silently didn't take still shows *ok*. Two keys bring it into the open:
+
+- **`check`** runs before the task. Exit 0 means *nothing to do*: the task is marked
+  **unchanged** (`=`) and its copies, command and verify are skipped. Any other exit code runs
+  the task.
+- **`verify`** runs after the command. A non-zero exit fails the task, so "it ran" becomes "it
+  worked".
+
+```toml
+[tasks.docker-install]
+description = "Install docker and the compose plugin, if missing"
+check = "command -v docker && docker compose version"    # exit 0: already installed
+cmd_file = "./scripts/docker-install.sh"
+verify = "docker compose version"
+sudo = true
+
+[tasks.docker-enable]
+check = "systemctl is-enabled --quiet docker && systemctl is-active --quiet docker"
+cmd = "systemctl enable --now docker containerd"
+verify = "systemctl is-active --quiet docker"
+sudo = true
+```
+
+The `if docker is installed then exit` at the top of `docker-install.sh` can go: the check does
+that now, and shows it. A check is just a command, so write it the way you would test by hand:
+`test -d`, `grep -q`, `systemctl is-active`, `curl -fs`.
+
+**Copies can check themselves.** `check_copies = true` compares the MD5 of each file a task would
+copy, a rendered template included, with the one already on the server. The server hashes its own
+file with `md5sum`, `md5 -r` or `openssl`, so only the hashes cross the network. When everything
+matches, nothing is copied and the command doesn't run. With a `check` as well, the task is
+unchanged only when both say so:
+
+```toml
+[tasks.caddyfile]
+description = "Render the Caddyfile for this server and install it"
+check_copies = true                                        # the staged copy is up to date
+check = "cmp -s /tmp/myapp.Caddyfile /opt/myapp/Caddyfile" # and it is the one installed
+cmd = "cp /tmp/myapp.Caddyfile /opt/myapp/Caddyfile"
+sudo = true
+depends_on = ["app-dirs"]
+[[tasks.caddyfile.copy]]
+src_template = "./templates/Caddyfile.tmpl"
+dst = "/tmp/myapp.Caddyfile"
+```
+
+If a server has no MD5 tool, the comparison is skipped and the files are copied, so it never
+fails a run.
+
+**Some tasks should always run.** Leave out `check` and `check_copies` and the task runs every
+time, as before. `registry-login` has no check, so a rotated token is always picked up, and
+`compose-up` always runs `docker compose up`, which does nothing when nothing changed. It gets a
+`verify`, so a stack that didn't come up fails the deploy instead of passing it:
+
+```toml
+[tasks.compose-up]
+cmd_file = "./scripts/compose-up.sh"
+verify = "cd /opt/myapp && test $(docker compose ps --status running --quiet | wc -l) -eq 2"
+```
+
+Two flags go with it:
+
+```bash
+gorun Gorunfile --run --check   # dry run: run only the checks, and say what would change
+gorun Gorunfile --run --force   # skip the checks and run every task anyway
+```
+
+`--check` changes nothing: each task ends as *would run* (`~`) or *unchanged* (`=`), and the run
+is marked *check only* in history. History also keeps each check's and verify's command, exit
+code and output, in their own drop-downs next to the task's stdout and stderr.
+
+> [!NOTE]
+> A check that can't run at all (it times out, or the connection drops) fails the task rather
+> than guess. A failing verify fails the task with the verify's exit code, and retries run the
+> check again first.
+
+See [checks](gorunfile.md#checks-run-only-when-needed) for every rule.
+
+## 8. Name groups of tasks with bundles
 
 The file now has about a dozen tasks. A **bundle** names a list of them, and you use it anywhere a
 task name goes, as `@name`:
@@ -349,26 +434,26 @@ tasks = ["app-dirs", "caddyfile", "compose-file"]
 description = "Set up a server from scratch and start or update the stack"
 tasks = ["@docker", "@files", "compose-up"]      # bundles can include bundles
 
-[bundles.check]
-description = "Read-only checks of a deployed server"
-tasks = ["check-docker", "check-containers", "check-https"]
+[bundles.health]
+description = "Read-only health checks of a deployed server"
+tasks = ["health-docker", "health-containers", "health-https"]
 ```
 
 Now the group says what every app server does, in one line:
 
 ```toml
 [server_groups.app]
-tasks = ["@deploy", "@check"]
+tasks = ["@deploy", "@health"]
 ```
 
 And you can run just part of it from the command line:
 
 ```bash
-gorun Gorunfile --run --task @check     # only check, change nothing
+gorun Gorunfile --run --task @health    # only the health checks, change nothing
 gorun Gorunfile --list-bundles          # what each bundle expands to
 ```
 
-## 8. Regions, tags and exceptions
+## 9. Regions, tags and exceptions
 
 **Tags** label servers so you can pick them out (`--tag eu`, or in the picker). A server gets the
 tags of its groups plus its own. A group with nothing but `tags` is an easy way to label a region:
@@ -396,13 +481,13 @@ When one server needs something different, change just that server:
 hostname = "staging.example.com"
 groups = ["app"]
 tags = ["staging"]
-skip_tasks = ["check-https"]      # no public certificate here
+skip_tasks = ["health-https"]     # no public certificate here
 ```
 
 | On a server | Does |
 |---|---|
 | `add_tasks = [...]` | runs these as well |
-| `skip_tasks = [...]` | leaves these out (bundles work too: `["@check"]`) |
+| `skip_tasks = [...]` | leaves these out (bundles work too: `["@health"]`) |
 | `tasks = [...]` | replaces the list completely |
 
 `gorun Gorunfile --list-servers` shows the final task list of every server, so you can see the
@@ -410,7 +495,7 @@ effect before you run anything.
 
 **That's the whole file.** Read it end to end in [`tutorial/Gorunfile`](tutorial/Gorunfile).
 
-## 9. Splitting large Gorunfiles (optional)
+## 10. Splitting large Gorunfiles (optional)
 
 As your Gorunfile grows, you can split it across multiple files with `include`:
 
@@ -427,7 +512,7 @@ organized and makes it easy to manage by role or region.
 
 For a complete example, see [`recipes/large-inventory`](../recipes/large-inventory).
 
-## 10. Run jobs on a schedule
+## 11. Run jobs on a schedule
 
 A `[[schedule]]` table runs a target, a task or a `@bundle`, on a cron pattern or once at a set
 time. Schedules run inside the web service, `gorun -web`, not in a plain run. Add these to the
@@ -435,16 +520,16 @@ file:
 
 ```toml
 [[schedule]]
-name = "nightly-check"
-description = "Read-only checks every night"
-target = "@check"
+name = "nightly-health"
+description = "Read-only health checks every night"
+target = "@health"
 cron = "0 2 * * *"                # minute hour day month weekday
 timezone = "Australia/Sydney"     # the clock the fields are read in; omit for UTC
 missed = "skip"                   # or "run": one catch-up run for runs missed while paused or down
 
 [[schedule]]
 name = "maintenance"
-target = "@check"
+target = "@deploy"
 at = "2026-12-01T02:00"           # a one-off time, read in the timezone above
 timezone = "Europe/London"
 ```
@@ -471,9 +556,9 @@ the reason in History.
 The [scheduled jobs recipe](../recipes/05-scheduled-jobs/README.md) runs these schedules on your
 own machine, and [Schedules](schedules.md) has the full syntax.
 
-## 11. Share tasks with other Gorunfiles
+## 12. Share tasks with other Gorunfiles
 
-The tasks you wrote here — Docker, the Caddyfile, the checks — would be useful in other projects
+The tasks you wrote here — Docker, the Caddyfile, the health checks — would be useful in other projects
 too. Instead of copying them, move them into a git repository of their own and include them.
 
 1. Make a repository, say `deploy-tasks`, with the task and bundle tables and their scripts:
@@ -481,7 +566,7 @@ too. Instead of copying them, move them into a git repository of their own and i
    ```
    deploy-tasks/
      docker.toml       # [tasks.docker-install], [tasks.docker-enable], [bundles.docker]
-     checks.toml       # [tasks.check-docker], [tasks.check-containers], [bundles.check]
+     health.toml       # [tasks.health-docker], [tasks.health-containers], [bundles.health]
      scripts/docker-install.sh
    ```
 
@@ -515,7 +600,7 @@ The [task library recipe](../recipes/06-task-library/README.md) does this with a
 can run on your own machine. [Tasks from a git repository](gorunfile.md#tasks-from-a-git-repository)
 has every rule.
 
-## 12. Upload big files (optional)
+## 13. Upload big files (optional)
 
 Servers that can't reach your registry need the app's image brought to them. Save it to a file
 and copy it like any other file; gorun streams it, so a few gigabytes is fine. This step isn't in
@@ -528,6 +613,7 @@ docker save myapp:2.4.0 -o build/myapp-image.tar
 ```toml
 [tasks.app-image]
 description = "Ship the app's image to servers that can't reach the registry"
+check = "docker image inspect myapp:2.4.0 >/dev/null"   # already loaded: don't upload it again
 cmd = "docker load -i /tmp/myapp-image.tar && rm /tmp/myapp-image.tar"
 sudo = true
 depends_on = ["docker-install"]
@@ -549,18 +635,24 @@ Press **v** for a row per task, with its own bar. `gorun -web` shows the same un
 task, and `--plain` prints a line about every 10%, so CI logs show it too. Ctrl-C stops the
 uploads where they are. See [upload progress](gorunfile.md#upload-progress) for the details.
 
+The `check` matters most here: without it, every run would send the whole image again. The
+check asks the server whether the image is already loaded, so a rerun costs one command, not
+gigabytes. (`check_copies` wouldn't help, because the command deletes the tar once it is loaded.)
+
 > [!TIP]
 > Copying a whole directory (`src = "./build/site"`) shows one bar for all of it, counting every
 > file.
 
-## 13. Everyday use
+## 14. Everyday use
 
 ```bash
 gorun Gorunfile                                    # pick servers and tasks, then run
-gorun Gorunfile --run                              # deploy and check every server
+gorun Gorunfile --run                              # deploy every server: only what changed
+gorun Gorunfile --run --check                      # dry run: what would change
+gorun Gorunfile --run --force                      # run every task, even ones already done
 gorun Gorunfile --run --server web-eu-1            # one server
 gorun Gorunfile --run --tag us                     # every server tagged us
-gorun Gorunfile --run --task @check                # only check
+gorun Gorunfile --run --task @health               # only the health checks
 gorun Gorunfile --run --task compose-up --tag eu   # redeploy the stack in the EU
 gorun -history                                     # look back at past runs
 ```

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -50,6 +51,15 @@ const (
 	TaskUnchanged                  // its check found nothing to do, so its command didn't run; a success
 	TaskWouldRun                   // a check-only run: its check found something to do, or it has no check
 )
+
+// String is the state's name, as gorun prints it: "done", "unchanged", "would run" and so on.
+func (s TaskState) String() string {
+	names := [...]string{"pending", "running", "done", "failed", "skipped", "unchanged", "would run"}
+	if s < 0 || int(s) >= len(names) {
+		return "state " + strconv.Itoa(int(s))
+	}
+	return names[s]
+}
 
 // Phase is the step of a task an event is about. A task with a check runs it first, then (when
 // the check says there is something to do) its copies and command, then its verify.

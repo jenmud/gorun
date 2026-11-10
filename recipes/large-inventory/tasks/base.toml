@@ -1,12 +1,14 @@
 # ≈ roles/common
 [tasks.timezone]
 description = "Set the timezone"
+check = "test \"$(timedatectl show -p Timezone --value)\" = UTC"   # already UTC: unchanged
 cmd = "timedatectl set-timezone UTC"
+verify = "test \"$(timedatectl show -p Timezone --value)\" = UTC"
 sudo = true
 
 [tasks.packages]
 description = "Refresh package lists"
-cmd = "apt-get update -q"
+cmd = "apt-get update -q"     # no check: always refresh, like a handler that runs every time
 sudo = true
 
 [bundles.base]

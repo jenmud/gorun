@@ -2,24 +2,30 @@ title = "Recipe lab (local commands)"
 log_level = "info"
 
 # These tasks run on your own machine (a server with no ssh block, and tasks marked
-# local = true): gorun is just as happy orchestrating local commands as remote ones.
+# local = true): gorun is just as happy orchestrating local commands as remote ones. up,
+# down and setup-user have a check, so running one again when it's already done does nothing.
 [tasks.up]
 local = true
 description = "up"
 details = "Runs the up step of the recipe."
+check = "test $(docker compose -f recipes/docker-compose.yml ps --status running --quiet | wc -l) -eq 101"
 cmd = "docker compose -f recipes/docker-compose.yml up -d && echo 'lab started'"
+verify = "test $(docker compose -f recipes/docker-compose.yml ps --status running --quiet | wc -l) -eq 101"
 
 [tasks.setup-user]
 local = true
 description = "Add the current user to the docker group"
 details = "Uses sudo -S with SUDO_PASSWORD from the environment. Log out and back in afterwards, or run 'newgrp docker' in your shell."
-cmd = "if id -nG | grep -qw docker; then echo 'already in docker group'; else printf '%s\\n' \"$SUDO_PASSWORD\" | sudo -S usermod -aG docker \"$USER\" && echo 'added to docker group; log out and back in'; fi"
+check = "id -nG \"$USER\" | grep -qw docker"    # already in the group: nothing to do
+cmd = "printf '%s\\n' \"$SUDO_PASSWORD\" | sudo -S usermod -aG docker \"$USER\" && echo 'added to docker group; log out and back in'"
+verify = "id -nG \"$USER\" | grep -qw docker"
 envvars = { SUDO_PASSWORD = "${SUDO_PASSWORD}" }
 
 [tasks.down]
 local = true
 description = "down"
 details = "Runs the down step of the recipe."
+check = "test -z \"$(docker compose -f recipes/docker-compose.yml ps --quiet)\""
 cmd = "docker compose -f recipes/docker-compose.yml down && echo 'lab stopped'"
 
 [tasks.status]

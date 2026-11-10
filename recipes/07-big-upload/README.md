@@ -17,6 +17,9 @@ Then run it:
 
 ```sh
 gorun recipes/07-big-upload/Gorunfile -r         # the live view
+gorun recipes/07-big-upload/Gorunfile -r         # again: nothing is uploaded, it is all there
+gorun recipes/07-big-upload/Gorunfile -r --check # dry run: which uploads would be sent
+gorun recipes/07-big-upload/Gorunfile -r --force # upload everything again anyway
 gorun recipes/07-big-upload/Gorunfile -r -v      # a row and a bar per task
 gorun recipes/07-big-upload/Gorunfile -r --plain # plain lines, as in CI
 gorun -web recipes/07-big-upload/Gorunfile       # the web UI: tick the servers and run
@@ -31,11 +34,27 @@ network: the bars may finish in a second or two. Use a bigger `SIZE_MB` to watch
 
 | Task | Copy | Shows |
 |---|---|---|
-| `upload-release` | `build/release.tar.gz`, one large file | one bar for the file, then the small checksum file |
-| `upload-site` | `build/site`, a folder | one bar for the whole folder, counting every file |
-| `verify` | — | `sha256sum -c` on the server: the release arrived whole |
+| `upload-release` | `build/release.tar.gz`, one large file | one bar for the file, then the small checksum file; its verify runs `sha256sum -c` on the server |
+| `upload-site` | `build/site`, a folder | one bar for the whole folder, counting every file; its verify counts the files |
 
-- **Ctrl-C** (or **Stop** in the web UI) stops the uploads part way. Run it again to start over.
+## Upload only what changed
+
+Both tasks have `check_copies = true`. Before uploading, gorun compares the MD5 of every file it
+would send with the one already on the server. The server hashes its own copy with `md5sum` (or
+`md5 -r`, or `openssl`), so only the hashes cross the network, never the 1 GB.
+
+- The first run uploads everything, and each task's `verify` checks it arrived whole.
+- Run it again and both tasks show `=` *unchanged*: nothing is sent. The check output lists each
+  copy as `same`.
+- Change one file of the site (`echo hi >> recipes/07-big-upload/build/site/css/file-0`) and run
+  again: `upload-release` stays unchanged, and `upload-site` uploads the folder. Its check output
+  (shown with `-v`, and kept in History) says why: `changed ... (1 of 200 files: css/file-0)`.
+- `--check` tells you which uploads would be sent without sending anything; `--force` sends
+  everything regardless.
+- A server with no MD5 tool can't compare, so its files are uploaded every time, as before.
+
+- **Ctrl-C** (or **Stop** in the web UI) stops the uploads part way. Run it again to start over:
+  a half-sent file doesn't match, so it is sent again.
 - `--plain` prints a line as each large copy starts, about every 10%, and when it is done:
 
   ```

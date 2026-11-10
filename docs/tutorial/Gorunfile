@@ -1,12 +1,15 @@
 # The finished Gorunfile from the tutorial (docs/tutorial.md).
 #
 # Sets up Ubuntu servers from scratch and runs a web app behind Caddy with docker compose.
-# Every task is safe to rerun, so the whole file is safe to rerun.
+# Every task is safe to rerun, so the whole file is safe to rerun. Most setup tasks have a check,
+# so a rerun only changes what is missing, and a verify, so a change that didn't take fails.
 #
 #   gorun Gorunfile                                  # pick servers and tasks, then run
 #   gorun Gorunfile --run                            # deploy and check every server
 #   gorun Gorunfile --run --server web-eu-1          # just one server
-#   gorun Gorunfile --run --task @check              # only check, change nothing
+#   gorun Gorunfile --run --check                    # dry run: what would change, change nothing
+#   gorun Gorunfile --run --force                    # run every task, even ones already done
+#   gorun Gorunfile --run --task @health             # only the health checks
 #   gorun Gorunfile --run --task compose-up --tag us # redeploy the stack in the US
 #   gorun Gorunfile --list-servers                   # what each server will run
 #
@@ -23,7 +26,9 @@ title = "Deploy myapp"
 
 [tasks.docker-install]
 description = "Install docker and the compose plugin, if missing"
+check = "command -v docker && docker compose version"    # exit 0: already installed
 cmd_file = "./scripts/docker-install.sh"
+verify = "docker compose version"
 sudo = true
 rerun = "safe"
 timeout = "20m"
@@ -32,7 +37,9 @@ retry_delay = "15s"
 
 [tasks.docker-enable]
 description = "Start docker and enable it at boot"
+check = "systemctl is-enabled --quiet docker && systemctl is-active --quiet docker"
 cmd = "systemctl enable --now docker containerd"
+verify = "systemctl is-active --quiet docker"
 sudo = true
 rerun = "safe"
 timeout = "2m"
@@ -40,6 +47,7 @@ depends_on = ["docker-install"]
 
 [tasks.app-dirs]
 description = "Create the /opt/myapp directories"
+check = "test -d /opt/myapp/data && test -d /opt/myapp/caddy-data"
 cmd = "mkdir -p /opt/myapp/data /opt/myapp/caddy-data"
 sudo = true
 rerun = "safe"
@@ -47,6 +55,9 @@ timeout = "30s"
 
 [tasks.caddyfile]
 description = "Render the Caddyfile for this server and install it"
+# unchanged when the rendered file matches the staged copy, and the staged copy is installed
+check_copies = true
+check = "cmp -s /tmp/myapp.Caddyfile /opt/myapp/Caddyfile"
 cmd = "cp /tmp/myapp.Caddyfile /opt/myapp/Caddyfile"
 sudo = true
 rerun = "safe"
@@ -64,6 +75,8 @@ to = "https://docs.example.com"
 
 [tasks.compose-file]
 description = "Render docker-compose.yml for this server and install it"
+check_copies = true
+check = "cmp -s /tmp/myapp.docker-compose.yml /opt/myapp/docker-compose.yml"
 cmd = "cp /tmp/myapp.docker-compose.yml /opt/myapp/docker-compose.yml"
 sudo = true
 rerun = "safe"
@@ -75,6 +88,7 @@ dst = "/tmp/myapp.docker-compose.yml"
 
 [tasks.registry-login]
 description = "Log docker in to the registry, so it can pull the private image"
+# no check: it always runs, so a rotated token is always picked up
 cmd_file = "./scripts/registry-login.sh"
 sudo = true
 rerun = "safe"
@@ -89,6 +103,7 @@ REGISTRY_TOKEN = "${REGISTRY_TOKEN}"
 [tasks.compose-up]
 description = "Start or update the stack, then reload caddy"
 cmd_file = "./scripts/compose-up.sh"
+verify = "cd /opt/myapp && test $(docker compose ps --status running --quiet | wc -l) -eq 2"
 sudo = true
 rerun = "safe"
 timeout = "10m"
@@ -97,16 +112,16 @@ retry_delay = "15s"
 depends_on = ["registry-login", "caddyfile", "compose-file"]
 
 #
-# Checks: read-only, and they don't depend on any setup task.
+# Health checks: read-only tasks, and they don't depend on any setup task.
 #
 
-[tasks.check-docker]
+[tasks.health-docker]
 description = "Check docker is running"
 cmd = "systemctl is-active docker"
 rerun = "safe"
 timeout = "30s"
 
-[tasks.check-containers]
+[tasks.health-containers]
 description = "Check the app and caddy containers are running"
 cmd = "cd /opt/myapp && test $(docker compose ps --status running --quiet | wc -l) -eq 2"
 sudo = true
@@ -115,14 +130,14 @@ timeout = "1m"
 retries = 3
 retry_delay = "5s"
 
-[tasks.check-https]
+[tasks.health-https]
 description = "Check the site answers over HTTPS"
 cmd_template = "curl -fsS -o /dev/null https://{{.Hostname}}/"
 rerun = "safe"
 timeout = "3m"
 retries = 5
 retry_delay = "20s"
-depends_on = ["check-containers"]
+depends_on = ["health-containers"]
 
 #
 # Bundles: named task lists, used as @name.
@@ -140,9 +155,9 @@ tasks = ["app-dirs", "caddyfile", "compose-file"]
 description = "Set up a server from scratch and start or update the stack"
 tasks = ["@docker", "@files", "compose-up"]
 
-[bundles.check]
-description = "Read-only checks of a deployed server"
-tasks = ["check-docker", "check-containers", "check-https"]
+[bundles.health]
+description = "Read-only health checks of a deployed server"
+tasks = ["health-docker", "health-containers", "health-https"]
 
 #
 # Server groups: app is what every server runs and how it logs in; eu and us tag the region.
@@ -150,7 +165,7 @@ tasks = ["check-docker", "check-containers", "check-https"]
 
 [server_groups.app]
 tags = ["app"]
-tasks = ["@deploy", "@check"]
+tasks = ["@deploy", "@health"]
 envvars = { APP_ENV = "production", APP_VERSION = "1.4.2" }
     [server_groups.app.ssh]
     username = "ubuntu"
@@ -179,4 +194,4 @@ hostname = "staging.example.com"
 groups = ["app"]
 tags = ["staging"]
 envvars = { APP_ENV = "staging", APP_VERSION = "1.5.0-rc1" }   # the host wins over its groups
-skip_tasks = ["check-https"]                                   # no public certificate here
+skip_tasks = ["health-https"]                                  # no public certificate here

@@ -19,6 +19,15 @@ cmd = "df -h /"
 local = true
 depends_on = ["lib-hello"]
 
+# A library task can skip itself and confirm its change like any other: the check makes it
+# unchanged once the file is there, and the verify fails it if the file didn't get written.
+[tasks.lib-motd]
+description = "Write a message of the day, once"
+check = "test -s /tmp/gorun-library/motd"
+cmd = "mkdir -p /tmp/gorun-library && echo 'managed by the shared task library' > /tmp/gorun-library/motd"
+verify = "grep -q 'shared task library' /tmp/gorun-library/motd"
+local = true
+
 [bundles.lib-checks]
-description = "Quick read-only checks, from the shared library"
-tasks = ["lib-hello", "lib-uptime", "lib-disk"]
+description = "Quick checks and a one-time setup step, from the shared library"
+tasks = ["lib-hello", "lib-uptime", "lib-disk", "lib-motd"]

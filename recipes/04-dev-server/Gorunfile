@@ -2,1399 +2,1697 @@ title = "Recipe 4: massive dev server"
 log_level = "info"
 max_task_parallel = -1
 
+# Every fetch, install and configure step has a check, so the first run sets up all ~60 tools and
+# a rerun only runs the smoke tests and the gate: the rest show as unchanged. Installs and
+# configures have a verify, so a step that didn't leave its file behind fails on the spot.
+#   --check              dry run: which steps would run
+#   --force              redo everything
+#   --task cleanup       start again from nothing
+
 [tasks.bootstrap]
-cmd = "rm -rf /tmp/devserver && mkdir -p /tmp/devserver/bin /tmp/devserver/cfg /tmp/devserver/test /tmp/devserver/logs && echo bootstrap ok"
+check = "test -d /tmp/devserver/bin && test -d /tmp/devserver/cfg && test -d /tmp/devserver/test && test -d /tmp/devserver/logs"
+cmd = "mkdir -p /tmp/devserver/bin /tmp/devserver/cfg /tmp/devserver/test /tmp/devserver/logs && echo bootstrap ok"
 description = "Bootstrap the dev server workspace"
 details = "Creates the working directories used by later tasks."
 
 [tasks.fetch-ca-certificates]
-cmd = "echo 'fetching ca-certificates' && sleep 0.1 && echo 'fetched ca-certificates'"
+check = "test -f /tmp/devserver/logs/ca-certificates.fetched"
+cmd = "echo 'fetching ca-certificates' && sleep 0.1 && touch /tmp/devserver/logs/ca-certificates.fetched && echo 'fetched ca-certificates'"
 description = "Fetch ca-certificates"
 details = "Downloads or locates the ca-certificates package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-ca-certificates]
-cmd = "echo 'installing ca-certificates' && sleep 0.1 && echo 'installed ca-certificates'"
+check = "test -x /tmp/devserver/bin/ca-certificates"
+cmd = "echo 'installing ca-certificates' && sleep 0.1 && printf '#!/bin/sh\\necho ca-certificates ok\\n' > /tmp/devserver/bin/ca-certificates && chmod +x /tmp/devserver/bin/ca-certificates && echo 'installed ca-certificates'"
+verify = "/tmp/devserver/bin/ca-certificates"
 description = "Install ca-certificates"
 details = "Installs ca-certificates onto the server and verifies the binary."
 depends_on = ["fetch-ca-certificates"]
 
 [tasks.configure-ca-certificates]
-cmd = "echo 'configuring ca-certificates' && sleep 0.1 && echo 'configured ca-certificates'"
+check = "grep -qx 'tool = ca-certificates' /tmp/devserver/cfg/ca-certificates.conf"
+cmd = "echo 'configuring ca-certificates' && sleep 0.1 && echo 'tool = ca-certificates' > /tmp/devserver/cfg/ca-certificates.conf && echo 'configured ca-certificates'"
+verify = "test -s /tmp/devserver/cfg/ca-certificates.conf"
 description = "Configure ca-certificates"
 details = "Writes the default configuration for ca-certificates."
 depends_on = ["install-ca-certificates"]
 
 [tasks.smoke-ca-certificates]
-cmd = "echo 'smoke testing ca-certificates' && sleep 0.1 && echo 'smoke ca-certificates ok'"
+cmd = "echo 'smoke testing ca-certificates' && sleep 0.1 && /tmp/devserver/bin/ca-certificates && test -s /tmp/devserver/cfg/ca-certificates.conf && echo 'smoke ca-certificates ok'"
 description = "Smoke test ca-certificates"
 details = "Runs a quick check that ca-certificates works."
 depends_on = ["configure-ca-certificates"]
 
 [tasks.fetch-tzdata]
-cmd = "echo 'fetching tzdata' && sleep 0.1 && echo 'fetched tzdata'"
+check = "test -f /tmp/devserver/logs/tzdata.fetched"
+cmd = "echo 'fetching tzdata' && sleep 0.1 && touch /tmp/devserver/logs/tzdata.fetched && echo 'fetched tzdata'"
 description = "Fetch tzdata"
 details = "Downloads or locates the tzdata package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-tzdata]
-cmd = "echo 'installing tzdata' && sleep 0.1 && echo 'installed tzdata'"
+check = "test -x /tmp/devserver/bin/tzdata"
+cmd = "echo 'installing tzdata' && sleep 0.1 && printf '#!/bin/sh\\necho tzdata ok\\n' > /tmp/devserver/bin/tzdata && chmod +x /tmp/devserver/bin/tzdata && echo 'installed tzdata'"
+verify = "/tmp/devserver/bin/tzdata"
 description = "Install tzdata"
 details = "Installs tzdata onto the server and verifies the binary."
 depends_on = ["fetch-tzdata"]
 
 [tasks.configure-tzdata]
-cmd = "echo 'configuring tzdata' && sleep 0.1 && echo 'configured tzdata'"
+check = "grep -qx 'tool = tzdata' /tmp/devserver/cfg/tzdata.conf"
+cmd = "echo 'configuring tzdata' && sleep 0.1 && echo 'tool = tzdata' > /tmp/devserver/cfg/tzdata.conf && echo 'configured tzdata'"
+verify = "test -s /tmp/devserver/cfg/tzdata.conf"
 description = "Configure tzdata"
 details = "Writes the default configuration for tzdata."
 depends_on = ["install-tzdata"]
 
 [tasks.smoke-tzdata]
-cmd = "echo 'smoke testing tzdata' && sleep 0.1 && echo 'smoke tzdata ok'"
+cmd = "echo 'smoke testing tzdata' && sleep 0.1 && /tmp/devserver/bin/tzdata && test -s /tmp/devserver/cfg/tzdata.conf && echo 'smoke tzdata ok'"
 description = "Smoke test tzdata"
 details = "Runs a quick check that tzdata works."
 depends_on = ["configure-tzdata"]
 
 [tasks.fetch-sudo]
-cmd = "echo 'fetching sudo' && sleep 0.1 && echo 'fetched sudo'"
+check = "test -f /tmp/devserver/logs/sudo.fetched"
+cmd = "echo 'fetching sudo' && sleep 0.1 && touch /tmp/devserver/logs/sudo.fetched && echo 'fetched sudo'"
 description = "Fetch sudo"
 details = "Downloads or locates the sudo package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-sudo]
-cmd = "echo 'installing sudo' && sleep 0.1 && echo 'installed sudo'"
+check = "test -x /tmp/devserver/bin/sudo"
+cmd = "echo 'installing sudo' && sleep 0.1 && printf '#!/bin/sh\\necho sudo ok\\n' > /tmp/devserver/bin/sudo && chmod +x /tmp/devserver/bin/sudo && echo 'installed sudo'"
+verify = "/tmp/devserver/bin/sudo"
 description = "Install sudo"
 details = "Installs sudo onto the server and verifies the binary."
 depends_on = ["fetch-sudo"]
 
 [tasks.configure-sudo]
-cmd = "echo 'configuring sudo' && sleep 0.1 && echo 'configured sudo'"
+check = "grep -qx 'tool = sudo' /tmp/devserver/cfg/sudo.conf"
+cmd = "echo 'configuring sudo' && sleep 0.1 && echo 'tool = sudo' > /tmp/devserver/cfg/sudo.conf && echo 'configured sudo'"
+verify = "test -s /tmp/devserver/cfg/sudo.conf"
 description = "Configure sudo"
 details = "Writes the default configuration for sudo."
 depends_on = ["install-sudo"]
 
 [tasks.smoke-sudo]
-cmd = "echo 'smoke testing sudo' && sleep 0.1 && echo 'smoke sudo ok'"
+cmd = "echo 'smoke testing sudo' && sleep 0.1 && /tmp/devserver/bin/sudo && test -s /tmp/devserver/cfg/sudo.conf && echo 'smoke sudo ok'"
 description = "Smoke test sudo"
 details = "Runs a quick check that sudo works."
 depends_on = ["configure-sudo"]
 
 [tasks.fetch-bash]
-cmd = "echo 'fetching bash' && sleep 0.1 && echo 'fetched bash'"
+check = "test -f /tmp/devserver/logs/bash.fetched"
+cmd = "echo 'fetching bash' && sleep 0.1 && touch /tmp/devserver/logs/bash.fetched && echo 'fetched bash'"
 description = "Fetch bash"
 details = "Downloads or locates the bash package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-bash]
-cmd = "echo 'installing bash' && sleep 0.1 && echo 'installed bash'"
+check = "test -x /tmp/devserver/bin/bash"
+cmd = "echo 'installing bash' && sleep 0.1 && printf '#!/bin/sh\\necho bash ok\\n' > /tmp/devserver/bin/bash && chmod +x /tmp/devserver/bin/bash && echo 'installed bash'"
+verify = "/tmp/devserver/bin/bash"
 description = "Install bash"
 details = "Installs bash onto the server and verifies the binary."
 depends_on = ["fetch-bash"]
 
 [tasks.configure-bash]
-cmd = "echo 'configuring bash' && sleep 0.1 && echo 'configured bash'"
+check = "grep -qx 'tool = bash' /tmp/devserver/cfg/bash.conf"
+cmd = "echo 'configuring bash' && sleep 0.1 && echo 'tool = bash' > /tmp/devserver/cfg/bash.conf && echo 'configured bash'"
+verify = "test -s /tmp/devserver/cfg/bash.conf"
 description = "Configure bash"
 details = "Writes the default configuration for bash."
 depends_on = ["install-bash"]
 
 [tasks.smoke-bash]
-cmd = "echo 'smoke testing bash' && sleep 0.1 && echo 'smoke bash ok'"
+cmd = "echo 'smoke testing bash' && sleep 0.1 && /tmp/devserver/bin/bash && test -s /tmp/devserver/cfg/bash.conf && echo 'smoke bash ok'"
 description = "Smoke test bash"
 details = "Runs a quick check that bash works."
 depends_on = ["configure-bash"]
 
 [tasks.fetch-zsh]
-cmd = "echo 'fetching zsh' && sleep 0.1 && echo 'fetched zsh'"
+check = "test -f /tmp/devserver/logs/zsh.fetched"
+cmd = "echo 'fetching zsh' && sleep 0.1 && touch /tmp/devserver/logs/zsh.fetched && echo 'fetched zsh'"
 description = "Fetch zsh"
 details = "Downloads or locates the zsh package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-zsh]
-cmd = "echo 'installing zsh' && sleep 0.1 && echo 'installed zsh'"
+check = "test -x /tmp/devserver/bin/zsh"
+cmd = "echo 'installing zsh' && sleep 0.1 && printf '#!/bin/sh\\necho zsh ok\\n' > /tmp/devserver/bin/zsh && chmod +x /tmp/devserver/bin/zsh && echo 'installed zsh'"
+verify = "/tmp/devserver/bin/zsh"
 description = "Install zsh"
 details = "Installs zsh onto the server and verifies the binary."
 depends_on = ["fetch-zsh"]
 
 [tasks.configure-zsh]
-cmd = "echo 'configuring zsh' && sleep 0.1 && echo 'configured zsh'"
+check = "grep -qx 'tool = zsh' /tmp/devserver/cfg/zsh.conf"
+cmd = "echo 'configuring zsh' && sleep 0.1 && echo 'tool = zsh' > /tmp/devserver/cfg/zsh.conf && echo 'configured zsh'"
+verify = "test -s /tmp/devserver/cfg/zsh.conf"
 description = "Configure zsh"
 details = "Writes the default configuration for zsh."
 depends_on = ["install-zsh"]
 
 [tasks.smoke-zsh]
-cmd = "echo 'smoke testing zsh' && sleep 0.1 && echo 'smoke zsh ok'"
+cmd = "echo 'smoke testing zsh' && sleep 0.1 && /tmp/devserver/bin/zsh && test -s /tmp/devserver/cfg/zsh.conf && echo 'smoke zsh ok'"
 description = "Smoke test zsh"
 details = "Runs a quick check that zsh works."
 depends_on = ["configure-zsh"]
 
 [tasks.fetch-curl]
-cmd = "echo 'fetching curl' && sleep 0.1 && echo 'fetched curl'"
+check = "test -f /tmp/devserver/logs/curl.fetched"
+cmd = "echo 'fetching curl' && sleep 0.1 && touch /tmp/devserver/logs/curl.fetched && echo 'fetched curl'"
 description = "Fetch curl"
 details = "Downloads or locates the curl package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-curl]
-cmd = "echo 'installing curl' && sleep 0.1 && echo 'installed curl'"
+check = "test -x /tmp/devserver/bin/curl"
+cmd = "echo 'installing curl' && sleep 0.1 && printf '#!/bin/sh\\necho curl ok\\n' > /tmp/devserver/bin/curl && chmod +x /tmp/devserver/bin/curl && echo 'installed curl'"
+verify = "/tmp/devserver/bin/curl"
 description = "Install curl"
 details = "Installs curl onto the server and verifies the binary."
 depends_on = ["fetch-curl"]
 
 [tasks.configure-curl]
-cmd = "echo 'configuring curl' && sleep 0.1 && echo 'configured curl'"
+check = "grep -qx 'tool = curl' /tmp/devserver/cfg/curl.conf"
+cmd = "echo 'configuring curl' && sleep 0.1 && echo 'tool = curl' > /tmp/devserver/cfg/curl.conf && echo 'configured curl'"
+verify = "test -s /tmp/devserver/cfg/curl.conf"
 description = "Configure curl"
 details = "Writes the default configuration for curl."
 depends_on = ["install-curl"]
 
 [tasks.smoke-curl]
-cmd = "echo 'smoke testing curl' && sleep 0.1 && echo 'smoke curl ok'"
+cmd = "echo 'smoke testing curl' && sleep 0.1 && /tmp/devserver/bin/curl && test -s /tmp/devserver/cfg/curl.conf && echo 'smoke curl ok'"
 description = "Smoke test curl"
 details = "Runs a quick check that curl works."
 depends_on = ["configure-curl"]
 
 [tasks.fetch-wget]
-cmd = "echo 'fetching wget' && sleep 0.1 && echo 'fetched wget'"
+check = "test -f /tmp/devserver/logs/wget.fetched"
+cmd = "echo 'fetching wget' && sleep 0.1 && touch /tmp/devserver/logs/wget.fetched && echo 'fetched wget'"
 description = "Fetch wget"
 details = "Downloads or locates the wget package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-wget]
-cmd = "echo 'installing wget' && sleep 0.1 && echo 'installed wget'"
+check = "test -x /tmp/devserver/bin/wget"
+cmd = "echo 'installing wget' && sleep 0.1 && printf '#!/bin/sh\\necho wget ok\\n' > /tmp/devserver/bin/wget && chmod +x /tmp/devserver/bin/wget && echo 'installed wget'"
+verify = "/tmp/devserver/bin/wget"
 description = "Install wget"
 details = "Installs wget onto the server and verifies the binary."
 depends_on = ["fetch-wget"]
 
 [tasks.configure-wget]
-cmd = "echo 'configuring wget' && sleep 0.1 && echo 'configured wget'"
+check = "grep -qx 'tool = wget' /tmp/devserver/cfg/wget.conf"
+cmd = "echo 'configuring wget' && sleep 0.1 && echo 'tool = wget' > /tmp/devserver/cfg/wget.conf && echo 'configured wget'"
+verify = "test -s /tmp/devserver/cfg/wget.conf"
 description = "Configure wget"
 details = "Writes the default configuration for wget."
 depends_on = ["install-wget"]
 
 [tasks.smoke-wget]
-cmd = "echo 'smoke testing wget' && sleep 0.1 && echo 'smoke wget ok'"
+cmd = "echo 'smoke testing wget' && sleep 0.1 && /tmp/devserver/bin/wget && test -s /tmp/devserver/cfg/wget.conf && echo 'smoke wget ok'"
 description = "Smoke test wget"
 details = "Runs a quick check that wget works."
 depends_on = ["configure-wget"]
 
 [tasks.fetch-jq]
-cmd = "echo 'fetching jq' && sleep 0.1 && echo 'fetched jq'"
+check = "test -f /tmp/devserver/logs/jq.fetched"
+cmd = "echo 'fetching jq' && sleep 0.1 && touch /tmp/devserver/logs/jq.fetched && echo 'fetched jq'"
 description = "Fetch jq"
 details = "Downloads or locates the jq package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-jq]
-cmd = "echo 'installing jq' && sleep 0.1 && echo 'installed jq'"
+check = "test -x /tmp/devserver/bin/jq"
+cmd = "echo 'installing jq' && sleep 0.1 && printf '#!/bin/sh\\necho jq ok\\n' > /tmp/devserver/bin/jq && chmod +x /tmp/devserver/bin/jq && echo 'installed jq'"
+verify = "/tmp/devserver/bin/jq"
 description = "Install jq"
 details = "Installs jq onto the server and verifies the binary."
 depends_on = ["fetch-jq"]
 
 [tasks.configure-jq]
-cmd = "echo 'configuring jq' && sleep 0.1 && echo 'configured jq'"
+check = "grep -qx 'tool = jq' /tmp/devserver/cfg/jq.conf"
+cmd = "echo 'configuring jq' && sleep 0.1 && echo 'tool = jq' > /tmp/devserver/cfg/jq.conf && echo 'configured jq'"
+verify = "test -s /tmp/devserver/cfg/jq.conf"
 description = "Configure jq"
 details = "Writes the default configuration for jq."
 depends_on = ["install-jq"]
 
 [tasks.smoke-jq]
-cmd = "echo 'smoke testing jq' && sleep 0.1 && echo 'smoke jq ok'"
+cmd = "echo 'smoke testing jq' && sleep 0.1 && /tmp/devserver/bin/jq && test -s /tmp/devserver/cfg/jq.conf && echo 'smoke jq ok'"
 description = "Smoke test jq"
 details = "Runs a quick check that jq works."
 depends_on = ["configure-jq"]
 
 [tasks.fetch-yq]
-cmd = "echo 'fetching yq' && sleep 0.1 && echo 'fetched yq'"
+check = "test -f /tmp/devserver/logs/yq.fetched"
+cmd = "echo 'fetching yq' && sleep 0.1 && touch /tmp/devserver/logs/yq.fetched && echo 'fetched yq'"
 description = "Fetch yq"
 details = "Downloads or locates the yq package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-yq]
-cmd = "echo 'installing yq' && sleep 0.1 && echo 'installed yq'"
+check = "test -x /tmp/devserver/bin/yq"
+cmd = "echo 'installing yq' && sleep 0.1 && printf '#!/bin/sh\\necho yq ok\\n' > /tmp/devserver/bin/yq && chmod +x /tmp/devserver/bin/yq && echo 'installed yq'"
+verify = "/tmp/devserver/bin/yq"
 description = "Install yq"
 details = "Installs yq onto the server and verifies the binary."
 depends_on = ["fetch-yq"]
 
 [tasks.configure-yq]
-cmd = "echo 'configuring yq' && sleep 0.1 && echo 'configured yq'"
+check = "grep -qx 'tool = yq' /tmp/devserver/cfg/yq.conf"
+cmd = "echo 'configuring yq' && sleep 0.1 && echo 'tool = yq' > /tmp/devserver/cfg/yq.conf && echo 'configured yq'"
+verify = "test -s /tmp/devserver/cfg/yq.conf"
 description = "Configure yq"
 details = "Writes the default configuration for yq."
 depends_on = ["install-yq"]
 
 [tasks.smoke-yq]
-cmd = "echo 'smoke testing yq' && sleep 0.1 && echo 'smoke yq ok'"
+cmd = "echo 'smoke testing yq' && sleep 0.1 && /tmp/devserver/bin/yq && test -s /tmp/devserver/cfg/yq.conf && echo 'smoke yq ok'"
 description = "Smoke test yq"
 details = "Runs a quick check that yq works."
 depends_on = ["configure-yq"]
 
 [tasks.fetch-fzf]
-cmd = "echo 'fetching fzf' && sleep 0.1 && echo 'fetched fzf'"
+check = "test -f /tmp/devserver/logs/fzf.fetched"
+cmd = "echo 'fetching fzf' && sleep 0.1 && touch /tmp/devserver/logs/fzf.fetched && echo 'fetched fzf'"
 description = "Fetch fzf"
 details = "Downloads or locates the fzf package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-fzf]
-cmd = "echo 'installing fzf' && sleep 0.1 && echo 'installed fzf'"
+check = "test -x /tmp/devserver/bin/fzf"
+cmd = "echo 'installing fzf' && sleep 0.1 && printf '#!/bin/sh\\necho fzf ok\\n' > /tmp/devserver/bin/fzf && chmod +x /tmp/devserver/bin/fzf && echo 'installed fzf'"
+verify = "/tmp/devserver/bin/fzf"
 description = "Install fzf"
 details = "Installs fzf onto the server and verifies the binary."
 depends_on = ["fetch-fzf"]
 
 [tasks.configure-fzf]
-cmd = "echo 'configuring fzf' && sleep 0.1 && echo 'configured fzf'"
+check = "grep -qx 'tool = fzf' /tmp/devserver/cfg/fzf.conf"
+cmd = "echo 'configuring fzf' && sleep 0.1 && echo 'tool = fzf' > /tmp/devserver/cfg/fzf.conf && echo 'configured fzf'"
+verify = "test -s /tmp/devserver/cfg/fzf.conf"
 description = "Configure fzf"
 details = "Writes the default configuration for fzf."
 depends_on = ["install-fzf"]
 
 [tasks.smoke-fzf]
-cmd = "echo 'smoke testing fzf' && sleep 0.1 && echo 'smoke fzf ok'"
+cmd = "echo 'smoke testing fzf' && sleep 0.1 && /tmp/devserver/bin/fzf && test -s /tmp/devserver/cfg/fzf.conf && echo 'smoke fzf ok'"
 description = "Smoke test fzf"
 details = "Runs a quick check that fzf works."
 depends_on = ["configure-fzf"]
 
 [tasks.fetch-ripgrep]
-cmd = "echo 'fetching ripgrep' && sleep 0.1 && echo 'fetched ripgrep'"
+check = "test -f /tmp/devserver/logs/ripgrep.fetched"
+cmd = "echo 'fetching ripgrep' && sleep 0.1 && touch /tmp/devserver/logs/ripgrep.fetched && echo 'fetched ripgrep'"
 description = "Fetch ripgrep"
 details = "Downloads or locates the ripgrep package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-ripgrep]
-cmd = "echo 'installing ripgrep' && sleep 0.1 && echo 'installed ripgrep'"
+check = "test -x /tmp/devserver/bin/ripgrep"
+cmd = "echo 'installing ripgrep' && sleep 0.1 && printf '#!/bin/sh\\necho ripgrep ok\\n' > /tmp/devserver/bin/ripgrep && chmod +x /tmp/devserver/bin/ripgrep && echo 'installed ripgrep'"
+verify = "/tmp/devserver/bin/ripgrep"
 description = "Install ripgrep"
 details = "Installs ripgrep onto the server and verifies the binary."
 depends_on = ["fetch-ripgrep"]
 
 [tasks.configure-ripgrep]
-cmd = "echo 'configuring ripgrep' && sleep 0.1 && echo 'configured ripgrep'"
+check = "grep -qx 'tool = ripgrep' /tmp/devserver/cfg/ripgrep.conf"
+cmd = "echo 'configuring ripgrep' && sleep 0.1 && echo 'tool = ripgrep' > /tmp/devserver/cfg/ripgrep.conf && echo 'configured ripgrep'"
+verify = "test -s /tmp/devserver/cfg/ripgrep.conf"
 description = "Configure ripgrep"
 details = "Writes the default configuration for ripgrep."
 depends_on = ["install-ripgrep"]
 
 [tasks.smoke-ripgrep]
-cmd = "echo 'smoke testing ripgrep' && sleep 0.1 && echo 'smoke ripgrep ok'"
+cmd = "echo 'smoke testing ripgrep' && sleep 0.1 && /tmp/devserver/bin/ripgrep && test -s /tmp/devserver/cfg/ripgrep.conf && echo 'smoke ripgrep ok'"
 description = "Smoke test ripgrep"
 details = "Runs a quick check that ripgrep works."
 depends_on = ["configure-ripgrep"]
 
 [tasks.fetch-fd]
-cmd = "echo 'fetching fd' && sleep 0.1 && echo 'fetched fd'"
+check = "test -f /tmp/devserver/logs/fd.fetched"
+cmd = "echo 'fetching fd' && sleep 0.1 && touch /tmp/devserver/logs/fd.fetched && echo 'fetched fd'"
 description = "Fetch fd"
 details = "Downloads or locates the fd package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-fd]
-cmd = "echo 'installing fd' && sleep 0.1 && echo 'installed fd'"
+check = "test -x /tmp/devserver/bin/fd"
+cmd = "echo 'installing fd' && sleep 0.1 && printf '#!/bin/sh\\necho fd ok\\n' > /tmp/devserver/bin/fd && chmod +x /tmp/devserver/bin/fd && echo 'installed fd'"
+verify = "/tmp/devserver/bin/fd"
 description = "Install fd"
 details = "Installs fd onto the server and verifies the binary."
 depends_on = ["fetch-fd"]
 
 [tasks.configure-fd]
-cmd = "echo 'configuring fd' && sleep 0.1 && echo 'configured fd'"
+check = "grep -qx 'tool = fd' /tmp/devserver/cfg/fd.conf"
+cmd = "echo 'configuring fd' && sleep 0.1 && echo 'tool = fd' > /tmp/devserver/cfg/fd.conf && echo 'configured fd'"
+verify = "test -s /tmp/devserver/cfg/fd.conf"
 description = "Configure fd"
 details = "Writes the default configuration for fd."
 depends_on = ["install-fd"]
 
 [tasks.smoke-fd]
-cmd = "echo 'smoke testing fd' && sleep 0.1 && echo 'smoke fd ok'"
+cmd = "echo 'smoke testing fd' && sleep 0.1 && /tmp/devserver/bin/fd && test -s /tmp/devserver/cfg/fd.conf && echo 'smoke fd ok'"
 description = "Smoke test fd"
 details = "Runs a quick check that fd works."
 depends_on = ["configure-fd"]
 
 [tasks.fetch-bat]
-cmd = "echo 'fetching bat' && sleep 0.1 && echo 'fetched bat'"
+check = "test -f /tmp/devserver/logs/bat.fetched"
+cmd = "echo 'fetching bat' && sleep 0.1 && touch /tmp/devserver/logs/bat.fetched && echo 'fetched bat'"
 description = "Fetch bat"
 details = "Downloads or locates the bat package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-bat]
-cmd = "echo 'installing bat' && sleep 0.1 && echo 'installed bat'"
+check = "test -x /tmp/devserver/bin/bat"
+cmd = "echo 'installing bat' && sleep 0.1 && printf '#!/bin/sh\\necho bat ok\\n' > /tmp/devserver/bin/bat && chmod +x /tmp/devserver/bin/bat && echo 'installed bat'"
+verify = "/tmp/devserver/bin/bat"
 description = "Install bat"
 details = "Installs bat onto the server and verifies the binary."
 depends_on = ["fetch-bat"]
 
 [tasks.configure-bat]
-cmd = "echo 'configuring bat' && sleep 0.1 && echo 'configured bat'"
+check = "grep -qx 'tool = bat' /tmp/devserver/cfg/bat.conf"
+cmd = "echo 'configuring bat' && sleep 0.1 && echo 'tool = bat' > /tmp/devserver/cfg/bat.conf && echo 'configured bat'"
+verify = "test -s /tmp/devserver/cfg/bat.conf"
 description = "Configure bat"
 details = "Writes the default configuration for bat."
 depends_on = ["install-bat"]
 
 [tasks.smoke-bat]
-cmd = "echo 'smoke testing bat' && sleep 0.1 && echo 'smoke bat ok'"
+cmd = "echo 'smoke testing bat' && sleep 0.1 && /tmp/devserver/bin/bat && test -s /tmp/devserver/cfg/bat.conf && echo 'smoke bat ok'"
 description = "Smoke test bat"
 details = "Runs a quick check that bat works."
 depends_on = ["configure-bat"]
 
 [tasks.fetch-eza]
-cmd = "echo 'fetching eza' && sleep 0.1 && echo 'fetched eza'"
+check = "test -f /tmp/devserver/logs/eza.fetched"
+cmd = "echo 'fetching eza' && sleep 0.1 && touch /tmp/devserver/logs/eza.fetched && echo 'fetched eza'"
 description = "Fetch eza"
 details = "Downloads or locates the eza package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-eza]
-cmd = "echo 'installing eza' && sleep 0.1 && echo 'installed eza'"
+check = "test -x /tmp/devserver/bin/eza"
+cmd = "echo 'installing eza' && sleep 0.1 && printf '#!/bin/sh\\necho eza ok\\n' > /tmp/devserver/bin/eza && chmod +x /tmp/devserver/bin/eza && echo 'installed eza'"
+verify = "/tmp/devserver/bin/eza"
 description = "Install eza"
 details = "Installs eza onto the server and verifies the binary."
 depends_on = ["fetch-eza"]
 
 [tasks.configure-eza]
-cmd = "echo 'configuring eza' && sleep 0.1 && echo 'configured eza'"
+check = "grep -qx 'tool = eza' /tmp/devserver/cfg/eza.conf"
+cmd = "echo 'configuring eza' && sleep 0.1 && echo 'tool = eza' > /tmp/devserver/cfg/eza.conf && echo 'configured eza'"
+verify = "test -s /tmp/devserver/cfg/eza.conf"
 description = "Configure eza"
 details = "Writes the default configuration for eza."
 depends_on = ["install-eza"]
 
 [tasks.smoke-eza]
-cmd = "echo 'smoke testing eza' && sleep 0.1 && echo 'smoke eza ok'"
+cmd = "echo 'smoke testing eza' && sleep 0.1 && /tmp/devserver/bin/eza && test -s /tmp/devserver/cfg/eza.conf && echo 'smoke eza ok'"
 description = "Smoke test eza"
 details = "Runs a quick check that eza works."
 depends_on = ["configure-eza"]
 
 [tasks.fetch-htop]
-cmd = "echo 'fetching htop' && sleep 0.1 && echo 'fetched htop'"
+check = "test -f /tmp/devserver/logs/htop.fetched"
+cmd = "echo 'fetching htop' && sleep 0.1 && touch /tmp/devserver/logs/htop.fetched && echo 'fetched htop'"
 description = "Fetch htop"
 details = "Downloads or locates the htop package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-htop]
-cmd = "echo 'installing htop' && sleep 0.1 && echo 'installed htop'"
+check = "test -x /tmp/devserver/bin/htop"
+cmd = "echo 'installing htop' && sleep 0.1 && printf '#!/bin/sh\\necho htop ok\\n' > /tmp/devserver/bin/htop && chmod +x /tmp/devserver/bin/htop && echo 'installed htop'"
+verify = "/tmp/devserver/bin/htop"
 description = "Install htop"
 details = "Installs htop onto the server and verifies the binary."
 depends_on = ["fetch-htop"]
 
 [tasks.configure-htop]
-cmd = "echo 'configuring htop' && sleep 0.1 && echo 'configured htop'"
+check = "grep -qx 'tool = htop' /tmp/devserver/cfg/htop.conf"
+cmd = "echo 'configuring htop' && sleep 0.1 && echo 'tool = htop' > /tmp/devserver/cfg/htop.conf && echo 'configured htop'"
+verify = "test -s /tmp/devserver/cfg/htop.conf"
 description = "Configure htop"
 details = "Writes the default configuration for htop."
 depends_on = ["install-htop"]
 
 [tasks.smoke-htop]
-cmd = "echo 'smoke testing htop' && sleep 0.1 && echo 'smoke htop ok'"
+cmd = "echo 'smoke testing htop' && sleep 0.1 && /tmp/devserver/bin/htop && test -s /tmp/devserver/cfg/htop.conf && echo 'smoke htop ok'"
 description = "Smoke test htop"
 details = "Runs a quick check that htop works."
 depends_on = ["configure-htop"]
 
 [tasks.fetch-btop]
-cmd = "echo 'fetching btop' && sleep 0.1 && echo 'fetched btop'"
+check = "test -f /tmp/devserver/logs/btop.fetched"
+cmd = "echo 'fetching btop' && sleep 0.1 && touch /tmp/devserver/logs/btop.fetched && echo 'fetched btop'"
 description = "Fetch btop"
 details = "Downloads or locates the btop package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-btop]
-cmd = "echo 'installing btop' && sleep 0.1 && echo 'installed btop'"
+check = "test -x /tmp/devserver/bin/btop"
+cmd = "echo 'installing btop' && sleep 0.1 && printf '#!/bin/sh\\necho btop ok\\n' > /tmp/devserver/bin/btop && chmod +x /tmp/devserver/bin/btop && echo 'installed btop'"
+verify = "/tmp/devserver/bin/btop"
 description = "Install btop"
 details = "Installs btop onto the server and verifies the binary."
 depends_on = ["fetch-btop"]
 
 [tasks.configure-btop]
-cmd = "echo 'configuring btop' && sleep 0.1 && echo 'configured btop'"
+check = "grep -qx 'tool = btop' /tmp/devserver/cfg/btop.conf"
+cmd = "echo 'configuring btop' && sleep 0.1 && echo 'tool = btop' > /tmp/devserver/cfg/btop.conf && echo 'configured btop'"
+verify = "test -s /tmp/devserver/cfg/btop.conf"
 description = "Configure btop"
 details = "Writes the default configuration for btop."
 depends_on = ["install-btop"]
 
 [tasks.smoke-btop]
-cmd = "echo 'smoke testing btop' && sleep 0.1 && echo 'smoke btop ok'"
+cmd = "echo 'smoke testing btop' && sleep 0.1 && /tmp/devserver/bin/btop && test -s /tmp/devserver/cfg/btop.conf && echo 'smoke btop ok'"
 description = "Smoke test btop"
 details = "Runs a quick check that btop works."
 depends_on = ["configure-btop"]
 
 [tasks.fetch-ncdu]
-cmd = "echo 'fetching ncdu' && sleep 0.1 && echo 'fetched ncdu'"
+check = "test -f /tmp/devserver/logs/ncdu.fetched"
+cmd = "echo 'fetching ncdu' && sleep 0.1 && touch /tmp/devserver/logs/ncdu.fetched && echo 'fetched ncdu'"
 description = "Fetch ncdu"
 details = "Downloads or locates the ncdu package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-ncdu]
-cmd = "echo 'installing ncdu' && sleep 0.1 && echo 'installed ncdu'"
+check = "test -x /tmp/devserver/bin/ncdu"
+cmd = "echo 'installing ncdu' && sleep 0.1 && printf '#!/bin/sh\\necho ncdu ok\\n' > /tmp/devserver/bin/ncdu && chmod +x /tmp/devserver/bin/ncdu && echo 'installed ncdu'"
+verify = "/tmp/devserver/bin/ncdu"
 description = "Install ncdu"
 details = "Installs ncdu onto the server and verifies the binary."
 depends_on = ["fetch-ncdu"]
 
 [tasks.configure-ncdu]
-cmd = "echo 'configuring ncdu' && sleep 0.1 && echo 'configured ncdu'"
+check = "grep -qx 'tool = ncdu' /tmp/devserver/cfg/ncdu.conf"
+cmd = "echo 'configuring ncdu' && sleep 0.1 && echo 'tool = ncdu' > /tmp/devserver/cfg/ncdu.conf && echo 'configured ncdu'"
+verify = "test -s /tmp/devserver/cfg/ncdu.conf"
 description = "Configure ncdu"
 details = "Writes the default configuration for ncdu."
 depends_on = ["install-ncdu"]
 
 [tasks.smoke-ncdu]
-cmd = "echo 'smoke testing ncdu' && sleep 0.1 && echo 'smoke ncdu ok'"
+cmd = "echo 'smoke testing ncdu' && sleep 0.1 && /tmp/devserver/bin/ncdu && test -s /tmp/devserver/cfg/ncdu.conf && echo 'smoke ncdu ok'"
 description = "Smoke test ncdu"
 details = "Runs a quick check that ncdu works."
 depends_on = ["configure-ncdu"]
 
 [tasks.fetch-duf]
-cmd = "echo 'fetching duf' && sleep 0.1 && echo 'fetched duf'"
+check = "test -f /tmp/devserver/logs/duf.fetched"
+cmd = "echo 'fetching duf' && sleep 0.1 && touch /tmp/devserver/logs/duf.fetched && echo 'fetched duf'"
 description = "Fetch duf"
 details = "Downloads or locates the duf package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-duf]
-cmd = "echo 'installing duf' && sleep 0.1 && echo 'installed duf'"
+check = "test -x /tmp/devserver/bin/duf"
+cmd = "echo 'installing duf' && sleep 0.1 && printf '#!/bin/sh\\necho duf ok\\n' > /tmp/devserver/bin/duf && chmod +x /tmp/devserver/bin/duf && echo 'installed duf'"
+verify = "/tmp/devserver/bin/duf"
 description = "Install duf"
 details = "Installs duf onto the server and verifies the binary."
 depends_on = ["fetch-duf"]
 
 [tasks.configure-duf]
-cmd = "echo 'configuring duf' && sleep 0.1 && echo 'configured duf'"
+check = "grep -qx 'tool = duf' /tmp/devserver/cfg/duf.conf"
+cmd = "echo 'configuring duf' && sleep 0.1 && echo 'tool = duf' > /tmp/devserver/cfg/duf.conf && echo 'configured duf'"
+verify = "test -s /tmp/devserver/cfg/duf.conf"
 description = "Configure duf"
 details = "Writes the default configuration for duf."
 depends_on = ["install-duf"]
 
 [tasks.smoke-duf]
-cmd = "echo 'smoke testing duf' && sleep 0.1 && echo 'smoke duf ok'"
+cmd = "echo 'smoke testing duf' && sleep 0.1 && /tmp/devserver/bin/duf && test -s /tmp/devserver/cfg/duf.conf && echo 'smoke duf ok'"
 description = "Smoke test duf"
 details = "Runs a quick check that duf works."
 depends_on = ["configure-duf"]
 
 [tasks.fetch-tmux]
-cmd = "echo 'fetching tmux' && sleep 0.1 && echo 'fetched tmux'"
+check = "test -f /tmp/devserver/logs/tmux.fetched"
+cmd = "echo 'fetching tmux' && sleep 0.1 && touch /tmp/devserver/logs/tmux.fetched && echo 'fetched tmux'"
 description = "Fetch tmux"
 details = "Downloads or locates the tmux package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-tmux]
-cmd = "echo 'installing tmux' && sleep 0.1 && echo 'installed tmux'"
+check = "test -x /tmp/devserver/bin/tmux"
+cmd = "echo 'installing tmux' && sleep 0.1 && printf '#!/bin/sh\\necho tmux ok\\n' > /tmp/devserver/bin/tmux && chmod +x /tmp/devserver/bin/tmux && echo 'installed tmux'"
+verify = "/tmp/devserver/bin/tmux"
 description = "Install tmux"
 details = "Installs tmux onto the server and verifies the binary."
 depends_on = ["fetch-tmux"]
 
 [tasks.configure-tmux]
-cmd = "echo 'configuring tmux' && sleep 0.1 && echo 'configured tmux'"
+check = "grep -qx 'tool = tmux' /tmp/devserver/cfg/tmux.conf"
+cmd = "echo 'configuring tmux' && sleep 0.1 && echo 'tool = tmux' > /tmp/devserver/cfg/tmux.conf && echo 'configured tmux'"
+verify = "test -s /tmp/devserver/cfg/tmux.conf"
 description = "Configure tmux"
 details = "Writes the default configuration for tmux."
 depends_on = ["install-tmux"]
 
 [tasks.smoke-tmux]
-cmd = "echo 'smoke testing tmux' && sleep 0.1 && echo 'smoke tmux ok'"
+cmd = "echo 'smoke testing tmux' && sleep 0.1 && /tmp/devserver/bin/tmux && test -s /tmp/devserver/cfg/tmux.conf && echo 'smoke tmux ok'"
 description = "Smoke test tmux"
 details = "Runs a quick check that tmux works."
 depends_on = ["configure-tmux"]
 
 [tasks.fetch-starship]
-cmd = "echo 'fetching starship' && sleep 0.1 && echo 'fetched starship'"
+check = "test -f /tmp/devserver/logs/starship.fetched"
+cmd = "echo 'fetching starship' && sleep 0.1 && touch /tmp/devserver/logs/starship.fetched && echo 'fetched starship'"
 description = "Fetch starship"
 details = "Downloads or locates the starship package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-starship]
-cmd = "echo 'installing starship' && sleep 0.1 && echo 'installed starship'"
+check = "test -x /tmp/devserver/bin/starship"
+cmd = "echo 'installing starship' && sleep 0.1 && printf '#!/bin/sh\\necho starship ok\\n' > /tmp/devserver/bin/starship && chmod +x /tmp/devserver/bin/starship && echo 'installed starship'"
+verify = "/tmp/devserver/bin/starship"
 description = "Install starship"
 details = "Installs starship onto the server and verifies the binary."
 depends_on = ["fetch-starship"]
 
 [tasks.configure-starship]
-cmd = "echo 'configuring starship' && sleep 0.1 && echo 'configured starship'"
+check = "grep -qx 'tool = starship' /tmp/devserver/cfg/starship.conf"
+cmd = "echo 'configuring starship' && sleep 0.1 && echo 'tool = starship' > /tmp/devserver/cfg/starship.conf && echo 'configured starship'"
+verify = "test -s /tmp/devserver/cfg/starship.conf"
 description = "Configure starship"
 details = "Writes the default configuration for starship."
 depends_on = ["install-starship"]
 
 [tasks.smoke-starship]
-cmd = "echo 'smoke testing starship' && sleep 0.1 && echo 'smoke starship ok'"
+cmd = "echo 'smoke testing starship' && sleep 0.1 && /tmp/devserver/bin/starship && test -s /tmp/devserver/cfg/starship.conf && echo 'smoke starship ok'"
 description = "Smoke test starship"
 details = "Runs a quick check that starship works."
 depends_on = ["configure-starship"]
 
 [tasks.fetch-tldr]
-cmd = "echo 'fetching tldr' && sleep 0.1 && echo 'fetched tldr'"
+check = "test -f /tmp/devserver/logs/tldr.fetched"
+cmd = "echo 'fetching tldr' && sleep 0.1 && touch /tmp/devserver/logs/tldr.fetched && echo 'fetched tldr'"
 description = "Fetch tldr"
 details = "Downloads or locates the tldr package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-tldr]
-cmd = "echo 'installing tldr' && sleep 0.1 && echo 'installed tldr'"
+check = "test -x /tmp/devserver/bin/tldr"
+cmd = "echo 'installing tldr' && sleep 0.1 && printf '#!/bin/sh\\necho tldr ok\\n' > /tmp/devserver/bin/tldr && chmod +x /tmp/devserver/bin/tldr && echo 'installed tldr'"
+verify = "/tmp/devserver/bin/tldr"
 description = "Install tldr"
 details = "Installs tldr onto the server and verifies the binary."
 depends_on = ["fetch-tldr"]
 
 [tasks.configure-tldr]
-cmd = "echo 'configuring tldr' && sleep 0.1 && echo 'configured tldr'"
+check = "grep -qx 'tool = tldr' /tmp/devserver/cfg/tldr.conf"
+cmd = "echo 'configuring tldr' && sleep 0.1 && echo 'tool = tldr' > /tmp/devserver/cfg/tldr.conf && echo 'configured tldr'"
+verify = "test -s /tmp/devserver/cfg/tldr.conf"
 description = "Configure tldr"
 details = "Writes the default configuration for tldr."
 depends_on = ["install-tldr"]
 
 [tasks.smoke-tldr]
-cmd = "echo 'smoke testing tldr' && sleep 0.1 && echo 'smoke tldr ok'"
+cmd = "echo 'smoke testing tldr' && sleep 0.1 && /tmp/devserver/bin/tldr && test -s /tmp/devserver/cfg/tldr.conf && echo 'smoke tldr ok'"
 description = "Smoke test tldr"
 details = "Runs a quick check that tldr works."
 depends_on = ["configure-tldr"]
 
 [tasks.fetch-httpie]
-cmd = "echo 'fetching httpie' && sleep 0.1 && echo 'fetched httpie'"
+check = "test -f /tmp/devserver/logs/httpie.fetched"
+cmd = "echo 'fetching httpie' && sleep 0.1 && touch /tmp/devserver/logs/httpie.fetched && echo 'fetched httpie'"
 description = "Fetch httpie"
 details = "Downloads or locates the httpie package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-httpie]
-cmd = "echo 'installing httpie' && sleep 0.1 && echo 'installed httpie'"
+check = "test -x /tmp/devserver/bin/httpie"
+cmd = "echo 'installing httpie' && sleep 0.1 && printf '#!/bin/sh\\necho httpie ok\\n' > /tmp/devserver/bin/httpie && chmod +x /tmp/devserver/bin/httpie && echo 'installed httpie'"
+verify = "/tmp/devserver/bin/httpie"
 description = "Install httpie"
 details = "Installs httpie onto the server and verifies the binary."
 depends_on = ["fetch-httpie"]
 
 [tasks.configure-httpie]
-cmd = "echo 'configuring httpie' && sleep 0.1 && echo 'configured httpie'"
+check = "grep -qx 'tool = httpie' /tmp/devserver/cfg/httpie.conf"
+cmd = "echo 'configuring httpie' && sleep 0.1 && echo 'tool = httpie' > /tmp/devserver/cfg/httpie.conf && echo 'configured httpie'"
+verify = "test -s /tmp/devserver/cfg/httpie.conf"
 description = "Configure httpie"
 details = "Writes the default configuration for httpie."
 depends_on = ["install-httpie"]
 
 [tasks.smoke-httpie]
-cmd = "echo 'smoke testing httpie' && sleep 0.1 && echo 'smoke httpie ok'"
+cmd = "echo 'smoke testing httpie' && sleep 0.1 && /tmp/devserver/bin/httpie && test -s /tmp/devserver/cfg/httpie.conf && echo 'smoke httpie ok'"
 description = "Smoke test httpie"
 details = "Runs a quick check that httpie works."
 depends_on = ["configure-httpie"]
 
 [tasks.fetch-git]
-cmd = "echo 'fetching git' && sleep 0.1 && echo 'fetched git'"
+check = "test -f /tmp/devserver/logs/git.fetched"
+cmd = "echo 'fetching git' && sleep 0.1 && touch /tmp/devserver/logs/git.fetched && echo 'fetched git'"
 description = "Fetch git"
 details = "Downloads or locates the git package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-git]
-cmd = "echo 'installing git' && sleep 0.1 && echo 'installed git'"
+check = "test -x /tmp/devserver/bin/git"
+cmd = "echo 'installing git' && sleep 0.1 && printf '#!/bin/sh\\necho git ok\\n' > /tmp/devserver/bin/git && chmod +x /tmp/devserver/bin/git && echo 'installed git'"
+verify = "/tmp/devserver/bin/git"
 description = "Install git"
 details = "Installs git onto the server and verifies the binary."
 depends_on = ["fetch-git"]
 
 [tasks.configure-git]
-cmd = "echo 'configuring git' && sleep 0.1 && echo 'configured git'"
+check = "grep -qx 'tool = git' /tmp/devserver/cfg/git.conf"
+cmd = "echo 'configuring git' && sleep 0.1 && echo 'tool = git' > /tmp/devserver/cfg/git.conf && echo 'configured git'"
+verify = "test -s /tmp/devserver/cfg/git.conf"
 description = "Configure git"
 details = "Writes the default configuration for git."
 depends_on = ["install-git"]
 
 [tasks.smoke-git]
-cmd = "echo 'smoke testing git' && sleep 0.1 && echo 'smoke git ok'"
+cmd = "echo 'smoke testing git' && sleep 0.1 && /tmp/devserver/bin/git && test -s /tmp/devserver/cfg/git.conf && echo 'smoke git ok'"
 description = "Smoke test git"
 details = "Runs a quick check that git works."
 depends_on = ["configure-git"]
 
 [tasks.fetch-git-lfs]
-cmd = "echo 'fetching git-lfs' && sleep 0.1 && echo 'fetched git-lfs'"
+check = "test -f /tmp/devserver/logs/git-lfs.fetched"
+cmd = "echo 'fetching git-lfs' && sleep 0.1 && touch /tmp/devserver/logs/git-lfs.fetched && echo 'fetched git-lfs'"
 description = "Fetch git-lfs"
 details = "Downloads or locates the git-lfs package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-git-lfs]
-cmd = "echo 'installing git-lfs' && sleep 0.1 && echo 'installed git-lfs'"
+check = "test -x /tmp/devserver/bin/git-lfs"
+cmd = "echo 'installing git-lfs' && sleep 0.1 && printf '#!/bin/sh\\necho git-lfs ok\\n' > /tmp/devserver/bin/git-lfs && chmod +x /tmp/devserver/bin/git-lfs && echo 'installed git-lfs'"
+verify = "/tmp/devserver/bin/git-lfs"
 description = "Install git-lfs"
 details = "Installs git-lfs onto the server and verifies the binary."
 depends_on = ["fetch-git-lfs"]
 
 [tasks.configure-git-lfs]
-cmd = "echo 'configuring git-lfs' && sleep 0.1 && echo 'configured git-lfs'"
+check = "grep -qx 'tool = git-lfs' /tmp/devserver/cfg/git-lfs.conf"
+cmd = "echo 'configuring git-lfs' && sleep 0.1 && echo 'tool = git-lfs' > /tmp/devserver/cfg/git-lfs.conf && echo 'configured git-lfs'"
+verify = "test -s /tmp/devserver/cfg/git-lfs.conf"
 description = "Configure git-lfs"
 details = "Writes the default configuration for git-lfs."
 depends_on = ["install-git-lfs"]
 
 [tasks.smoke-git-lfs]
-cmd = "echo 'smoke testing git-lfs' && sleep 0.1 && echo 'smoke git-lfs ok'"
+cmd = "echo 'smoke testing git-lfs' && sleep 0.1 && /tmp/devserver/bin/git-lfs && test -s /tmp/devserver/cfg/git-lfs.conf && echo 'smoke git-lfs ok'"
 description = "Smoke test git-lfs"
 details = "Runs a quick check that git-lfs works."
 depends_on = ["configure-git-lfs"]
 
 [tasks.fetch-git-delta]
-cmd = "echo 'fetching git-delta' && sleep 0.1 && echo 'fetched git-delta'"
+check = "test -f /tmp/devserver/logs/git-delta.fetched"
+cmd = "echo 'fetching git-delta' && sleep 0.1 && touch /tmp/devserver/logs/git-delta.fetched && echo 'fetched git-delta'"
 description = "Fetch git-delta"
 details = "Downloads or locates the git-delta package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-git-delta]
-cmd = "echo 'installing git-delta' && sleep 0.1 && echo 'installed git-delta'"
+check = "test -x /tmp/devserver/bin/git-delta"
+cmd = "echo 'installing git-delta' && sleep 0.1 && printf '#!/bin/sh\\necho git-delta ok\\n' > /tmp/devserver/bin/git-delta && chmod +x /tmp/devserver/bin/git-delta && echo 'installed git-delta'"
+verify = "/tmp/devserver/bin/git-delta"
 description = "Install git-delta"
 details = "Installs git-delta onto the server and verifies the binary."
 depends_on = ["fetch-git-delta"]
 
 [tasks.configure-git-delta]
-cmd = "echo 'configuring git-delta' && sleep 0.1 && echo 'configured git-delta'"
+check = "grep -qx 'tool = git-delta' /tmp/devserver/cfg/git-delta.conf"
+cmd = "echo 'configuring git-delta' && sleep 0.1 && echo 'tool = git-delta' > /tmp/devserver/cfg/git-delta.conf && echo 'configured git-delta'"
+verify = "test -s /tmp/devserver/cfg/git-delta.conf"
 description = "Configure git-delta"
 details = "Writes the default configuration for git-delta."
 depends_on = ["install-git-delta"]
 
 [tasks.smoke-git-delta]
-cmd = "echo 'smoke testing git-delta' && sleep 0.1 && echo 'smoke git-delta ok'"
+cmd = "echo 'smoke testing git-delta' && sleep 0.1 && /tmp/devserver/bin/git-delta && test -s /tmp/devserver/cfg/git-delta.conf && echo 'smoke git-delta ok'"
 description = "Smoke test git-delta"
 details = "Runs a quick check that git-delta works."
 depends_on = ["configure-git-delta"]
 
 [tasks.fetch-gh]
-cmd = "echo 'fetching gh' && sleep 0.1 && echo 'fetched gh'"
+check = "test -f /tmp/devserver/logs/gh.fetched"
+cmd = "echo 'fetching gh' && sleep 0.1 && touch /tmp/devserver/logs/gh.fetched && echo 'fetched gh'"
 description = "Fetch gh"
 details = "Downloads or locates the gh package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-gh]
-cmd = "echo 'installing gh' && sleep 0.1 && echo 'installed gh'"
+check = "test -x /tmp/devserver/bin/gh"
+cmd = "echo 'installing gh' && sleep 0.1 && printf '#!/bin/sh\\necho gh ok\\n' > /tmp/devserver/bin/gh && chmod +x /tmp/devserver/bin/gh && echo 'installed gh'"
+verify = "/tmp/devserver/bin/gh"
 description = "Install gh"
 details = "Installs gh onto the server and verifies the binary."
 depends_on = ["fetch-gh"]
 
 [tasks.configure-gh]
-cmd = "echo 'configuring gh' && sleep 0.1 && echo 'configured gh'"
+check = "grep -qx 'tool = gh' /tmp/devserver/cfg/gh.conf"
+cmd = "echo 'configuring gh' && sleep 0.1 && echo 'tool = gh' > /tmp/devserver/cfg/gh.conf && echo 'configured gh'"
+verify = "test -s /tmp/devserver/cfg/gh.conf"
 description = "Configure gh"
 details = "Writes the default configuration for gh."
 depends_on = ["install-gh"]
 
 [tasks.smoke-gh]
-cmd = "echo 'smoke testing gh' && sleep 0.1 && echo 'smoke gh ok'"
+cmd = "echo 'smoke testing gh' && sleep 0.1 && /tmp/devserver/bin/gh && test -s /tmp/devserver/cfg/gh.conf && echo 'smoke gh ok'"
 description = "Smoke test gh"
 details = "Runs a quick check that gh works."
 depends_on = ["configure-gh"]
 
 [tasks.fetch-jj]
-cmd = "echo 'fetching jj' && sleep 0.1 && echo 'fetched jj'"
+check = "test -f /tmp/devserver/logs/jj.fetched"
+cmd = "echo 'fetching jj' && sleep 0.1 && touch /tmp/devserver/logs/jj.fetched && echo 'fetched jj'"
 description = "Fetch jj"
 details = "Downloads or locates the jj package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-jj]
-cmd = "echo 'installing jj' && sleep 0.1 && echo 'installed jj'"
+check = "test -x /tmp/devserver/bin/jj"
+cmd = "echo 'installing jj' && sleep 0.1 && printf '#!/bin/sh\\necho jj ok\\n' > /tmp/devserver/bin/jj && chmod +x /tmp/devserver/bin/jj && echo 'installed jj'"
+verify = "/tmp/devserver/bin/jj"
 description = "Install jj"
 details = "Installs jj onto the server and verifies the binary."
 depends_on = ["fetch-jj"]
 
 [tasks.configure-jj]
-cmd = "echo 'configuring jj' && sleep 0.1 && echo 'configured jj'"
+check = "grep -qx 'tool = jj' /tmp/devserver/cfg/jj.conf"
+cmd = "echo 'configuring jj' && sleep 0.1 && echo 'tool = jj' > /tmp/devserver/cfg/jj.conf && echo 'configured jj'"
+verify = "test -s /tmp/devserver/cfg/jj.conf"
 description = "Configure jj"
 details = "Writes the default configuration for jj."
 depends_on = ["install-jj"]
 
 [tasks.smoke-jj]
-cmd = "echo 'smoke testing jj' && sleep 0.1 && echo 'smoke jj ok'"
+cmd = "echo 'smoke testing jj' && sleep 0.1 && /tmp/devserver/bin/jj && test -s /tmp/devserver/cfg/jj.conf && echo 'smoke jj ok'"
 description = "Smoke test jj"
 details = "Runs a quick check that jj works."
 depends_on = ["configure-jj"]
 
 [tasks.fetch-lazygit]
-cmd = "echo 'fetching lazygit' && sleep 0.1 && echo 'fetched lazygit'"
+check = "test -f /tmp/devserver/logs/lazygit.fetched"
+cmd = "echo 'fetching lazygit' && sleep 0.1 && touch /tmp/devserver/logs/lazygit.fetched && echo 'fetched lazygit'"
 description = "Fetch lazygit"
 details = "Downloads or locates the lazygit package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-lazygit]
-cmd = "echo 'installing lazygit' && sleep 0.1 && echo 'installed lazygit'"
+check = "test -x /tmp/devserver/bin/lazygit"
+cmd = "echo 'installing lazygit' && sleep 0.1 && printf '#!/bin/sh\\necho lazygit ok\\n' > /tmp/devserver/bin/lazygit && chmod +x /tmp/devserver/bin/lazygit && echo 'installed lazygit'"
+verify = "/tmp/devserver/bin/lazygit"
 description = "Install lazygit"
 details = "Installs lazygit onto the server and verifies the binary."
 depends_on = ["fetch-lazygit"]
 
 [tasks.configure-lazygit]
-cmd = "echo 'configuring lazygit' && sleep 0.1 && echo 'configured lazygit'"
+check = "grep -qx 'tool = lazygit' /tmp/devserver/cfg/lazygit.conf"
+cmd = "echo 'configuring lazygit' && sleep 0.1 && echo 'tool = lazygit' > /tmp/devserver/cfg/lazygit.conf && echo 'configured lazygit'"
+verify = "test -s /tmp/devserver/cfg/lazygit.conf"
 description = "Configure lazygit"
 details = "Writes the default configuration for lazygit."
 depends_on = ["install-lazygit"]
 
 [tasks.smoke-lazygit]
-cmd = "echo 'smoke testing lazygit' && sleep 0.1 && echo 'smoke lazygit ok'"
+cmd = "echo 'smoke testing lazygit' && sleep 0.1 && /tmp/devserver/bin/lazygit && test -s /tmp/devserver/cfg/lazygit.conf && echo 'smoke lazygit ok'"
 description = "Smoke test lazygit"
 details = "Runs a quick check that lazygit works."
 depends_on = ["configure-lazygit"]
 
 [tasks.fetch-neovim]
-cmd = "echo 'fetching neovim' && sleep 0.1 && echo 'fetched neovim'"
+check = "test -f /tmp/devserver/logs/neovim.fetched"
+cmd = "echo 'fetching neovim' && sleep 0.1 && touch /tmp/devserver/logs/neovim.fetched && echo 'fetched neovim'"
 description = "Fetch neovim"
 details = "Downloads or locates the neovim package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-neovim]
-cmd = "echo 'installing neovim' && sleep 0.1 && echo 'installed neovim'"
+check = "test -x /tmp/devserver/bin/neovim"
+cmd = "echo 'installing neovim' && sleep 0.1 && printf '#!/bin/sh\\necho neovim ok\\n' > /tmp/devserver/bin/neovim && chmod +x /tmp/devserver/bin/neovim && echo 'installed neovim'"
+verify = "/tmp/devserver/bin/neovim"
 description = "Install neovim"
 details = "Installs neovim onto the server and verifies the binary."
 depends_on = ["fetch-neovim"]
 
 [tasks.configure-neovim]
-cmd = "echo 'configuring neovim' && sleep 0.1 && echo 'configured neovim'"
+check = "grep -qx 'tool = neovim' /tmp/devserver/cfg/neovim.conf"
+cmd = "echo 'configuring neovim' && sleep 0.1 && echo 'tool = neovim' > /tmp/devserver/cfg/neovim.conf && echo 'configured neovim'"
+verify = "test -s /tmp/devserver/cfg/neovim.conf"
 description = "Configure neovim"
 details = "Writes the default configuration for neovim."
 depends_on = ["install-neovim"]
 
 [tasks.smoke-neovim]
-cmd = "echo 'smoke testing neovim' && sleep 0.1 && echo 'smoke neovim ok'"
+cmd = "echo 'smoke testing neovim' && sleep 0.1 && /tmp/devserver/bin/neovim && test -s /tmp/devserver/cfg/neovim.conf && echo 'smoke neovim ok'"
 description = "Smoke test neovim"
 details = "Runs a quick check that neovim works."
 depends_on = ["configure-neovim"]
 
 [tasks.fetch-vim]
-cmd = "echo 'fetching vim' && sleep 0.1 && echo 'fetched vim'"
+check = "test -f /tmp/devserver/logs/vim.fetched"
+cmd = "echo 'fetching vim' && sleep 0.1 && touch /tmp/devserver/logs/vim.fetched && echo 'fetched vim'"
 description = "Fetch vim"
 details = "Downloads or locates the vim package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-vim]
-cmd = "echo 'installing vim' && sleep 0.1 && echo 'installed vim'"
+check = "test -x /tmp/devserver/bin/vim"
+cmd = "echo 'installing vim' && sleep 0.1 && printf '#!/bin/sh\\necho vim ok\\n' > /tmp/devserver/bin/vim && chmod +x /tmp/devserver/bin/vim && echo 'installed vim'"
+verify = "/tmp/devserver/bin/vim"
 description = "Install vim"
 details = "Installs vim onto the server and verifies the binary."
 depends_on = ["fetch-vim"]
 
 [tasks.configure-vim]
-cmd = "echo 'configuring vim' && sleep 0.1 && echo 'configured vim'"
+check = "grep -qx 'tool = vim' /tmp/devserver/cfg/vim.conf"
+cmd = "echo 'configuring vim' && sleep 0.1 && echo 'tool = vim' > /tmp/devserver/cfg/vim.conf && echo 'configured vim'"
+verify = "test -s /tmp/devserver/cfg/vim.conf"
 description = "Configure vim"
 details = "Writes the default configuration for vim."
 depends_on = ["install-vim"]
 
 [tasks.smoke-vim]
-cmd = "echo 'smoke testing vim' && sleep 0.1 && echo 'smoke vim ok'"
+cmd = "echo 'smoke testing vim' && sleep 0.1 && /tmp/devserver/bin/vim && test -s /tmp/devserver/cfg/vim.conf && echo 'smoke vim ok'"
 description = "Smoke test vim"
 details = "Runs a quick check that vim works."
 depends_on = ["configure-vim"]
 
 [tasks.fetch-helix]
-cmd = "echo 'fetching helix' && sleep 0.1 && echo 'fetched helix'"
+check = "test -f /tmp/devserver/logs/helix.fetched"
+cmd = "echo 'fetching helix' && sleep 0.1 && touch /tmp/devserver/logs/helix.fetched && echo 'fetched helix'"
 description = "Fetch helix"
 details = "Downloads or locates the helix package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-helix]
-cmd = "echo 'installing helix' && sleep 0.1 && echo 'installed helix'"
+check = "test -x /tmp/devserver/bin/helix"
+cmd = "echo 'installing helix' && sleep 0.1 && printf '#!/bin/sh\\necho helix ok\\n' > /tmp/devserver/bin/helix && chmod +x /tmp/devserver/bin/helix && echo 'installed helix'"
+verify = "/tmp/devserver/bin/helix"
 description = "Install helix"
 details = "Installs helix onto the server and verifies the binary."
 depends_on = ["fetch-helix"]
 
 [tasks.configure-helix]
-cmd = "echo 'configuring helix' && sleep 0.1 && echo 'configured helix'"
+check = "grep -qx 'tool = helix' /tmp/devserver/cfg/helix.conf"
+cmd = "echo 'configuring helix' && sleep 0.1 && echo 'tool = helix' > /tmp/devserver/cfg/helix.conf && echo 'configured helix'"
+verify = "test -s /tmp/devserver/cfg/helix.conf"
 description = "Configure helix"
 details = "Writes the default configuration for helix."
 depends_on = ["install-helix"]
 
 [tasks.smoke-helix]
-cmd = "echo 'smoke testing helix' && sleep 0.1 && echo 'smoke helix ok'"
+cmd = "echo 'smoke testing helix' && sleep 0.1 && /tmp/devserver/bin/helix && test -s /tmp/devserver/cfg/helix.conf && echo 'smoke helix ok'"
 description = "Smoke test helix"
 details = "Runs a quick check that helix works."
 depends_on = ["configure-helix"]
 
 [tasks.fetch-docker]
-cmd = "echo 'fetching docker' && sleep 0.1 && echo 'fetched docker'"
+check = "test -f /tmp/devserver/logs/docker.fetched"
+cmd = "echo 'fetching docker' && sleep 0.1 && touch /tmp/devserver/logs/docker.fetched && echo 'fetched docker'"
 description = "Fetch docker"
 details = "Downloads or locates the docker package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-docker]
-cmd = "echo 'installing docker' && sleep 0.1 && echo 'installed docker'"
+check = "test -x /tmp/devserver/bin/docker"
+cmd = "echo 'installing docker' && sleep 0.1 && printf '#!/bin/sh\\necho docker ok\\n' > /tmp/devserver/bin/docker && chmod +x /tmp/devserver/bin/docker && echo 'installed docker'"
+verify = "/tmp/devserver/bin/docker"
 description = "Install docker"
 details = "Installs docker onto the server and verifies the binary."
 depends_on = ["fetch-docker"]
 
 [tasks.configure-docker]
-cmd = "echo 'configuring docker' && sleep 0.1 && echo 'configured docker'"
+check = "grep -qx 'tool = docker' /tmp/devserver/cfg/docker.conf"
+cmd = "echo 'configuring docker' && sleep 0.1 && echo 'tool = docker' > /tmp/devserver/cfg/docker.conf && echo 'configured docker'"
+verify = "test -s /tmp/devserver/cfg/docker.conf"
 description = "Configure docker"
 details = "Writes the default configuration for docker."
 depends_on = ["install-docker"]
 
 [tasks.smoke-docker]
-cmd = "echo 'smoke testing docker' && sleep 0.1 && echo 'smoke docker ok'"
+cmd = "echo 'smoke testing docker' && sleep 0.1 && /tmp/devserver/bin/docker && test -s /tmp/devserver/cfg/docker.conf && echo 'smoke docker ok'"
 description = "Smoke test docker"
 details = "Runs a quick check that docker works."
 depends_on = ["configure-docker"]
 
 [tasks.fetch-compose]
-cmd = "echo 'fetching compose' && sleep 0.1 && echo 'fetched compose'"
+check = "test -f /tmp/devserver/logs/compose.fetched"
+cmd = "echo 'fetching compose' && sleep 0.1 && touch /tmp/devserver/logs/compose.fetched && echo 'fetched compose'"
 description = "Fetch compose"
 details = "Downloads or locates the compose package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-compose]
-cmd = "echo 'installing compose' && sleep 0.1 && echo 'installed compose'"
+check = "test -x /tmp/devserver/bin/compose"
+cmd = "echo 'installing compose' && sleep 0.1 && printf '#!/bin/sh\\necho compose ok\\n' > /tmp/devserver/bin/compose && chmod +x /tmp/devserver/bin/compose && echo 'installed compose'"
+verify = "/tmp/devserver/bin/compose"
 description = "Install compose"
 details = "Installs compose onto the server and verifies the binary."
 depends_on = ["fetch-compose"]
 
 [tasks.configure-compose]
-cmd = "echo 'configuring compose' && sleep 0.1 && echo 'configured compose'"
+check = "grep -qx 'tool = compose' /tmp/devserver/cfg/compose.conf"
+cmd = "echo 'configuring compose' && sleep 0.1 && echo 'tool = compose' > /tmp/devserver/cfg/compose.conf && echo 'configured compose'"
+verify = "test -s /tmp/devserver/cfg/compose.conf"
 description = "Configure compose"
 details = "Writes the default configuration for compose."
 depends_on = ["install-compose"]
 
 [tasks.smoke-compose]
-cmd = "echo 'smoke testing compose' && sleep 0.1 && echo 'smoke compose ok'"
+cmd = "echo 'smoke testing compose' && sleep 0.1 && /tmp/devserver/bin/compose && test -s /tmp/devserver/cfg/compose.conf && echo 'smoke compose ok'"
 description = "Smoke test compose"
 details = "Runs a quick check that compose works."
 depends_on = ["configure-compose"]
 
 [tasks.fetch-lazydocker]
-cmd = "echo 'fetching lazydocker' && sleep 0.1 && echo 'fetched lazydocker'"
+check = "test -f /tmp/devserver/logs/lazydocker.fetched"
+cmd = "echo 'fetching lazydocker' && sleep 0.1 && touch /tmp/devserver/logs/lazydocker.fetched && echo 'fetched lazydocker'"
 description = "Fetch lazydocker"
 details = "Downloads or locates the lazydocker package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-lazydocker]
-cmd = "echo 'installing lazydocker' && sleep 0.1 && echo 'installed lazydocker'"
+check = "test -x /tmp/devserver/bin/lazydocker"
+cmd = "echo 'installing lazydocker' && sleep 0.1 && printf '#!/bin/sh\\necho lazydocker ok\\n' > /tmp/devserver/bin/lazydocker && chmod +x /tmp/devserver/bin/lazydocker && echo 'installed lazydocker'"
+verify = "/tmp/devserver/bin/lazydocker"
 description = "Install lazydocker"
 details = "Installs lazydocker onto the server and verifies the binary."
 depends_on = ["fetch-lazydocker"]
 
 [tasks.configure-lazydocker]
-cmd = "echo 'configuring lazydocker' && sleep 0.1 && echo 'configured lazydocker'"
+check = "grep -qx 'tool = lazydocker' /tmp/devserver/cfg/lazydocker.conf"
+cmd = "echo 'configuring lazydocker' && sleep 0.1 && echo 'tool = lazydocker' > /tmp/devserver/cfg/lazydocker.conf && echo 'configured lazydocker'"
+verify = "test -s /tmp/devserver/cfg/lazydocker.conf"
 description = "Configure lazydocker"
 details = "Writes the default configuration for lazydocker."
 depends_on = ["install-lazydocker"]
 
 [tasks.smoke-lazydocker]
-cmd = "echo 'smoke testing lazydocker' && sleep 0.1 && echo 'smoke lazydocker ok'"
+cmd = "echo 'smoke testing lazydocker' && sleep 0.1 && /tmp/devserver/bin/lazydocker && test -s /tmp/devserver/cfg/lazydocker.conf && echo 'smoke lazydocker ok'"
 description = "Smoke test lazydocker"
 details = "Runs a quick check that lazydocker works."
 depends_on = ["configure-lazydocker"]
 
 [tasks.fetch-podman]
-cmd = "echo 'fetching podman' && sleep 0.1 && echo 'fetched podman'"
+check = "test -f /tmp/devserver/logs/podman.fetched"
+cmd = "echo 'fetching podman' && sleep 0.1 && touch /tmp/devserver/logs/podman.fetched && echo 'fetched podman'"
 description = "Fetch podman"
 details = "Downloads or locates the podman package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-podman]
-cmd = "echo 'installing podman' && sleep 0.1 && echo 'installed podman'"
+check = "test -x /tmp/devserver/bin/podman"
+cmd = "echo 'installing podman' && sleep 0.1 && printf '#!/bin/sh\\necho podman ok\\n' > /tmp/devserver/bin/podman && chmod +x /tmp/devserver/bin/podman && echo 'installed podman'"
+verify = "/tmp/devserver/bin/podman"
 description = "Install podman"
 details = "Installs podman onto the server and verifies the binary."
 depends_on = ["fetch-podman"]
 
 [tasks.configure-podman]
-cmd = "echo 'configuring podman' && sleep 0.1 && echo 'configured podman'"
+check = "grep -qx 'tool = podman' /tmp/devserver/cfg/podman.conf"
+cmd = "echo 'configuring podman' && sleep 0.1 && echo 'tool = podman' > /tmp/devserver/cfg/podman.conf && echo 'configured podman'"
+verify = "test -s /tmp/devserver/cfg/podman.conf"
 description = "Configure podman"
 details = "Writes the default configuration for podman."
 depends_on = ["install-podman"]
 
 [tasks.smoke-podman]
-cmd = "echo 'smoke testing podman' && sleep 0.1 && echo 'smoke podman ok'"
+cmd = "echo 'smoke testing podman' && sleep 0.1 && /tmp/devserver/bin/podman && test -s /tmp/devserver/cfg/podman.conf && echo 'smoke podman ok'"
 description = "Smoke test podman"
 details = "Runs a quick check that podman works."
 depends_on = ["configure-podman"]
 
 [tasks.fetch-go]
-cmd = "echo 'fetching go' && sleep 0.1 && echo 'fetched go'"
+check = "test -f /tmp/devserver/logs/go.fetched"
+cmd = "echo 'fetching go' && sleep 0.1 && touch /tmp/devserver/logs/go.fetched && echo 'fetched go'"
 description = "Fetch go"
 details = "Downloads or locates the go package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-go]
-cmd = "echo 'installing go' && sleep 0.1 && echo 'installed go'"
+check = "test -x /tmp/devserver/bin/go"
+cmd = "echo 'installing go' && sleep 0.1 && printf '#!/bin/sh\\necho go ok\\n' > /tmp/devserver/bin/go && chmod +x /tmp/devserver/bin/go && echo 'installed go'"
+verify = "/tmp/devserver/bin/go"
 description = "Install go"
 details = "Installs go onto the server and verifies the binary."
 depends_on = ["fetch-go"]
 
 [tasks.configure-go]
-cmd = "echo 'configuring go' && sleep 0.1 && echo 'configured go'"
+check = "grep -qx 'tool = go' /tmp/devserver/cfg/go.conf"
+cmd = "echo 'configuring go' && sleep 0.1 && echo 'tool = go' > /tmp/devserver/cfg/go.conf && echo 'configured go'"
+verify = "test -s /tmp/devserver/cfg/go.conf"
 description = "Configure go"
 details = "Writes the default configuration for go."
 depends_on = ["install-go"]
 
 [tasks.smoke-go]
-cmd = "echo 'smoke testing go' && sleep 0.1 && echo 'smoke go ok'"
+cmd = "echo 'smoke testing go' && sleep 0.1 && /tmp/devserver/bin/go && test -s /tmp/devserver/cfg/go.conf && echo 'smoke go ok'"
 description = "Smoke test go"
 details = "Runs a quick check that go works."
 depends_on = ["configure-go"]
 
 [tasks.fetch-rust]
-cmd = "echo 'fetching rust' && sleep 0.1 && echo 'fetched rust'"
+check = "test -f /tmp/devserver/logs/rust.fetched"
+cmd = "echo 'fetching rust' && sleep 0.1 && touch /tmp/devserver/logs/rust.fetched && echo 'fetched rust'"
 description = "Fetch rust"
 details = "Downloads or locates the rust package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-rust]
-cmd = "echo 'installing rust' && sleep 0.1 && echo 'installed rust'"
+check = "test -x /tmp/devserver/bin/rust"
+cmd = "echo 'installing rust' && sleep 0.1 && printf '#!/bin/sh\\necho rust ok\\n' > /tmp/devserver/bin/rust && chmod +x /tmp/devserver/bin/rust && echo 'installed rust'"
+verify = "/tmp/devserver/bin/rust"
 description = "Install rust"
 details = "Installs rust onto the server and verifies the binary."
 depends_on = ["fetch-rust"]
 
 [tasks.configure-rust]
-cmd = "echo 'configuring rust' && sleep 0.1 && echo 'configured rust'"
+check = "grep -qx 'tool = rust' /tmp/devserver/cfg/rust.conf"
+cmd = "echo 'configuring rust' && sleep 0.1 && echo 'tool = rust' > /tmp/devserver/cfg/rust.conf && echo 'configured rust'"
+verify = "test -s /tmp/devserver/cfg/rust.conf"
 description = "Configure rust"
 details = "Writes the default configuration for rust."
 depends_on = ["install-rust"]
 
 [tasks.smoke-rust]
-cmd = "echo 'smoke testing rust' && sleep 0.1 && echo 'smoke rust ok'"
+cmd = "echo 'smoke testing rust' && sleep 0.1 && /tmp/devserver/bin/rust && test -s /tmp/devserver/cfg/rust.conf && echo 'smoke rust ok'"
 description = "Smoke test rust"
 details = "Runs a quick check that rust works."
 depends_on = ["configure-rust"]
 
 [tasks.fetch-node]
-cmd = "echo 'fetching node' && sleep 0.1 && echo 'fetched node'"
+check = "test -f /tmp/devserver/logs/node.fetched"
+cmd = "echo 'fetching node' && sleep 0.1 && touch /tmp/devserver/logs/node.fetched && echo 'fetched node'"
 description = "Fetch node"
 details = "Downloads or locates the node package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-node]
-cmd = "echo 'installing node' && sleep 0.1 && echo 'installed node'"
+check = "test -x /tmp/devserver/bin/node"
+cmd = "echo 'installing node' && sleep 0.1 && printf '#!/bin/sh\\necho node ok\\n' > /tmp/devserver/bin/node && chmod +x /tmp/devserver/bin/node && echo 'installed node'"
+verify = "/tmp/devserver/bin/node"
 description = "Install node"
 details = "Installs node onto the server and verifies the binary."
 depends_on = ["fetch-node"]
 
 [tasks.configure-node]
-cmd = "echo 'configuring node' && sleep 0.1 && echo 'configured node'"
+check = "grep -qx 'tool = node' /tmp/devserver/cfg/node.conf"
+cmd = "echo 'configuring node' && sleep 0.1 && echo 'tool = node' > /tmp/devserver/cfg/node.conf && echo 'configured node'"
+verify = "test -s /tmp/devserver/cfg/node.conf"
 description = "Configure node"
 details = "Writes the default configuration for node."
 depends_on = ["install-node"]
 
 [tasks.smoke-node]
-cmd = "echo 'smoke testing node' && sleep 0.1 && echo 'smoke node ok'"
+cmd = "echo 'smoke testing node' && sleep 0.1 && /tmp/devserver/bin/node && test -s /tmp/devserver/cfg/node.conf && echo 'smoke node ok'"
 description = "Smoke test node"
 details = "Runs a quick check that node works."
 depends_on = ["configure-node"]
 
 [tasks.fetch-python]
-cmd = "echo 'fetching python' && sleep 0.1 && echo 'fetched python'"
+check = "test -f /tmp/devserver/logs/python.fetched"
+cmd = "echo 'fetching python' && sleep 0.1 && touch /tmp/devserver/logs/python.fetched && echo 'fetched python'"
 description = "Fetch python"
 details = "Downloads or locates the python package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-python]
-cmd = "echo 'installing python' && sleep 0.1 && echo 'installed python'"
+check = "test -x /tmp/devserver/bin/python"
+cmd = "echo 'installing python' && sleep 0.1 && printf '#!/bin/sh\\necho python ok\\n' > /tmp/devserver/bin/python && chmod +x /tmp/devserver/bin/python && echo 'installed python'"
+verify = "/tmp/devserver/bin/python"
 description = "Install python"
 details = "Installs python onto the server and verifies the binary."
 depends_on = ["fetch-python"]
 
 [tasks.configure-python]
-cmd = "echo 'configuring python' && sleep 0.1 && echo 'configured python'"
+check = "grep -qx 'tool = python' /tmp/devserver/cfg/python.conf"
+cmd = "echo 'configuring python' && sleep 0.1 && echo 'tool = python' > /tmp/devserver/cfg/python.conf && echo 'configured python'"
+verify = "test -s /tmp/devserver/cfg/python.conf"
 description = "Configure python"
 details = "Writes the default configuration for python."
 depends_on = ["install-python"]
 
 [tasks.smoke-python]
-cmd = "echo 'smoke testing python' && sleep 0.1 && echo 'smoke python ok'"
+cmd = "echo 'smoke testing python' && sleep 0.1 && /tmp/devserver/bin/python && test -s /tmp/devserver/cfg/python.conf && echo 'smoke python ok'"
 description = "Smoke test python"
 details = "Runs a quick check that python works."
 depends_on = ["configure-python"]
 
 [tasks.fetch-uv]
-cmd = "echo 'fetching uv' && sleep 0.1 && echo 'fetched uv'"
+check = "test -f /tmp/devserver/logs/uv.fetched"
+cmd = "echo 'fetching uv' && sleep 0.1 && touch /tmp/devserver/logs/uv.fetched && echo 'fetched uv'"
 description = "Fetch uv"
 details = "Downloads or locates the uv package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-uv]
-cmd = "echo 'installing uv' && sleep 0.1 && echo 'installed uv'"
+check = "test -x /tmp/devserver/bin/uv"
+cmd = "echo 'installing uv' && sleep 0.1 && printf '#!/bin/sh\\necho uv ok\\n' > /tmp/devserver/bin/uv && chmod +x /tmp/devserver/bin/uv && echo 'installed uv'"
+verify = "/tmp/devserver/bin/uv"
 description = "Install uv"
 details = "Installs uv onto the server and verifies the binary."
 depends_on = ["fetch-uv"]
 
 [tasks.configure-uv]
-cmd = "echo 'configuring uv' && sleep 0.1 && echo 'configured uv'"
+check = "grep -qx 'tool = uv' /tmp/devserver/cfg/uv.conf"
+cmd = "echo 'configuring uv' && sleep 0.1 && echo 'tool = uv' > /tmp/devserver/cfg/uv.conf && echo 'configured uv'"
+verify = "test -s /tmp/devserver/cfg/uv.conf"
 description = "Configure uv"
 details = "Writes the default configuration for uv."
 depends_on = ["install-uv"]
 
 [tasks.smoke-uv]
-cmd = "echo 'smoke testing uv' && sleep 0.1 && echo 'smoke uv ok'"
+cmd = "echo 'smoke testing uv' && sleep 0.1 && /tmp/devserver/bin/uv && test -s /tmp/devserver/cfg/uv.conf && echo 'smoke uv ok'"
 description = "Smoke test uv"
 details = "Runs a quick check that uv works."
 depends_on = ["configure-uv"]
 
 [tasks.fetch-bun]
-cmd = "echo 'fetching bun' && sleep 0.1 && echo 'fetched bun'"
+check = "test -f /tmp/devserver/logs/bun.fetched"
+cmd = "echo 'fetching bun' && sleep 0.1 && touch /tmp/devserver/logs/bun.fetched && echo 'fetched bun'"
 description = "Fetch bun"
 details = "Downloads or locates the bun package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-bun]
-cmd = "echo 'installing bun' && sleep 0.1 && echo 'installed bun'"
+check = "test -x /tmp/devserver/bin/bun"
+cmd = "echo 'installing bun' && sleep 0.1 && printf '#!/bin/sh\\necho bun ok\\n' > /tmp/devserver/bin/bun && chmod +x /tmp/devserver/bin/bun && echo 'installed bun'"
+verify = "/tmp/devserver/bin/bun"
 description = "Install bun"
 details = "Installs bun onto the server and verifies the binary."
 depends_on = ["fetch-bun"]
 
 [tasks.configure-bun]
-cmd = "echo 'configuring bun' && sleep 0.1 && echo 'configured bun'"
+check = "grep -qx 'tool = bun' /tmp/devserver/cfg/bun.conf"
+cmd = "echo 'configuring bun' && sleep 0.1 && echo 'tool = bun' > /tmp/devserver/cfg/bun.conf && echo 'configured bun'"
+verify = "test -s /tmp/devserver/cfg/bun.conf"
 description = "Configure bun"
 details = "Writes the default configuration for bun."
 depends_on = ["install-bun"]
 
 [tasks.smoke-bun]
-cmd = "echo 'smoke testing bun' && sleep 0.1 && echo 'smoke bun ok'"
+cmd = "echo 'smoke testing bun' && sleep 0.1 && /tmp/devserver/bin/bun && test -s /tmp/devserver/cfg/bun.conf && echo 'smoke bun ok'"
 description = "Smoke test bun"
 details = "Runs a quick check that bun works."
 depends_on = ["configure-bun"]
 
 [tasks.fetch-pnpm]
-cmd = "echo 'fetching pnpm' && sleep 0.1 && echo 'fetched pnpm'"
+check = "test -f /tmp/devserver/logs/pnpm.fetched"
+cmd = "echo 'fetching pnpm' && sleep 0.1 && touch /tmp/devserver/logs/pnpm.fetched && echo 'fetched pnpm'"
 description = "Fetch pnpm"
 details = "Downloads or locates the pnpm package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-pnpm]
-cmd = "echo 'installing pnpm' && sleep 0.1 && echo 'installed pnpm'"
+check = "test -x /tmp/devserver/bin/pnpm"
+cmd = "echo 'installing pnpm' && sleep 0.1 && printf '#!/bin/sh\\necho pnpm ok\\n' > /tmp/devserver/bin/pnpm && chmod +x /tmp/devserver/bin/pnpm && echo 'installed pnpm'"
+verify = "/tmp/devserver/bin/pnpm"
 description = "Install pnpm"
 details = "Installs pnpm onto the server and verifies the binary."
 depends_on = ["fetch-pnpm"]
 
 [tasks.configure-pnpm]
-cmd = "echo 'configuring pnpm' && sleep 0.1 && echo 'configured pnpm'"
+check = "grep -qx 'tool = pnpm' /tmp/devserver/cfg/pnpm.conf"
+cmd = "echo 'configuring pnpm' && sleep 0.1 && echo 'tool = pnpm' > /tmp/devserver/cfg/pnpm.conf && echo 'configured pnpm'"
+verify = "test -s /tmp/devserver/cfg/pnpm.conf"
 description = "Configure pnpm"
 details = "Writes the default configuration for pnpm."
 depends_on = ["install-pnpm"]
 
 [tasks.smoke-pnpm]
-cmd = "echo 'smoke testing pnpm' && sleep 0.1 && echo 'smoke pnpm ok'"
+cmd = "echo 'smoke testing pnpm' && sleep 0.1 && /tmp/devserver/bin/pnpm && test -s /tmp/devserver/cfg/pnpm.conf && echo 'smoke pnpm ok'"
 description = "Smoke test pnpm"
 details = "Runs a quick check that pnpm works."
 depends_on = ["configure-pnpm"]
 
 [tasks.fetch-psql]
-cmd = "echo 'fetching psql' && sleep 0.1 && echo 'fetched psql'"
+check = "test -f /tmp/devserver/logs/psql.fetched"
+cmd = "echo 'fetching psql' && sleep 0.1 && touch /tmp/devserver/logs/psql.fetched && echo 'fetched psql'"
 description = "Fetch psql"
 details = "Downloads or locates the psql package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-psql]
-cmd = "echo 'installing psql' && sleep 0.1 && echo 'installed psql'"
+check = "test -x /tmp/devserver/bin/psql"
+cmd = "echo 'installing psql' && sleep 0.1 && printf '#!/bin/sh\\necho psql ok\\n' > /tmp/devserver/bin/psql && chmod +x /tmp/devserver/bin/psql && echo 'installed psql'"
+verify = "/tmp/devserver/bin/psql"
 description = "Install psql"
 details = "Installs psql onto the server and verifies the binary."
 depends_on = ["fetch-psql"]
 
 [tasks.configure-psql]
-cmd = "echo 'configuring psql' && sleep 0.1 && echo 'configured psql'"
+check = "grep -qx 'tool = psql' /tmp/devserver/cfg/psql.conf"
+cmd = "echo 'configuring psql' && sleep 0.1 && echo 'tool = psql' > /tmp/devserver/cfg/psql.conf && echo 'configured psql'"
+verify = "test -s /tmp/devserver/cfg/psql.conf"
 description = "Configure psql"
 details = "Writes the default configuration for psql."
 depends_on = ["install-psql"]
 
 [tasks.smoke-psql]
-cmd = "echo 'smoke testing psql' && sleep 0.1 && echo 'smoke psql ok'"
+cmd = "echo 'smoke testing psql' && sleep 0.1 && /tmp/devserver/bin/psql && test -s /tmp/devserver/cfg/psql.conf && echo 'smoke psql ok'"
 description = "Smoke test psql"
 details = "Runs a quick check that psql works."
 depends_on = ["configure-psql"]
 
 [tasks.fetch-redis-cli]
-cmd = "echo 'fetching redis-cli' && sleep 0.1 && echo 'fetched redis-cli'"
+check = "test -f /tmp/devserver/logs/redis-cli.fetched"
+cmd = "echo 'fetching redis-cli' && sleep 0.1 && touch /tmp/devserver/logs/redis-cli.fetched && echo 'fetched redis-cli'"
 description = "Fetch redis-cli"
 details = "Downloads or locates the redis-cli package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-redis-cli]
-cmd = "echo 'installing redis-cli' && sleep 0.1 && echo 'installed redis-cli'"
+check = "test -x /tmp/devserver/bin/redis-cli"
+cmd = "echo 'installing redis-cli' && sleep 0.1 && printf '#!/bin/sh\\necho redis-cli ok\\n' > /tmp/devserver/bin/redis-cli && chmod +x /tmp/devserver/bin/redis-cli && echo 'installed redis-cli'"
+verify = "/tmp/devserver/bin/redis-cli"
 description = "Install redis-cli"
 details = "Installs redis-cli onto the server and verifies the binary."
 depends_on = ["fetch-redis-cli"]
 
 [tasks.configure-redis-cli]
-cmd = "echo 'configuring redis-cli' && sleep 0.1 && echo 'configured redis-cli'"
+check = "grep -qx 'tool = redis-cli' /tmp/devserver/cfg/redis-cli.conf"
+cmd = "echo 'configuring redis-cli' && sleep 0.1 && echo 'tool = redis-cli' > /tmp/devserver/cfg/redis-cli.conf && echo 'configured redis-cli'"
+verify = "test -s /tmp/devserver/cfg/redis-cli.conf"
 description = "Configure redis-cli"
 details = "Writes the default configuration for redis-cli."
 depends_on = ["install-redis-cli"]
 
 [tasks.smoke-redis-cli]
-cmd = "echo 'smoke testing redis-cli' && sleep 0.1 && echo 'smoke redis-cli ok'"
+cmd = "echo 'smoke testing redis-cli' && sleep 0.1 && /tmp/devserver/bin/redis-cli && test -s /tmp/devserver/cfg/redis-cli.conf && echo 'smoke redis-cli ok'"
 description = "Smoke test redis-cli"
 details = "Runs a quick check that redis-cli works."
 depends_on = ["configure-redis-cli"]
 
 [tasks.fetch-sqlite3]
-cmd = "echo 'fetching sqlite3' && sleep 0.1 && echo 'fetched sqlite3'"
+check = "test -f /tmp/devserver/logs/sqlite3.fetched"
+cmd = "echo 'fetching sqlite3' && sleep 0.1 && touch /tmp/devserver/logs/sqlite3.fetched && echo 'fetched sqlite3'"
 description = "Fetch sqlite3"
 details = "Downloads or locates the sqlite3 package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-sqlite3]
-cmd = "echo 'installing sqlite3' && sleep 0.1 && echo 'installed sqlite3'"
+check = "test -x /tmp/devserver/bin/sqlite3"
+cmd = "echo 'installing sqlite3' && sleep 0.1 && printf '#!/bin/sh\\necho sqlite3 ok\\n' > /tmp/devserver/bin/sqlite3 && chmod +x /tmp/devserver/bin/sqlite3 && echo 'installed sqlite3'"
+verify = "/tmp/devserver/bin/sqlite3"
 description = "Install sqlite3"
 details = "Installs sqlite3 onto the server and verifies the binary."
 depends_on = ["fetch-sqlite3"]
 
 [tasks.configure-sqlite3]
-cmd = "echo 'configuring sqlite3' && sleep 0.1 && echo 'configured sqlite3'"
+check = "grep -qx 'tool = sqlite3' /tmp/devserver/cfg/sqlite3.conf"
+cmd = "echo 'configuring sqlite3' && sleep 0.1 && echo 'tool = sqlite3' > /tmp/devserver/cfg/sqlite3.conf && echo 'configured sqlite3'"
+verify = "test -s /tmp/devserver/cfg/sqlite3.conf"
 description = "Configure sqlite3"
 details = "Writes the default configuration for sqlite3."
 depends_on = ["install-sqlite3"]
 
 [tasks.smoke-sqlite3]
-cmd = "echo 'smoke testing sqlite3' && sleep 0.1 && echo 'smoke sqlite3 ok'"
+cmd = "echo 'smoke testing sqlite3' && sleep 0.1 && /tmp/devserver/bin/sqlite3 && test -s /tmp/devserver/cfg/sqlite3.conf && echo 'smoke sqlite3 ok'"
 description = "Smoke test sqlite3"
 details = "Runs a quick check that sqlite3 works."
 depends_on = ["configure-sqlite3"]
 
 [tasks.fetch-mongosh]
-cmd = "echo 'fetching mongosh' && sleep 0.1 && echo 'fetched mongosh'"
+check = "test -f /tmp/devserver/logs/mongosh.fetched"
+cmd = "echo 'fetching mongosh' && sleep 0.1 && touch /tmp/devserver/logs/mongosh.fetched && echo 'fetched mongosh'"
 description = "Fetch mongosh"
 details = "Downloads or locates the mongosh package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-mongosh]
-cmd = "echo 'installing mongosh' && sleep 0.1 && echo 'installed mongosh'"
+check = "test -x /tmp/devserver/bin/mongosh"
+cmd = "echo 'installing mongosh' && sleep 0.1 && printf '#!/bin/sh\\necho mongosh ok\\n' > /tmp/devserver/bin/mongosh && chmod +x /tmp/devserver/bin/mongosh && echo 'installed mongosh'"
+verify = "/tmp/devserver/bin/mongosh"
 description = "Install mongosh"
 details = "Installs mongosh onto the server and verifies the binary."
 depends_on = ["fetch-mongosh"]
 
 [tasks.configure-mongosh]
-cmd = "echo 'configuring mongosh' && sleep 0.1 && echo 'configured mongosh'"
+check = "grep -qx 'tool = mongosh' /tmp/devserver/cfg/mongosh.conf"
+cmd = "echo 'configuring mongosh' && sleep 0.1 && echo 'tool = mongosh' > /tmp/devserver/cfg/mongosh.conf && echo 'configured mongosh'"
+verify = "test -s /tmp/devserver/cfg/mongosh.conf"
 description = "Configure mongosh"
 details = "Writes the default configuration for mongosh."
 depends_on = ["install-mongosh"]
 
 [tasks.smoke-mongosh]
-cmd = "echo 'smoke testing mongosh' && sleep 0.1 && echo 'smoke mongosh ok'"
+cmd = "echo 'smoke testing mongosh' && sleep 0.1 && /tmp/devserver/bin/mongosh && test -s /tmp/devserver/cfg/mongosh.conf && echo 'smoke mongosh ok'"
 description = "Smoke test mongosh"
 details = "Runs a quick check that mongosh works."
 depends_on = ["configure-mongosh"]
 
 [tasks.fetch-nmap]
-cmd = "echo 'fetching nmap' && sleep 0.1 && echo 'fetched nmap'"
+check = "test -f /tmp/devserver/logs/nmap.fetched"
+cmd = "echo 'fetching nmap' && sleep 0.1 && touch /tmp/devserver/logs/nmap.fetched && echo 'fetched nmap'"
 description = "Fetch nmap"
 details = "Downloads or locates the nmap package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-nmap]
-cmd = "echo 'installing nmap' && sleep 0.1 && echo 'installed nmap'"
+check = "test -x /tmp/devserver/bin/nmap"
+cmd = "echo 'installing nmap' && sleep 0.1 && printf '#!/bin/sh\\necho nmap ok\\n' > /tmp/devserver/bin/nmap && chmod +x /tmp/devserver/bin/nmap && echo 'installed nmap'"
+verify = "/tmp/devserver/bin/nmap"
 description = "Install nmap"
 details = "Installs nmap onto the server and verifies the binary."
 depends_on = ["fetch-nmap"]
 
 [tasks.configure-nmap]
-cmd = "echo 'configuring nmap' && sleep 0.1 && echo 'configured nmap'"
+check = "grep -qx 'tool = nmap' /tmp/devserver/cfg/nmap.conf"
+cmd = "echo 'configuring nmap' && sleep 0.1 && echo 'tool = nmap' > /tmp/devserver/cfg/nmap.conf && echo 'configured nmap'"
+verify = "test -s /tmp/devserver/cfg/nmap.conf"
 description = "Configure nmap"
 details = "Writes the default configuration for nmap."
 depends_on = ["install-nmap"]
 
 [tasks.smoke-nmap]
-cmd = "echo 'smoke testing nmap' && sleep 0.1 && echo 'smoke nmap ok'"
+cmd = "echo 'smoke testing nmap' && sleep 0.1 && /tmp/devserver/bin/nmap && test -s /tmp/devserver/cfg/nmap.conf && echo 'smoke nmap ok'"
 description = "Smoke test nmap"
 details = "Runs a quick check that nmap works."
 depends_on = ["configure-nmap"]
 
 [tasks.fetch-mtr]
-cmd = "echo 'fetching mtr' && sleep 0.1 && echo 'fetched mtr'"
+check = "test -f /tmp/devserver/logs/mtr.fetched"
+cmd = "echo 'fetching mtr' && sleep 0.1 && touch /tmp/devserver/logs/mtr.fetched && echo 'fetched mtr'"
 description = "Fetch mtr"
 details = "Downloads or locates the mtr package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-mtr]
-cmd = "echo 'installing mtr' && sleep 0.1 && echo 'installed mtr'"
+check = "test -x /tmp/devserver/bin/mtr"
+cmd = "echo 'installing mtr' && sleep 0.1 && printf '#!/bin/sh\\necho mtr ok\\n' > /tmp/devserver/bin/mtr && chmod +x /tmp/devserver/bin/mtr && echo 'installed mtr'"
+verify = "/tmp/devserver/bin/mtr"
 description = "Install mtr"
 details = "Installs mtr onto the server and verifies the binary."
 depends_on = ["fetch-mtr"]
 
 [tasks.configure-mtr]
-cmd = "echo 'configuring mtr' && sleep 0.1 && echo 'configured mtr'"
+check = "grep -qx 'tool = mtr' /tmp/devserver/cfg/mtr.conf"
+cmd = "echo 'configuring mtr' && sleep 0.1 && echo 'tool = mtr' > /tmp/devserver/cfg/mtr.conf && echo 'configured mtr'"
+verify = "test -s /tmp/devserver/cfg/mtr.conf"
 description = "Configure mtr"
 details = "Writes the default configuration for mtr."
 depends_on = ["install-mtr"]
 
 [tasks.smoke-mtr]
-cmd = "echo 'smoke testing mtr' && sleep 0.1 && echo 'smoke mtr ok'"
+cmd = "echo 'smoke testing mtr' && sleep 0.1 && /tmp/devserver/bin/mtr && test -s /tmp/devserver/cfg/mtr.conf && echo 'smoke mtr ok'"
 description = "Smoke test mtr"
 details = "Runs a quick check that mtr works."
 depends_on = ["configure-mtr"]
 
 [tasks.fetch-iperf3]
-cmd = "echo 'fetching iperf3' && sleep 0.1 && echo 'fetched iperf3'"
+check = "test -f /tmp/devserver/logs/iperf3.fetched"
+cmd = "echo 'fetching iperf3' && sleep 0.1 && touch /tmp/devserver/logs/iperf3.fetched && echo 'fetched iperf3'"
 description = "Fetch iperf3"
 details = "Downloads or locates the iperf3 package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-iperf3]
-cmd = "echo 'installing iperf3' && sleep 0.1 && echo 'installed iperf3'"
+check = "test -x /tmp/devserver/bin/iperf3"
+cmd = "echo 'installing iperf3' && sleep 0.1 && printf '#!/bin/sh\\necho iperf3 ok\\n' > /tmp/devserver/bin/iperf3 && chmod +x /tmp/devserver/bin/iperf3 && echo 'installed iperf3'"
+verify = "/tmp/devserver/bin/iperf3"
 description = "Install iperf3"
 details = "Installs iperf3 onto the server and verifies the binary."
 depends_on = ["fetch-iperf3"]
 
 [tasks.configure-iperf3]
-cmd = "echo 'configuring iperf3' && sleep 0.1 && echo 'configured iperf3'"
+check = "grep -qx 'tool = iperf3' /tmp/devserver/cfg/iperf3.conf"
+cmd = "echo 'configuring iperf3' && sleep 0.1 && echo 'tool = iperf3' > /tmp/devserver/cfg/iperf3.conf && echo 'configured iperf3'"
+verify = "test -s /tmp/devserver/cfg/iperf3.conf"
 description = "Configure iperf3"
 details = "Writes the default configuration for iperf3."
 depends_on = ["install-iperf3"]
 
 [tasks.smoke-iperf3]
-cmd = "echo 'smoke testing iperf3' && sleep 0.1 && echo 'smoke iperf3 ok'"
+cmd = "echo 'smoke testing iperf3' && sleep 0.1 && /tmp/devserver/bin/iperf3 && test -s /tmp/devserver/cfg/iperf3.conf && echo 'smoke iperf3 ok'"
 description = "Smoke test iperf3"
 details = "Runs a quick check that iperf3 works."
 depends_on = ["configure-iperf3"]
 
 [tasks.fetch-socat]
-cmd = "echo 'fetching socat' && sleep 0.1 && echo 'fetched socat'"
+check = "test -f /tmp/devserver/logs/socat.fetched"
+cmd = "echo 'fetching socat' && sleep 0.1 && touch /tmp/devserver/logs/socat.fetched && echo 'fetched socat'"
 description = "Fetch socat"
 details = "Downloads or locates the socat package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-socat]
-cmd = "echo 'installing socat' && sleep 0.1 && echo 'installed socat'"
+check = "test -x /tmp/devserver/bin/socat"
+cmd = "echo 'installing socat' && sleep 0.1 && printf '#!/bin/sh\\necho socat ok\\n' > /tmp/devserver/bin/socat && chmod +x /tmp/devserver/bin/socat && echo 'installed socat'"
+verify = "/tmp/devserver/bin/socat"
 description = "Install socat"
 details = "Installs socat onto the server and verifies the binary."
 depends_on = ["fetch-socat"]
 
 [tasks.configure-socat]
-cmd = "echo 'configuring socat' && sleep 0.1 && echo 'configured socat'"
+check = "grep -qx 'tool = socat' /tmp/devserver/cfg/socat.conf"
+cmd = "echo 'configuring socat' && sleep 0.1 && echo 'tool = socat' > /tmp/devserver/cfg/socat.conf && echo 'configured socat'"
+verify = "test -s /tmp/devserver/cfg/socat.conf"
 description = "Configure socat"
 details = "Writes the default configuration for socat."
 depends_on = ["install-socat"]
 
 [tasks.smoke-socat]
-cmd = "echo 'smoke testing socat' && sleep 0.1 && echo 'smoke socat ok'"
+cmd = "echo 'smoke testing socat' && sleep 0.1 && /tmp/devserver/bin/socat && test -s /tmp/devserver/cfg/socat.conf && echo 'smoke socat ok'"
 description = "Smoke test socat"
 details = "Runs a quick check that socat works."
 depends_on = ["configure-socat"]
 
 [tasks.fetch-make]
-cmd = "echo 'fetching make' && sleep 0.1 && echo 'fetched make'"
+check = "test -f /tmp/devserver/logs/make.fetched"
+cmd = "echo 'fetching make' && sleep 0.1 && touch /tmp/devserver/logs/make.fetched && echo 'fetched make'"
 description = "Fetch make"
 details = "Downloads or locates the make package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-make]
-cmd = "echo 'installing make' && sleep 0.1 && echo 'installed make'"
+check = "test -x /tmp/devserver/bin/make"
+cmd = "echo 'installing make' && sleep 0.1 && printf '#!/bin/sh\\necho make ok\\n' > /tmp/devserver/bin/make && chmod +x /tmp/devserver/bin/make && echo 'installed make'"
+verify = "/tmp/devserver/bin/make"
 description = "Install make"
 details = "Installs make onto the server and verifies the binary."
 depends_on = ["fetch-make"]
 
 [tasks.configure-make]
-cmd = "echo 'configuring make' && sleep 0.1 && echo 'configured make'"
+check = "grep -qx 'tool = make' /tmp/devserver/cfg/make.conf"
+cmd = "echo 'configuring make' && sleep 0.1 && echo 'tool = make' > /tmp/devserver/cfg/make.conf && echo 'configured make'"
+verify = "test -s /tmp/devserver/cfg/make.conf"
 description = "Configure make"
 details = "Writes the default configuration for make."
 depends_on = ["install-make"]
 
 [tasks.smoke-make]
-cmd = "echo 'smoke testing make' && sleep 0.1 && echo 'smoke make ok'"
+cmd = "echo 'smoke testing make' && sleep 0.1 && /tmp/devserver/bin/make && test -s /tmp/devserver/cfg/make.conf && echo 'smoke make ok'"
 description = "Smoke test make"
 details = "Runs a quick check that make works."
 depends_on = ["configure-make"]
 
 [tasks.fetch-cmake]
-cmd = "echo 'fetching cmake' && sleep 0.1 && echo 'fetched cmake'"
+check = "test -f /tmp/devserver/logs/cmake.fetched"
+cmd = "echo 'fetching cmake' && sleep 0.1 && touch /tmp/devserver/logs/cmake.fetched && echo 'fetched cmake'"
 description = "Fetch cmake"
 details = "Downloads or locates the cmake package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-cmake]
-cmd = "echo 'installing cmake' && sleep 0.1 && echo 'installed cmake'"
+check = "test -x /tmp/devserver/bin/cmake"
+cmd = "echo 'installing cmake' && sleep 0.1 && printf '#!/bin/sh\\necho cmake ok\\n' > /tmp/devserver/bin/cmake && chmod +x /tmp/devserver/bin/cmake && echo 'installed cmake'"
+verify = "/tmp/devserver/bin/cmake"
 description = "Install cmake"
 details = "Installs cmake onto the server and verifies the binary."
 depends_on = ["fetch-cmake"]
 
 [tasks.configure-cmake]
-cmd = "echo 'configuring cmake' && sleep 0.1 && echo 'configured cmake'"
+check = "grep -qx 'tool = cmake' /tmp/devserver/cfg/cmake.conf"
+cmd = "echo 'configuring cmake' && sleep 0.1 && echo 'tool = cmake' > /tmp/devserver/cfg/cmake.conf && echo 'configured cmake'"
+verify = "test -s /tmp/devserver/cfg/cmake.conf"
 description = "Configure cmake"
 details = "Writes the default configuration for cmake."
 depends_on = ["install-cmake"]
 
 [tasks.smoke-cmake]
-cmd = "echo 'smoke testing cmake' && sleep 0.1 && echo 'smoke cmake ok'"
+cmd = "echo 'smoke testing cmake' && sleep 0.1 && /tmp/devserver/bin/cmake && test -s /tmp/devserver/cfg/cmake.conf && echo 'smoke cmake ok'"
 description = "Smoke test cmake"
 details = "Runs a quick check that cmake works."
 depends_on = ["configure-cmake"]
 
 [tasks.fetch-ninja]
-cmd = "echo 'fetching ninja' && sleep 0.1 && echo 'fetched ninja'"
+check = "test -f /tmp/devserver/logs/ninja.fetched"
+cmd = "echo 'fetching ninja' && sleep 0.1 && touch /tmp/devserver/logs/ninja.fetched && echo 'fetched ninja'"
 description = "Fetch ninja"
 details = "Downloads or locates the ninja package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-ninja]
-cmd = "echo 'installing ninja' && sleep 0.1 && echo 'installed ninja'"
+check = "test -x /tmp/devserver/bin/ninja"
+cmd = "echo 'installing ninja' && sleep 0.1 && printf '#!/bin/sh\\necho ninja ok\\n' > /tmp/devserver/bin/ninja && chmod +x /tmp/devserver/bin/ninja && echo 'installed ninja'"
+verify = "/tmp/devserver/bin/ninja"
 description = "Install ninja"
 details = "Installs ninja onto the server and verifies the binary."
 depends_on = ["fetch-ninja"]
 
 [tasks.configure-ninja]
-cmd = "echo 'configuring ninja' && sleep 0.1 && echo 'configured ninja'"
+check = "grep -qx 'tool = ninja' /tmp/devserver/cfg/ninja.conf"
+cmd = "echo 'configuring ninja' && sleep 0.1 && echo 'tool = ninja' > /tmp/devserver/cfg/ninja.conf && echo 'configured ninja'"
+verify = "test -s /tmp/devserver/cfg/ninja.conf"
 description = "Configure ninja"
 details = "Writes the default configuration for ninja."
 depends_on = ["install-ninja"]
 
 [tasks.smoke-ninja]
-cmd = "echo 'smoke testing ninja' && sleep 0.1 && echo 'smoke ninja ok'"
+cmd = "echo 'smoke testing ninja' && sleep 0.1 && /tmp/devserver/bin/ninja && test -s /tmp/devserver/cfg/ninja.conf && echo 'smoke ninja ok'"
 description = "Smoke test ninja"
 details = "Runs a quick check that ninja works."
 depends_on = ["configure-ninja"]
 
 [tasks.fetch-gcc]
-cmd = "echo 'fetching gcc' && sleep 0.1 && echo 'fetched gcc'"
+check = "test -f /tmp/devserver/logs/gcc.fetched"
+cmd = "echo 'fetching gcc' && sleep 0.1 && touch /tmp/devserver/logs/gcc.fetched && echo 'fetched gcc'"
 description = "Fetch gcc"
 details = "Downloads or locates the gcc package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-gcc]
-cmd = "echo 'installing gcc' && sleep 0.1 && echo 'installed gcc'"
+check = "test -x /tmp/devserver/bin/gcc"
+cmd = "echo 'installing gcc' && sleep 0.1 && printf '#!/bin/sh\\necho gcc ok\\n' > /tmp/devserver/bin/gcc && chmod +x /tmp/devserver/bin/gcc && echo 'installed gcc'"
+verify = "/tmp/devserver/bin/gcc"
 description = "Install gcc"
 details = "Installs gcc onto the server and verifies the binary."
 depends_on = ["fetch-gcc"]
 
 [tasks.configure-gcc]
-cmd = "echo 'configuring gcc' && sleep 0.1 && echo 'configured gcc'"
+check = "grep -qx 'tool = gcc' /tmp/devserver/cfg/gcc.conf"
+cmd = "echo 'configuring gcc' && sleep 0.1 && echo 'tool = gcc' > /tmp/devserver/cfg/gcc.conf && echo 'configured gcc'"
+verify = "test -s /tmp/devserver/cfg/gcc.conf"
 description = "Configure gcc"
 details = "Writes the default configuration for gcc."
 depends_on = ["install-gcc"]
 
 [tasks.smoke-gcc]
-cmd = "echo 'smoke testing gcc' && sleep 0.1 && echo 'smoke gcc ok'"
+cmd = "echo 'smoke testing gcc' && sleep 0.1 && /tmp/devserver/bin/gcc && test -s /tmp/devserver/cfg/gcc.conf && echo 'smoke gcc ok'"
 description = "Smoke test gcc"
 details = "Runs a quick check that gcc works."
 depends_on = ["configure-gcc"]
 
 [tasks.fetch-clang]
-cmd = "echo 'fetching clang' && sleep 0.1 && echo 'fetched clang'"
+check = "test -f /tmp/devserver/logs/clang.fetched"
+cmd = "echo 'fetching clang' && sleep 0.1 && touch /tmp/devserver/logs/clang.fetched && echo 'fetched clang'"
 description = "Fetch clang"
 details = "Downloads or locates the clang package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-clang]
-cmd = "echo 'installing clang' && sleep 0.1 && echo 'installed clang'"
+check = "test -x /tmp/devserver/bin/clang"
+cmd = "echo 'installing clang' && sleep 0.1 && printf '#!/bin/sh\\necho clang ok\\n' > /tmp/devserver/bin/clang && chmod +x /tmp/devserver/bin/clang && echo 'installed clang'"
+verify = "/tmp/devserver/bin/clang"
 description = "Install clang"
 details = "Installs clang onto the server and verifies the binary."
 depends_on = ["fetch-clang"]
 
 [tasks.configure-clang]
-cmd = "echo 'configuring clang' && sleep 0.1 && echo 'configured clang'"
+check = "grep -qx 'tool = clang' /tmp/devserver/cfg/clang.conf"
+cmd = "echo 'configuring clang' && sleep 0.1 && echo 'tool = clang' > /tmp/devserver/cfg/clang.conf && echo 'configured clang'"
+verify = "test -s /tmp/devserver/cfg/clang.conf"
 description = "Configure clang"
 details = "Writes the default configuration for clang."
 depends_on = ["install-clang"]
 
 [tasks.smoke-clang]
-cmd = "echo 'smoke testing clang' && sleep 0.1 && echo 'smoke clang ok'"
+cmd = "echo 'smoke testing clang' && sleep 0.1 && /tmp/devserver/bin/clang && test -s /tmp/devserver/cfg/clang.conf && echo 'smoke clang ok'"
 description = "Smoke test clang"
 details = "Runs a quick check that clang works."
 depends_on = ["configure-clang"]
 
 [tasks.fetch-gdb]
-cmd = "echo 'fetching gdb' && sleep 0.1 && echo 'fetched gdb'"
+check = "test -f /tmp/devserver/logs/gdb.fetched"
+cmd = "echo 'fetching gdb' && sleep 0.1 && touch /tmp/devserver/logs/gdb.fetched && echo 'fetched gdb'"
 description = "Fetch gdb"
 details = "Downloads or locates the gdb package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-gdb]
-cmd = "echo 'installing gdb' && sleep 0.1 && echo 'installed gdb'"
+check = "test -x /tmp/devserver/bin/gdb"
+cmd = "echo 'installing gdb' && sleep 0.1 && printf '#!/bin/sh\\necho gdb ok\\n' > /tmp/devserver/bin/gdb && chmod +x /tmp/devserver/bin/gdb && echo 'installed gdb'"
+verify = "/tmp/devserver/bin/gdb"
 description = "Install gdb"
 details = "Installs gdb onto the server and verifies the binary."
 depends_on = ["fetch-gdb"]
 
 [tasks.configure-gdb]
-cmd = "echo 'configuring gdb' && sleep 0.1 && echo 'configured gdb'"
+check = "grep -qx 'tool = gdb' /tmp/devserver/cfg/gdb.conf"
+cmd = "echo 'configuring gdb' && sleep 0.1 && echo 'tool = gdb' > /tmp/devserver/cfg/gdb.conf && echo 'configured gdb'"
+verify = "test -s /tmp/devserver/cfg/gdb.conf"
 description = "Configure gdb"
 details = "Writes the default configuration for gdb."
 depends_on = ["install-gdb"]
 
 [tasks.smoke-gdb]
-cmd = "echo 'smoke testing gdb' && sleep 0.1 && echo 'smoke gdb ok'"
+cmd = "echo 'smoke testing gdb' && sleep 0.1 && /tmp/devserver/bin/gdb && test -s /tmp/devserver/cfg/gdb.conf && echo 'smoke gdb ok'"
 description = "Smoke test gdb"
 details = "Runs a quick check that gdb works."
 depends_on = ["configure-gdb"]
 
 [tasks.fetch-strace]
-cmd = "echo 'fetching strace' && sleep 0.1 && echo 'fetched strace'"
+check = "test -f /tmp/devserver/logs/strace.fetched"
+cmd = "echo 'fetching strace' && sleep 0.1 && touch /tmp/devserver/logs/strace.fetched && echo 'fetched strace'"
 description = "Fetch strace"
 details = "Downloads or locates the strace package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-strace]
-cmd = "echo 'installing strace' && sleep 0.1 && echo 'installed strace'"
+check = "test -x /tmp/devserver/bin/strace"
+cmd = "echo 'installing strace' && sleep 0.1 && printf '#!/bin/sh\\necho strace ok\\n' > /tmp/devserver/bin/strace && chmod +x /tmp/devserver/bin/strace && echo 'installed strace'"
+verify = "/tmp/devserver/bin/strace"
 description = "Install strace"
 details = "Installs strace onto the server and verifies the binary."
 depends_on = ["fetch-strace"]
 
 [tasks.configure-strace]
-cmd = "echo 'configuring strace' && sleep 0.1 && echo 'configured strace'"
+check = "grep -qx 'tool = strace' /tmp/devserver/cfg/strace.conf"
+cmd = "echo 'configuring strace' && sleep 0.1 && echo 'tool = strace' > /tmp/devserver/cfg/strace.conf && echo 'configured strace'"
+verify = "test -s /tmp/devserver/cfg/strace.conf"
 description = "Configure strace"
 details = "Writes the default configuration for strace."
 depends_on = ["install-strace"]
 
 [tasks.smoke-strace]
-cmd = "echo 'smoke testing strace' && sleep 0.1 && echo 'smoke strace ok'"
+cmd = "echo 'smoke testing strace' && sleep 0.1 && /tmp/devserver/bin/strace && test -s /tmp/devserver/cfg/strace.conf && echo 'smoke strace ok'"
 description = "Smoke test strace"
 details = "Runs a quick check that strace works."
 depends_on = ["configure-strace"]
 
 [tasks.fetch-ltrace]
-cmd = "echo 'fetching ltrace' && sleep 0.1 && echo 'fetched ltrace'"
+check = "test -f /tmp/devserver/logs/ltrace.fetched"
+cmd = "echo 'fetching ltrace' && sleep 0.1 && touch /tmp/devserver/logs/ltrace.fetched && echo 'fetched ltrace'"
 description = "Fetch ltrace"
 details = "Downloads or locates the ltrace package so it can be installed."
 depends_on = ["bootstrap"]
 
 [tasks.install-ltrace]
-cmd = "echo 'installing ltrace' && sleep 0.1 && echo 'installed ltrace'"
+check = "test -x /tmp/devserver/bin/ltrace"
+cmd = "echo 'installing ltrace' && sleep 0.1 && printf '#!/bin/sh\\necho ltrace ok\\n' > /tmp/devserver/bin/ltrace && chmod +x /tmp/devserver/bin/ltrace && echo 'installed ltrace'"
+verify = "/tmp/devserver/bin/ltrace"
 description = "Install ltrace"
 details = "Installs ltrace onto the server and verifies the binary."
 depends_on = ["fetch-ltrace"]
 
 [tasks.configure-ltrace]
-cmd = "echo 'configuring ltrace' && sleep 0.1 && echo 'configured ltrace'"
+check = "grep -qx 'tool = ltrace' /tmp/devserver/cfg/ltrace.conf"
+cmd = "echo 'configuring ltrace' && sleep 0.1 && echo 'tool = ltrace' > /tmp/devserver/cfg/ltrace.conf && echo 'configured ltrace'"
+verify = "test -s /tmp/devserver/cfg/ltrace.conf"
 description = "Configure ltrace"
 details = "Writes the default configuration for ltrace."
 depends_on = ["install-ltrace"]
 
 [tasks.smoke-ltrace]
-cmd = "echo 'smoke testing ltrace' && sleep 0.1 && echo 'smoke ltrace ok'"
+cmd = "echo 'smoke testing ltrace' && sleep 0.1 && /tmp/devserver/bin/ltrace && test -s /tmp/devserver/cfg/ltrace.conf && echo 'smoke ltrace ok'"
 description = "Smoke test ltrace"
 details = "Runs a quick check that ltrace works."
 depends_on = ["configure-ltrace"]
@@ -1431,9 +1729,8 @@ depends_on = ["integration-dev-env", "checksums"]
 
 [tasks.cleanup]
 description = "cleanup"
-details = "Runs the cleanup step of the recipe."
+details = "Removes everything, so the next run sets up from nothing. Run it with --task cleanup."
 cmd = "rm -rf /tmp/devserver && echo 'cleaned up'"
-depends_on = ["verify-all"]
 
 [tasks.server-info]
 cmd_template = "echo '{{.Name}}: tags={{range .Tags}}{{.}} {{end}}'"
@@ -1531,7 +1828,7 @@ tasks = ["smoke-ca-certificates", "smoke-tzdata", "smoke-sudo", "smoke-bash", "s
 
 [bundles.devserver]
 description = "Full massive dev server setup"
-tasks = ["@fetch-all", "@install-all", "@configure-all", "@smoke-all", "integration-dev-env", "package-manifest", "package-configs", "checksums", "verify-all", "cleanup"]
+tasks = ["@fetch-all", "@install-all", "@configure-all", "@smoke-all", "integration-dev-env", "package-manifest", "package-configs", "checksums", "verify-all"]
 
 [server_groups.lab]
 tags = ["lab"]
@@ -1564,7 +1861,7 @@ tags = ["docker"]
 tasks = ["server-info"]
 
 [servers]
-tasks = ["cleanup"]
+tasks = ["verify-all"]
 
 [servers.hosts.server1]
 hostname = "localhost"

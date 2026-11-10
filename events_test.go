@@ -30,3 +30,11 @@ func TestTaskEventPublishesTheSkipReason(t *testing.T) {
 		t.Errorf("published %s, want the reason and the task's other fields", data)
 	}
 }
+
+func TestTaskStateString(t *testing.T) {
+	for state, want := range map[TaskState]string{TaskDone: "done", TaskUnchanged: "unchanged", TaskWouldRun: "would run", 42: "state 42"} {
+		if got := state.String(); got != want {
+			t.Errorf("%d: got %q, want %q", int(state), got, want)
+		}
+	}
+}

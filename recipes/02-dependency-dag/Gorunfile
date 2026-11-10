@@ -3,7 +3,9 @@ log_level = "info"
 max_task_parallel = -1
 
 # A small diamond: one prepare step fans out into three independent branches
-# that all run at the same time, then a merge step waits for all of them.
+# that all run at the same time, then a merge step waits for all of them. Each step has a verify,
+# so a step that didn't write its file fails right there, instead of a later step tripping on it.
+# The steps have no check, because prepare starts from an empty folder every time: they always run.
 [tasks.prepare]
 description = "prepare"
 details = "Runs the prepare step of the recipe."
@@ -13,18 +15,21 @@ cmd = "rm -rf /tmp/recipe2 && mkdir -p /tmp/recipe2 && echo prepared"
 description = "branch-a"
 details = "Runs the branch-a step of the recipe."
 cmd = "sleep 1; echo alpha > /tmp/recipe2/a.txt; echo branch-a done"
+verify = "grep -qx alpha /tmp/recipe2/a.txt"
 depends_on = ["prepare"]
 
 [tasks.branch-b]
 description = "branch-b"
 details = "Runs the branch-b step of the recipe."
 cmd = "sleep 1; echo beta > /tmp/recipe2/b.txt; echo branch-b done"
+verify = "grep -qx beta /tmp/recipe2/b.txt"
 depends_on = ["prepare"]
 
 [tasks.branch-c]
 description = "branch-c"
 details = "Runs the branch-c step of the recipe."
 cmd = "sleep 1; echo gamma > /tmp/recipe2/c.txt; echo branch-c done"
+verify = "grep -qx gamma /tmp/recipe2/c.txt"
 depends_on = ["prepare"]
 
 [tasks.merge]
@@ -32,18 +37,13 @@ description = "merge"
 details = "Runs the merge step of the recipe."
 cmd = "cat /tmp/recipe2/a.txt /tmp/recipe2/b.txt /tmp/recipe2/c.txt > /tmp/recipe2/merged.txt && echo merged: $(cat /tmp/recipe2/merged.txt | tr '\\n' ' ')"
 depends_on = ["branch-a", "branch-b", "branch-c"]
-
-[tasks.verify]
-description = "verify"
-details = "Runs the verify step of the recipe."
-cmd = "test \"$(wc -l < /tmp/recipe2/merged.txt)\" -eq 3 && echo verify ok"
-depends_on = ["merge"]
+verify = "test \"$(wc -l < /tmp/recipe2/merged.txt)\" -eq 3"    # all three branches made it in
 
 [tasks.cleanup]
 description = "cleanup"
 details = "Runs the cleanup step of the recipe."
 cmd = "rm -rf /tmp/recipe2 && echo cleaned up"
-depends_on = ["verify"]
+depends_on = ["merge"]
 
 [server_groups.lab]
 tags = ["lab"]

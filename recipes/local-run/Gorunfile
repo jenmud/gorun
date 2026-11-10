@@ -5,9 +5,16 @@ cmd = "echo hello from local"
 rerun = "safe"
 local = true
 
+[tasks.workdir]
+description = "Create the scratch directory, once"
+check = "test -d /tmp/gorun-local-run"    # exit 0: already there, so the task is unchanged
+cmd = "mkdir -p /tmp/gorun-local-run"
+verify = "test -w /tmp/gorun-local-run"   # non-zero would fail the task
+local = true
+
 [tasks.show-env]
-cmd = 'echo "APP_ENV=$APP_ENV"'
-depends_on = ["hello"]
+cmd = 'echo "APP_ENV=$APP_ENV" | tee /tmp/gorun-local-run/env'
+depends_on = ["hello", "workdir"]
 local = true
 
 [tasks.uptime]

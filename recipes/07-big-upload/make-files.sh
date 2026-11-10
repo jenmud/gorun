@@ -1,7 +1,7 @@
 #!/bin/sh
 # Makes the files recipe 7 uploads, in build/ next to this script:
 #   build/release.tar.gz   SIZE_MB megabytes of random data (default 1024, so 1 GB)
-#   build/release.sha256   its checksum, for the verify task
+#   build/release.sha256   its checksum, for the upload's verify
 #   build/site/            a static site: 200 files of 64 KB to 1 MB in a few folders
 set -eu
 cd "$(dirname "$0")"

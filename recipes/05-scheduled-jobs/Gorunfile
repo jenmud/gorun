@@ -1,5 +1,7 @@
 # Recipe 5: scheduled jobs. Everything runs on this machine, so no servers are needed.
 # Plain runs (-r) run only the server tasks below, once. Schedules run inside `gorun -web`.
+# Checks work the same in a scheduled run: backup runs at most once a day, however often the
+# schedule (or a catch-up run, or you) starts it. heartbeat has no check, so it always runs.
 title = "Recipe 5: scheduled jobs"
 log_level = "info"
 
@@ -10,13 +12,16 @@ local = true
 
 [tasks.backup]
 description = "Pretend to back up the data"
-details = "Takes a few seconds, so the running state is visible on the Schedules page."
+details = "Takes a few seconds, so the running state is visible on the Schedules page. Runs once a day: the check skips it when today's backup is done."
+check = 'grep -q "^$(date -u +%F).* backup done" /tmp/gorun-scheduled/backup.log'
+verify = 'tail -1 /tmp/gorun-scheduled/backup.log | grep -q "backup done"'
 cmd = 'mkdir -p /tmp/gorun-scheduled && echo "$(date -u +%FT%TZ) backup started" >> /tmp/gorun-scheduled/backup.log && sleep 5 && echo "$(date -u +%FT%TZ) backup done" >> /tmp/gorun-scheduled/backup.log'
 local = true
 
 [tasks.report]
 description = "Write the nightly report"
 cmd = 'mkdir -p /tmp/gorun-scheduled && echo "$(date -u +%FT%TZ) report written" >> /tmp/gorun-scheduled/report.log'
+verify = 'grep -q "^$(date -u +%F).* report written" /tmp/gorun-scheduled/report.log'
 local = true
 
 [bundles.nightly]

@@ -3,10 +3,16 @@ log_level = "info"
 
 # Uploads a 1 GB release and a folder of 200 files to three servers, and shows each upload's
 # progress. Make the files first: recipes/07-big-upload/make-files.sh
+#
+# check_copies compares each file with the one already on the server (the server hashes its own
+# copy, so only the hashes cross the network): a rerun uploads nothing that is already there.
+# Each upload's verify checks it arrived whole. --force uploads everything again.
 
 [tasks.upload-release]
 description = "Upload the 1 GB release and its checksum"
 details = "A src copy of a single large file: gorun streams it and shows its progress."
+check_copies = true
+verify = "cd /tmp/gorun-upload/releases/v2.4.0 && sha256sum -c release.sha256"
     [[tasks.upload-release.copy]]
     src = "build/release.tar.gz"
     dst = "/tmp/gorun-upload/releases/v2.4.0/release.tar.gz"
@@ -18,22 +24,19 @@ details = "A src copy of a single large file: gorun streams it and shows its pro
 description = "Upload the static site"
 details = "A src copy of a directory: one bar counts every file in it."
 depends_on = ["upload-release"]
+check_copies = true
+verify = "test $(find /tmp/gorun-upload/releases/v2.4.0/site -type f | wc -l) -eq 200"
     [[tasks.upload-site.copy]]
     src = "build/site"
     dst = "/tmp/gorun-upload/releases/v2.4.0/site"
-
-[tasks.verify]
-description = "Check the release arrived whole"
-depends_on = ["upload-site"]
-cmd = "cd /tmp/gorun-upload/releases/v2.4.0 && sha256sum -c release.sha256 && find site -type f | wc -l"
 
 [tasks.cleanup]
 description = "Remove the uploaded files"
 cmd = "rm -rf /tmp/gorun-upload"
 
 [bundles.ship]
-description = "Upload and verify"
-tasks = ["upload-release", "upload-site", "verify"]
+description = "Upload the release and the site, and verify them"
+tasks = ["upload-release", "upload-site"]
 
 [server_groups.lab]
 tags = ["lab"]
@@ -42,7 +45,7 @@ tags = ["lab"]
     identityfile = "../ssh-keys/id_ecdsa"
 
 [servers]
-tasks = ["upload-release", "upload-site", "verify"]
+tasks = ["@ship"]
 
 [servers.hosts.server1]
 hostname = "localhost"

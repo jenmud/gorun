@@ -36,10 +36,23 @@ Open http://localhost:8080 (or the address in `GORUN_ADDRESS`). Then:
 The web service starts its own NATS server, so live updates work with no setup. If you already
 run NATS, set `GORUN_NATS_CLIENT_URL` to use it.
 
+## Checks in scheduled runs
+
+A task's `check` and `verify` run in a scheduled run just as in any other:
+
+- `backup` has a check that looks for today's `backup done` line, so it runs at most once a day.
+  Start `@nightly` by hand from the Run page, then again: the second time `backup` shows
+  *unchanged* and only `report` runs.
+- `backup` and `report` have a `verify`, so a run that didn't write its log line fails, and the
+  schedule's run shows as failed in History, with the verify's output in its own drop-down.
+- `heartbeat` has no check: a task without one always runs, which is what a heartbeat wants.
+- Tick **Check only** on the Run page for a dry run: it says what would run and changes nothing.
+
 ## Try the missed-run setting
 
 Pause `nightly` on the Schedules page, wait past 02:00 Sydney time, then resume it. With
-`missed = "run"` the backup runs once to catch up; with `missed = "skip"` it would be dropped.
+`missed = "run"` the backup runs once to catch up; with `missed = "skip"` it would be dropped. If
+the backup already ran that day, the catch-up run finds it done and leaves it unchanged.
 
 ## Clean up
 

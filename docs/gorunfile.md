@@ -363,12 +363,14 @@ copy = [{ src = "site", dst = "/srv/www" }]
   exits 0.
 - The check's output lists each copy as `same` or `changed`, and for a folder, which files.
 - Files on the server that the copy doesn't include are ignored, as the copy ignores them.
-- gorun hashes both sides itself, in Go, so it works whatever the server runs: it reads the
-  server's files back over SFTP, which OpenSSH offers by default. A file whose size differs is a
-  change straight away and isn't read; only files of the same size are read and hashed. So
-  comparing a large file that hasn't changed costs about as much as reading it once.
-- A file that isn't on the server counts as changed, so the task runs. A server without SFTP
-  fails the check, like any check that can't run.
+- gorun hashes its own files in Go. On the server it uses whichever tool is there: `md5sum`
+  (Linux, BusyBox), `md5 -r` (macOS, BSD) or `openssl md5`. Nothing is copied back, so comparing
+  a large file costs a few bytes of traffic. A local server's files are hashed in Go too.
+- A file that isn't on the server counts as changed, so the task runs.
+- **When the server can't compare, the task copies anyway.** If it has none of those tools, or no
+  `sh` (a Windows server, say), every copy counts as changed, and the check output says
+  `not compared: …, so it is copied`. Copying again is always safe, so a server that can't
+  compare never fails a run; it just doesn't get the shortcut.
 - Only the contents are compared, not file modes.
 
 ### Descriptions and rerun safety

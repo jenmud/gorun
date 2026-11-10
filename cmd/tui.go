@@ -64,16 +64,17 @@ type taskView struct {
 
 // serverView is a server in the live view, with its tasks and running totals.
 type serverView struct {
-	name         string
-	address      string
-	tasks        []*taskView
-	taskMap      map[string]*taskView
-	err          error
-	doneCount    int
-	failedCount  int
-	skippedCount int
-	runningCount int
-	open         bool // the compact view lists this server's tasks
+	name           string
+	address        string
+	tasks          []*taskView
+	taskMap        map[string]*taskView
+	err            error
+	doneCount      int
+	failedCount    int
+	skippedCount   int
+	unchangedCount int
+	runningCount   int
+	open           bool // the compact view lists this server's tasks
 }
 
 // task returns the server's task by name, or nil.
@@ -99,10 +100,12 @@ func (s *serverView) count(states ...gorun.TaskState) int {
 			return s.failedCount
 		case gorun.TaskSkipped:
 			return s.skippedCount
+		case gorun.TaskUnchanged:
+			return s.unchangedCount
 		case gorun.TaskRunning:
 			return s.runningCount
 		case gorun.TaskPending:
-			return len(s.tasks) - s.doneCount - s.failedCount - s.skippedCount - s.runningCount
+			return len(s.tasks) - s.doneCount - s.failedCount - s.skippedCount - s.unchangedCount - s.runningCount
 		}
 	}
 	n := 0
@@ -277,6 +280,8 @@ func (m tuiModel) applyEvent(event any) tuiModel {
 				case gorun.TaskSkipped:
 					s.skippedCount++
 					t.expanded = true
+				case gorun.TaskUnchanged:
+					s.unchangedCount++
 				}
 			}
 		}
@@ -515,7 +520,7 @@ func (m tuiModel) header() string {
 // serverSummary renders the server name, progress bar and current status.
 func (m tuiModel) serverSummary(s *serverView) string {
 	total := len(s.tasks)
-	finished := s.count(gorun.TaskDone, gorun.TaskFailed, gorun.TaskSkipped)
+	finished := s.count(gorun.TaskDone, gorun.TaskFailed, gorun.TaskSkipped, gorun.TaskUnchanged)
 
 	percent := 0.0
 	if total > 0 {
@@ -991,15 +996,27 @@ func (m tuiModel) taskStatus(t *taskView) string {
 		if t.event.Attempts > 1 && t.event.Err != nil {
 			attempt = fmt.Sprintf("retry %d/%d · ", t.event.Attempt, t.event.Attempts)
 		}
+		if phase := phaseLabel(t.event.Phase); phase != "" {
+			attempt += phase + " · "
+		}
 		detail = mutedStyle.Render(attempt) + timeStyle.Render(formatDuration(time.Since(t.started)))
 		if t.copy != nil {
 			detail = mutedStyle.Render(attempt) + m.copyStatus(t.copy, true) + " " + timeStyle.Render(formatDuration(time.Since(t.started)))
 		}
 	case gorun.TaskDone:
 		icon = okStyle.Render("✓")
+		if t.event.Verify != nil {
+			attempt += "verified · "
+		}
 		detail = mutedStyle.Render(attempt) + timeStyle.Render(formatDuration(t.event.Duration))
+	case gorun.TaskUnchanged:
+		icon = mutedStyle.Render("=")
+		detail = mutedStyle.Render("unchanged · "+attempt) + timeStyle.Render(formatDuration(t.event.Duration))
 	case gorun.TaskFailed:
 		icon = failStyle.Render("✗")
+		if t.event.Phase == gorun.PhaseCheck || t.event.Phase == gorun.PhaseVerify {
+			attempt = string(t.event.Phase) + " failed · " + attempt
+		}
 		detail = failStyle.Render(fmt.Sprintf("exit %d", t.event.ExitCode)) + mutedStyle.Render(" · "+attempt) + timeStyle.Render(formatDuration(t.event.Duration))
 	case gorun.TaskSkipped:
 		icon = skipStyle.Render("⊘")
@@ -1149,11 +1166,12 @@ func (m tuiModel) renderServerErrorBox(server string, err error) string {
 // footer draws the run's totals once it is over, and the key help.
 func (m tuiModel) footer() string {
 	if m.done || m.quitting {
-		total, failed, skipped := 0, 0, 0
+		total, failed, skipped, unchanged := 0, 0, 0, 0
 		for _, s := range m.servers {
 			total += len(s.tasks)
 			failed += s.count(gorun.TaskFailed)
 			skipped += s.count(gorun.TaskSkipped)
+			unchanged += s.count(gorun.TaskUnchanged)
 		}
 
 		elapsed := m.elapsed
@@ -1174,7 +1192,11 @@ func (m tuiModel) footer() string {
 			}
 			summary += mutedStyle.Render(" in ") + timeStyle.Render(formatDuration(elapsed))
 		default:
-			summary = okStyle.Render(fmt.Sprintf("✓ all %d tasks completed", total)) + mutedStyle.Render(" in ") + timeStyle.Render(formatDuration(elapsed))
+			summary = okStyle.Render(fmt.Sprintf("✓ all %d tasks completed", total))
+			if unchanged > 0 {
+				summary += mutedStyle.Render(fmt.Sprintf(", %d unchanged", unchanged))
+			}
+			summary += mutedStyle.Render(" in ") + timeStyle.Render(formatDuration(elapsed))
 		}
 
 		if m.quitting {
@@ -1350,4 +1372,15 @@ func (m tuiModel) copyStatus(ev *gorun.CopyProgressEvent, withName bool) string 
 		out += copyName(*ev) + " "
 	}
 	return out + bar.ViewAs(pct) + " " + fmt.Sprintf("%3d%%", int(ev.Percent)) + " " + mutedStyle.Render(copySizes(*ev))
+}
+
+// phaseLabel says what a running task with a check or verify is doing: "checking" or "verifying".
+func phaseLabel(phase gorun.Phase) string {
+	switch phase {
+	case gorun.PhaseCheck:
+		return "checking"
+	case gorun.PhaseVerify:
+		return "verifying"
+	}
+	return ""
 }

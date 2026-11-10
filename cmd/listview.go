@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"maps"
@@ -665,6 +666,8 @@ func taskExecutionOptions(task gorun.Task) []taskOption {
 		{name: "Log level", value: logLevel},
 		{name: "Depends on", value: dependsOn},
 		{name: "File copies", value: fmt.Sprint(copies)},
+		{name: "Check", value: cmp.Or(task.Check, "none")},
+		{name: "Verify", value: cmp.Or(task.Verify, "none")},
 	}
 }
 

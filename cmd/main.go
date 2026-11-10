@@ -116,12 +116,12 @@ func (s *stringSlice) Set(v string) error { *s = append(*s, v); return nil }
 
 // options are the command line flags. printUsage documents each one.
 type options struct {
-	verbose, plain, run, dump, version, web, history, updateIncludes bool
-	listTasks, listServers, listTags, listGroups, listBundles        bool
-	tasks, bundles, servers, exclude, tags, groups                   stringSlice
-	parallel                                                         int
-	parallelSet                                                      bool // -parallel was given
-	dumpTasksDir, complete, filename                                 string
+	verbose, plain, run, dump, version, web, history, updateIncludes, force bool
+	listTasks, listServers, listTags, listGroups, listBundles               bool
+	tasks, bundles, servers, exclude, tags, groups                          stringSlice
+	parallel                                                                int
+	parallelSet                                                             bool // -parallel was given
+	dumpTasksDir, complete, filename                                        string
 }
 
 // lists reports whether a flag that only prints and exits was given.
@@ -134,7 +134,7 @@ func parseFlags() *options {
 	o := &options{}
 	for name, dst := range map[string]*bool{
 		"v": &o.verbose, "plain": &o.plain, "run": &o.run, "r": &o.run, "dump": &o.dump, "version": &o.version,
-		"web": &o.web, "history": &o.history, "update-includes": &o.updateIncludes,
+		"web": &o.web, "history": &o.history, "update-includes": &o.updateIncludes, "force": &o.force,
 		"list-tasks": &o.listTasks, "list-servers": &o.listServers, "list-tags": &o.listTags,
 		"list-groups": &o.listGroups, "list-server-groups": &o.listGroups, "list-bundles": &o.listBundles,
 	} {
@@ -337,6 +337,7 @@ func applySelection(cfg *gorun.Config, o *options) (selectedTasks []string, filt
 	if o.parallelSet {
 		cfg.MaxParallel = o.parallel
 	}
+	cfg.Force = o.force
 
 	var err error
 	switch {
@@ -460,6 +461,7 @@ Options:
   -tag      run only servers with this tag (repeatable; servers need every tag)
   -group    run only servers in this server group (repeatable; servers need every group)
   -parallel N  run at most N hosts at once (0 = all servers)
+  -force    run every task even when its check says there is nothing to do
   -list-tasks  list available tasks and exit (a collapsible tree in a terminal)
   -list-servers  list servers and their task pipelines and exit (a collapsible tree in a terminal)
   -list-tags  list tags and the servers that have them and exit (a collapsible tree in a terminal)

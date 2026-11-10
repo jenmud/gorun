@@ -370,9 +370,15 @@ func (m historyModel) detailSections() ([]string, []historySection) {
 			command = append(command, prefix+strings.ReplaceAll(strings.TrimRight(line, "\r"), "\t", "    "))
 		}
 	}
+	if task.Check != nil {
+		add(taskScope+"check", "Check · "+stepLabel(task.Check), stepLines(task.Check))
+	}
 	add(taskScope+"command", "Command", command)
 	add(taskScope+"stdout", "Stdout", outputLines(task.Stdout))
 	add(taskScope+"stderr", "Stderr", outputLines(task.Stderr))
+	if task.Verify != nil {
+		add(taskScope+"verify", "Verify · "+stepLabel(task.Verify), stepLines(task.Verify))
+	}
 	return meta, sections
 }
 
@@ -384,17 +390,33 @@ func outputLines(s string) []string {
 	return strings.Split(strings.TrimRight(s, "\r\n"), "\n")
 }
 
+// stepLabel is a check or verify's exit code and duration, e.g. "exit 1, 12ms".
+func stepLabel(s *store.Step) string {
+	return fmt.Sprintf("exit %d, %s", s.ExitCode, time.Duration(s.Duration).Round(time.Millisecond))
+}
+
+// stepLines shows a check or verify: the command, then its output.
+func stepLines(s *store.Step) []string {
+	lines := []string{"$ " + s.Command}
+	if out := strings.TrimRight(s.Stdout+s.Stderr, "\n"); out != "" {
+		lines = append(lines, strings.Split(out, "\n")...)
+	}
+	return lines
+}
+
 // historyTaskState renders a task's state as a coloured label.
 func historyTaskState(state int) string {
 	switch state {
-	case 1:
+	case store.StateRunning:
 		return skipStyle.Render("● running")
-	case 2:
+	case store.StateDone:
 		return okStyle.Render("✓ done")
-	case 3:
+	case store.StateFailed:
 		return failStyle.Render("✗ failed")
-	case 4:
+	case store.StateSkipped:
 		return skipStyle.Render("⊘ skipped")
+	case store.StateUnchanged:
+		return mutedStyle.Render("= unchanged")
 	default:
 		return mutedStyle.Render("○ pending")
 	}
@@ -1006,14 +1028,16 @@ func (m historyModel) historyDetailView(title, muted, ok, fail, skip, timing lip
 			task := run.Tasks[item.taskIdx]
 			mark := muted.Render("○")
 			switch task.State {
-			case 2:
+			case store.StateDone:
 				mark = ok.Render("✓")
-			case 3:
+			case store.StateFailed:
 				mark = fail.Render("✗")
-			case 4:
+			case store.StateSkipped:
 				mark = skip.Render("⊘")
-			case 1:
+			case store.StateRunning:
 				mark = skip.Render("●")
+			case store.StateUnchanged:
+				mark = muted.Render("=")
 			}
 			line = pointer + "  " + mark + " " + task.Name + timing.Render("  "+task.Duration.Round(time.Millisecond).String())
 		}

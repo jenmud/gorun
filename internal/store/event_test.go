@@ -38,3 +38,24 @@ func TestApplyRecordsPlannedTasksAndServerErrors(t *testing.T) {
 		t.Errorf("task a = %+v, %v; want it left as it ran", a, err)
 	}
 }
+
+func TestApplyKeepsCheckAndVerify(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "gorun.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	ctx := context.Background()
+	st.Apply(ctx, &Event{Type: "process_started", GorunUUID: "r1"})
+	st.Apply(ctx, &Event{Type: "plan", GorunUUID: "r1", Server: "web-1", Tasks: []string{"deploy"}})
+	st.Apply(ctx, &Event{Type: "task", GorunUUID: "r1", Server: "web-1", Task: "deploy", State: StateUnchanged,
+		Check: &Step{Command: "test -f /etc/app", ExitCode: 0, Stdout: "present"}})
+
+	task, err := st.GetTask(ctx, "r1", "web-1", "deploy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.State != StateUnchanged || task.Check == nil || task.Check.Stdout != "present" || task.Verify != nil {
+		t.Errorf("task = %+v, check = %+v; want unchanged with the check kept", task, task.Check)
+	}
+}

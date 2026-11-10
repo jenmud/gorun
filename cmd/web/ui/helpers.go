@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/a-h/templ"
+
+	"github.com/jenmud/gorun/internal/store"
 )
 
 // runCardClass frames a run: red when a task failed, a calm card while running.
@@ -77,7 +79,14 @@ func processDuration(p *ProcessState) string {
 
 // taskTiming shows a task's duration, or its state while it hasn't finished.
 func taskTiming(t *TaskInfo) string {
-	if t.Duration > 0 {
+	switch {
+	case t.State == store.StateUnchanged:
+		return "unchanged · " + formatDuration(time.Duration(t.Duration))
+	case t.State == store.StateRunning && t.Phase == "check":
+		return "checking"
+	case t.State == store.StateRunning && t.Phase == "verify":
+		return "verifying"
+	case t.Duration > 0:
 		return formatDuration(time.Duration(t.Duration))
 	}
 	return stateLabel(t.State)
@@ -470,4 +479,9 @@ func copySizes(c *CopyInfo) string {
 		s += " · " + formatBytes(int64(c.BytesPerSecond)) + "/s"
 	}
 	return s
+}
+
+// stepSummary is a check or verify's exit code and duration, e.g. "exit 1 · 12ms".
+func stepSummary(s *store.Step) string {
+	return "exit " + itoa(s.ExitCode) + " · " + formatDuration(time.Duration(s.Duration))
 }

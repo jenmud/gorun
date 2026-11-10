@@ -1,5 +1,7 @@
 package ui
 
+import "github.com/jenmud/gorun/internal/store"
+
 templ HistoryPage(d HistoryPageData) {
 	if d.Flash != "" {
 		@flash(d.Flash, false)
@@ -186,7 +188,7 @@ templ taskInspector(t TaskView) {
 				<span class={ taskViewClass(t) }>{ taskViewIcon(t) } { taskViewLabel(t) }</span>
 			}
 			@fact("Exit code") {
-				if !t.NotRun && (t.State == 2 || t.State == 3) {
+				if !t.NotRun && (t.State == 2 || t.State == 3 || t.State == 5) {
 					<span class={ exitClass(t.ExitCode) }>{ itoa(t.ExitCode) }</span>
 				} else {
 					<span class="text-zinc-500">—</span>
@@ -203,6 +205,9 @@ templ taskInspector(t TaskView) {
 			}
 		</dl>
 		<p class="text-zinc-400">{ taskViewHint(t, t.ServerFailed) }</p>
+		if t.Check != nil {
+			@stepFold("Check", t.Check)
+		}
 		@fold("", "Command", "") {
 			if t.Command != "" {
 				<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">$ { t.Command }</pre>
@@ -224,8 +229,24 @@ templ taskInspector(t TaskView) {
 				<p class="text-zinc-500">No output.</p>
 			}
 		}
+		if t.Verify != nil {
+			@stepFold("Verify", t.Verify)
+		}
 		@varsPanel("Task", t.EnvVars, t.Vars)
 	</div>
+}
+
+// stepFold shows a check or verify command: what ran, its exit code and its output.
+templ stepFold(title string, s *store.Step) {
+	@fold("", title, stepSummary(s)) {
+		<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">$ { s.Command }</pre>
+		if s.Stdout != "" {
+			<pre class="mt-2 max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">{ s.Stdout }</pre>
+		}
+		if s.Stderr != "" {
+			<pre class="mt-2 max-h-64 overflow-auto rounded-lg bg-zinc-950 p-2 font-mono text-red-300">{ s.Stderr }</pre>
+		}
+	}
 }
 
 templ fact(label string) {

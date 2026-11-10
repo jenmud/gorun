@@ -18,6 +18,7 @@ gorun Gorunfile -v                 # the same, listing every task while it runs
 gorun Gorunfile --run              # run everything, no picker (-r)
 gorun Gorunfile -r --plain         # plain text instead of the live view, e.g. for CI
 gorun Gorunfile -r --parallel 4    # at most 4 servers at a time
+gorun Gorunfile -r --force         # run tasks even when their check says nothing changed
 ```
 
 ## The picker

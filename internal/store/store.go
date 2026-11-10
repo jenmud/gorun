@@ -11,6 +11,16 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// Task states, as stored. They match gorun.TaskState, which only ever adds states at the end.
+const (
+	StatePending = iota
+	StateRunning
+	StateDone
+	StateFailed
+	StateSkipped
+	StateUnchanged
+)
+
 // RunSummary is one run: when it started and finished, and how its tasks went.
 type RunSummary struct {
 	Servers    int // how many servers it ran on
@@ -42,6 +52,9 @@ type TaskDetail struct {
 	Duration time.Duration
 	EnvVars  map[string]string
 	Vars     map[string]any
+	// Check and Verify are the task's check and verify results, when they ran.
+	Check  *Step
+	Verify *Step
 }
 
 // Include is a git include a run read: the repository, the ref asked for and the commit used.
@@ -150,6 +163,7 @@ var addedColumns = [][2]string{
 	{"runs", "vars"},
 	{"runs", "includes"},
 	{"runs", "schedule"},
+	{"tasks", "steps"},
 }
 
 // migrate creates the tables and adds the columns newer versions need.
@@ -244,6 +258,18 @@ func (s *Store) UpsertTask(ctx context.Context, runID, server, name string, stat
 			state=excluded.state, command=excluded.command, stdout=excluded.stdout, stderr=excluded.stderr,
 			exit_code=excluded.exit_code, duration_ns=excluded.duration_ns`,
 		runID, server, name, state, command, stdout, stderr, exitCode, int64(duration))
+}
+
+// SetTaskSteps stores a task's check and verify results.
+func (s *Store) SetTaskSteps(ctx context.Context, runID, server, name string, check, verify *Step) error {
+	return s.exec(ctx, `UPDATE tasks SET steps=? WHERE run_id=? AND server=? AND name=?`,
+		toJSON(steps{check, verify}), runID, server, name)
+}
+
+// steps is how a task's check and verify results are kept in its steps column.
+type steps struct {
+	Check  *Step `json:"check,omitempty"`
+	Verify *Step `json:"verify,omitempty"`
 }
 
 // SetTaskEnvVars stores a task's merged envvars and vars.
@@ -364,16 +390,19 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 func (s *Store) GetTask(ctx context.Context, runID, server, name string) (TaskDetail, error) {
 	var t TaskDetail
 	var duration sql.NullInt64
-	var env, vars sql.NullString
+	var env, vars, stepsCol sql.NullString
 	err := s.db.QueryRowContext(ctx,
-		`SELECT server,name,state,command,stdout,stderr,exit_code,duration_ns,envvars,vars FROM tasks WHERE run_id=? AND server=? AND name=?`,
-		runID, server, name).Scan(&t.Server, &t.Name, &t.State, &t.Command, &t.Stdout, &t.Stderr, &t.ExitCode, &duration, &env, &vars)
+		`SELECT server,name,state,command,stdout,stderr,exit_code,duration_ns,envvars,vars,steps FROM tasks WHERE run_id=? AND server=? AND name=?`,
+		runID, server, name).Scan(&t.Server, &t.Name, &t.State, &t.Command, &t.Stdout, &t.Stderr, &t.ExitCode, &duration, &env, &vars, &stepsCol)
 	if err != nil {
 		return TaskDetail{}, err
 	}
 	t.Duration = time.Duration(duration.Int64)
 	fromJSON(env, &t.EnvVars)
 	fromJSON(vars, &t.Vars)
+	var st steps
+	fromJSON(stepsCol, &st)
+	t.Check, t.Verify = st.Check, st.Verify
 	return t, nil
 }
 

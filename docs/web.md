@@ -60,7 +60,8 @@ The picker: tick servers, then tasks or bundles (not both), and start. Stats and
 update as runs go. Each run, server and task starts collapsed. A task that is uploading a file shows
 a bar with the size and rate, and a closed server shows the upload on its line
 ([screenshot](screenshot-web-upload.png)). **Recent runs** bars link to the
-run; **Stop** cancels a run started from the page. Runs read the Gorunfile on disk, so save first.
+run; **Stop** cancels a run started from the page. **Force** runs every task even when its
+[check](gorunfile.md#checks-run-only-when-needed) says there is nothing to do. Runs read the Gorunfile on disk, so save first.
 
 ### Tasks
 

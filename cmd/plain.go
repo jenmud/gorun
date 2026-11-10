@@ -42,7 +42,11 @@ func (p *plainPrinter) event(event any) {
 				}
 			}
 		case gorun.TaskDone:
-			fmt.Fprintf(p.w, "%s: %s ok (%s%s)\n", ev.Server, ev.Task, ev.Duration.Round(time.Millisecond), attempt)
+			verified := ""
+			if ev.Verify != nil {
+				verified = "verified, "
+			}
+			fmt.Fprintf(p.w, "%s: %s ok (%s%s%s)\n", ev.Server, ev.Task, verified, ev.Duration.Round(time.Millisecond), attempt)
 			if p.verbose {
 				p.output("stdout", ev.Stdout, outputTailLines)
 				p.output("stderr", ev.Stderr, outputTailLines)
@@ -57,6 +61,11 @@ func (p *plainPrinter) event(event any) {
 			}
 			if ev.Err == nil || strings.TrimSpace(ev.Stderr) != ev.Err.Error() {
 				p.output("stderr", ev.Stderr, failTailLines)
+			}
+		case gorun.TaskUnchanged:
+			fmt.Fprintf(p.w, "%s: %s unchanged (check found nothing to do, %s%s)\n", ev.Server, ev.Task, ev.Duration.Round(time.Millisecond), attempt)
+			if p.verbose && ev.Check != nil {
+				p.output("check output", ev.Check.Stdout+ev.Check.Stderr, outputTailLines)
 			}
 		case gorun.TaskSkipped:
 			fmt.Fprintf(p.w, "%s: %s skipped\n", ev.Server, ev.Task)

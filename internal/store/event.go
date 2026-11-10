@@ -22,6 +22,7 @@ type Event struct {
 	Schedule   string    `json:"schedule,omitempty"`
 	Success    bool      `json:"success"`
 	TotalTasks int       `json:"total_tasks"`
+	Unchanged  int       `json:"unchanged"`
 	Failed     int       `json:"failed"`
 	Skipped    int       `json:"skipped"`
 	FinishedAt string    `json:"finished_at"`
@@ -43,6 +44,9 @@ type Event struct {
 	EnvVars  map[string]string `json:"envvars,omitempty"`
 	Vars     map[string]any    `json:"vars,omitempty"`
 	Error    string            `json:"error,omitempty"`
+	Phase    string            `json:"phase,omitempty"`
+	Check    *Step             `json:"check,omitempty"`
+	Verify   *Step             `json:"verify,omitempty"`
 
 	// copy_progress
 	File           string  `json:"file,omitempty"`
@@ -51,6 +55,15 @@ type Event struct {
 	Percent        float64 `json:"percent,omitempty"`
 	BytesPerSecond float64 `json:"bytes_per_second,omitempty"`
 	Done           bool    `json:"done,omitempty"`
+}
+
+// Step is how a task's check or verify command went.
+type Step struct {
+	Command  string `json:"command"`
+	ExitCode int    `json:"exit_code"`
+	Stdout   string `json:"stdout,omitempty"`
+	Stderr   string `json:"stderr,omitempty"`
+	Duration int64  `json:"duration"`
 }
 
 // TaskMeta is the documentation a plan event carries for a task.
@@ -105,6 +118,9 @@ func (s *Store) Apply(ctx context.Context, ev *Event) {
 		}
 		check("save task", s.UpsertTask(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.State, ev.Command, ev.Stdout, ev.Stderr, ev.ExitCode, time.Duration(ev.Duration)))
 		check("set task envvars", s.SetTaskEnvVars(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.EnvVars, ev.Vars))
+		if ev.Check != nil || ev.Verify != nil {
+			check("set task steps", s.SetTaskSteps(ctx, ev.GorunUUID, ev.Server, ev.Task, ev.Check, ev.Verify))
+		}
 	case "process_finished":
 		check("finish run", s.FinishRun(ctx, ev.GorunUUID, ev.Success, ev.TotalTasks, ev.Failed, ev.Skipped, time.Duration(ev.Duration), parseTime(ev.FinishedAt)))
 	}

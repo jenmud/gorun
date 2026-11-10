@@ -206,16 +206,18 @@ func formatDuration(d time.Duration) string {
 // stateLabel names a task state for the UI.
 func stateLabel(state int) string {
 	switch state {
-	case 0:
+	case store.StatePending:
 		return "pending"
-	case 1:
+	case store.StateRunning:
 		return "running"
-	case 2:
+	case store.StateDone:
 		return "done"
-	case 3:
+	case store.StateFailed:
 		return "failed"
-	case 4:
+	case store.StateSkipped:
 		return "skipped"
+	case store.StateUnchanged:
+		return "unchanged"
 	default:
 		return "unknown"
 	}
@@ -224,14 +226,16 @@ func stateLabel(state int) string {
 // stateIcon is the one-character mark the TUI uses for a task state.
 func stateIcon(state int) string {
 	switch state {
-	case 1:
+	case store.StateRunning:
 		return "●"
-	case 2:
+	case store.StateDone:
 		return "✓"
-	case 3:
+	case store.StateFailed:
 		return "✗"
-	case 4:
+	case store.StateSkipped:
 		return "⊘"
+	case store.StateUnchanged:
+		return "="
 	default:
 		return "○"
 	}
@@ -240,14 +244,16 @@ func stateIcon(state int) string {
 // stateClass colours a task state.
 func stateClass(state int) string {
 	switch state {
-	case 1:
+	case store.StateRunning:
 		return "text-accent"
-	case 2:
+	case store.StateDone:
 		return "text-emerald-400"
-	case 3:
+	case store.StateFailed:
 		return "text-red-400"
-	case 4:
+	case store.StateSkipped:
 		return "text-amber-400"
+	case store.StateUnchanged:
+		return "text-sky-400"
 	default:
 		return "text-zinc-500"
 	}
@@ -296,13 +302,15 @@ func maxBar(bars []Bar) float64 {
 // hintFor returns the one-line hint shown under a task state, so people know what to do next.
 func hintFor(state int) string {
 	switch state {
-	case 2:
+	case store.StateDone:
 		return "Finished. Open the output to see what it printed."
-	case 3:
+	case store.StateFailed:
 		return "Failed. Open the output to see why, and check the exit code."
-	case 4:
+	case store.StateSkipped:
 		return "Skipped because something it depends on failed."
-	case 1:
+	case store.StateUnchanged:
+		return "Unchanged: its check found nothing to do, so its command didn't run."
+	case store.StateRunning:
 		return "Running now. Output appears when it finishes."
 	default:
 		return "Waiting for its turn."

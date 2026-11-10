@@ -74,6 +74,10 @@ type Config struct {
 	// empty for a run started any other way, and is reported in ProcessStartedEvent.
 	Schedule string `toml:"-"`
 
+	// Force runs every task even when its check says there is nothing to do: checks are not
+	// run, so tasks never end unchanged. Verify commands still run.
+	Force bool `toml:"-"`
+
 	// SelectedTasks, when non-empty, limits execution to these tasks (and their
 	// dependencies). Bundle references ("@name") are expanded. Used by the --task CLI flag.
 	SelectedTasks []string `toml:"-"`

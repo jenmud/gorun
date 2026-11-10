@@ -69,7 +69,7 @@ Every event has a `type` and the run's `gorun_uuid`:
 |---|---|---|
 | `process_started` | when a run starts | `title`, `servers`, `started_at`, `hostname`, `pid`, `schedule` (when a schedule started it) |
 | `plan` | per server, before it starts | `server`, `address`, `tasks`, `task_meta` |
-| `task` | every task state change | `server`, `task`, `state`, `command`, `stdout`, `stderr`, `exit_code`, `duration`, `attempt`, `attempts` |
+| `task` | every task state change | `server`, `task`, `state`, `command`, `stdout`, `stderr`, `exit_code`, `duration`, `attempt`, `attempts`, `phase`, `check`, `verify` |
 | `server_error` | a server couldn't run (e.g. SSH failed) | `server` |
 | `copy_progress` | while a task copies a file or directory, at most 4 times a second | `server`, `task`, `file`, `bytes`, `total`, `percent`, `bytes_per_second`, `elapsed`, `done` |
 | `process_finished` | when the run ends | `success`, `duration`, `total_tasks`, `failed`, `skipped`, `finished_at` |

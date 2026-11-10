@@ -27,6 +27,10 @@ templ runPicker(d RunPageData) {
 			<p class="mt-1 text-xs text-zinc-500">Tick the servers to run on. Tick tasks, or bundles, to run only those in place of each server's own list; leave them all unticked to run each server's own list. Tasks marked local run on this machine, so they need no server ticked. Tasks and bundles can't be mixed. Uses the saved <span class="font-mono">{ d.Path }</span>.</p>
 		</div>
 		<button type="submit" disabled?={ !d.NATSOK } class="w-full rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-accent/20 transition hover:bg-violet-600 disabled:cursor-not-allowed disabled:opacity-40">Run selected</button>
+		<label class="flex items-start gap-2 text-xs text-zinc-400" title="Run every task even when its check says there is nothing to do">
+			<input type="checkbox" name="force" value="1" class="mt-0.5 accent-violet-600"/>
+			<span><span class="font-medium text-zinc-200">Force</span>: run tasks even when their check says nothing needs to change</span>
+		</label>
 		<section>
 			<div class="mb-2 flex items-center justify-between gap-2">
 				<h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400">Servers</h3>

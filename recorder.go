@@ -11,8 +11,9 @@ package gorun
 //	ProcessStartedEvent                  once, first
 //	PlanEvent                            once per server, all before any task starts
 //	ServerErrorEvent                     instead of tasks, for a server that can't run
-//	TaskEvent (TaskRunning)              when a task starts, and again before each retry
-//	TaskEvent (done, failed or skipped)  once per task, when it finishes
+//	TaskEvent (TaskRunning)              as each phase (check, run, verify) of each attempt starts
+//	TaskEvent (done, failed, skipped     once per task, when it finishes
+//	           or unchanged)
 //	ProcessFinishedEvent                 once, last, even when tasks fail or the run is cancelled
 //
 // GorunUUID identifies the run on every event; GorunUUID, Server and Task together identify a

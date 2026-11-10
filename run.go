@@ -110,6 +110,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		TotalTasks: total,
 		Failed:     failed,
 		Skipped:    int(r.skipped.Load()),
+		Unchanged:  int(r.unchanged.Load()),
 		FinishedAt: time.Now(),
 	})
 	if failed > 0 {
@@ -189,8 +190,8 @@ func withDefaults[V any](m, defaults map[string]V) map[string]V {
 
 // run is the state shared by every server of one Run.
 type run struct {
-	cfg             *Config
-	failed, skipped atomic.Int64 // tasks, counted for ProcessFinishedEvent
+	cfg                        *Config
+	failed, skipped, unchanged atomic.Int64 // tasks, counted for ProcessFinishedEvent
 }
 
 // runServer connects to the server and runs its tasks: one at a time by default, or up to
@@ -245,6 +246,7 @@ func (r *run) runServer(ctx context.Context, server Server) {
 	}
 	for _, t := range tasks {
 		t.target = &server
+		t.force = c.Force
 		t.logger = t.logger.With(slog.String("gorun_uuid", c.GorunUUID))
 		sr.done[t.task.Name] = make(chan struct{})
 	}
@@ -374,15 +376,32 @@ func (sr *serverRun) runTask(ctx context.Context, task *TaskExec) {
 	var err error
 	attempt := 1
 	for ; ; attempt++ {
-		running := event(TaskRunning)
-		running.Command, _ = task.task.CommandFor(server)
-		numbered(&running, attempt)
+		// a running event is sent as each phase of the attempt starts: check, run and verify
+		var previous TaskEvent
 		if attempt > 1 {
 			// carry the previous attempt's failure, to explain why the task is running again
-			running.ExitCode, running.Stderr, running.Err = task.exitCode, string(task.stderr), err
+			previous.ExitCode, previous.Stderr, previous.Err = task.exitCode, string(task.stderr), err
 			task.resetForRetry()
 		}
-		c.emit(running)
+		first := true
+		task.onPhase = func(phase Phase) {
+			running := event(TaskRunning)
+			running.Phase = phase
+			switch phase {
+			case PhaseCheck:
+				running.Command = task.task.Check
+			case PhaseVerify:
+				running.Command = task.task.Verify
+			default:
+				running.Command, _ = task.task.CommandFor(server)
+			}
+			numbered(&running, attempt)
+			if first {
+				running.ExitCode, running.Stderr, running.Err = previous.ExitCode, previous.Stderr, previous.Err
+				first = false
+			}
+			c.emit(running)
+		}
 
 		err = task.Execute(ctx)
 		if err == nil || task.stopped || ctx.Err() != nil || attempt == attempts {
@@ -402,10 +421,15 @@ func (sr *serverRun) runTask(ctx context.Context, task *TaskExec) {
 
 	ev := event(TaskDone)
 	numbered(&ev, attempt)
-	if err != nil {
+	switch {
+	case err != nil:
 		sr.failed.Add(1)
 		ev.State, ev.Err = TaskFailed, err
+	case task.unchanged:
+		sr.unchanged.Add(1)
+		ev.State = TaskUnchanged
 	}
+	ev.Phase, ev.Check, ev.Verify = task.phase, task.check, task.verify
 	if ev.Command = task.command; ev.Command == "" {
 		ev.Command, _ = task.task.CommandFor(server)
 	}

@@ -35,12 +35,18 @@ type TaskExec struct {
 	target   *Server     // the server templates are rendered for
 	logger   *slog.Logger
 	progress CopyProgressFunc // when set, is told how far each copy has got
+	onPhase  func(Phase)      // when set, is told as each phase of an attempt starts
+	force    bool             // skip the check and always run the command
 
 	command   string // the command as written, with templates rendered
 	startedAt time.Time
 	stdout    []byte
 	stderr    []byte
 	exitCode  int
+	phase     Phase       // the phase running, or the one that decided the outcome
+	check     *StepResult // the check's result, when it ran
+	verify    *StepResult // the verify's result, when it ran
+	unchanged bool        // the check found nothing to do
 	// stopped is set when the task stopped because its context was canceled or
 	// its timeout expired. Such attempts are not retried.
 	stopped bool
@@ -84,12 +90,13 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 	return tasks, nil
 }
 
-// Execute runs the task: its copies, then its command, within the task's timeout.
+// Execute runs the task within its timeout: its check, then its copies and command, then its
+// verify.
 func (t *TaskExec) Execute(ctx context.Context) error {
 	return t.execute(ctx, t.server == nil)
 }
 
-// LocalExecute runs the task's command on this machine.
+// LocalExecute runs the task on this machine.
 func (t *TaskExec) LocalExecute(ctx context.Context) error {
 	return t.execute(ctx, true)
 }
@@ -108,11 +115,12 @@ func (t *TaskExec) execute(ctx context.Context, local bool) error {
 	defer cancel()
 
 	t.startedAt = time.Now()
-	run := t.runRemote
 	if local {
-		run = t.runLocal
+		t.logger.InfoContext(ctx, "running local task")
+	} else {
+		t.logger.InfoContext(ctx, "running task")
 	}
-	err := t.finish(ctx, run(ctx))
+	err := t.finish(ctx, t.phases(ctx, local))
 
 	status := "ok"
 	if t.exitCode != 0 {
@@ -128,62 +136,131 @@ func (t *TaskExec) execute(ctx context.Context, local bool) error {
 	return err
 }
 
-// runLocal copies the task's files and runs its command on this machine.
-func (t *TaskExec) runLocal(ctx context.Context) error {
-	t.logger.InfoContext(ctx, "running local task")
+// phases runs the task's check, its copies and command, and its verify, stopping at the first
+// that fails. A check that exits 0 ends the attempt early, with the task unchanged.
+func (t *TaskExec) phases(ctx context.Context, local bool) error {
+	run := t.runRemote
+	if local {
+		run = t.runLocal
+	}
 
-	if err := CopyFilesContext(ctx, t.server, t.target, &t.task, t.progress); err != nil {
-		return err
+	if t.task.Check != "" && !t.force {
+		t.enter(PhaseCheck)
+		var err error
+		if t.check, err = t.step(ctx, run, t.task.Check); err == nil {
+			t.unchanged = true
+			return nil
+		}
+		// any exit code but 0 means there is work to do; a check that couldn't run fails the task
+		if !hasExitStatus(err) || ctx.Err() != nil {
+			return fmt.Errorf("check failed: %w", err)
+		}
 	}
-	if !t.task.hasCommand() {
-		return nil
+
+	t.enter(PhaseRun)
+	command, err := "", error(nil)
+	if t.task.hasCommand() {
+		if command, err = t.task.CommandFor(t.target); err != nil {
+			return err
+		}
 	}
-	command, err := t.task.CommandFor(t.target)
+	// record the command as written (templates rendered), not the shell, sudo and envvars
+	// wrapping, so history and events show what the user wrote
+	t.command = command
+	t.stdout, t.stderr, err = run(ctx, command, true)
 	if err != nil {
 		return err
+	}
+
+	if t.task.Verify != "" {
+		t.enter(PhaseVerify)
+		if t.verify, err = t.step(ctx, run, t.task.Verify); err != nil {
+			return fmt.Errorf("verify failed: %w", err)
+		}
+	}
+	return nil
+}
+
+// enter starts a phase, and tells onPhase.
+func (t *TaskExec) enter(phase Phase) {
+	t.phase = phase
+	if t.onPhase != nil {
+		t.onPhase(phase)
+	}
+}
+
+// step runs a check or verify command and returns its result, and the error a failing exit
+// code gives.
+func (t *TaskExec) step(ctx context.Context, run runFunc, command string) (*StepResult, error) {
+	started := time.Now()
+	stdout, stderr, err := run(ctx, command, false)
+	res := &StepResult{Command: command, ExitCode: exitCode(err), Stdout: string(stdout), Stderr: string(stderr), Duration: time.Since(started)}
+	return res, err
+}
+
+// exitCode is the exit status err reports, 0 for nil, or exitError when it reports none.
+func exitCode(err error) int {
+	var sshErr *ssh.ExitError
+	var execErr *exec.ExitError
+	switch {
+	case err == nil:
+		return 0
+	case errors.As(err, &sshErr):
+		return sshErr.ExitStatus()
+	case errors.As(err, &execErr):
+		return execErr.ExitCode()
+	}
+	return exitError
+}
+
+// hasExitStatus reports whether err is a command exiting with a status, as opposed to one
+// that couldn't be run at all.
+func hasExitStatus(err error) bool {
+	var sshErr *ssh.ExitError
+	var execErr *exec.ExitError
+	return errors.As(err, &sshErr) || errors.As(err, &execErr)
+}
+
+// runFunc runs command where the task runs, after the task's copies when copies is set, and
+// returns its output. An empty command only copies.
+type runFunc func(ctx context.Context, command string, copies bool) (stdout, stderr []byte, err error)
+
+// runLocal runs a command on this machine.
+func (t *TaskExec) runLocal(ctx context.Context, command string, copies bool) ([]byte, []byte, error) {
+	if copies {
+		if err := CopyFilesContext(ctx, t.server, t.target, &t.task, t.progress); err != nil {
+			return nil, nil, err
+		}
+	}
+	if command == "" {
+		return nil, nil, nil
 	}
 	stdin, err := envStdin(t.task.EnvVars)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-
-	// record the command as written (templates rendered), not the shell, sudo and
-	// envvars wrapping, so history and events show what the user wrote
-	t.command = command
 
 	name, args := t.task.localArgs(command, stdin != nil)
 	cmd := exec.CommandContext(ctx, name, args...)
 	configureCommand(cmd)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, &stdout, &stderr
-
-	t.startedAt = time.Now()
 	err = cmd.Run()
-	t.stdout, t.stderr = stdout.Bytes(), stderr.Bytes()
-	return err
+	return stdout.Bytes(), stderr.Bytes(), err
 }
 
-// runRemote copies the task's files and runs its command over SSH. When ctx ends first, the
-// command is told to stop and the connection is closed, so a stuck task can't hold up the run.
-func (t *TaskExec) runRemote(ctx context.Context) error {
-	t.logger.InfoContext(ctx, "running task")
+// runRemote runs a command over SSH. When ctx ends first, the command is told to stop and the
+// connection is closed, so a stuck task can't hold up the run.
+func (t *TaskExec) runRemote(ctx context.Context, command string, copies bool) ([]byte, []byte, error) {
 	const failed = "error running the task on the remote server: %w"
 
-	var (
-		command string
-		stdin   io.Reader
-		err     error
-	)
-	if t.task.hasCommand() {
-		if command, err = t.task.CommandFor(t.target); err != nil {
-			return fmt.Errorf(failed, err)
-		}
+	var stdin io.Reader
+	if command != "" {
+		var err error
 		if stdin, err = envStdin(t.task.EnvVars); err != nil {
-			return err
+			return nil, nil, err
 		}
 	}
-	// record the command as written, before the envvars prelude, sudo wrapping and quoting below
-	t.command = command
 	switch {
 	case command == "":
 	case t.task.Sudo && stdin != nil:
@@ -209,9 +286,11 @@ func (t *TaskExec) runRemote(ctx context.Context) error {
 		session   *ssh.Session
 	)
 	go func() {
-		if err := CopyFilesContext(ctx, t.server, t.target, &t.task, t.progress); err != nil {
-			done <- result{err: fmt.Errorf(failed, err)}
-			return
+		if copies {
+			if err := CopyFilesContext(ctx, t.server, t.target, &t.task, t.progress); err != nil {
+				done <- result{err: fmt.Errorf(failed, err)}
+				return
+			}
 		}
 		if command == "" { // a copy-only task
 			done <- result{}
@@ -238,8 +317,7 @@ func (t *TaskExec) runRemote(ctx context.Context) error {
 
 	select {
 	case res := <-done:
-		t.stdout, t.stderr = res.stdout, res.stderr
-		return res.err
+		return res.stdout, res.stderr, res.err
 	case <-ctx.Done():
 	}
 
@@ -247,8 +325,7 @@ func (t *TaskExec) runRemote(ctx context.Context) error {
 	// Prefer its result over reporting a timeout.
 	select {
 	case res := <-done:
-		t.stdout, t.stderr = res.stdout, res.stderr
-		return res.err
+		return res.stdout, res.stderr, res.err
 	default:
 	}
 
@@ -263,11 +340,11 @@ func (t *TaskExec) runRemote(ctx context.Context) error {
 
 	select {
 	case res := <-done:
-		t.stdout, t.stderr = res.stdout, res.stderr
+		return res.stdout, res.stderr, ctx.Err()
 	case <-time.After(taskKillGrace):
 		// The connection didn't close in time; don't hold up the whole run.
 	}
-	return ctx.Err()
+	return nil, nil, ctx.Err()
 }
 
 // finish records how an attempt ended: its exit code, and for a failure the reason, which it
@@ -284,8 +361,6 @@ func (t *TaskExec) finish(ctx context.Context, err error) error {
 		return nil
 	}
 
-	var sshErr *ssh.ExitError
-	var execErr *exec.ExitError
 	ctxErr := ctx.Err()
 	t.stopped = ctxErr != nil
 	switch {
@@ -295,21 +370,21 @@ func (t *TaskExec) finish(ctx context.Context, err error) error {
 	case ctxErr != nil:
 		t.exitCode = exitInterrupted
 		err = fmt.Errorf("task %q was interrupted", t.task.Name)
-	case errors.As(err, &sshErr):
-		t.exitCode = sshErr.ExitStatus()
-	case errors.As(err, &execErr):
-		t.exitCode = execErr.ExitCode()
 	case errors.Is(err, exec.ErrWaitDelay):
 		t.exitCode = exitError
 		err = fmt.Errorf("task %q finished but left a background process holding its output open", t.task.Name)
 	default:
-		t.exitCode = exitError
+		t.exitCode = exitCode(err)
 	}
 
 	level, msg := slog.LevelError, "task failed"
-	if t.stopped {
+	switch {
+	case t.stopped:
 		t.appendStderr(err.Error())
 		level, msg = slog.LevelWarn, "task terminated"
+	case t.phase == PhaseCheck || t.phase == PhaseVerify:
+		// the command's output stays as it was; the step's reason is added so it shows too
+		t.appendStderr(stepFailure(t.phase, err, t.check, t.verify))
 	}
 	span.RecordError(err)
 	span.SetStatus(codes.Error, err.Error())
@@ -318,10 +393,27 @@ func (t *TaskExec) finish(ctx context.Context, err error) error {
 	return err
 }
 
+// stepFailure explains a failed check or verify, with the end of its output.
+func stepFailure(phase Phase, err error, check, verify *StepResult) string {
+	res := check
+	if phase == PhaseVerify {
+		res = verify
+	}
+	msg := err.Error()
+	if res != nil {
+		if out := strings.TrimSpace(res.Stderr + "\n" + res.Stdout); out != "" {
+			lines := strings.Split(out, "\n")
+			msg += ": " + strings.TrimSpace(lines[len(lines)-1])
+		}
+	}
+	return msg
+}
+
 // resetForRetry clears the result of the previous attempt so the task can run
 // again with a clean exit code, output and command.
 func (t *TaskExec) resetForRetry() {
 	t.stdout, t.stderr, t.exitCode, t.command, t.stopped = nil, nil, 0, "", false
+	t.phase, t.check, t.verify, t.unchanged = "", nil, nil, false
 	t.startedAt = time.Time{}
 }
 

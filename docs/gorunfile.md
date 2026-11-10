@@ -9,7 +9,7 @@ New to gorun? Start with the [tutorial](tutorial.md). This page explains every o
 - [The shape of a Gorunfile](#the-shape-of-a-gorunfile)
 - [Tasks](#tasks)
   - [Commands](#commands) · [Templates](#templates) · [Task variables](#task-variables) · [Copying files](#copying-files) · [Dependencies](#dependencies)
-  - [Environment variables and secrets](#environment-variables-and-secrets) · [Timeouts](#timeouts) · [Retries](#retries) · [Descriptions and rerun safety](#descriptions-and-rerun-safety) · [Local-only tasks](#local-only-tasks)
+  - [Environment variables and secrets](#environment-variables-and-secrets) · [Timeouts](#timeouts) · [Retries](#retries) · [Checks: run only when needed](#checks-run-only-when-needed) · [Descriptions and rerun safety](#descriptions-and-rerun-safety) · [Local-only tasks](#local-only-tasks)
 - [Servers](#servers)
   - [SSH or local](#ssh-or-local) · [Choosing a server's tasks](#choosing-a-servers-tasks) · [Server variables](#server-variables)
 - [Bundles](#bundles)
@@ -304,6 +304,38 @@ retry_delay = "1s"   # default 50ms; "0s" retries straight away
 - A task that succeeds on a retry isn't a failure.
 - Timeouts and cancelled runs are never retried.
 - `rerun = "unsafe"` tasks aren't retried, unless they also set `retry_unsafe = true`.
+
+### Checks: run only when needed
+
+A task can carry two extra commands: a `check` that runs first and says whether there is
+anything to do, and a `verify` that runs after the command and confirms the change took.
+
+```toml
+[tasks.app-config]
+description = "Install the app's config"
+check  = "grep -q 'version=2.4' /etc/app/app.conf"   # already there? then nothing to do
+cmd    = "install -m 644 /tmp/app.conf /etc/app/app.conf"
+verify = "grep -q 'version=2.4' /etc/app/app.conf"   # did it take?
+sudo   = true
+```
+
+| The check exits | gorun |
+|---|---|
+| `0` | marks the task **unchanged**: its copies, command and verify don't run |
+| anything else | runs the task |
+| can't finish (timeout, lost connection) | fails the task, rather than run it blind |
+
+- **Unchanged is a success.** Tasks that depend on it still run, and the run still passes.
+- **Verify failing fails the task**, with the verify's exit code. Its reason and the end of its
+  output are added to the task's stderr, and tasks that depend on it are skipped.
+- **Force:** `--force` on the command line, or **Force** on the web UI's Run page, runs every
+  task whatever its check says: checks don't run, so nothing ends unchanged. Verifies still run.
+- Checks and verifies run the way `cmd` does: same server, `shell`, `sudo`, envvars and
+  `timeout`. The timeout covers all three. A retry runs the check again.
+- A check runs before the task's copies, so it can't look at the files being copied.
+- They are plain commands, like `cmd`: they aren't templates.
+- The live view shows *checking* and *verifying* as they run, and a task the check skipped
+  as `=` *unchanged*. History keeps each one's command, exit code and output.
 
 ### Descriptions and rerun safety
 

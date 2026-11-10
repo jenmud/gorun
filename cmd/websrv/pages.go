@@ -136,6 +136,7 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 
 	uuid := fmt.Sprintf("web-%d-%d", os.Getpid(), time.Now().UnixNano())
 	cfg.GorunUUID = uuid
+	cfg.Force = r.PostFormValue("force") != ""
 	ctx, cancel := context.WithCancel(context.Background())
 	a.mu.Lock()
 	a.runs[uuid] = cancel

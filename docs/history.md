@@ -102,9 +102,10 @@ What to expect:
 ProcessStartedEvent                      once, first
 PlanEvent                                once per server, all of them before any task starts
 ServerErrorEvent                         instead of tasks, when a server can't run at all
-TaskEvent  running                       when a task starts, and again for each retry
+TaskEvent  running                       as each phase (check, run, verify) of each attempt starts
 CopyProgressEvent                        while a running task copies a file or directory
 TaskEvent  done | failed | skipped       once per task, when it finishes
+           | unchanged
 ProcessFinishedEvent                     once, last, after every server has finished
 ```
 
@@ -142,8 +143,10 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
 | Field | Meaning |
 |---|---|
 | `Server`, `Task` | which task, on which server |
-| `State` | `TaskRunning`, `TaskDone`, `TaskFailed` or `TaskSkipped` |
-| `Command` | the command as run, with templates rendered |
+| `State` | `TaskRunning`, `TaskDone`, `TaskFailed`, `TaskSkipped` or `TaskUnchanged` |
+| `Phase` | `PhaseCheck`, `PhaseRun` or `PhaseVerify`: the step a running event starts, or on the final event the step that decided the outcome. Empty for a task that never started |
+| `Check`, `Verify` | the [check and verify](gorunfile.md#checks-run-only-when-needed) results, when they ran: each one's `Command`, `ExitCode`, `Stdout`, `Stderr` and `Duration` |
+| `Command` | the command as run, with templates rendered; on a running event, the command that phase runs |
 | `Stdout`, `Stderr` | the output, on the final event |
 | `ExitCode` | the exit code, on the final event; 124 when the task timed out |
 | `Err` | why it failed or was skipped |
@@ -152,10 +155,14 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
 | `EnvVars` | the server's envvars with the task's own on top |
 | `Vars` | the task's own vars |
 
-- **Running** is sent when a task starts, and again before each retry. A retry's running event
-  has `Attempt` above 1 and carries the previous attempt's `ExitCode`, `Stderr` and `Err`, so you
-  can show why it is running again.
-- **Done** and **failed** are sent once, with the output, exit code and duration.
+- **Running** is sent as each phase of an attempt starts: the check, then the command, then the
+  verify, for a task that has them, and just the command otherwise. A retry's first running
+  event has `Attempt` above 1 and carries the previous attempt's `ExitCode`, `Stderr` and `Err`,
+  so you can show why it is running again.
+- **Done** and **failed** are sent once, with the output, exit code and duration. A task that
+  failed its check or verify has `Phase` set to that step and its `ExitCode`.
+- **Unchanged** is sent once when the task's check exited 0, so its command didn't run. It is a
+  success: `ExitCode` is 0, `Stdout` and `Stderr` are empty, and `Check` has the check's output.
 - **Skipped** is sent once when a task doesn't run: a task it depends on failed, an earlier task
   on that server failed, or the run was cancelled. `Err` and `Stderr` say which.
 - `TaskPending` is never sent. It is what the SQLite store records for a planned task that hasn't
@@ -212,6 +219,7 @@ To copy files from your own code, outside a run, `gorun.CopyFilesContext` takes 
 | `Duration`, `FinishedAt` | how long the run took, and when it ended |
 | `TotalTasks` | how many tasks were planned, across every server |
 | `Failed`, `Skipped` | how many failed (including every task of a server that couldn't run) and were skipped |
+| `Unchanged` | how many ended unchanged, because their check found nothing to do |
 
 ### Not sent by `Run`
 

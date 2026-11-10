@@ -37,16 +37,37 @@ func StartNATS() {
 	})
 }
 
-// TaskState is the lifecycle state of a task on a server.
+// TaskState is the lifecycle state of a task on a server. The values are stored in the history
+// database, so new states are only ever added at the end.
 type TaskState int
 
 const (
-	TaskPending TaskState = iota
-	TaskRunning
-	TaskDone
-	TaskFailed
-	TaskSkipped
+	TaskPending   TaskState = iota // planned, not started
+	TaskRunning                    // running; a running event is sent for each phase and attempt
+	TaskDone                       // finished successfully
+	TaskFailed                     // failed: the command, its check or its verify failed
+	TaskSkipped                    // not run: a task it depends on failed, or the run was cancelled
+	TaskUnchanged                  // its check found nothing to do, so its command didn't run; a success
 )
+
+// Phase is the step of a task an event is about. A task with a check runs it first, then (when
+// the check says there is something to do) its copies and command, then its verify.
+type Phase string
+
+const (
+	PhaseCheck  Phase = "check"
+	PhaseRun    Phase = "run"
+	PhaseVerify Phase = "verify"
+)
+
+// StepResult is how a task's check or verify command went.
+type StepResult struct {
+	Command  string        `json:"command"`
+	ExitCode int           `json:"exit_code"`
+	Stdout   string        `json:"stdout,omitempty"`
+	Stderr   string        `json:"stderr,omitempty"`
+	Duration time.Duration `json:"duration"`
+}
 
 // ProcessStartedEvent is published when a gorun process starts running.
 type ProcessStartedEvent struct {
@@ -78,6 +99,7 @@ type ProcessFinishedEvent struct {
 	TotalTasks int           `json:"total_tasks"`
 	Failed     int           `json:"failed"`
 	Skipped    int           `json:"skipped"`
+	Unchanged  int           `json:"unchanged"` // tasks whose check found nothing to do
 	FinishedAt time.Time     `json:"finished_at"`
 }
 
@@ -123,6 +145,12 @@ type TaskEvent struct {
 	// failed and the task is being retried.
 	Attempt  int `json:"attempt,omitempty"`
 	Attempts int `json:"attempts,omitempty"`
+	// Phase is the step a running event is about, or on a final event the step that decided
+	// the outcome. Empty for a task with no check or verify that never started.
+	Phase Phase `json:"phase,omitempty"`
+	// Check and Verify are the results of the task's check and verify commands, when they ran.
+	Check  *StepResult `json:"check,omitempty"`
+	Verify *StepResult `json:"verify,omitempty"`
 }
 
 // errText is the message of err, or "" for nil. An error value marshals as {}, so events

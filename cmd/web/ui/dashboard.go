@@ -23,6 +23,7 @@ type TaskInfo struct {
 	Stdout      string
 	Stderr      string
 	Error       string    // why it was skipped
+	Phase       string    // the step it is in: check, run or verify
 	Copy        *CopyInfo // the file it is copying, while it copies one
 }
 
@@ -165,6 +166,7 @@ func (s *DashboardState) Apply(ev store.Event) {
 		t.Stdout = ev.Stdout
 		t.Stderr = ev.Stderr
 		t.Error = ev.Error
+		t.Phase = ev.Phase
 	case "copy_progress":
 		srv, ok := p.Servers[ev.Server]
 		if !ok {

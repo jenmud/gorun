@@ -92,6 +92,14 @@ type Task struct {
 	RetryDelay *time.Duration `toml:"retry_delay,omitempty"`
 	// RetryUnsafe allows automatic retries for a task marked rerun = "unsafe".
 	RetryUnsafe bool `toml:"retry_unsafe,omitempty"`
+	// Check runs before the task, to see whether there is anything to do. Exit 0 means no: the
+	// task is marked unchanged, and its copies, command and verify don't run. Any other exit
+	// code means yes, so the task runs. A check that can't run at all (or times out) fails the
+	// task. Config.Force skips the check.
+	Check string `toml:"check,omitempty"`
+	// Verify runs after the task's command succeeds, to confirm the change took: a non-zero
+	// exit fails the task.
+	Verify string `toml:"verify,omitempty"`
 }
 
 // Attempts returns how many times the task may run, including the first try.

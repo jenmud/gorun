@@ -61,6 +61,9 @@ local = true
 # retry_delay = "5s"              # wait before each retry (default 50ms, "0s" = immediately)
 # retry_unsafe = false            # allow retries of a rerun = "unsafe" task
 # local = true                    # only on local (no-SSH) servers; without it, only over SSH
+# check = "grep -q v2.4 /etc/app/version"  # runs first: exit 0 = nothing to do, so the task
+#                                 # is unchanged; any other exit code runs it; --force skips it
+# verify = "curl -fs localhost:8080/health"  # runs after the command: non-zero fails the task
 # envvars = { NGINX_PORT = "8080" }
 # vars = { port = 8080 }          # template data for this task only: {{.vars.port}}
 #                                 # may nest: [[tasks.example.vars.sites]] is a list

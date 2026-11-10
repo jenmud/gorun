@@ -29,8 +29,11 @@ func TestTasksPageAddsAndEditsCheckAndVerify(t *testing.T) {
 		t.Fatalf("added task = %+v", task)
 	}
 
-	// the card shows both commands, open
+	// the card shows both commands, folded like the task's command
 	page = get(t, a, "/tasks").Body.String()
+	if strings.Contains(page, `<details open class="group/step"`) {
+		t.Error("a card's check or verify starts open; it should start folded")
+	}
 	for _, want := range []string{"dpkg -s nginx", "systemctl is-active nginx", "exit 0 means nothing to do", "a non-zero exit fails the task"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the task card is missing %q", want)

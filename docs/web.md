@@ -69,7 +69,7 @@ marked *check only*. Runs read the Gorunfile on disk, so save first.
 
 Every task with its command, settings, dependencies, the bundles that include it and the servers
 that run it, slowest first by recent average. A task's card shows its **check** and **verify**
-under its command, open, with what each does; a task without them says so. The `check` and
+under its command, folded like it, with what each does; a task without them says so. The `check` and
 `verify` badges mark the tasks that have them.
 
 - **Add a task**: name, command, check, verify, description, sudo, local, and the file to save

@@ -63,14 +63,22 @@ func bigTUIModel(tb testing.TB) tuiModel {
 func TestTUIStaysResponsive(t *testing.T) {
 	m := bigTUIModel(t)
 
+	// A freeze is slow every time, but a busy machine (or the race detector) can pause any single
+	// measurement, so each key counts its fastest of three tries from the same state.
 	keys := []string{"v", "end", "home", "pgdown", "pgup", "down", "up", "enter", "v", "end", "home", "pgdown", "pgup"}
 	for _, k := range keys {
-		start := time.Now()
-		next, _ := m.Update(keyPress(k))
-		m = next.(tuiModel)
-		_ = m.View()
-		if d := time.Since(start); d > 100*time.Millisecond {
-			t.Errorf("key %q took %s to handle and render", k, d)
+		fastest := time.Hour
+		var after tuiModel
+		for range 3 {
+			start := time.Now()
+			next, _ := m.Update(keyPress(k))
+			after = next.(tuiModel)
+			_ = after.View()
+			fastest = min(fastest, time.Since(start)) // a toggle pressed three times ends toggled once
+		}
+		m = after
+		if fastest > 100*time.Millisecond {
+			t.Errorf("key %q took %s to handle and render, at best", k, fastest)
 		}
 	}
 

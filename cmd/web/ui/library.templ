@@ -352,13 +352,13 @@ templ bundleCard(b BundleCard) {
 	</li>
 }
 
-// cardStep is a task's check or verify on its card: the command, open so it is seen at once,
-// and what it does; or that the task has none.
+// cardStep is a task's check or verify on its card: folded like the command, with what it does
+// beside it; or that the task has none.
 templ cardStep(label, command, about, none string) {
 	if command == "" {
 		<p class="flex items-center gap-2"><span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ label }</span><span class="text-zinc-500">{ none }</span></p>
 	} else {
-		<details open class="group/step">
+		<details class="group/step">
 			<summary class="flex cursor-pointer list-none items-center gap-2">
 				<span class="inline-block text-zinc-500 transition group-open/step:rotate-90">▸</span>
 				<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{ label }</span>

@@ -82,6 +82,10 @@ func taskTiming(t *TaskInfo) string {
 	switch {
 	case t.State == store.StateUnchanged:
 		return "unchanged · " + formatDuration(time.Duration(t.Duration))
+	case t.State == store.StateWouldRun && t.Duration >= int64(time.Millisecond):
+		return "would run · " + formatDuration(time.Duration(t.Duration))
+	case t.State == store.StateWouldRun:
+		return "would run"
 	case t.State == store.StateRunning && t.Phase == "check":
 		return "checking"
 	case t.State == store.StateRunning && t.Phase == "verify":

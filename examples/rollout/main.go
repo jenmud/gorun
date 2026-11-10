@@ -113,7 +113,7 @@ func (p *progress) onEvent(event any) {
 			if ev.Attempt > 1 {
 				r.note = fmt.Sprintf("retry %d of %d", ev.Attempt-1, ev.Attempts-1)
 			}
-		case gorun.TaskDone:
+		case gorun.TaskDone, gorun.TaskUnchanged, gorun.TaskWouldRun: // unchanged: its check found nothing to do
 			r.done++
 			r.finished = r.done == r.total
 		case gorun.TaskFailed:
@@ -140,6 +140,9 @@ func (p *progress) onEvent(event any) {
 		p.failed = ev.Failed
 		p.summary = fmt.Sprintf("%d tasks · %d failed · %d skipped · %s",
 			ev.TotalTasks, ev.Failed, ev.Skipped, ev.Duration.Round(100*time.Millisecond))
+		if ev.Unchanged > 0 { // tasks whose check found nothing to do
+			p.summary += fmt.Sprintf(" · %d unchanged", ev.Unchanged)
+		}
 	}
 }
 // docs:end events

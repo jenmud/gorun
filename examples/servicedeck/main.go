@@ -234,14 +234,18 @@ func (d *deck) onEvent(event any) {
 				s.Attempt = fmt.Sprintf("retry %d/%d", ev.Attempt-1, ev.Attempts-1)
 			}
 			d.logLocked("running", fmt.Sprintf("%s › %s", ev.Server, ev.Task))
-		case gorun.TaskDone:
+		case gorun.TaskDone, gorun.TaskUnchanged, gorun.TaskWouldRun: // unchanged: its check found nothing to do
 			s.Done++
 			s.LastLine = lastLine(ev.Stdout)
 			s.Elapsed = ev.Duration.Round(10 * time.Millisecond).String()
 			if s.Done == len(s.Tasks) {
 				s.State, s.Current = "done", ""
 			}
-			d.logLocked("done", fmt.Sprintf("%s › %s in %s", ev.Server, ev.Task, s.Elapsed))
+			kind := "done"
+			if ev.State == gorun.TaskUnchanged {
+				kind = "unchanged"
+			}
+			d.logLocked(kind, fmt.Sprintf("%s › %s in %s", ev.Server, ev.Task, s.Elapsed))
 		case gorun.TaskFailed:
 			s.State, s.Current = "failed", ev.Task
 			s.LastLine = lastLine(ev.Stderr)

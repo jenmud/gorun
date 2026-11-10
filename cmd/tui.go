@@ -552,8 +552,18 @@ func (m tuiModel) serverSummary(s *serverView) string {
 		if n := s.count(gorun.TaskSkipped); n > 0 {
 			status += skipStyle.Render(fmt.Sprintf(", %d skipped", n))
 		}
+	case s.finished() && s.count(gorun.TaskWouldRun) > 0:
+		status = skipStyle.Render(fmt.Sprintf("~ %d would run", s.count(gorun.TaskWouldRun)))
+		if n := s.count(gorun.TaskUnchanged); n > 0 {
+			status += mutedStyle.Render(fmt.Sprintf(", %d unchanged", n))
+		}
+	case s.finished() && s.count(gorun.TaskUnchanged) == len(s.tasks):
+		status = mutedStyle.Render("= unchanged")
 	case s.finished():
 		status = okStyle.Render("✓ done")
+		if n := s.count(gorun.TaskUnchanged); n > 0 {
+			status += mutedStyle.Render(fmt.Sprintf(", %d unchanged", n))
+		}
 	default:
 		for _, t := range s.tasks {
 			if t.state == gorun.TaskRunning {

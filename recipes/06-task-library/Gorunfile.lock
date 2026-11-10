@@ -4,5 +4,5 @@
 
 [[include]]
   source = "https://github.com/jenmud/gorun.git"
-  ref = "696498c1a35b0dd22ebfa8437fd4006b037aefd3"
-  commit = "696498c1a35b0dd22ebfa8437fd4006b037aefd3"
+  ref = "ad10c1fa306f85ca9b241e4b959634b82f467ea6"
+  commit = "ad10c1fa306f85ca9b241e4b959634b82f467ea6"

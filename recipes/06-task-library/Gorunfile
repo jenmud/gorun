@@ -6,7 +6,7 @@ title = "Recipe 6: a shared task library"
 
 include = [
   # git::<repository>//<files>?ref=<tag, branch or commit>
-  'git::https://github.com/jenmud/gorun.git//recipes/06-task-library/library/*.toml?ref=696498c1a35b0dd22ebfa8437fd4006b037aefd3',
+  'git::https://github.com/jenmud/gorun.git//recipes/06-task-library/library/*.toml?ref=ad10c1fa306f85ca9b241e4b959634b82f467ea6',
 ]
 
 [servers]

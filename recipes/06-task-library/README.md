@@ -24,6 +24,8 @@ the lock file, so they work offline.
 - **Paths in the library** are relative to the root of its repository. `lib-hello` runs
   `recipes/06-task-library/library/scripts/hello.sh` because this library lives inside the gorun
   repository; in a repository of its own it would be `scripts/hello.sh`.
+- **Checks travel with the task.** `lib-motd` has a `check` and a `verify` like any task: the
+  first run writes `/tmp/gorun-library/motd`, and later runs show it *unchanged*.
 - **History:** run it with `gorun -web recipes/06-task-library/Gorunfile` and press Run. The run's
   page in History lists the library under *Task libraries*, with the commit it used.
 

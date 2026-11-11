@@ -143,6 +143,15 @@ templ taskRow(p *ProcessState, srv *ServerInfo, t *TaskInfo) {
 						}
 					</p>
 				}
+				if len(t.Copies) > 0 {
+					@fold(p.UUID+"/"+srv.Name+"/"+t.Name+"/copies", "Copies", copiesHint(t.Copies)) {
+						<ul class="space-y-1">
+							for _, c := range t.Copies {
+								<li class="break-all rounded-lg bg-zinc-950 px-2 py-1 font-mono text-zinc-300">{ c }</li>
+							}
+						</ul>
+					}
+				}
 				if t.Command != "" {
 					@fold(p.UUID+"/"+srv.Name+"/"+t.Name+"/cmd", "Command", "") {
 						<pre class="overflow-x-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-300">$ { t.Command }</pre>

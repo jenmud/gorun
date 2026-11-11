@@ -265,7 +265,7 @@ func TestTasksTreeShowsScrollableCommandAndVariables(t *testing.T) {
 	collapsed := strings.Join(m.taskDetailLines(80), "\n")
 	for _, want := range []string{
 		"Description", "Compile the application", "Details", "Builds all packages",
-		"▸ Command · cmd [expand]", "▸ Check · test -x dist/app [expand]", "▸ Verify · dist/app --version [expand]", "▸ Execution settings [expand]", "▸ Env vars · config + task (2) [expand]",
+		"▸ Command · cmd [expand]", "▸ Copies · source → destination [expand]", "▸ Check · test -x dist/app [expand]", "▸ Verify · dist/app --version [expand]", "▸ Execution settings [expand]", "▸ Env vars · config + task (2) [expand]",
 		"▸ Config vars · server templates (1) [expand]", "▸ Task vars (1) [expand]",
 	} {
 		if !strings.Contains(collapsed, want) {
@@ -282,10 +282,10 @@ func TestTasksTreeShowsScrollableCommandAndVariables(t *testing.T) {
 	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "▶ ▸ Command · cmd [expand]") {
 		t.Fatalf("focused detail section should show a pointer and expand hint:\n%s", view)
 	}
-	m = pressTree(m, "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter")
+	m = pressTree(m, "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter", "down", "enter")
 	allDetails := strings.Join(m.taskDetailLines(80), "\n")
 	for _, want := range []string{
-		"echo build line global task ${MISSING}", `\${ESCAPED}`, "exit 0 means nothing to do", "a non-zero exit fails the task", "$${DOUBLE}", "┌", "┬", "SETTING", "Timeout", "45s", "Retries", "2 extra · 3 attempts", "Retry delay", "250ms",
+		"echo build line global task ${MISSING}", `\${ESCAPED}`, "exit 0 means nothing to do", "a non-zero exit fails the task", "copied to the server before the command runs", "$${DOUBLE}", "┌", "┬", "SETTING", "Timeout", "45s", "Retries", "2 extra · 3 attempts", "Retry delay", "250ms",
 		"Rerun", "unsafe", "Retry unsafe", "yes", "Shell", "bash -e", "Sudo", "Local only", "Log level", "debug",
 		"Depends on", "File copies", "NAME", "VALUE", "BASE", "global", "SHARED", "task", "Config vars · server templates", `"region": "eu"`, "Task vars", `"port": 8080`,
 	} {
@@ -537,7 +537,7 @@ func TestTasksTreeSaysWhenThereIsNoCheckOrVerify(t *testing.T) {
 	m.embedded = true
 	m.width, m.height = 100, 30
 	lines := ansi.Strip(strings.Join(m.taskDetailLines(80), "\n"))
-	for _, want := range []string{"▸ Check · none [expand]", "▸ Verify · none [expand]"} {
+	for _, want := range []string{"▸ Copies · none [expand]", "▸ Check · none [expand]", "▸ Verify · none [expand]"} {
 		if !strings.Contains(lines, want) {
 			t.Errorf("missing %q:\n%s", want, lines)
 		}

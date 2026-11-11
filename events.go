@@ -143,6 +143,9 @@ type TaskMeta struct {
 	Check       string `json:"check,omitempty"`
 	CheckCopies bool   `json:"check_copies,omitempty"`
 	Verify      string `json:"verify,omitempty"`
+	// Copies describes the files the task copies to the server before its command, one line
+	// each, as Task.CopySummaries gives them.
+	Copies []string `json:"copies,omitempty"`
 }
 
 // TaskEvent is sent when a task changes state.

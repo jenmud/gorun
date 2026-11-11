@@ -176,6 +176,8 @@ type EditFields struct {
 	Hostname, Groups, Tags, SSHUser, IdentityFile string
 	Cmd, Description, Tasks                       string
 	Check, Verify                                 string
+	Copies, DependsOn, Timeout, Retries           string // copies one per line, "src -> dst"
+	InlineCopies                                  int    // inline-text copies, kept as they are
 	Sudo, Local, CheckCopies                      bool
 	Target, Cron, At, Timezone, Missed            string
 }
@@ -362,9 +364,10 @@ type TaskCard struct {
 	Average       time.Duration
 	CommandSource string
 	Command       string
-	Check         string // the check, run first; empty when the task has none
-	CheckCopies   bool   // it compares its copies with the server's
-	Verify        string // the verify, run after the command
+	Copies        []string // what the task copies to the server before its command
+	Check         string   // the check, run first; empty when the task has none
+	CheckCopies   bool     // it compares its copies with the server's
+	Verify        string   // the verify, run after the command
 	Options       []Option
 	DependsOn     []string
 	InBundles     []string

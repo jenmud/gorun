@@ -119,3 +119,32 @@ func TestLiveViewPlainTaskUnchanged(t *testing.T) {
 		t.Errorf("plain task box:\n%s", box)
 	}
 }
+
+// An expanded task in the live view lists the files it copies, before its command, and says
+// when it is copying.
+func TestLiveViewShowsCopies(t *testing.T) {
+	m := newTUIModel("deploy", true, func() {})
+	m.width, m.height = 140, 60
+	step := func(msg any) {
+		next, _ := m.Update(tuiBatchMsg{events: []any{msg}})
+		m = next.(tuiModel)
+	}
+	step(gorun.PlanEvent{Server: "web-1", Tasks: []string{"compose-up"}, TaskMeta: []gorun.TaskMeta{
+		{Name: "compose-up", Copies: []string{"scripts/stack-ok.sh → /home/ubuntu/stack-ok.sh"}},
+	}})
+	task := m.servers[0].tasks[0]
+	box := ansi.Strip(m.outputBox(task))
+	if !strings.Contains(box, "copy") || !strings.Contains(box, "scripts/stack-ok.sh → /home/ubuntu/stack-ok.sh") {
+		t.Errorf("planned copies missing:\n%s", box)
+	}
+	step(gorun.TaskEvent{Server: "web-1", Task: "compose-up", State: gorun.TaskRunning, Phase: gorun.PhaseRun, Command: "sh compose-up.sh"})
+	step(gorun.CopyProgressEvent{Server: "web-1", Task: "compose-up", File: "/home/ubuntu/stack-ok.sh", Total: 100, Bytes: 10})
+	if box := ansi.Strip(m.outputBox(task)); !strings.Contains(box, "copying…") {
+		t.Errorf("a running copy isn't marked:\n%s", box)
+	}
+	step(gorun.TaskEvent{Server: "web-1", Task: "compose-up", State: gorun.TaskDone, Stdout: "up\n"})
+	box = ansi.Strip(m.outputBox(task))
+	if i, j := strings.Index(box, "stack-ok.sh →"), strings.Index(box, "$ sh compose-up.sh"); i < 0 || j < 0 || j < i || strings.Contains(box, "copying…") {
+		t.Errorf("after the run, the copy should be listed before the command, and no longer copying:\n%s", box)
+	}
+}

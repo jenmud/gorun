@@ -82,7 +82,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		for _, t := range s.Tasks {
 			plan.Tasks = append(plan.Tasks, t.Name)
 			plan.TaskMeta = append(plan.TaskMeta, TaskMeta{Name: t.Name, Description: t.Description, Details: t.Details, Rerun: t.Rerun,
-				Check: t.Check, CheckCopies: t.CheckCopies, Verify: t.Verify})
+				Check: t.Check, CheckCopies: t.CheckCopies, Verify: t.Verify, Copies: t.CopySummaries()})
 		}
 		c.emit(plan)
 	}

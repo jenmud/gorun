@@ -58,6 +58,8 @@ type taskView struct {
 	check       string
 	checkCopies bool
 	verify      string
+	// copies describes what the task copies to the server before its command, from its plan
+	copies []string
 	// command is the command the task ran (its run phase), once it has started it
 	command  string
 	state    gorun.TaskState
@@ -254,6 +256,7 @@ func (m tuiModel) applyEvent(event any) tuiModel {
 				tv.details = tm.Details
 				tv.rerun = tm.Rerun
 				tv.check, tv.checkCopies, tv.verify = tm.Check, tm.CheckCopies, tm.Verify
+				tv.copies = tm.Copies
 			}
 			s.tasks = append(s.tasks, tv)
 			s.taskMap[name] = tv
@@ -812,7 +815,7 @@ func (it boxItem) sig(width int) string {
 	if it.serverErr != nil {
 		errText = it.serverErr.Error()
 	}
-	return fmt.Sprintf("%d|%d|%d|%d|%d|%d|%s|%d|%d|%d|%s|%t|%t", width, it.task.state, ev.ExitCode, ev.Duration, ev.Attempt, ev.Attempts, errText, len(ev.Stdout), len(ev.Stderr), len(it.skipped), ev.Phase, ev.Check != nil, ev.Verify != nil)
+	return fmt.Sprintf("%d|%d|%d|%d|%d|%d|%s|%d|%d|%d|%s|%t|%t|%t", width, it.task.state, ev.ExitCode, ev.Duration, ev.Attempt, ev.Attempts, errText, len(ev.Stdout), len(ev.Stderr), len(it.skipped), ev.Phase, ev.Check != nil, ev.Verify != nil, it.task.copy != nil)
 }
 
 // boxSnapshot is a copy of what the compact view's boxes show, rendered off the UI loop.
@@ -1152,6 +1155,17 @@ func (m tuiModel) stepSections(t *taskView, lines int) []string {
 	}
 	if check != "" || ev.Check != nil {
 		sections = append(sections, step("check", check, ev.Check, gorun.PhaseCheck))
+	}
+	// copies run after the check and before the command
+	if len(t.copies) > 0 {
+		head := serverStyle.Render("copy")
+		if t.copy != nil {
+			head += "  " + skipStyle.Render("copying…")
+		}
+		for _, c := range t.copies {
+			head += "\n" + mutedStyle.Render(c)
+		}
+		sections = append(sections, head)
 	}
 	hasSteps := len(sections) > 0 || t.verify != "" || ev.Verify != nil
 	out := output(ev.Stdout, ev.Stderr)

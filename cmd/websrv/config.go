@@ -1,6 +1,7 @@
 package websrv
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -10,9 +11,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/jenmud/gorun"
@@ -223,10 +227,6 @@ func cloneMap(m map[string]any) map[string]any {
 
 // editFields reads the values the edit form shows from an entity's table.
 func editFields(body map[string]any) ui.EditFields {
-	str := func(m map[string]any, k string) string {
-		s, _ := m[k].(string)
-		return s
-	}
 	list := func(k string) string {
 		var items []string
 		switch v := body[k].(type) {
@@ -243,6 +243,14 @@ func editFields(body map[string]any) ui.EditFields {
 	sudo, _ := body["sudo"].(bool)
 	local, _ := body["local"].(bool)
 	checkCopies, _ := body["check_copies"].(bool)
+	copies, inline := copyLines(body)
+	retries := ""
+	switch n := body["retries"].(type) {
+	case int64:
+		retries = strconv.FormatInt(n, 10)
+	case int:
+		retries = strconv.Itoa(n)
+	}
 	return ui.EditFields{
 		Hostname:     str(body, "hostname"),
 		Groups:       list("groups"),
@@ -253,6 +261,11 @@ func editFields(body map[string]any) ui.EditFields {
 		Check:        str(body, "check"),
 		Verify:       str(body, "verify"),
 		CheckCopies:  checkCopies,
+		Copies:       copies,
+		InlineCopies: inline,
+		DependsOn:    list("depends_on"),
+		Timeout:      str(body, "timeout"),
+		Retries:      retries,
 		Description:  str(body, "description"),
 		Tasks:        list("tasks"),
 		Sudo:         sudo,
@@ -324,6 +337,12 @@ func applyEdit(kind string, body map[string]any, form url.Values) error {
 		putFlag("sudo")
 		putFlag("local")
 		putFlag("check_copies")
+		if err := applyCopies(body, form); err != nil {
+			return err
+		}
+		if err := applyRunSettings(body, form); err != nil {
+			return err
+		}
 	case kindBundle:
 		putList("tasks")
 		if _, ok := body["tasks"]; !ok {
@@ -797,6 +816,19 @@ func newChange(kind, name, file string, form url.Values) (gorun.Change, error) {
 		if form.Get("sudo") != "" {
 			body["sudo"] = true
 		}
+		if form.Get("check_copies") != "" {
+			body["check_copies"] = true
+		}
+		copies, err := parseCopyLines(form.Get("copies"))
+		if err != nil {
+			return gorun.Change{}, err
+		}
+		if len(copies) > 0 {
+			body["copy"] = copies
+		}
+		if err := applyRunSettings(body, form); err != nil {
+			return gorun.Change{}, err
+		}
 		if form.Get("local") != "" {
 			body["local"] = true
 		}
@@ -845,4 +877,138 @@ func setList(body map[string]any, key, value string) {
 	if len(items) > 0 {
 		body[key] = items
 	}
+}
+
+// copyKeys are the keys a task's copies can be listed under.
+var copyKeys = []string{"copy", "copies", "upload", "files"}
+
+// copyEntries reads one of a task's copy lists, however the TOML decoder typed it.
+func copyEntries(v any) []map[string]any {
+	switch list := v.(type) {
+	case []map[string]any:
+		return list
+	case []any:
+		var out []map[string]any
+		for _, item := range list {
+			if m, ok := item.(map[string]any); ok {
+				out = append(out, m)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// copyLines renders a task's file and template copies as the form's lines: "src -> dst", or
+// "template src -> dst". Inline-text copies can't be written that way, so they are counted
+// instead, and the form leaves them alone.
+func copyLines(body map[string]any) (lines string, inline int) {
+	var out []string
+	for _, key := range copyKeys {
+		for _, c := range copyEntries(body[key]) {
+			if str(c, "content") != "" {
+				inline++
+				continue
+			}
+			dst := cmp.Or(str(c, "dst"), str(c, "dst_path"), str(c, "dest"))
+			src := cmp.Or(str(c, "src"), str(c, "src_file"))
+			if dst == "" && str(c, "dir") != "" && src != "" {
+				dst = path.Join(str(c, "dir"), filepath.Base(src))
+			}
+			if tpl := cmp.Or(str(c, "src_template"), str(c, "template"), str(c, "src_tmpl")); tpl != "" {
+				out = append(out, "template "+tpl+" -> "+dst)
+			} else {
+				out = append(out, src+" -> "+dst)
+			}
+		}
+	}
+	return strings.Join(out, "\n"), inline
+}
+
+// parseCopyLines reads the form's copy lines: "local -> server", or "template local -> server".
+// Blank lines are skipped.
+func parseCopyLines(text string) ([]map[string]any, error) {
+	var out []map[string]any
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		src, dst, ok := strings.Cut(line, "->")
+		src, dst = strings.TrimSpace(src), strings.TrimSpace(dst)
+		if !ok || src == "" || dst == "" {
+			return nil, fmt.Errorf("can't read the copy %q: write it as local/path -> /path/on/server", line)
+		}
+		if tpl, isTpl := strings.CutPrefix(src, "template "); isTpl {
+			out = append(out, map[string]any{"src_template": strings.TrimSpace(tpl), "dst": dst})
+		} else {
+			out = append(out, map[string]any{"src": src, "dst": dst})
+		}
+	}
+	return out, nil
+}
+
+// applyCopies replaces a task's file and template copies with the form's lines, keeping its
+// inline-text copies. Nothing changes when the form has no copies field, or its lines are as the
+// form showed them.
+func applyCopies(body map[string]any, form url.Values) error {
+	if !form.Has("copies") {
+		return nil
+	}
+	text := strings.ReplaceAll(form.Get("copies"), "\r\n", "\n")
+	if was, _ := copyLines(body); strings.TrimSpace(text) == strings.TrimSpace(was) {
+		return nil
+	}
+	copies, err := parseCopyLines(text)
+	if err != nil {
+		return err
+	}
+	var kept []map[string]any
+	for _, key := range copyKeys {
+		for _, c := range copyEntries(body[key]) {
+			if str(c, "content") != "" {
+				kept = append(kept, c)
+			}
+		}
+		delete(body, key)
+	}
+	if all := append(kept, copies...); len(all) > 0 {
+		body["copy"] = all
+	}
+	return nil
+}
+
+// applyRunSettings writes the form's depends on, timeout and retries over body. A cleared field
+// removes the key; a field the form doesn't have leaves it as it is.
+func applyRunSettings(body map[string]any, form url.Values) error {
+	if form.Has("depends_on") {
+		delete(body, "depends_on")
+		setList(body, "depends_on", form.Get("depends_on"))
+	}
+	if form.Has("timeout") {
+		delete(body, "timeout")
+		if t := strings.TrimSpace(form.Get("timeout")); t != "" {
+			if _, err := time.ParseDuration(t); err != nil {
+				return fmt.Errorf("timeout %q isn't a duration: write it like 90s, 5m or 1h", t)
+			}
+			body["timeout"] = t
+		}
+	}
+	if form.Has("retries") {
+		delete(body, "retries")
+		if r := strings.TrimSpace(form.Get("retries")); r != "" && r != "0" {
+			n, err := strconv.Atoi(r)
+			if err != nil || n < 0 {
+				return fmt.Errorf("retries %q isn't a number of extra tries, such as 2", r)
+			}
+			body["retries"] = int64(n)
+		}
+	}
+	return nil
+}
+
+// str is m's string value at k, or "" when it has none.
+func str(m map[string]any, k string) string {
+	s, _ := m[k].(string)
+	return s
 }

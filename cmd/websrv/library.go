@@ -147,6 +147,7 @@ func taskCards(cfg *gorun.Config, avg map[string]time.Duration) []ui.TaskCard {
 			Badges:      taskBadges(t),
 			Average:     avg[name],
 			Options:     executionOptions(t),
+			Copies:      t.CopySummaries(),
 			Check:       t.Check,
 			CheckCopies: t.CheckCopies,
 			Verify:      t.Verify,

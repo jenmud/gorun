@@ -519,3 +519,20 @@ func cardCheck(t TaskCard) string {
 	}
 	return strings.TrimSuffix("compare copies (md5); "+t.Check, "; ")
 }
+
+// copiesHint sums up a task's copies beside their heading: how many, and when they run.
+func copiesHint(copies []string) string {
+	n := "1 file or folder"
+	if len(copies) != 1 {
+		n = fmt.Sprintf("%d files or folders", len(copies))
+	}
+	return n + ", copied to the server before the command runs"
+}
+
+// inlineCopiesNote says a task's inline-text copies are kept, as the form can't show them.
+func inlineCopiesNote(n int) string {
+	if n == 1 {
+		return "Plus 1 copy of inline text, kept as it is (edit it in the file)."
+	}
+	return fmt.Sprintf("Plus %d copies of inline text, kept as they are (edit them in the file).", n)
+}

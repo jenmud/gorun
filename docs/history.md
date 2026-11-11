@@ -136,7 +136,7 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
 |---|---|
 | `Server`, `Address` | the server, and the address gorun connects to (`local` for a local server) |
 | `Tasks` | the task names it will run, in order |
-| `TaskMeta` | each task's `Name`, `Description`, `Details` and `Rerun` setting, and its `Check`, `CheckCopies` and `Verify`, so a view can show them before they run |
+| `TaskMeta` | each task's `Name`, `Description`, `Details` and `Rerun` setting, its `Check`, `CheckCopies` and `Verify`, and `Copies`, one line per file it copies (`src → dst`, as `Task.CopySummaries` gives them), so a view can show them before they run |
 | `EnvVars`, `Vars` | the server's envvars and vars, including its groups' and the global ones |
 
 ### `TaskEvent` (`task`)

@@ -198,3 +198,18 @@ func TestDashboardShowsCheckAndVerify(t *testing.T) {
 		}
 	}
 }
+
+// A live task lists the files it copies, from the plan.
+func TestDashboardShowsCopies(t *testing.T) {
+	var state DashboardState
+	state.Apply(store.Event{Type: "process_started", GorunUUID: "run-1", Title: "demo"})
+	state.Apply(store.Event{Type: "plan", GorunUUID: "run-1", Server: "web-1", Tasks: []string{"compose-up"},
+		TaskMeta: []store.TaskMeta{{Name: "compose-up", Copies: []string{"scripts/stack-ok.sh → /home/ubuntu/stack-ok.sh"}}}})
+	var buf bytes.Buffer
+	if err := Dashboard(state).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	if html := buf.String(); !strings.Contains(html, "scripts/stack-ok.sh → /home/ubuntu/stack-ok.sh") || !strings.Contains(html, ">Copies<") {
+		t.Errorf("copies missing from the live task:\n%s", html)
+	}
+}

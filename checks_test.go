@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -325,5 +326,24 @@ func TestForceAndCheckOnlyCantBeUsedTogether(t *testing.T) {
 	_, _, err := runChecksWith(t, func(c *Config) { c.Force, c.CheckOnly = true, true }, Task{Name: "a", Cmd: "true"})
 	if err == nil || !strings.Contains(err.Error(), "can't be used together") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestCopySummariesDescribeEachCopy(t *testing.T) {
+	task := Task{
+		Copy:  []Copy{{Src: "scripts/ok.sh", Dst: "/opt/ok.sh"}, {SrcTpl: "app.conf.tmpl", Dst: "/etc/app.conf"}},
+		Files: []Copy{{Content: "hello", Dst: "/etc/motd"}, {Src: "site", Dir: "/srv"}},
+	}
+	want := []string{
+		"scripts/ok.sh → /opt/ok.sh",
+		"template app.conf.tmpl → /etc/app.conf",
+		"inline text (5 bytes) → /etc/motd",
+		"site → /srv/site",
+	}
+	if got := task.CopySummaries(); !slices.Equal(got, want) {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+	if got := (Task{}).CopySummaries(); len(got) != 0 {
+		t.Errorf("a task without copies: %q", got)
 	}
 }

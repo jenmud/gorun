@@ -70,13 +70,14 @@ type Step struct {
 
 // TaskMeta is the documentation a plan event carries for a task.
 type TaskMeta struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Details     string `json:"details,omitempty"`
-	Rerun       string `json:"rerun,omitempty"`
-	Check       string `json:"check,omitempty"`
-	CheckCopies bool   `json:"check_copies,omitempty"`
-	Verify      string `json:"verify,omitempty"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Details     string   `json:"details,omitempty"`
+	Rerun       string   `json:"rerun,omitempty"`
+	Check       string   `json:"check,omitempty"`
+	CheckCopies bool     `json:"check_copies,omitempty"`
+	Verify      string   `json:"verify,omitempty"`
+	Copies      []string `json:"copies,omitempty"`
 }
 
 // Apply saves one event. Events can be replayed: a plan never resets a task that already ran.

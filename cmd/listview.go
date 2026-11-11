@@ -314,6 +314,7 @@ func (m treeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func taskSectionAt(i int) taskSection {
 	return [...]taskSection{
 		taskSectionCommand,
+		taskSectionCopies,
 		taskSectionCheck,
 		taskSectionVerify,
 		taskSectionExecution,
@@ -549,7 +550,8 @@ type taskDetail struct {
 	description   string
 	details       string
 	execution     []taskOption
-	check, verify string // the task's check (with its copy comparison) and verify; "" for none
+	check, verify string   // the task's check (with its copy comparison) and verify; "" for none
+	copies        []string // what the task copies to the server before its command, one per copy
 	command       string
 	commandSource string
 	commandFile   string
@@ -578,9 +580,10 @@ const (
 	taskSectionTaskVars
 	taskSectionCheck
 	taskSectionVerify
+	taskSectionCopies
 )
 
-const taskSectionCount = 7
+const taskSectionCount = 8
 
 // newTaskDetail gathers what the task pane shows for task.
 func newTaskDetail(cfg *gorun.Config, task gorun.Task) *taskDetail {
@@ -590,6 +593,7 @@ func newTaskDetail(cfg *gorun.Config, task gorun.Task) *taskDetail {
 		execution:     taskExecutionOptions(task),
 		check:         taskCheckText(task),
 		verify:        task.Verify,
+		copies:        task.CopySummaries(),
 		commandSource: "none",
 		commandLoaded: true,
 		envVars:       map[string]string{},
@@ -761,9 +765,25 @@ func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 			heading := label + " · " + firstLine(command)
 			appendSection(index, section, heading, append(wrapDetailText(command, max(width-4, 1)), mutedStyle.Render(about)))
 		}
-		stepSection(1, taskSectionCheck, "Check", d.check, "runs first: exit 0 means nothing to do, so the task is skipped as unchanged",
+		// copies run before the command: a single one names itself in the heading
+		switch len(d.copies) {
+		case 0:
+			appendSection(1, taskSectionCopies, "Copies · none", []string{"(the task copies no files)"})
+		default:
+			heading := fmt.Sprintf("Copies · %d", len(d.copies))
+			if len(d.copies) == 1 {
+				heading = "Copies · " + d.copies[0]
+			}
+			content := []string{}
+			for _, c := range d.copies {
+				content = append(content, wrapDetailText(c, max(width-4, 1))...)
+			}
+			content = append(content, mutedStyle.Render("copied to the server before the command runs, as the login user"))
+			appendSection(1, taskSectionCopies, heading, content)
+		}
+		stepSection(2, taskSectionCheck, "Check", d.check, "runs first: exit 0 means nothing to do, so the task is skipped as unchanged",
 			"(none: the task always runs)")
-		stepSection(2, taskSectionVerify, "Verify", d.verify, "runs after the command: a non-zero exit fails the task", "(none)")
+		stepSection(3, taskSectionVerify, "Verify", d.verify, "runs after the command: a non-zero exit fails the task", "(none)")
 
 		executionRows := make([][2]string, 0, len(d.execution))
 		for _, option := range d.execution {
@@ -773,7 +793,7 @@ func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 		if d.expanded&taskSections(taskSectionExecution) != 0 {
 			executionContent = detailTableLines("SETTING", "VALUE", executionRows, max(width-4, 1))
 		}
-		appendSection(3, taskSectionExecution, "Execution settings", executionContent)
+		appendSection(4, taskSectionExecution, "Execution settings", executionContent)
 
 		envRows := make([][2]string, 0, len(d.envVars))
 		for _, key := range slices.Sorted(maps.Keys(d.envVars)) {
@@ -783,7 +803,7 @@ func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 		if d.expanded&taskSections(taskSectionEnvVars) != 0 {
 			envContent = detailTableLines("NAME", "VALUE", envRows, max(width-4, 1))
 		}
-		appendSection(4, taskSectionEnvVars, fmt.Sprintf("Env vars · config + task (%d)", len(d.envVars)), envContent)
+		appendSection(5, taskSectionEnvVars, fmt.Sprintf("Env vars · config + task (%d)", len(d.envVars)), envContent)
 
 		var configVarsContent []string
 		if d.expanded&taskSections(taskSectionConfigVars) != 0 {
@@ -792,7 +812,7 @@ func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 				configVarsContent = []string{"(none configured)"}
 			}
 		}
-		appendSection(5, taskSectionConfigVars, fmt.Sprintf("Config vars · server templates (%d)", len(d.configVars)), configVarsContent)
+		appendSection(6, taskSectionConfigVars, fmt.Sprintf("Config vars · server templates (%d)", len(d.configVars)), configVarsContent)
 
 		var taskVarsContent []string
 		if d.expanded&taskSections(taskSectionTaskVars) != 0 {
@@ -801,7 +821,7 @@ func (d *taskDetail) lines(width, cursor int, focused bool) []string {
 				taskVarsContent = []string{"(none configured)"}
 			}
 		}
-		appendSection(6, taskSectionTaskVars, fmt.Sprintf("Task vars (%d)", len(d.taskVars)), taskVarsContent)
+		appendSection(7, taskSectionTaskVars, fmt.Sprintf("Task vars (%d)", len(d.taskVars)), taskVarsContent)
 		d.renderedWidth, d.renderedState, d.renderedLines = width, d.expanded, lines
 	}
 

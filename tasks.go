@@ -158,6 +158,24 @@ func (t Task) copies() []Copy {
 	return out
 }
 
+// CopySummaries describes the task's copies, one line each in the order they run: what is
+// copied (a file or folder, a template rendered for the server, or inline text) and where it
+// goes on the server, e.g. "scripts/ok.sh → /opt/app/ok.sh". Copies run before the command.
+func (t Task) CopySummaries() []string {
+	var out []string
+	for _, c := range t.copies() {
+		from := c.Src
+		switch {
+		case c.Content != "":
+			from = fmt.Sprintf("inline text (%d bytes)", len(c.Content))
+		case c.SrcTpl != "":
+			from = "template " + c.SrcTpl
+		}
+		out = append(out, from+" → "+c.target())
+	}
+	return out
+}
+
 // commandSources are the task's four ways to give a command, of which at most one may be set.
 func (t Task) commandSources() []string {
 	return []string{t.Cmd, t.CmdFile, t.CmdTemplate, t.CmdTemplateFile}

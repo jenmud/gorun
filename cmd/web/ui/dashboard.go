@@ -22,11 +22,12 @@ type TaskInfo struct {
 	Command     string
 	Stdout      string
 	Stderr      string
-	Error       string // why it was skipped
-	Phase       string // the step it is in: check, run or verify
-	CheckCmd    string // its check, from the plan, shown before it runs
-	CheckCopies bool   // it compares its copies with the server's
-	VerifyCmd   string // its verify, from the plan
+	Error       string   // why it was skipped
+	Phase       string   // the step it is in: check, run or verify
+	CheckCmd    string   // its check, from the plan, shown before it runs
+	CheckCopies bool     // it compares its copies with the server's
+	VerifyCmd   string   // its verify, from the plan
+	Copies      []string // what it copies to the server before its command, from the plan
 	Check       *store.Step
 	Verify      *store.Step
 	Copy        *CopyInfo // the file it is copying, while it copies one
@@ -146,6 +147,7 @@ func (s *DashboardState) Apply(ev store.Event) {
 				t.Details = m.Details
 				t.Rerun = m.Rerun
 				t.CheckCmd, t.CheckCopies, t.VerifyCmd = m.Check, m.CheckCopies, m.Verify
+				t.Copies = m.Copies
 			}
 		}
 	case "task":

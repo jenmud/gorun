@@ -3,8 +3,10 @@ package websrv
 import (
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jenmud/gorun"
 )
@@ -127,5 +129,104 @@ func TestEditKeepsCheckCopies(t *testing.T) {
 	}
 	if task := a.cfg.Tasks["ship"]; !task.CheckCopies || task.Cmd != "echo shipped" || len(task.Copy) != 1 {
 		t.Errorf("edited task = %+v", task)
+	}
+}
+
+// The task forms add and edit a task's copies, dependencies, timeout and retries, and the card
+// lists the copies.
+func TestTaskFormsEditCopiesAndRunSettings(t *testing.T) {
+	a, path := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+
+	page := get(t, a, "/tasks").Body.String()
+	for _, want := range []string{`name="copies"`, `name="depends_on"`, `name="timeout"`, `name="retries"`, `name="check_copies"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the add form has no %s field", want)
+		}
+	}
+	rec := post(t, a, "/tasks/add", url.Values{"name": {"compose-up"}, "cmd": {"docker compose up -d"}, "file": {path},
+		"copies":     {"scripts/stack-ok.sh -> /home/ubuntu/stack-ok.sh\r\n\r\ntemplate templates/app.conf.tmpl -> /etc/app.conf"},
+		"depends_on": {"hello"}, "timeout": {"10m"}, "retries": {"2"}, "check_copies": {"on"}})
+	if msg, bad := flashOf(t, rec.Header().Get("Location")); bad {
+		t.Fatalf("add refused: %q", msg)
+	}
+	task := a.cfg.Tasks["compose-up"]
+	if len(task.Copy) != 2 || !strings.HasSuffix(task.Copy[0].Src, "scripts/stack-ok.sh") || task.Copy[0].Dst != "/home/ubuntu/stack-ok.sh" ||
+		!strings.HasSuffix(task.Copy[1].SrcTpl, "templates/app.conf.tmpl") || task.Copy[1].Dst != "/etc/app.conf" {
+		t.Errorf("copies = %+v", task.Copy)
+	}
+	if !slices.Equal(task.DependsOn, []string{"hello"}) || task.Timeout != 10*time.Minute || task.Retries != 2 || !task.CheckCopies {
+		t.Errorf("settings = depends %v timeout %v retries %d check_copies %v", task.DependsOn, task.Timeout, task.Retries, task.CheckCopies)
+	}
+
+	// the card lists each copy
+	page = get(t, a, "/tasks").Body.String()
+	if !strings.Contains(page, "stack-ok.sh → /home/ubuntu/stack-ok.sh") || !strings.Contains(page, "copied to the server before the command runs") {
+		t.Error("the card doesn't list the copies")
+	}
+
+	// the edit form shows them as written, and saving an edited list replaces them
+	edit := get(t, a, "/tasks?edit=compose-up").Body.String()
+	for _, want := range []string{"scripts/stack-ok.sh -&gt; /home/ubuntu/stack-ok.sh", "template templates/app.conf.tmpl -&gt; /etc/app.conf", `value="10m"`, `value="2"`, `value="hello"`} {
+		if !strings.Contains(edit, want) {
+			t.Errorf("the edit form is missing %s", want)
+		}
+	}
+	rec = post(t, a, "/tasks/edit", url.Values{"name": {"compose-up"}, "cmd": {"docker compose up -d"},
+		"copies": {"scripts/stack-ok.sh -> /opt/stack-ok.sh"}, "depends_on": {""}, "timeout": {""}, "retries": {"0"}})
+	if msg, bad := flashOf(t, rec.Header().Get("Location")); bad {
+		t.Fatalf("edit refused: %q", msg)
+	}
+	task = a.cfg.Tasks["compose-up"]
+	if len(task.Copy) != 1 || task.Copy[0].Dst != "/opt/stack-ok.sh" || len(task.DependsOn) != 0 || task.Timeout != 0 || task.Retries != 0 {
+		t.Errorf("after the edit: %+v", task)
+	}
+
+	// a line without -> is refused, and the file is left as it was
+	before, _ := os.ReadFile(path)
+	rec = post(t, a, "/tasks/edit", url.Values{"name": {"compose-up"}, "cmd": {"docker compose up -d"}, "copies": {"just-a-path"}})
+	if msg, bad := flashOf(t, rec.Header().Get("Location")); !bad || !strings.Contains(msg, "local/path -> /path/on/server") {
+		t.Errorf("a bad copy line: flash %q (bad %v)", msg, bad)
+	}
+	if after, _ := os.ReadFile(path); string(after) != string(before) {
+		t.Error("the file changed after a refused edit")
+	}
+}
+
+// Editing the copies keeps a task's inline-text copies, which the form can't show.
+func TestEditKeepsInlineCopies(t *testing.T) {
+	a, path := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	data, _ := os.ReadFile(path)
+	extra := "\n[tasks.motd]\ncmd = \"true\"\ncopy = [{ content = \"hello\", dst = \"/etc/motd\" }, { src = \"a.sh\", dst = \"/opt/a.sh\" }]\n"
+	if err := os.WriteFile(path, append(data, extra...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.reloadConfig(); err != nil {
+		t.Fatal(err)
+	}
+	edit := get(t, a, "/tasks?edit=motd").Body.String()
+	if !strings.Contains(edit, "a.sh -&gt; /opt/a.sh") || !strings.Contains(edit, "Plus 1 copy of inline text") {
+		t.Error("the edit form doesn't show the file copy and the kept inline copy")
+	}
+	rec := post(t, a, "/tasks/edit", url.Values{"name": {"motd"}, "cmd": {"true"}, "copies": {"b.sh -> /opt/b.sh"}})
+	if msg, bad := flashOf(t, rec.Header().Get("Location")); bad {
+		t.Fatalf("edit refused: %q", msg)
+	}
+	got := a.cfg.Tasks["motd"].CopySummaries()
+	if len(got) != 2 || got[0] != "inline text (5 bytes) → /etc/motd" || !strings.HasSuffix(got[1], "b.sh → /opt/b.sh") {
+		t.Errorf("copies after the edit: %q", got)
+	}
+}
+
+// The Config page's edit dialog has the same fields.
+func TestConfigEditDialogHasCopies(t *testing.T) {
+	a, _ := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	edit := get(t, a, "/config/edit?kind=task&name=hello").Body.String()
+	for _, want := range []string{`name="copies"`, `name="depends_on"`, `name="timeout"`, `name="retries"`} {
+		if !strings.Contains(edit, want) {
+			t.Errorf("the Config edit dialog has no %s", want)
+		}
 	}
 }

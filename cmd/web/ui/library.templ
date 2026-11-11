@@ -55,7 +55,8 @@ templ taskAddForm(files []FileOption) {
 			<input name="name" required placeholder="name, e.g. restart-web" class={ inputClass() }/>
 			<input name="description" placeholder="description" class={ inputClass() }/>
 			<textarea name="cmd" required rows="3" placeholder="command, e.g. systemctl restart web" class={ inputClass() + " font-mono sm:col-span-2" }></textarea>
-			@taskCheckFields(EditFields{}, false)
+			@taskFilesField(EditFields{})
+			@taskCheckFields(EditFields{})
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" class="accent-violet-600"/> run with sudo</label>
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" class="accent-violet-600"/> run only on local servers</label>
 			<div class="sm:col-span-2">
@@ -68,9 +69,34 @@ templ taskAddForm(files []FileOption) {
 	</details>
 }
 
-// taskCheckFields are a task's check and verify in its add and edit forms. The edit form also
-// offers check_copies, so editing a task never drops it; a new task from a form copies nothing.
-templ taskCheckFields(e EditFields, edit bool) {
+// taskFilesField is the files a task copies to the server, one per line, in its add and edit
+// forms, then its dependencies, timeout and retries.
+templ taskFilesField(e EditFields) {
+	<label class="block text-xs text-zinc-400 sm:col-span-2">
+		Files to copy <span class="text-zinc-600">one per line: a local file or folder, then -&gt; and where it goes on the server. Start a line with template to render a Go template for each server. Copied before the command, as the login user; local paths are relative to the Gorunfile.</span>
+		<textarea name="copies" rows="3" placeholder={ "scripts/stack-ok.sh -> /home/ubuntu/stack-ok.sh\ntemplate templates/app.conf.tmpl -> /etc/app/app.conf" } class={ inputClass() + " font-mono" }>{ e.Copies }</textarea>
+		if e.InlineCopies > 0 {
+			<span class="text-zinc-500">{ inlineCopiesNote(e.InlineCopies) }</span>
+		}
+	</label>
+	<div class="grid gap-2 sm:col-span-2 sm:grid-cols-3">
+		<label class="block text-xs text-zinc-400">
+			Depends on <span class="text-zinc-600">tasks, comma separated</span>
+			<input name="depends_on" value={ e.DependsOn } placeholder="e.g. docker-install, app-dirs" class={ inputClass() }/>
+		</label>
+		<label class="block text-xs text-zinc-400">
+			Timeout <span class="text-zinc-600">default 30m</span>
+			<input name="timeout" value={ e.Timeout } placeholder="e.g. 5m" class={ inputClass() }/>
+		</label>
+		<label class="block text-xs text-zinc-400">
+			Retries <span class="text-zinc-600">extra tries after a failure</span>
+			<input name="retries" type="number" min="0" value={ e.Retries } placeholder="0" class={ inputClass() }/>
+		</label>
+	</div>
+}
+
+// taskCheckFields are a task's check and verify in its add and edit forms, and check_copies.
+templ taskCheckFields(e EditFields) {
 	<label class="block text-xs text-zinc-400 sm:col-span-2">
 		Check <span class="text-zinc-600">runs first: exit 0 means nothing to do, so the task is skipped as unchanged</span>
 		<input name="check" value={ e.Check } placeholder="e.g. dpkg -s nginx (leave empty: the task always runs)" class={ inputClass() + " font-mono" }/>
@@ -79,9 +105,7 @@ templ taskCheckFields(e EditFields, edit bool) {
 		Verify <span class="text-zinc-600">runs after the command: a non-zero exit fails the task</span>
 		<input name="verify" value={ e.Verify } placeholder="e.g. systemctl is-active nginx" class={ inputClass() + " font-mono" }/>
 	</label>
-	if edit {
-		<label class="flex items-center gap-2 text-xs text-zinc-300 sm:col-span-2"><input type="checkbox" name="check_copies" checked?={ e.CheckCopies } class="accent-violet-600"/> check copies: skip the task when the server already has every file it copies (MD5)</label>
-	}
+	<label class="flex items-center gap-2 text-xs text-zinc-300 sm:col-span-2"><input type="checkbox" name="check_copies" checked?={ e.CheckCopies } class="accent-violet-600"/> check copies: skip the task when the server already has every file it copies (MD5)</label>
 }
 
 templ taskEditPanel(d TasksPageData) {
@@ -94,7 +118,8 @@ templ taskEditPanel(d TasksPageData) {
 				Command
 				<textarea name="cmd" rows="4" placeholder="leave empty if the task uses cmd_file, a template or only copies files" class={ inputClass() + " font-mono" }>{ d.Edit.Cmd }</textarea>
 			</label>
-			@taskCheckFields(d.Edit, true)
+			@taskFilesField(d.Edit)
+			@taskCheckFields(d.Edit)
 			@editField("Description", "description", d.Edit.Description, "")
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" checked?={ d.Edit.Sudo } class="accent-violet-600"/> run with sudo</label>
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" checked?={ d.Edit.Local } class="accent-violet-600"/> run only on local servers</label>
@@ -140,6 +165,22 @@ templ taskCard(t TaskCard) {
 					</summary>
 					<pre class="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-zinc-950 p-2 font-mono text-zinc-200">{ t.Command }</pre>
 				</details>
+				if len(t.Copies) > 0 {
+					<details class="group/copies">
+						<summary class="flex cursor-pointer list-none items-center gap-2">
+							<span class="inline-block text-zinc-500 transition group-open/copies:rotate-90">▸</span>
+							<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Copies</span>
+							<span class="text-[11px] text-zinc-600">{ copiesHint(t.Copies) }</span>
+						</summary>
+						<ul class="mt-2 space-y-1">
+							for _, c := range t.Copies {
+								<li class="break-all rounded-lg bg-zinc-950 px-2 py-1 font-mono text-zinc-200">{ c }</li>
+							}
+						</ul>
+					</details>
+				} else {
+					<p class="flex items-center gap-2"><span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Copies</span><span class="text-zinc-500">none</span></p>
+				}
 				@cardStep("Check", cardCheck(t), "runs first: exit 0 means nothing to do, so the task is skipped as unchanged", "none: the task always runs")
 				@cardStep("Verify", t.Verify, "runs after the command: a non-zero exit fails the task", "none")
 				if len(t.Options) > 0 {

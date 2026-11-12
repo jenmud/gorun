@@ -314,18 +314,30 @@ func main() {
 		fmt.Printf("%s: %s\n", server.Name, strings.Join(names, " -> "))
 	}
 
-	cfg.OnEvent = (&plainPrinter{w: os.Stdout, verbose: o.verbose}).event
+	printer := &plainPrinter{w: os.Stdout, verbose: o.verbose}
+	cfg.OnEvent = printer.event
 	if h, err := history.Open(getHistoryDBPath()); err == nil {
 		defer func() { _ = h.Close() }()
 		cfg.Recorder = h
 	}
-	if err := cfg.Run(ctx); err != nil {
+	stopAbortWatch := printer.watchAbort(ctx, notifyInterrupts, func() { os.Exit(130) })
+	err = cfg.Run(ctx)
+	stopAbortWatch()
+	if err != nil {
 		slog.Error("error executing tasks", slog.String("reason", err.Error()))
 		if logPath != "" {
 			err = fmt.Errorf("%w (logs: %s)", err, logPath)
 		}
 		fatal(err)
 	}
+}
+
+// notifyInterrupts returns a channel of further interrupts, for a second ctrl+c to force quit,
+// and the func that stops delivering them.
+func notifyInterrupts() (<-chan os.Signal, func()) {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
+	return ch, func() { signal.Stop(ch) }
 }
 
 // applySelection applies -parallel, -task or -bundles, and the server filters to cfg. It

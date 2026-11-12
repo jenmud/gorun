@@ -38,10 +38,10 @@ GORUN_ADDRESS ?= :8080
 WEB_PROXY := http://$(if $(filter :%,$(GORUN_ADDRESS)),localhost)$(GORUN_ADDRESS)
 
 web:
-	GORUN_ADDRESS=$(GORUN_ADDRESS) go run ./cmd -web
+	GORUN_ADDRESS=$(GORUN_ADDRESS) go run ./cmd -serve
 
 web-dev:
-	GORUN_ADDRESS=$(GORUN_ADDRESS) $(TEMPL) generate -watch -cmd "go run ./cmd -web" -proxy $(WEB_PROXY) ./cmd/web/...
+	GORUN_ADDRESS=$(GORUN_ADDRESS) $(TEMPL) generate -watch -cmd "go run ./cmd -serve" -proxy $(WEB_PROXY) ./cmd/web/...
 
 
 -include ./recipes/Makefile

@@ -6,6 +6,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	inats "github.com/jenmud/gorun/internal/nats"
+	"github.com/nats-io/nats-server/v2/server"
 )
 
 // message renders the startup message for info, as one string.
@@ -130,5 +134,68 @@ func TestRunReportsBindError(t *testing.T) {
 	}
 	if out.Len() != 0 {
 		t.Errorf("nothing should be printed when binding fails, got %q", out.String())
+	}
+}
+
+func TestStartupMessageSchedulerNotStarted(t *testing.T) {
+	line := lineFor(message(startupInfo{cfgPath: "/abs/Gorunfile", schedules: 1}), "Gorunfile")
+	if !strings.HasSuffix(line, "/abs/Gorunfile, 1 schedule, scheduler not started, see the log") {
+		t.Errorf("Gorunfile line = %q", line)
+	}
+}
+
+func TestStartupMessageHidesNATSCredentials(t *testing.T) {
+	for _, tc := range []struct{ user, pass string }{{"alice", "s3cret"}, {"tok3n", ""}} {
+		opts := &server.Options{Host: "127.0.0.1", Port: -1, NoLog: true, NoSigs: true}
+		if tc.pass != "" {
+			opts.Username, opts.Password = tc.user, tc.pass
+		} else {
+			opts.Authorization = tc.user
+		}
+		srv, err := server.NewServer(opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		go srv.Start()
+		if !srv.ReadyForConnections(5 * time.Second) {
+			t.Fatal("nats server did not start")
+		}
+		creds := tc.user
+		if tc.pass != "" {
+			creds += ":" + tc.pass
+		}
+		addr := srv.Addr().String()
+		t.Setenv("GORUN_NATS_CLIENT_URL", "nats://"+creds+"@"+addr)
+		nc, err := inats.NewClient()
+		if err != nil {
+			srv.Shutdown()
+			t.Fatal(err)
+		}
+		msg := message(startupInfo{nats: natsStartState(nil, nc, nil, false), topic: "gorun.events"})
+		nc.Close()
+		srv.Shutdown()
+
+		line := lineFor(msg, "NATS")
+		if !strings.Contains(line, "external server at nats://"+addr) {
+			t.Errorf("NATS line = %q, want the URL without credentials", line)
+		}
+		for _, secret := range []string{tc.user, tc.pass} {
+			if secret != "" && strings.Contains(msg, secret) {
+				t.Errorf("startup message leaks %q:\n%s", secret, msg)
+			}
+		}
+	}
+}
+
+func TestNATSOffReasonHidesCredentials(t *testing.T) {
+	err := errors.New("dial nats://alice:s3cret@nats.internal:4222 failed; also nats://tok3n@other:4222")
+	line := lineFor(message(startupInfo{nats: natsStartState(nil, nil, err, false)}), "NATS")
+	for _, secret := range []string{"alice", "s3cret", "tok3n"} {
+		if strings.Contains(line, secret) {
+			t.Errorf("off reason leaks %q: %s", secret, line)
+		}
+	}
+	if !strings.Contains(line, "nats://nats.internal:4222") || !strings.Contains(line, "nats://other:4222") {
+		t.Errorf("off reason should keep the hosts: %s", line)
 	}
 }

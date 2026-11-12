@@ -201,7 +201,7 @@ progress.
 - One event is sent at 0% as the copy starts, then at most one every quarter of a second, then one
   with `Done` set. A task with two copies sends a series for each, one after the other.
 - A copy that fails or is cancelled sends no `Done` event; the task's failed event follows.
-- `content` and `src_template` copies send none.
+- `content` copies and files with `render = true` send none.
 - They come often, so the built-in SQLite recorder doesn't save them. A recorder that writes each
   event somewhere slow may want to skip them, or keep only the `Done` ones.
 

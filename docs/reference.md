@@ -84,30 +84,32 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | `max_parallel` | servers at once; `0` (default) means all |
 | `max_task_parallel` | tasks at once per host; `0` (default) means one at a time, `-1` means all |
 | `envvars` | env vars for every task |
-| `vars` | template variables for every task on this run (a task's own vars win) |
+| `vars` | template variables for every server, read as `{{.Server.Vars.KEY}}` |
+| `raw` | keep the global `vars` and `envvars` exactly as written (they are [templates](gorunfile.md#templates) otherwise) |
 | `[ssh]` | only `config_file` (or `config`) is used: the SSH config every host reads (and it makes every host use SSH) |
 
 **`[tasks.<name>]`**
 
 | Key | Description |
 |---|---|
-| `cmd`, `cmd_file`, `cmd_template`, `cmd_template_file` | the command (pick one) |
-| `copy` (also `copies`, `upload`, `files`) | file copies: `src`, `src_template` or `content`; `dst`, `dst_template` (or `dir` with `src`) |
+| `cmd`, `cmd_file` | the command (pick one); a [template](gorunfile.md#templates), like every setting |
+| `copy` (also `copies`, `upload`, `files`) | file copies: `src` (with `render = true` to fill the file in) or `content`; `dst` (or `dir` with `src`); `raw` |
 | `depends_on` | tasks that must run first |
 | `sudo` | run with `sudo -n` |
 | `shell` | shell for local hosts (default `sh -c`) |
-| `envvars`, `envvars_template` | env vars for this task; `envvars_template` values are templates rendered per server |
+| `envvars` | env vars for this task (values are templates) |
 | `vars` | [template variables](gorunfile.md#task-variables) for this task: a map, which may hold nested tables and lists |
 | `log_level` | log level for this task |
 | `timeout` | Go duration, default `30m` |
 | `retries`, `retry_delay`, `retry_unsafe` | [retries](gorunfile.md#retries) |
-| `check`, `check_template`, `check_copies`, `verify`, `verify_template` | [checks](gorunfile.md#checks-run-only-when-needed): skip the task when there is nothing to do (a command, or an MD5 comparison of its copies), and confirm the change afterwards |
+| `raw` | no [templates](gorunfile.md#templates): the task's settings are used exactly as written |
+| `check`, `check_copies`, `verify` | [checks](gorunfile.md#checks-run-only-when-needed): skip the task when there is nothing to do (a command, or an MD5 comparison of its copies), and confirm the change afterwards |
 | `description`, `details`, `rerun` | [descriptions and rerun safety](gorunfile.md#descriptions-and-rerun-safety) |
 | `local` | run only on local (no-SSH) servers; without it, the task runs only over SSH |
 
-**`[bundles.<name>]`**: `tasks` (task names and `@bundles`), `description` and `vars` (template variables for the tasks it pulls in).
+**`[bundles.<name>]`**: `tasks` (task names and `@bundles`), `description`, `vars` (template variables for the tasks it pulls in) and `raw` (keep its vars as written).
 
-**`[server_groups.<name>]`**: `tags`, `tasks`, `envvars`, `vars`, `log_level` and an `ssh` table.
+**`[server_groups.<name>]`**: `tags`, `tasks`, `envvars`, `vars`, `raw` (keep its vars and envvars as written), `log_level` and an `ssh` table.
 
 **`[[schedule]]`**: `name`, `target` (a task or `@bundle`), `cron` or `at`, `timezone` and `missed` (`skip` or `run`); [schedules](schedules.md).
 
@@ -124,6 +126,7 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | `add_tasks`, `skip_tasks` | append to / remove from the task list |
 | `envvars` | env vars for every task on this host |
 | `vars` | template variables for this host (read as `{{.Server.Vars.KEY}}`) |
+| `raw` | keep its own `vars` and `envvars` exactly as written |
 | `log_level` | log level for this host |
 | `ssh` | `username`, `port`, `identityfile`, `password`, `config_file` |
 

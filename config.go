@@ -36,6 +36,8 @@ type Config struct {
 	EnvVars         map[string]string `toml:"envvars"`
 	Vars            map[string]any    `toml:"vars,omitempty"`
 	SSH             SSH               `toml:"ssh"`
+	// Raw keeps the global vars and envvars exactly as written, with no templating.
+	Raw bool `toml:"raw,omitempty"`
 
 	// Tasks is the task library, keyed by task name. Servers pick tasks from it by name.
 	Tasks map[string]Task `toml:"tasks"`
@@ -161,11 +163,10 @@ func (c *Config) ResolvePaths(dir string) {
 	resolveSSH(&c.SSH)
 	for name, task := range c.Tasks {
 		task.CmdFile = resolve(task.CmdFile)
-		task.CmdTemplateFile = resolve(task.CmdTemplateFile)
 		for _, list := range [][]Copy{task.Copy, task.Copies, task.Upload, task.Files} {
 			for i, cp := range list {
 				cp = cp.normalized()
-				cp.Src, cp.SrcTpl = resolve(cp.Src), resolve(cp.SrcTpl)
+				cp.Src = resolve(cp.Src)
 				list[i] = cp
 			}
 		}

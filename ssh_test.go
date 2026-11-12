@@ -14,7 +14,7 @@ func TestCopyFiles_TemplateGetsServer(t *testing.T) {
 	}
 
 	dst := filepath.Join(dir, "Caddyfile")
-	task := &Task{Name: "copy", Copy: []Copy{{SrcTpl: tmpl, Dst: dst}}}
+	task := &Task{Name: "copy", Copy: []Copy{{Src: tmpl, Dst: dst, Render: true}}}
 	server := &Server{Name: "otp", Hostname: "otp.example.com", SSH: SSH{Port: 2222}}
 
 	// a nil client writes locally, which is enough to check the rendered template

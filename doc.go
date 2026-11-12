@@ -20,7 +20,7 @@
 //	title = "Provision app servers"
 //
 //	[tasks.hello]
-//	cmd_template = "echo hello from {{.Name}}"
+//	cmd = "echo hello from {{.Name}}"
 //
 //	[servers]
 //	tasks = ["hello"]

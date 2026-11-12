@@ -63,8 +63,8 @@ A task has **one** command source:
 |---|---|
 | `cmd` | a shell command |
 | `cmd_file` | a local script, sent to the server |
-| `cmd_template` | a [template](#templates), rendered for each server |
-| `cmd_template_file` | the same, from a local file |
+
+Both are [templates](#templates), filled in for each server.
 
 ```toml
 [tasks.packages]
@@ -79,7 +79,11 @@ sudo = true
 
 ### Templates
 
-Templates are [Go templates](https://pkg.go.dev/text/template) that see the server they run on:
+Every setting is a template, filled in for each server before the run starts: a task's `cmd`
+(and the script in its `cmd_file`), `check`, `verify`, `envvars` and `vars`, a copy's `dst`,
+`dir` and `content`, and the `vars` and `envvars` of the whole file, server groups, bundles and
+servers. Templates are [Go templates](https://pkg.go.dev/text/template) that see the server they
+run on:
 
 | Template | Gives |
 |---|---|
@@ -88,27 +92,44 @@ Templates are [Go templates](https://pkg.go.dev/text/template) that see the serv
 | `{{.SSH.Port}}` | its SSH port |
 | `{{.Tags}}` | its tags, e.g. `{{range .Tags}}{{.}} {{end}}` |
 | `{{index .EnvVars "REGION"}}` | one of its [env vars](#environment-variables-and-secrets), including its groups' |
+| `{{.Server.Vars.port}}` | one of its [server variables](#server-variables) |
 | `{{.Vars}}` / `{{.vars}}` | the task's own [variables](#task-variables), e.g. `{{.vars.port}}` |
 
 ```toml
 [tasks.greet]
-cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}'"
+cmd = "echo 'hello from {{.Name}} on {{.Hostname}}'"
 ```
 
-The same data reaches every templated key. Each one is the `_template` form of a plain key,
-and a task sets one or the other, never both:
+Text without `{{` is used exactly as written, so most settings never notice. A copied file is
+the exception: it is sent as it is (it may be a binary, an archive or another tool's template)
+unless the copy says `render = true`; see [copying files](#copying-files).
 
-| Plain | Template |
+**`raw = true`** turns templating off, for text that has `{{` of its own:
+
+| Where | Keeps exactly as written |
 |---|---|
-| `cmd`, `cmd_file` | `cmd_template`, `cmd_template_file` |
-| `check` | `check_template` ([checks](#checks-run-only-when-needed)) |
-| `verify` | `verify_template` |
-| a copy's `src` | a copy's `src_template` ([copies](#copying-files)) |
-| a copy's `dst` | a copy's `dst_template` |
-| `envvars` | `envvars_template` ([env vars](#environment-variables-and-secrets)) |
+| a task | its command, `cmd_file` script, check, verify, envvars, vars and copies |
+| a copy | its `dst`, `dir` and `content` |
+| a server, a server group | its own `vars` and `envvars` |
+| a bundle | its `vars` |
+| the top of the file | the global `vars` and `envvars` |
 
-The plain keys are never rendered, so a literal `{{` in one (`docker ps --format '{{.Names}}'`)
-stays as written.
+```toml
+[tasks.containers]
+cmd = "docker ps --format '{{.Names}}'"
+raw = true
+```
+
+**What each template sees.** A server's vars and envvars are filled in first, layer by layer:
+the global ones, then each group's, then the server's own. Each layer sees the server's fields
+(name, hostname, tags, groups, SSH settings) and the vars of the layers below it, already filled
+in; envvars see all the vars. A task's vars then see the server and its vars and envvars, and the
+rest of the task sees all of that plus the task's vars. Values in the same layer can't refer to
+each other.
+
+> **Upgrading from v0.19:** the `_template` keys are gone. Write `cmd`, `cmd_file`, `check`,
+> `verify`, `envvars` and a copy's `dst`, and a copy's `src_template = "x"` as `src = "x"` with
+> `render = true`. A Gorunfile that still uses one stops at load and says what to write instead.
 
 ### Task variables
 
@@ -121,7 +142,8 @@ nested table or a list of tables, so a template can loop over a structure:
 cmd = "cp /tmp/myapp.Caddyfile /opt/myapp/Caddyfile"
 sudo = true
 [[tasks.caddyfile.copy]]
-src_template = "./templates/Caddyfile.tmpl"
+src = "./templates/Caddyfile.tmpl"
+render = true                         # fill the file in for each server
 dst = "/tmp/myapp.Caddyfile"
 
 [tasks.caddyfile.vars]
@@ -146,9 +168,10 @@ to = "https://docs.example.com"
 Inside a `range`, `.` is the item being looped over and `$` is still the whole template data, so
 `{{$.vars.port}}` reaches the port from inside the loop.
 
-`vars` belong to the task, so they are the same wherever it runs, and they reach that task's
-templates only — the [`_template` keys](#templates) — and reach the command's environment only
-through `envvars_template`. For a value the command needs, a secret, or anything that differs per
+`vars` belong to the task and reach that task's templates only; the command's environment gets
+one only through `envvars` (`envvars = { PORT = "{{ .vars.port }}" }`). A task's vars are
+templates too, filled in with the server's data, so a value can differ per server
+(`dir = "/srv/{{ .Name }}"`). For a value the command needs, a secret, or anything that differs per
 server or group, use [envvars](#environment-variables-and-secrets) and read it in a template with
 `{{index .EnvVars "NAME"}}`.
 
@@ -179,21 +202,23 @@ Add one or more `copy` tables to a task. Copies run **before** the command.
 cmd = "mv /tmp/site.conf /etc/nginx/conf.d/site.conf && nginx -s reload"
 sudo = true
 [[tasks.nginx-config.copy]]
-src_template = "./templates/site.conf.tmpl"   # rendered for each server
+src = "./templates/site.conf.tmpl"
+render = true                                 # filled in for each server
 dst = "/tmp/site.conf"
 ```
 
 | Source | Copies |
 |---|---|
-| `src` | a local file, or a directory (recursively, like `scp -r`) |
-| `src_template` | a template file, rendered for each server |
-| `content` | inline text |
+| `src` | a local file, or a directory (recursively, like `scp -r`), as it is |
+| `src` with `render = true` | a file, filled in as a [template](#templates) for each server |
+| `content` | inline text, a template |
 
 | Target | Means |
 |---|---|
-| `dst` | the target path |
-| `dst_template` | the target path as a template, rendered for each server: `"{{ .Server.Vars.config }}/app.conf"` |
+| `dst` | the target path, a template: `"{{ .Server.Vars.config }}/app.conf"` |
 | `dir` | a target directory, keeping the file's name (with `src` only) |
+
+`raw = true` on a copy keeps its `dst`, `dir` and `content` exactly as written.
 
 Good to know:
 
@@ -203,7 +228,7 @@ Good to know:
   permissions.
 - A copy creates the folders it needs on the server, as the login user. A directory copy leaves
   other files in the target alone and follows symlinks.
-- Files from `src` are streamed, so a multi-gigabyte release is fine. `src_template` and
+- Files from `src` are streamed, so a multi-gigabyte release is fine. Rendered files and
   `content` are built in memory, which suits configs and scripts.
 - Stopping a run (Ctrl-C, **Stop** in the web UI, or a task's `timeout`) stops a copy part way.
 
@@ -243,7 +268,7 @@ web-1: upload-release sent release.tar.gz (1.0 GB in 17.1s, 59.9 MB/s)
 The progress is what has been sent over the SSH connection. SSH only lets a few megabytes be in
 flight before the server reads them, so on a slow link the bar moves at the speed the server is
 receiving. A copy is done only once the server has confirmed every byte. Copies of `content` and
-`src_template` are small and show no progress.
+rendered files are small and show no progress.
 
 Programs using the library get the same progress as a
 [`CopyProgressEvent`](history.md#copyprogressevent-copy_progress).
@@ -285,14 +310,13 @@ envvars = { TOKEN = "${REGISTRY_TOKEN}" }
 ```
 
 - Use `$$` for a literal `$`. An unset variable becomes an empty string.
-- `envvars_template` on a task is envvars whose values are [templates](#templates), rendered for
-  each server and then treated exactly like `envvars` (so `$VAR` still expands). A name may be
-  in `envvars` or `envvars_template`, not both:
+- Values are [templates](#templates), filled in for each server first, then `$VAR` expands, so a
+  secret's value is never read as a template:
 
   ```toml
   [tasks.compose-up]
   cmd = 'docker compose -f "$COMPOSE_FILE" up -d'
-  envvars_template = { COMPOSE_FILE = "{{ .Server.Vars.config }}/docker-compose.yml" }
+  envvars = { COMPOSE_FILE = "{{ .Server.Vars.config }}/docker-compose.yml" }
   ```
 - Values are sent to the task over stdin, so they don't appear in gorun's logs, the history, NATS
   events or the server's process list.
@@ -366,14 +390,13 @@ sudo   = true
   `timeout`. The timeout covers all three. A retry runs the check again.
 - A check runs before the task's copies, so it can't look at the files being copied; use
   `check_copies` for that.
-- `check` and `verify` are plain commands, like `cmd`. For one rendered for each server, use
-  `check_template` and `verify_template`, which see the same data as `cmd_template`:
+- `check` and `verify` are [templates](#templates), like `cmd`, filled in for each server:
 
   ```toml
   [tasks.config-dir]
-  check_template  = "test -d {{ .Server.Vars.config }}"
-  cmd_template    = "mkdir -p {{ .Server.Vars.config }}"
-  verify_template = "test -d {{ .Server.Vars.config }}"
+  check  = "test -d {{ .Server.Vars.config }}"
+  cmd    = "mkdir -p {{ .Server.Vars.config }}"
+  verify = "test -d {{ .Server.Vars.config }}"
   sudo = true
   ```
 - The live view shows *checking* and *verifying* as they run, and a task the check skipped
@@ -518,7 +541,7 @@ vars = { port = 9090, redirects = ["docs"] }   # host: wins over the group
 
 ```toml
 [tasks.show]
-cmd_template = "echo {{.Hostname}} {{.Server.Vars.region}} {{.Server.Vars.port}}"
+cmd = "echo {{.Hostname}} {{.Server.Vars.region}} {{.Server.Vars.port}}"
 ```
 
 The layers merge the same way [envvars](#environment-variables-and-secrets) do — global, then each
@@ -541,9 +564,12 @@ redir {{.from}} {{.to}}
 {{end}}
 ```
 
-Server vars are read-only template data: they reach `cmd_template`, `cmd_template_file` and a copy's
-`src_template`, never the command's environment, and they never override a task's own `vars`
-(`{{.vars}}`), which is a separate namespace. Use them for host-specific template data; use
+Server vars are template data: every template of the server's tasks can read them, the command's
+environment gets one only through `envvars`, and they never override a task's own `vars`
+(`{{.vars}}`), which is a separate namespace. They are templates themselves: each layer is filled in
+for the server, and sees the server's fields and the layers below it (`config =
+"{{ .Server.Vars.home }}/conf"` on a group can use a global `home`). `raw = true` on a layer keeps
+it as written. Use them for host-specific template data; use
 [task vars](#task-variables) for data that belongs to the task and is the same everywhere it
 runs, and [envvars](#environment-variables-and-secrets) for anything the command itself needs or
 that is a secret.
@@ -663,7 +689,7 @@ tasks = ["@web-baseline"]                 # a bundle from the library
 - **Only tasks and bundles.** A file from a git repository can't add servers, groups, schedules or
   global `envvars` and `vars`, so a shared library never changes where, when or with what your
   commands run. It may include other files from the same repository, or other git repositories.
-- **Paths are the library's.** A library task's `cmd_file`, `cmd_template_file` and copy sources
+- **Paths are the library's.** A library task's `cmd_file` and copy sources
   are relative to the root of its repository.
 - Names follow the usual rule: a name defined both in the library and in your files is an error.
 - **Keep a library self-contained.** Its tasks' `depends_on` should name tasks in the library.
@@ -762,22 +788,23 @@ Every key, grouped by the table it belongs to. `gorun -dump` prints the same lis
 | `max_parallel` | servers at once; `0` (default) means all |
 | `max_task_parallel` | tasks at once per host; `0` (default) means one at a time, `-1` means all |
 | `envvars` | env vars for every task |
-| `vars` | template variables for every task on this run (a task's own vars win) |
+| `vars` | template variables for every server (`{{.Server.Vars.KEY}}`); templates themselves |
+| `raw` | keep the global `vars` and `envvars` exactly as written |
 | `[ssh]` | only `config_file` (or `config`) is used |
 
 ### `[tasks.<name>]`
 
 | Key | Description |
 |---|---|
-| `cmd`, `cmd_file`, `cmd_template`, `cmd_template_file` | the command (pick one) |
+| `cmd`, `cmd_file` | the command (pick one), a [template](#templates) |
 | `copy` (also `copies`, `upload`, `files`) | file copies |
 | `depends_on` | tasks that must run first |
 | `sudo` | run with `sudo -n` |
 | `shell` | shell for local hosts (default `sh -c`) |
-| `envvars` | env vars for this task |
-| `envvars_template` | env vars whose values are templates, rendered for each server |
-| `check`, `check_template`, `check_copies` | checks: skip the task when there is nothing to do |
-| `verify`, `verify_template` | confirm the change after the command |
+| `envvars` | env vars for this task (values are templates) |
+| `check`, `check_copies` | checks: skip the task when there is nothing to do |
+| `verify` | confirm the change after the command |
+| `raw` | no templates: use the command, check, verify, envvars, vars and copies as written |
 | `vars` | template variables for this task (map, may nest) |
 | `log_level` | log level for this task |
 | `timeout` | Go duration, default `30m` |
@@ -791,11 +818,11 @@ Every key, grouped by the table it belongs to. `gorun -dump` prints the same lis
 |---|---|
 | `src` | a file, or a directory copied recursively |
 | `src_file` | alias for `src` |
-| `src_template` (also `src_tmpl`, `template`) | a template rendered for each server |
-| `content` | inline text written to `dst` |
-| `dst` (also `dst_path`, `dest`) | destination path on the server |
-| `dst_template` | destination path as a template, rendered for each server |
-| `dir` | destination directory (keeps the source file name) |
+| `render` | fill the `src` file in as a template for each server (files are sent as they are without it) |
+| `content` | inline text written to `dst` (a template) |
+| `dst` (also `dst_path`, `dest`) | destination path on the server (a template) |
+| `dir` | destination directory, keeping the source file name (a template) |
+| `raw` | keep `dst`, `dir` and `content` exactly as written |
 | `mode` (also `perm`) | file mode, e.g. `0644` |
 
 ### `[bundles.<name>]`
@@ -805,6 +832,7 @@ Every key, grouped by the table it belongs to. `gorun -dump` prints the same lis
 | `description` | one line, shown in lists |
 | `tasks` | task names and `@bundles` |
 | `vars` | template variables for the tasks it pulls in |
+| `raw` | keep its `vars` exactly as written |
 
 ### `[server_groups.<name>]`
 
@@ -814,6 +842,7 @@ Every key, grouped by the table it belongs to. `gorun -dump` prints the same lis
 | `tasks` | tasks for members |
 | `envvars` | env vars for every task |
 | `vars` | template variables (merged into the server) |
+| `raw` | keep its `vars` and `envvars` exactly as written |
 | `log_level` | log level |
 | `[ssh]` | `username`, `port`, `identityfile`, `password`, `config_file` |
 
@@ -840,5 +869,6 @@ the default, or `run`). See [schedules](schedules.md).
 | `add_tasks`, `skip_tasks` | append to / remove from the task list |
 | `envvars` | env vars for every task on this host |
 | `vars` | template variables for this host (read as `{{.Server.Vars.KEY}}`) |
+| `raw` | keep its own `vars` and `envvars` exactly as written |
 | `log_level` | log level for this host |
 | `[ssh]` | `username`, `port`, `identityfile`, `password`, `config_file` |

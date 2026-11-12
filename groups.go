@@ -21,6 +21,8 @@ type Bundle struct {
 	Description string         `toml:"description"`
 	Tasks       []string       `toml:"tasks"`
 	Vars        map[string]any `toml:"vars,omitempty"`
+	// Raw keeps the bundle's vars exactly as written, with no templating.
+	Raw bool `toml:"raw,omitempty"`
 }
 
 // ServerGroup holds defaults shared by the servers that join it, defined as
@@ -34,6 +36,8 @@ type ServerGroup struct {
 	EnvVars  map[string]string `toml:"envvars"`
 	Vars     map[string]any    `toml:"vars,omitempty"`
 	SSH      SSH               `toml:"ssh"`
+	// Raw keeps the group's vars and envvars exactly as written, with no templating.
+	Raw bool `toml:"raw,omitempty"`
 }
 
 // validateLibrary checks the task, bundle and group definitions, so mistakes in a
@@ -227,17 +231,10 @@ func (c *Config) composeServer(s *Server, globalTasks []string, ownTasks bool) e
 	if len(groups) > 0 {
 		tags := []string{}
 		sshLayers := []SSH{}
-		env := map[string]string{}
-		vars := map[string]any{}
-		maps.Copy(vars, c.Vars)
 		for _, group := range groups {
 			tags = append(tags, group.Tags...)
 			sshLayers = append(sshLayers, group.SSH)
-			maps.Copy(env, group.EnvVars)
-			maps.Copy(vars, group.Vars)
 		}
-		maps.Copy(env, s.EnvVars)
-		maps.Copy(vars, s.Vars)
 
 		if s.LogLevel == "" {
 			for _, group := range slices.Backward(groups) {
@@ -250,27 +247,9 @@ func (c *Config) composeServer(s *Server, globalTasks []string, ownTasks bool) e
 
 		s.Tags = append(tags, s.Tags...)
 		s.SSH = mergeSSH(append(sshLayers, s.SSH)...)
-		if len(env) > 0 {
-			s.EnvVars = env
-		}
-		if len(vars) > 0 {
-			s.Vars = vars
-		}
 	}
 	if len(s.Tags) > 0 {
 		s.Tags = unique(s.Tags)
-	}
-
-	// global vars apply even to servers that join no group
-	if len(c.Vars) > 0 {
-		if s.Vars == nil {
-			s.Vars = map[string]any{}
-		}
-		for k, v := range c.Vars {
-			if _, ok := s.Vars[k]; !ok {
-				s.Vars[k] = v
-			}
-		}
 	}
 
 	refs := []string{}
@@ -300,36 +279,8 @@ func (c *Config) composeServer(s *Server, globalTasks []string, ownTasks bool) e
 		return fmt.Errorf("skip_tasks: %w", err)
 	}
 
-	// bundle vars: any bundle a server pulls tasks from contributes its vars,
-	// lowest precedence (group/server vars win).
-	bundleVars := map[string]any{}
-	visited := map[string]bool{}
-	var collectBundleVars func(refs []string)
-	collectBundleVars = func(refs []string) {
-		for _, ref := range refs {
-			name, isBundle := strings.CutPrefix(ref, BundlePrefix)
-			if !isBundle || visited[name] {
-				continue
-			}
-			visited[name] = true
-			if b, ok := c.Bundles[name]; ok {
-				maps.Copy(bundleVars, b.Vars)
-				collectBundleVars(b.Tasks)
-			}
-		}
-	}
-	collectBundleVars(refs)
-	collectBundleVars(s.AddTasks)
-	if len(bundleVars) > 0 {
-		if s.Vars == nil {
-			s.Vars = map[string]any{}
-		}
-		// bundle vars are defaults: only fill keys the server/group did not set
-		for k, v := range bundleVars {
-			if _, ok := s.Vars[k]; !ok {
-				s.Vars[k] = v
-			}
-		}
+	if err := c.composeVars(s, groups, refs); err != nil {
+		return err
 	}
 
 	names = unique(append(names, added...))
@@ -537,4 +488,118 @@ func containsAll(list, want []string) bool {
 		}
 	}
 	return true
+}
+
+// composeVars builds the server's vars and envvars. Each layer is filled in for the server as a
+// template, unless it is raw, and then layered, later ones winning: the global ones, each group
+// in order, then the server's own. A bundle's vars fill only the keys none of those set. Every
+// layer sees the server's fields (name, hostname, tags, groups, SSH) and the vars of the layers
+// below it, filled in already; envvars see all the vars. refs are the task refs the server pulls
+// tasks from.
+func (c *Config) composeVars(s *Server, groups []ServerGroup, refs []string) error {
+	ident := *s
+	ident.Vars, ident.EnvVars = nil, nil
+	fill := func(what string, m map[string]any, raw bool, data map[string]any) (map[string]any, error) {
+		if raw || len(m) == 0 {
+			return m, nil
+		}
+		v, err := renderValue(m, data)
+		if err != nil {
+			return nil, fmt.Errorf("server %s: %s: %w", s.Name, what, err)
+		}
+		out, _ := v.(map[string]any)
+		return out, nil
+	}
+
+	data := templateData(&ident, nil)
+	type varsLayer struct {
+		what string
+		vars map[string]any
+		raw  bool
+	}
+	layers := []varsLayer{{"the global vars", c.Vars, c.Raw}}
+	for _, g := range groups {
+		layers = append(layers, varsLayer{"server group " + g.Name + " vars", g.Vars, g.Raw})
+	}
+	layers = append(layers, varsLayer{"vars", s.Vars, s.Raw})
+	vars := map[string]any{}
+	for _, l := range layers {
+		ident.Vars = maps.Clone(vars)
+		m, err := fill(l.what, l.vars, l.raw, templateData(&ident, nil))
+		if err != nil {
+			return err
+		}
+		maps.Copy(vars, m)
+	}
+	ident.Vars = maps.Clone(vars)
+	data = templateData(&ident, nil)
+
+	// any bundle the server pulls tasks from adds its vars, below everything else
+	bundleVars := map[string]any{}
+	visited := map[string]bool{}
+	var collect func(refs []string) error
+	collect = func(refs []string) error {
+		for _, ref := range refs {
+			name, isBundle := strings.CutPrefix(ref, BundlePrefix)
+			if !isBundle || visited[name] {
+				continue
+			}
+			visited[name] = true
+			if b, ok := c.Bundles[name]; ok {
+				m, err := fill("bundle "+name+" vars", b.Vars, b.Raw, data)
+				if err != nil {
+					return err
+				}
+				maps.Copy(bundleVars, m)
+				if err := collect(b.Tasks); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	if err := collect(refs); err != nil {
+		return err
+	}
+	if err := collect(s.AddTasks); err != nil {
+		return err
+	}
+	for k, v := range bundleVars {
+		if _, ok := vars[k]; !ok {
+			vars[k] = v
+		}
+	}
+	if len(vars) > 0 {
+		s.Vars = vars
+	}
+
+	ident.Vars = s.Vars
+	data = templateData(&ident, nil)
+	type envLayer struct {
+		what string
+		env  map[string]string
+		raw  bool
+	}
+	envLayers := []envLayer{{"the global envvars", c.EnvVars, c.Raw}}
+	for _, g := range groups {
+		envLayers = append(envLayers, envLayer{"server group " + g.Name + " envvars", g.EnvVars, g.Raw})
+	}
+	envLayers = append(envLayers, envLayer{"envvars", s.EnvVars, s.Raw})
+	env := map[string]string{}
+	for _, l := range envLayers {
+		for _, k := range slices.Sorted(maps.Keys(l.env)) {
+			v := l.env[k]
+			if !l.raw {
+				var err error
+				if v, err = renderText(k, v, data); err != nil {
+					return fmt.Errorf("server %s: %s: %s: %w", s.Name, l.what, k, err)
+				}
+			}
+			env[k] = v
+		}
+	}
+	if len(env) > 0 {
+		s.EnvVars = env
+	}
+	return nil
 }

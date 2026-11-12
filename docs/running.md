@@ -53,7 +53,7 @@ so it shows even folded, and a task without one says `none`. In the live view, a
 lists its copies before its command, and marks them *copying…* while they upload. Description and details stay open; the other sections start collapsed. Execution settings and env vars appear as tables when expanded. Press **tab** to
 focus the details pane, **↑/↓** to select a section, and **enter** or **→** to expand/collapse it.
 Use **pgup/pgdn** or **home/end** to scroll the details, then press **tab** to return to the tree.
-Press **ctrl+e** on a file-backed task to open its `cmd_file` or `cmd_template_file` in `$EDITOR`
+Press **ctrl+e** on a file-backed task to open its `cmd_file` in `$EDITOR`
 (`vi` if unset); gorun exits when the editor closes.
 
 ![the Tasks tab with task details and execution settings beside the dependency tree](screenshot-tasks.png)

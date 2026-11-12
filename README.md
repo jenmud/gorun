@@ -61,9 +61,14 @@ any of them.
   [checks](docs/gorunfile.md#checks-run-only-when-needed).
 - **Nothing runs by accident.** You pick servers and tasks in a picker first, and every task has a
   timeout.
-- **Grows with you.** Dependencies, bundles, server groups, tags, templates with per-task
-  variables (for commands, checks, verifies, copy sources and destinations, and envvars), file copies, retries and secrets from your environment, when you need them. Large
-  fleets can be split across files with `include`.
+- **Every setting is a template.** `cmd = "echo hello from {{ .Name }}"` runs a different command
+  on each server; the same goes for scripts, checks, verifies, copy destinations, envvars and vars,
+  anywhere in the file. Text without `{{` is used as it is, and `raw = true` keeps a command that
+  uses `{{` itself (like `docker ps --format '{{.Names}}'`) exactly as written. See
+  [templates](docs/gorunfile.md#templates).
+- **Grows with you.** Dependencies, bundles, server groups, tags, task and server variables, file
+  copies, retries and secrets from your environment, when you need them. Large fleets can be split
+  across files with `include`.
 - **Write a task once.** Keep tasks in a git repository and include them in any Gorunfile, pinned to
   a tag or commit and locked in `Gorunfile.lock`:
   `include = ["git::https://github.com/you/tasks.git//web/*.toml?ref=v1.2.0"]`. See the

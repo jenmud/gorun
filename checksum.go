@@ -34,8 +34,8 @@ func copyDigests(task *Task, server any) ([]copyDigest, error) {
 		switch {
 		case c.Content != "":
 			d.files[""] = md5Hex([]byte(c.Content))
-		case c.SrcTpl != "":
-			data, err := renderCopyTemplate(task, server, c.SrcTpl)
+		case c.renders(task):
+			data, err := renderCopyTemplate(task, server, c.Src)
 			if err != nil {
 				return nil, err
 			}

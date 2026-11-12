@@ -331,7 +331,7 @@ func TestForceAndCheckOnlyCantBeUsedTogether(t *testing.T) {
 
 func TestCopySummariesDescribeEachCopy(t *testing.T) {
 	task := Task{
-		Copy:  []Copy{{Src: "scripts/ok.sh", Dst: "/opt/ok.sh"}, {SrcTpl: "app.conf.tmpl", Dst: "/etc/app.conf"}},
+		Copy:  []Copy{{Src: "scripts/ok.sh", Dst: "/opt/ok.sh"}, {Src: "app.conf.tmpl", Render: true, Dst: "/etc/app.conf"}},
 		Files: []Copy{{Content: "hello", Dst: "/etc/motd"}, {Src: "site", Dir: "/srv"}},
 	}
 	want := []string{

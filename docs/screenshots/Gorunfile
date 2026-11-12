@@ -53,7 +53,7 @@ depends_on = ["neovim-install"]
 
 [tasks.docker-install]
 local = true
-cmd_template = "sleep 0.8; sleep $JITTER; {{if eq .Name \"cache-redis\"}}echo 'ERROR: unable to select packages:' >&2; echo '  docker-ce (no such package):' >&2; echo '    required by: world[docker-ce]' >&2; exit 1{{else}}echo 'docker 27.3.1 installed'{{end}}"
+cmd = "sleep 0.8; sleep $JITTER; {{if eq .Name \"cache-redis\"}}echo 'ERROR: unable to select packages:' >&2; echo '  docker-ce (no such package):' >&2; echo '    required by: world[docker-ce]' >&2; exit 1{{else}}echo 'docker 27.3.1 installed'{{end}}"
 depends_on = ["packages"]
 
 [tasks.deploy-user]
@@ -93,7 +93,7 @@ depends_on = ["deploy-user"]
 
 [tasks.server-info]
 local = true
-cmd_template = "echo '{{.Name}}: region={{index .EnvVars \"REGION\"}} env={{index .EnvVars \"APP_ENV\"}}'"
+cmd = "echo '{{.Name}}: region={{index .EnvVars \"REGION\"}} env={{index .EnvVars \"APP_ENV\"}}'"
 description = "Print the region, environment and tags the server ended up with"
 rerun = "safe"
 

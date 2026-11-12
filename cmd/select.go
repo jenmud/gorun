@@ -1682,7 +1682,7 @@ func (m serverSelectionModel) helpContent() string {
 			{"←", "collapse a section / return to the task tree"},
 			{"pgup / pgdn", "move in the tree / scroll details"},
 			{"home / end", "jump to the start/end of details"},
-			{"ctrl+e", "edit selected cmd_file / cmd_template_file, then exit"},
+			{"ctrl+e", "edit the selected task's cmd_file, then exit"},
 			{"→ / ←", "expand / collapse a task"},
 			{"shift+tab", "next tab"},
 			{"ctrl+s/t/b/g/h", "jump to Servers/Tasks/Bundles/Groups/History"},

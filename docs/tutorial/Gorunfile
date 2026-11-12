@@ -64,7 +64,8 @@ rerun = "safe"
 timeout = "1m"
 depends_on = ["app-dirs"]
 [[tasks.caddyfile.copy]]
-src_template = "./templates/Caddyfile.tmpl"
+src = "./templates/Caddyfile.tmpl"
+render = true
 dst = "/tmp/myapp.Caddyfile"
 # vars feed the template: the app's port and the redirects every server adds
 [tasks.caddyfile.vars]
@@ -83,7 +84,8 @@ rerun = "safe"
 timeout = "1m"
 depends_on = ["app-dirs"]
 [[tasks.compose-file.copy]]
-src_template = "./templates/docker-compose.yml.tmpl"
+src = "./templates/docker-compose.yml.tmpl"
+render = true
 dst = "/tmp/myapp.docker-compose.yml"
 
 [tasks.registry-login]
@@ -132,7 +134,7 @@ retry_delay = "5s"
 
 [tasks.health-https]
 description = "Check the site answers over HTTPS"
-cmd_template = "curl -fsS -o /dev/null https://{{.Hostname}}/"
+cmd = "curl -fsS -o /dev/null https://{{.Hostname}}/"
 rerun = "safe"
 timeout = "3m"
 retries = 5

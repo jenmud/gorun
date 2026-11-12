@@ -350,7 +350,7 @@ type Option struct {
 // TaskCard is one task of the library, as the Tasks page shows it.
 // FileRef is a file referenced by a task.
 type FileRef struct {
-	Type string // "cmd_file", "cmd_template_file", "template", "src_file", "src_template"
+	Type string // "cmd_file", or a copy's source: "copy → dst" or "template → dst"
 	Path string
 }
 

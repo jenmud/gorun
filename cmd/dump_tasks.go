@@ -144,7 +144,7 @@ func writeDumpedTask(cfg *gorun.Config, dir string, task gorun.Task, server goru
 	if haveServer {
 		target, srv = server, &server
 	}
-	task, err := task.ForServer(srv) // envvars_template, so the script exports them too
+	task, err := task.ForServer(srv) // filled in for the server, so the script is what runs
 	if err != nil {
 		return err
 	}

@@ -245,8 +245,8 @@ func copyDir(ctx context.Context, client *ssh.Client, localDir, dir string, wrap
 	return nil
 }
 
-// CopyFiles copies files for a task to a server. Templates are executed with
-// server as their data, the same as cmd_template.
+// CopyFiles copies files for a task to a server. A copy with render = true is filled in as a
+// template with server as its data, the same as a task's cmd.
 func CopyFiles(client *ssh.Client, server any, task *Task) error {
 	return CopyFilesContext(context.Background(), client, server, task, nil)
 }
@@ -275,8 +275,8 @@ func copyOne(ctx context.Context, client *ssh.Client, server any, task *Task, c 
 	switch {
 	case c.Content != "":
 		return text([]byte(c.Content))
-	case c.SrcTpl != "":
-		data, err := renderCopyTemplate(task, server, c.SrcTpl)
+	case c.renders(task):
+		data, err := renderCopyTemplate(task, server, c.Src)
 		if err != nil {
 			return err
 		}

@@ -18,7 +18,7 @@ depends_on = ["drain"]
 [tasks.install]
 local = true
 description = "Install release 3.1"
-cmd_template = "sleep 1.1; sleep $JITTER; {{if eq .Name \"edge-4\"}}echo 'E: Unable to fetch app_3.1_amd64.deb  404 Not Found' >&2; exit 100{{else}}echo 'app 3.1.0 installed'{{end}}"
+cmd = "sleep 1.1; sleep $JITTER; {{if eq .Name \"edge-4\"}}echo 'E: Unable to fetch app_3.1_amd64.deb  404 Not Found' >&2; exit 100{{else}}echo 'app 3.1.0 installed'{{end}}"
 depends_on = ["backup"]
 retries = 1
 retry_delay = "300ms"

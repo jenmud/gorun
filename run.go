@@ -297,7 +297,7 @@ func (sr *serverRun) runTask(ctx context.Context, task *TaskExec) {
 	event := func(state TaskState) TaskEvent {
 		// envvars as written in the Gorunfile, not expanded, so secrets stay out of events
 		env := make(map[string]string, len(server.EnvVars))
-		for _, layer := range []map[string]string{server.EnvVars, c.Tasks[name].EnvVars, c.Tasks[name].EnvVarsTemplate} {
+		for _, layer := range []map[string]string{server.EnvVars, c.Tasks[name].EnvVars} {
 			for k, v := range layer {
 				env[strings.ToUpper(k)] = v
 			}

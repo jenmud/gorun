@@ -184,11 +184,13 @@ cmd = "cp /tmp/myapp.Caddyfile /opt/myapp/Caddyfile"
 sudo = true
 depends_on = ["app-dirs"]
 [[tasks.caddyfile.copy]]
-src_template = "./templates/Caddyfile.tmpl"
+src = "./templates/Caddyfile.tmpl"
+render = true
 dst = "/tmp/myapp.Caddyfile"
 ```
 
-`src_template` is a Go template, rendered separately for each server. `templates/Caddyfile.tmpl`:
+`render = true` makes the file a Go template, filled in separately for each server (without it, a
+file is copied exactly as it is). `templates/Caddyfile.tmpl`:
 
 ```
 {{.Hostname}} {
@@ -246,11 +248,12 @@ differ per server — they belong to the task — so a per-server value has to g
 instead, or in the **server's** own `vars` (read as `{{.Server.Vars.KEY}}`), which merge the same
 way envvars do: global, then group, then host.
 
-The other kinds of copy: `src` copies a file, or a whole directory, as it is, and `content` writes
-inline text. `src_template` is rendered; `src` and `content` are copied literally. A destination
-that differs per server can be a template too: `dst_template = "{{.Server.Vars.app_dir}}/Caddyfile"`.
-The same goes for checks, verifies and envvars (`check_template`, `verify_template`,
-`envvars_template`); see [templates](gorunfile.md#templates).
+The other kinds of copy: `src` without `render` copies a file, or a whole directory, as it is,
+and `content` writes inline text. Every setting in the Gorunfile is a template too, so a
+destination that differs per server is just `dst = "{{.Server.Vars.app_dir}}/Caddyfile"`, and the
+same goes for `cmd`, checks, verifies, envvars and vars. For a command that uses `{{` itself, like
+`docker ps --format '{{.Names}}'`, add `raw = true` to the task; see
+[templates](gorunfile.md#templates).
 
 ## 5. Give each server its own settings, and keep secrets out
 
@@ -383,7 +386,8 @@ cmd = "cp /tmp/myapp.Caddyfile /opt/myapp/Caddyfile"
 sudo = true
 depends_on = ["app-dirs"]
 [[tasks.caddyfile.copy]]
-src_template = "./templates/Caddyfile.tmpl"
+src = "./templates/Caddyfile.tmpl"
+render = true
 dst = "/tmp/myapp.Caddyfile"
 ```
 

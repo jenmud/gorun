@@ -532,7 +532,7 @@ func copiesHint(copies []string) string {
 // inlineCopiesNote says a task's inline-text copies are kept, as the form can't show them.
 func inlineCopiesNote(n int) string {
 	if n == 1 {
-		return "Plus 1 copy of inline text, kept as it is (edit it in the file)."
+		return "Plus 1 copy of inline text or marked raw, kept as it is (edit it in the file)."
 	}
-	return fmt.Sprintf("Plus %d copies of inline text, kept as they are (edit them in the file).", n)
+	return fmt.Sprintf("Plus %d copies of inline text or marked raw, kept as they are (edit them in the file).", n)
 }

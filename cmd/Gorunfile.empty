@@ -7,13 +7,20 @@
 #
 # Relative paths (cmd_file, copy src, identityfile, ...) are relative to this file.
 # Unknown keys are errors, so typos don't go unnoticed.
+#
+# Settings are templates, filled in for each server: write {{ .Name }}, {{ .Hostname }},
+# {{ .Server.Vars.port }} and so on in a task's cmd, cmd_file script, check, verify, envvars,
+# vars and copy dst, and in vars and envvars anywhere. Text without {{ is used as it is.
+# raw = true keeps a task's (or a server's, group's, bundle's, copy's) text exactly as written,
+# for commands that use {{ themselves, like docker ps --format '{{.Names}}'.
 
 title = "My deployment"
 log_level = "info"                # debug | info | warn | error; servers and tasks inherit it
 # max_parallel = 4                # hosts at once; 0 (default) = all; -parallel N overrides
 # max_task_parallel = -1            # tasks at once per host; 0 (default) = one at a time, -1 = all
 envvars = { APP_ENV = "development" }   # exported to every task (a task's own envvars win)
-# vars = { region = "home" }             # template data for every task on this run (a task's own vars win)
+# vars = { region = "home" }             # template data for every server: {{ .Server.Vars.region }}
+# raw = true                             # keep the global vars and envvars exactly as written
 # include = [
 #   "tasks/*.toml",                                                # local files, relative to this one
 #   "git::https://github.com/you/tasks.git//web/*.toml?ref=v1.2.0", # tasks from a git repository, pinned
@@ -31,7 +38,7 @@ envvars = { APP_ENV = "development" }   # exported to every task (a task's own e
 
 [tasks.hello]
 description = "Say hello"         # one line, shown in lists, the picker and the TUI
-cmd_template = "echo 'hello from {{.Name}}, tags:{{range .Tags}} #{{.}}{{end}}'"
+cmd = "echo 'hello from {{.Name}}, tags:{{range .Tags}} #{{.}}{{end}}'"   # a template, filled in per server
 rerun = "safe"                    # safe | unsafe; omit if you don't know
 local = true                      # runs on localhost below; tasks without it only run over SSH
 
@@ -42,13 +49,11 @@ depends_on = ["hello"]            # always pulled in and run first
 rerun = "safe"
 local = true
 
-# Every task option (pick one command source: cmd, cmd_file, cmd_template or
-# cmd_template_file; a task can also be copies only):
+# Every task option (pick one command source: cmd or cmd_file; a task can also be copies only):
 # [tasks.example]
-# cmd = "apt-get install -y nginx"
-# cmd_file = "./scripts/setup.sh"             # a local script, sent to the server
-# cmd_template = "echo {{.Name}} {{.Hostname}} {{index .EnvVars \"REGION\"}}"  # Go template over the server
-# cmd_template_file = "./templates/setup.sh.tmpl"
+# cmd = "apt-get install -y nginx"            # a template: "echo {{.Name}} {{index .EnvVars \"REGION\"}}"
+# cmd_file = "./scripts/setup.sh"             # a local script, filled in and sent to the server
+# raw = true                      # no templates: cmd, check, verify, envvars, vars and copies as written
 # description = "Install nginx"
 # details = "A longer explanation, shown when the task is expanded."
 # rerun = "unsafe"                # marks it ⚠ in lists and the TUI
@@ -63,15 +68,12 @@ local = true
 # local = true                    # only on local (no-SSH) servers; without it, only over SSH
 # check = "grep -q v2.4 /etc/app/version"  # runs first: exit 0 = nothing to do, so the task
 #                                 # is unchanged; any other exit code runs it; --force skips it
-# check_template = "test -d {{ .Server.Vars.config }}"  # check rendered per server, like cmd_template
 # check_copies = true             # compare the MD5 of each copy with the file on the server
 #                                 # (md5sum, md5 or openssl there; with none, it just copies):
 #                                 # all the same (and check, if set, exits 0) = unchanged
 # verify = "curl -fs localhost:8080/health"  # runs after the command: non-zero fails the task
 #                                 # without check or check_copies, a task always runs
-# verify_template = "test -s {{ .Server.Vars.config }}/app.conf"  # verify rendered per server
-# envvars = { NGINX_PORT = "8080" }
-# envvars_template = { SITE = "{{ .Name }}" }  # values rendered per server, then like envvars
+# envvars = { NGINX_PORT = "8080", SITE = "{{ .Name }}" }  # values are templates too
 # vars = { port = 8080 }          # template data for this task only: {{.vars.port}}
 #                                 # may nest: [[tasks.example.vars.sites]] is a list
 #
@@ -81,8 +83,10 @@ local = true
 # mode = "0644"
 #
 # [[tasks.example.copy]]
-# src_template = "./templates/site.conf.tmpl"  # or content = "inline text"; rendered with the server
-# dst = "/etc/nginx/conf.d/site.conf"  # or dst_template = "{{ .Server.Vars.config }}/site.conf"
+# src = "./templates/site.conf.tmpl"  # or content = "inline text {{ .Name }}", a template
+# render = true                   # fill the src file in as a template (files are sent as they are without it)
+# dst = "{{ .Server.Vars.config }}/site.conf"  # dst and dir are templates
+# raw = true                      # keep this copy's dst and content exactly as written
 
 #
 # Bundles: named task lists. Use "@name" in any task list, or `--task @name`.
@@ -92,6 +96,7 @@ local = true
 description = "What every server gets"
 tasks = ["hello", "show-env"]     # tasks and/or other "@bundles"
 # vars = { port = 8080 }              # template data for this bundle's tasks
+# raw = true                          # keep this bundle's vars exactly as written
 
 #
 # Server groups: defaults shared by the hosts that list them in `groups`. Later groups
@@ -109,7 +114,8 @@ envvars = { REGION = "home" }
 # tasks = ["@base"]
 # log_level = "warn"
 # envvars = { APP_ENV = "production" }
-# vars = { region = "eu-west-1" }
+# vars = { region = "eu-west-1", config = "/etc/{{ .Name }}" }  # templates, filled in per server
+# raw = true                      # keep this group's vars and envvars exactly as written
 #   [server_groups.prod.ssh]
 #   username = "deploy"
 #   identityfile = "~/.ssh/id_ed25519"
@@ -136,6 +142,7 @@ tags = ["dev"]
 # skip_tasks = ["show-env"]       # removed from the list
 # envvars = { REGION = "eu-west-1" }
 # vars = { region = "eu-west-1" }
+# raw = true                      # keep this server's own vars and envvars exactly as written
 # log_level = "info"
 #   [servers.hosts.web-01.ssh]    # fills in what the groups don't set
 #   username = "root"

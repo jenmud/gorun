@@ -31,6 +31,9 @@ type Server struct {
 	// groups' vars; a task's own vars still win in its templates.
 	Vars map[string]any `toml:"vars,omitempty"`
 
+	// Raw keeps the server's own vars and envvars exactly as written, with no templating.
+	Raw bool `toml:"raw,omitempty"`
+
 	// AddTasks are appended to the server's task list and SkipTasks removed from it.
 	AddTasks  []string `toml:"add_tasks"`
 	SkipTasks []string `toml:"skip_tasks"`

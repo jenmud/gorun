@@ -754,8 +754,8 @@ func TestTaskEventCommandIsAsWritten(t *testing.T) {
 
 func TestTaskVarsInTemplates(t *testing.T) {
 	task := Task{
-		Name:        "sites",
-		CmdTemplate: "{{.Name}} {{range .vars.sites}}{{.host}}:{{.port}} {{end}}{{.Vars.region}}",
+		Name: "sites",
+		Cmd:  "{{.Name}} {{range .vars.sites}}{{.host}}:{{.port}} {{end}}{{.Vars.region}}",
 		Vars: map[string]any{
 			"region": "eu-west-1",
 			"sites": []map[string]any{

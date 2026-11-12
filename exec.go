@@ -88,8 +88,6 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 				slog.String("shell", t.Shell),
 				slog.Bool("sudo", t.Sudo),
 				slog.String("cmd_file", t.CmdFile),
-				slog.String("cmd_template_file", t.CmdTemplateFile),
-				slog.String("cmd_template", t.CmdTemplate),
 				slog.Any("depends_on", t.DependsOn),
 				slog.Any("envvars", envNames(t.EnvVars)), // names only, the values can be secrets
 				slog.Group("server", slog.String("user", user), slog.String("session", session)),

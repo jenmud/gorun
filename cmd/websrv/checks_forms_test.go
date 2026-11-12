@@ -152,7 +152,7 @@ func TestTaskFormsEditCopiesAndRunSettings(t *testing.T) {
 	}
 	task := a.cfg.Tasks["compose-up"]
 	if len(task.Copy) != 2 || !strings.HasSuffix(task.Copy[0].Src, "scripts/stack-ok.sh") || task.Copy[0].Dst != "/home/ubuntu/stack-ok.sh" ||
-		!strings.HasSuffix(task.Copy[1].SrcTpl, "templates/app.conf.tmpl") || task.Copy[1].Dst != "/etc/app.conf" {
+		!strings.HasSuffix(task.Copy[1].Src, "templates/app.conf.tmpl") || !task.Copy[1].Render || task.Copy[1].Dst != "/etc/app.conf" {
 		t.Errorf("copies = %+v", task.Copy)
 	}
 	if !slices.Equal(task.DependsOn, []string{"hello"}) || task.Timeout != 10*time.Minute || task.Retries != 2 || !task.CheckCopies {
@@ -206,7 +206,7 @@ func TestEditKeepsInlineCopies(t *testing.T) {
 		t.Fatal(err)
 	}
 	edit := get(t, a, "/tasks?edit=motd").Body.String()
-	if !strings.Contains(edit, "a.sh -&gt; /opt/a.sh") || !strings.Contains(edit, "Plus 1 copy of inline text") {
+	if !strings.Contains(edit, "a.sh -&gt; /opt/a.sh") || !strings.Contains(edit, "Plus 1 copy of inline text or marked raw") {
 		t.Error("the edit form doesn't show the file copy and the kept inline copy")
 	}
 	rec := post(t, a, "/tasks/edit", url.Values{"name": {"motd"}, "cmd": {"true"}, "copies": {"b.sh -> /opt/b.sh"}})

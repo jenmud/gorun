@@ -15,7 +15,7 @@ import (
 // rootOnlyKeys can only be set in the root Gorunfile, so an included file can't change
 // settings that apply to the whole run.
 var rootOnlyKeys = [][]string{
-	{"title"}, {"log_level"}, {"max_parallel"}, {"max_task_parallel"}, {"ssh"}, {"servers", "tasks"},
+	{"title"}, {"log_level"}, {"max_parallel"}, {"max_task_parallel"}, {"ssh"}, {"servers", "tasks"}, {"raw"},
 }
 
 // pendingHost is a server read from a file, composed once every file has been merged.
@@ -82,6 +82,9 @@ func (l *loader) read(r io.Reader, path string, root bool) error {
 		for _, key := range undecoded {
 			if isVarsNestedKey(key) {
 				continue
+			}
+			if msg := removedKey(key); msg != "" {
+				return fmt.Errorf("%s: %s", key.String(), msg)
 			}
 			keys = append(keys, key.String())
 		}
@@ -385,4 +388,33 @@ func putAll[V any](dst *map[string]V, src map[string]V) {
 	for k, v := range src {
 		(*dst)[k] = v
 	}
+}
+
+// removedKeys are the _template keys v0.20 removed, when every setting became a template, and
+// what to write instead.
+var removedKeys = map[string]string{
+	"cmd_template":      "write cmd",
+	"cmd_template_file": "write cmd_file",
+	"check_template":    "write check",
+	"verify_template":   "write verify",
+	"envvars_template":  "write envvars",
+	"dst_template":      "write dst",
+	"src_template":      "write src, with render = true to fill the file in",
+	"src_tmpl":          "write src, with render = true to fill the file in",
+}
+
+// removedKey explains a key gorun no longer reads, or returns "" for any other key.
+func removedKey(key toml.Key) string {
+	if len(key) == 0 {
+		return ""
+	}
+	last := key[len(key)-1]
+	instead, ok := removedKeys[last]
+	if !ok && last == "template" && len(key) >= 2 && slices.Contains([]string{"copy", "copies", "upload", "files"}, key[len(key)-2]) {
+		instead, ok = removedKeys["src_template"], true
+	}
+	if !ok {
+		return ""
+	}
+	return "removed in v0.20: every setting is a template now, so " + instead + " (and raw = true for text to keep exactly as written)"
 }

@@ -10,7 +10,7 @@ title = "Service Deck"
 local = true
 description = "Check the service answers on /health"
 # real: curl -fsS --max-time 5 http://localhost:8080/health
-cmd_template = "sleep 0.5; sleep $JITTER; {{if eq .Name \"worker-2\"}}echo 'curl: (7) Failed to connect to localhost port 8080: Connection refused' >&2; exit 7{{else}}echo 'GET /health 200 OK in 14ms'{{end}}"
+cmd = "sleep 0.5; sleep $JITTER; {{if eq .Name \"worker-2\"}}echo 'curl: (7) Failed to connect to localhost port 8080: Connection refused' >&2; exit 7{{else}}echo 'GET /health 200 OK in 14ms'{{end}}"
 
 # --- restart nginx ----------------------------------------------------------------------
 [tasks.nginx-config-test]

@@ -1733,7 +1733,7 @@ details = "Removes everything, so the next run sets up from nothing. Run it with
 cmd = "rm -rf /tmp/devserver && echo 'cleaned up'"
 
 [tasks.server-info]
-cmd_template = "echo '{{.Name}}: tags={{range .Tags}}{{.}} {{end}}'"
+cmd = "echo '{{.Name}}: tags={{range .Tags}}{{.}} {{end}}'"
 description = "Print the host tags"
 details = "Shows the resolved tags for the host."
 rerun = "safe"

@@ -165,7 +165,7 @@ func TestRunMaxParallel(t *testing.T) {
 	cfg := Config{
 		MaxParallel: limit,
 		Tasks: map[string]Task{
-			"gate": {Name: "gate", CmdTemplate: command, Local: true, Timeout: 2 * time.Second},
+			"gate": {Name: "gate", Cmd: command, Local: true, Timeout: 2 * time.Second},
 		},
 		Servers: servers,
 	}
@@ -248,7 +248,7 @@ func TestConfig_Load_Errors(t *testing.T) {
 func TestConfig_Load_TaskVars(t *testing.T) {
 	gorunfile := `
 [tasks.sites]
-cmd_template = "echo {{range .vars.sites}}{{.host}} {{end}}"
+cmd = "echo {{range .vars.sites}}{{.host}} {{end}}"
 
 [tasks.sites.vars]
 region = "eu-west-1"

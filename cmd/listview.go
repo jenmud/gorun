@@ -592,7 +592,7 @@ func newTaskDetail(cfg *gorun.Config, task gorun.Task) *taskDetail {
 		details:       task.Details,
 		execution:     taskExecutionOptions(task),
 		check:         taskCheckText(task),
-		verify:        task.VerifyText(),
+		verify:        task.Verify,
 		copies:        task.CopySummaries(),
 		commandSource: "none",
 		commandLoaded: true,
@@ -603,19 +603,11 @@ func newTaskDetail(cfg *gorun.Config, task gorun.Task) *taskDetail {
 	for key, value := range cfg.EnvVars {
 		d.envVars[strings.ToUpper(key)] = value
 	}
-	for _, layer := range []map[string]string{task.EnvVars, task.EnvVarsTemplate} {
-		for key, value := range layer {
-			d.envVars[strings.ToUpper(key)] = value
-		}
+	for key, value := range task.EnvVars {
+		d.envVars[strings.ToUpper(key)] = value
 	}
 
 	switch {
-	case task.CmdTemplate != "":
-		d.commandSource, d.command = "cmd_template", task.CmdTemplate
-	case task.CmdTemplateFile != "":
-		d.commandSource = "cmd_template_file · " + task.CmdTemplateFile
-		d.commandFile = task.CmdTemplateFile
-		d.commandLoaded = false
 	case task.Cmd != "":
 		d.commandSource, d.command = "cmd", task.Cmd
 	case task.CmdFile != "":
@@ -679,9 +671,10 @@ func taskExecutionOptions(task gorun.Task) []taskOption {
 		{name: "Log level", value: logLevel},
 		{name: "Depends on", value: dependsOn},
 		{name: "File copies", value: fmt.Sprint(copies)},
-		{name: "Check", value: cmp.Or(task.CheckText(), "none")},
+		{name: "Check", value: cmp.Or(task.Check, "none")},
 		{name: "Check copies", value: yesNo(task.CheckCopies)},
-		{name: "Verify", value: cmp.Or(task.VerifyText(), "none")},
+		{name: "Verify", value: cmp.Or(task.Verify, "none")},
+		{name: "Templates", value: templatesLabel(task.Raw)},
 	}
 }
 
@@ -1114,7 +1107,15 @@ func bundleTreeNodes(cfg *gorun.Config) []*treeNode {
 // taskCheckText is a task's check as it runs: the copy comparison first, when it has one.
 func taskCheckText(task gorun.Task) string {
 	if !task.CheckCopies {
-		return task.CheckText()
+		return task.Check
 	}
-	return strings.TrimSuffix("compare copies (md5); "+task.CheckText(), "; ")
+	return strings.TrimSuffix("compare copies (md5); "+task.Check, "; ")
+}
+
+// templatesLabel says whether a task's settings are templates, or raw.
+func templatesLabel(raw bool) string {
+	if raw {
+		return "off (raw = true): used exactly as written"
+	}
+	return "on: filled in for each server"
 }

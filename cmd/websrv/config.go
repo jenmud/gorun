@@ -899,24 +899,24 @@ func copyEntries(v any) []map[string]any {
 	return nil
 }
 
-// copyLines renders a task's file and template copies as the form's lines: "src -> dst", or
-// "template src -> dst". Inline-text copies can't be written that way, so they are counted
-// instead, and the form leaves them alone.
+// copyLines renders a task's file copies as the form's lines: "src -> dst", or "template src
+// -> dst" for a file filled in as a template (render = true). Inline-text and raw copies can't
+// be written that way, so they are counted instead, and the form leaves them alone.
 func copyLines(body map[string]any) (lines string, inline int) {
 	var out []string
 	for _, key := range copyKeys {
 		for _, c := range copyEntries(body[key]) {
-			if str(c, "content") != "" {
+			if keptCopy(c) {
 				inline++
 				continue
 			}
-			dst := cmp.Or(str(c, "dst"), str(c, "dst_path"), str(c, "dest"), str(c, "dst_template"))
+			dst := cmp.Or(str(c, "dst"), str(c, "dst_path"), str(c, "dest"))
 			src := cmp.Or(str(c, "src"), str(c, "src_file"))
 			if dst == "" && str(c, "dir") != "" && src != "" {
 				dst = path.Join(str(c, "dir"), filepath.Base(src))
 			}
-			if tpl := cmp.Or(str(c, "src_template"), str(c, "template"), str(c, "src_tmpl")); tpl != "" {
-				out = append(out, "template "+tpl+" -> "+dst)
+			if render, _ := c["render"].(bool); render {
+				out = append(out, "template "+src+" -> "+dst)
 			} else {
 				out = append(out, src+" -> "+dst)
 			}
@@ -925,8 +925,8 @@ func copyLines(body map[string]any) (lines string, inline int) {
 	return strings.Join(out, "\n"), inline
 }
 
-// parseCopyLines reads the form's copy lines: "local -> server", or "template local -> server".
-// A server path with "{{" in it is saved as dst_template. Blank lines are skipped.
+// parseCopyLines reads the form's copy lines: "local -> server", or "template local -> server"
+// for a file to fill in as a template. Blank lines are skipped.
 func parseCopyLines(text string) ([]map[string]any, error) {
 	var out []map[string]any
 	for _, line := range strings.Split(text, "\n") {
@@ -939,15 +939,10 @@ func parseCopyLines(text string) ([]map[string]any, error) {
 		if !ok || src == "" || dst == "" {
 			return nil, fmt.Errorf("can't read the copy %q: write it as local/path -> /path/on/server", line)
 		}
-		// a destination with a template action in it is rendered for each server
-		dstKey := "dst"
-		if strings.Contains(dst, "{{") {
-			dstKey = "dst_template"
-		}
 		if tpl, isTpl := strings.CutPrefix(src, "template "); isTpl {
-			out = append(out, map[string]any{"src_template": strings.TrimSpace(tpl), dstKey: dst})
+			out = append(out, map[string]any{"src": strings.TrimSpace(tpl), "render": true, "dst": dst})
 		} else {
-			out = append(out, map[string]any{"src": src, dstKey: dst})
+			out = append(out, map[string]any{"src": src, "dst": dst})
 		}
 	}
 	return out, nil
@@ -971,7 +966,7 @@ func applyCopies(body map[string]any, form url.Values) error {
 	var kept []map[string]any
 	for _, key := range copyKeys {
 		for _, c := range copyEntries(body[key]) {
-			if str(c, "content") != "" {
+			if keptCopy(c) {
 				kept = append(kept, c)
 			}
 		}
@@ -1016,4 +1011,11 @@ func applyRunSettings(body map[string]any, form url.Values) error {
 func str(m map[string]any, k string) string {
 	s, _ := m[k].(string)
 	return s
+}
+
+// keptCopy reports whether a copy is one the form can't show as a line, and so keeps as it is:
+// inline text, or a raw copy.
+func keptCopy(c map[string]any) bool {
+	raw, _ := c["raw"].(bool)
+	return str(c, "content") != "" || raw
 }

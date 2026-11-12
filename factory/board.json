@@ -37,6 +37,36 @@
       "decision": "APPROVE",
       "note": "",
       "updated": "2026-11-12T22:29:19Z"
+    },
+    {
+      "id": "003-serve-flag",
+      "title": "Add -serve (with -web as an alias) and a startup message",
+      "branch": "factory/003-serve-flag",
+      "stage": "merged",
+      "round": 3,
+      "reviews": {
+        "security": "PASS",
+        "ux": "PASS",
+        "ui": "PASS",
+        "code": "PASS"
+      },
+      "rounds": [
+        {
+          "security": "CHANGES",
+          "ux": "PASS",
+          "ui": "PASS",
+          "code": "CHANGES"
+        },
+        {
+          "security": "CHANGES",
+          "ux": "PASS",
+          "ui": "PASS",
+          "code": "PASS"
+        }
+      ],
+      "decision": "APPROVE (human)",
+      "note": "",
+      "updated": "2026-11-13T00:43:36Z"
     }
   ]
 }

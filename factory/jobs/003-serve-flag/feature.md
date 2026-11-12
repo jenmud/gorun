@@ -1,0 +1,1 @@
+With gorun, change -web to be an alias to -serve. It also needs to print a message that the server has started and is listening for client connections. It should note the address:port and any other useful information, like NATS etc.

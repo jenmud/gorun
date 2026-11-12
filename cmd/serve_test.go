@@ -46,12 +46,13 @@ func TestUsageDocumentsServeAndWebAlias(t *testing.T) {
 	}
 }
 
+// TestDocsUseServeFlag also scans the recipes' Gorunfiles, whose comments name the flag.
 func TestDocsUseServeFlag(t *testing.T) {
 	files := []string{"../README.md", "../Makefile", "../AGENTS.md", "Gorunfile.empty"}
 	docs, _ := filepath.Glob("../docs/*.md")
 	files = append(files, docs...)
 	_ = filepath.WalkDir("../recipes", func(path string, d os.DirEntry, err error) error {
-		if err == nil && d.Name() == "README.md" {
+		if err == nil && (d.Name() == "README.md" || d.Name() == "Gorunfile") {
 			files = append(files, path)
 		}
 		return nil

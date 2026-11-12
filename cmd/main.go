@@ -140,7 +140,8 @@ func parseArgs(fs *flag.FlagSet, args []string) *options {
 	o := &options{}
 	for name, dst := range map[string]*bool{
 		"v": &o.verbose, "plain": &o.plain, "run": &o.run, "r": &o.run, "dump": &o.dump, "version": &o.version,
-		"serve": &o.serve, "web": &o.serve, "history": &o.history, "update-includes": &o.updateIncludes, "force": &o.force, "check": &o.checkOnly,
+		"serve": &o.serve, "web": &o.serve, "history": &o.history,
+		"update-includes": &o.updateIncludes, "force": &o.force, "check": &o.checkOnly,
 		"list-tasks": &o.listTasks, "list-servers": &o.listServers, "list-tags": &o.listTags,
 		"list-groups": &o.listGroups, "list-server-groups": &o.listGroups, "list-bundles": &o.listBundles,
 	} {

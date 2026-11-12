@@ -1,5 +1,5 @@
 # Recipe 5: scheduled jobs. Everything runs on this machine, so no servers are needed.
-# Plain runs (-r) run only the server tasks below, once. Schedules run inside `gorun -web`.
+# Plain runs (-r) run only the server tasks below, once. Schedules run inside `gorun -serve`.
 # Checks work the same in a scheduled run: backup runs at most once a day, however often the
 # schedule (or a catch-up run, or you) starts it. heartbeat has no check, so it always runs.
 title = "Recipe 5: scheduled jobs"

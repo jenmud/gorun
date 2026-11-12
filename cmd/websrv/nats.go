@@ -1,6 +1,7 @@
 package websrv
 
 import (
+	"errors"
 	"net/url"
 	"regexp"
 
@@ -27,6 +28,11 @@ func natsStartState(emb *natsserver.Embedded, nc *inats.Client, connectErr error
 	case skipped:
 		return natsState{mode: "off", reason: "GORUN_SKIP_NATS is set"}
 	case connectErr != nil:
+		var urlErr *url.Error
+		if errors.As(connectErr, &urlErr) {
+			// a url.Error quotes the URL, credentials and all, and may not parse well enough to scrub
+			return natsState{mode: "off", reason: "GORUN_NATS_CLIENT_URL is not a valid URL"}
+		}
 		return natsState{mode: "off", reason: scrubUserinfo(connectErr.Error())}
 	}
 	return natsState{mode: "off", reason: "no NATS server answered"}
@@ -37,14 +43,15 @@ func natsStartState(emb *natsserver.Embedded, nc *inats.Client, connectErr error
 func withoutUserinfo(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return scrubUserinfo(raw)
+		return ""
 	}
 	u.User = nil
 	return u.String()
 }
 
-// userinfoRE matches the userinfo part of any URL in a piece of text.
-var userinfoRE = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.-]*://)[^/\s@]*@`)
+// userinfoRE matches the userinfo of any URL in a piece of text, up to its last @, so a password
+// with an unencoded / is caught too.
+var userinfoRE = regexp.MustCompile(`([A-Za-z][A-Za-z0-9+.-]*://)[^\s"]*@`)
 
 // scrubUserinfo removes userinfo from every URL in s, such as one echoed in a connect error.
 func scrubUserinfo(s string) string { return userinfoRE.ReplaceAllString(s, "$1") }

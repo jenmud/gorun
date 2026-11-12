@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"cmp"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"strings"
 	"text/template"
 	"time"
 )
@@ -32,8 +35,9 @@ const (
 )
 
 // Copy is one file copy of a task. A source is one of Src (a file or directory), SrcTpl (a
-// template rendered for each server) or Content (inline text); the target is Dst, or Dir to keep
-// the source's name. The other fields are alternative spellings of those keys.
+// template rendered for each server) or Content (inline text); the target is Dst, DstTpl (a
+// template rendered for each server), or Dir to keep the source's name. The other fields are
+// alternative spellings of those keys.
 type Copy struct {
 	Src      string `toml:"src"`
 	SrcFile  string `toml:"src_file,omitempty"`
@@ -42,6 +46,7 @@ type Copy struct {
 	Template string `toml:"template,omitempty"`
 	Content  string `toml:"content,omitempty"`
 	Dst      string `toml:"dst"`
+	DstTpl   string `toml:"dst_template,omitempty"`
 	DstPath  string `toml:"dst_path,omitempty"`
 	Dir      string `toml:"dir,omitempty"`
 	Dest     string `toml:"dest,omitempty"`
@@ -80,6 +85,9 @@ type Task struct {
 	Upload          []Copy            `toml:"upload,omitempty"`
 	Files           []Copy            `toml:"files,omitempty"`
 	EnvVars         map[string]string `toml:"envvars"`
+	// EnvVarsTemplate are envvars whose values are templates, rendered for each server with
+	// the same data as cmd_template and then treated like envvars. A name may not be in both.
+	EnvVarsTemplate map[string]string `toml:"envvars_template,omitempty"`
 	Vars            map[string]any    `toml:"vars,omitempty"`
 	DependsOn       []string          `toml:"depends_on"`
 	Shell           string            `toml:"shell"`
@@ -106,12 +114,18 @@ type Task struct {
 	// code means yes, so the task runs. A check that can't run at all (or times out) fails the
 	// task. Config.Force skips the check.
 	Check string `toml:"check,omitempty"`
+	// CheckTemplate is Check as a template, rendered for each server like cmd_template. A task
+	// sets at most one of check and check_template.
+	CheckTemplate string `toml:"check_template,omitempty"`
 	// CheckCopies compares the MD5 of each file the task copies with the file on the server.
 	// When they all match, and Check (if set) exits 0 too, the task is unchanged.
 	CheckCopies bool `toml:"check_copies,omitempty"`
 	// Verify runs after the task's command succeeds, to confirm the change took: a non-zero
 	// exit fails the task.
 	Verify string `toml:"verify,omitempty"`
+	// VerifyTemplate is Verify as a template, rendered for each server like cmd_template. A
+	// task sets at most one of verify and verify_template.
+	VerifyTemplate string `toml:"verify_template,omitempty"`
 }
 
 // Attempts returns how many times the task may run, including the first try.
@@ -171,7 +185,7 @@ func (t Task) CopySummaries() []string {
 		case c.SrcTpl != "":
 			from = "template " + c.SrcTpl
 		}
-		out = append(out, from+" → "+c.target())
+		out = append(out, from+" → "+cmp.Or(c.target(), c.DstTpl))
 	}
 	return out
 }
@@ -183,7 +197,82 @@ func (t Task) commandSources() []string {
 
 // hasCheck reports whether the task checks whether there is anything to do before it runs.
 func (t Task) hasCheck() bool {
-	return t.Check != "" || t.CheckCopies
+	return t.Check != "" || t.CheckTemplate != "" || t.CheckCopies
+}
+
+// CheckText is the task's check as written: check, or check_template unrendered.
+func (t Task) CheckText() string {
+	return cmp.Or(t.Check, t.CheckTemplate)
+}
+
+// VerifyText is the task's verify as written: verify, or verify_template unrendered.
+func (t Task) VerifyText() string {
+	return cmp.Or(t.Verify, t.VerifyTemplate)
+}
+
+// ForServer returns the task with its templated settings rendered for server: check_template
+// into Check, verify_template into Verify, each copy's dst_template into Dst and
+// envvars_template into EnvVars. Everything that runs or shows the task afterwards then sees
+// plain values. The task's own slices and maps are copied, never changed in place, since
+// every server shares them.
+func (t Task) ForServer(server *Server) (Task, error) {
+	switch {
+	case t.Check != "" && t.CheckTemplate != "":
+		return t, fmt.Errorf("task %s cannot have both check and check_template", t.Name)
+	case t.Verify != "" && t.VerifyTemplate != "":
+		return t, fmt.Errorf("task %s cannot have both verify and verify_template", t.Name)
+	}
+	var err error
+	if t.CheckTemplate != "" {
+		if t.Check, err = t.render("check template for task "+t.Name, t.CheckTemplate, server); err != nil {
+			return t, err
+		}
+		t.CheckTemplate = ""
+	}
+	if t.VerifyTemplate != "" {
+		if t.Verify, err = t.render("verify template for task "+t.Name, t.VerifyTemplate, server); err != nil {
+			return t, err
+		}
+		t.VerifyTemplate = ""
+	}
+	for _, list := range []*[]Copy{&t.Copy, &t.Copies, &t.Upload, &t.Files} {
+		if *list = slices.Clone(*list); *list == nil {
+			continue
+		}
+		for i := range *list {
+			c := &(*list)[i]
+			if c.DstTpl == "" {
+				continue
+			}
+			if cmp.Or(c.Dst, c.DstPath, c.Dest) != "" {
+				return t, fmt.Errorf("task %s copy cannot have both dst and dst_template", t.Name)
+			}
+			if c.Dst, err = t.render("copy dst template for task "+t.Name, c.DstTpl, server); err != nil {
+				return t, err
+			}
+			if c.Dst = strings.TrimSpace(c.Dst); c.Dst == "" {
+				return t, fmt.Errorf("task %s copy dst template %q renders empty", t.Name, c.DstTpl)
+			}
+			c.DstTpl = ""
+		}
+	}
+	if len(t.EnvVarsTemplate) > 0 {
+		env := make(map[string]string, len(t.EnvVars)+len(t.EnvVarsTemplate))
+		for k, v := range t.EnvVars {
+			env[strings.ToUpper(k)] = v
+		}
+		for _, k := range slices.Sorted(maps.Keys(t.EnvVarsTemplate)) {
+			name := strings.ToUpper(k)
+			if _, ok := env[name]; ok {
+				return t, fmt.Errorf("task %s has envvar %s in both envvars and envvars_template", t.Name, name)
+			}
+			if env[name], err = t.render("envvars template "+name+" for task "+t.Name, t.EnvVarsTemplate[k], server); err != nil {
+				return t, err
+			}
+		}
+		t.EnvVars, t.EnvVarsTemplate = env, nil
+	}
+	return t, nil
 }
 
 // hasCommand reports whether the task runs a command (as opposed to only copying files).
@@ -228,7 +317,7 @@ func (t *Task) render(what, text string, server any) (string, error) {
 	return buf.String(), nil
 }
 
-// templateData is what cmd_template and copy templates see: every exported field of the server
+// templateData is what every template key (cmd, check, verify, copy src and dst, envvars) sees: every exported field of the server
 // at the top level ({{.Name}}, {{.Hostname}}, ...), the server itself as .Server, and the task's
 // vars as .Vars and .vars. Envvars are expanded from gorun's environment, so templates see the
 // resolved values and not the "$VAR" references.
@@ -317,8 +406,8 @@ func (t Task) validate() error {
 		case missing(c.Src):
 			return fmt.Errorf("copy source %s does not exist", c.Src)
 		}
-		if c.Dst == "" && c.Dir == "" {
-			return fmt.Errorf("task %s copy requires dst or dir", t.Name)
+		if c.Dst == "" && c.DstTpl == "" && c.Dir == "" {
+			return fmt.Errorf("task %s copy requires dst, dst_template or dir", t.Name)
 		}
 	}
 	return nil

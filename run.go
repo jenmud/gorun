@@ -155,6 +155,11 @@ func (c *Config) plan(servers []Server) ([]Server, error) {
 		s.LogLevel = cmp.Or(s.LogLevel, c.LogLevel)
 		for i := range s.Tasks {
 			t := &s.Tasks[i]
+			rendered, err := t.ForServer(&s)
+			if err != nil {
+				return nil, fmt.Errorf("server %s: %w", s.Name, err)
+			}
+			*t = rendered
 			t.LogLevel = cmp.Or(t.LogLevel, s.LogLevel)
 			// A task's environment is the global envvars, then the server's (with its
 			// groups'), then its own, later ones winning. Names are upper-cased and values
@@ -292,7 +297,7 @@ func (sr *serverRun) runTask(ctx context.Context, task *TaskExec) {
 	event := func(state TaskState) TaskEvent {
 		// envvars as written in the Gorunfile, not expanded, so secrets stay out of events
 		env := make(map[string]string, len(server.EnvVars))
-		for _, layer := range []map[string]string{server.EnvVars, c.Tasks[name].EnvVars} {
+		for _, layer := range []map[string]string{server.EnvVars, c.Tasks[name].EnvVars, c.Tasks[name].EnvVarsTemplate} {
 			for k, v := range layer {
 				env[strings.ToUpper(k)] = v
 			}

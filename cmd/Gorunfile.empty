@@ -63,12 +63,15 @@ local = true
 # local = true                    # only on local (no-SSH) servers; without it, only over SSH
 # check = "grep -q v2.4 /etc/app/version"  # runs first: exit 0 = nothing to do, so the task
 #                                 # is unchanged; any other exit code runs it; --force skips it
+# check_template = "test -d {{ .Server.Vars.config }}"  # check rendered per server, like cmd_template
 # check_copies = true             # compare the MD5 of each copy with the file on the server
 #                                 # (md5sum, md5 or openssl there; with none, it just copies):
 #                                 # all the same (and check, if set, exits 0) = unchanged
 # verify = "curl -fs localhost:8080/health"  # runs after the command: non-zero fails the task
 #                                 # without check or check_copies, a task always runs
+# verify_template = "test -s {{ .Server.Vars.config }}/app.conf"  # verify rendered per server
 # envvars = { NGINX_PORT = "8080" }
+# envvars_template = { SITE = "{{ .Name }}" }  # values rendered per server, then like envvars
 # vars = { port = 8080 }          # template data for this task only: {{.vars.port}}
 #                                 # may nest: [[tasks.example.vars.sites]] is a list
 #
@@ -79,7 +82,7 @@ local = true
 #
 # [[tasks.example.copy]]
 # src_template = "./templates/site.conf.tmpl"  # or content = "inline text"; rendered with the server
-# dst = "/etc/nginx/conf.d/site.conf"
+# dst = "/etc/nginx/conf.d/site.conf"  # or dst_template = "{{ .Server.Vars.config }}/site.conf"
 
 #
 # Bundles: named task lists. Use "@name" in any task list, or `--task @name`.

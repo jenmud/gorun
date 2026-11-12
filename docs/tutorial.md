@@ -247,7 +247,10 @@ instead, or in the **server's** own `vars` (read as `{{.Server.Vars.KEY}}`), whi
 way envvars do: global, then group, then host.
 
 The other kinds of copy: `src` copies a file, or a whole directory, as it is, and `content` writes
-inline text. Only `src_template` is rendered; `content` is copied literally.
+inline text. `src_template` is rendered; `src` and `content` are copied literally. A destination
+that differs per server can be a template too: `dst_template = "{{.Server.Vars.app_dir}}/Caddyfile"`.
+The same goes for checks, verifies and envvars (`check_template`, `verify_template`,
+`envvars_template`); see [templates](gorunfile.md#templates).
 
 ## 5. Give each server its own settings, and keep secrets out
 

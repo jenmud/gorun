@@ -69,13 +69,20 @@ func NewTaskExec(server *ssh.Client, task ...Task) ([]*TaskExec, error) {
 
 	tasks := make([]*TaskExec, len(task))
 	for i, t := range task {
+		// Config.Run renders templated settings for each server while planning; a task
+		// handed straight here is rendered for the default target instead.
+		target := &Server{Name: "localhost"}
+		t, err := t.ForServer(target)
+		if err != nil {
+			return nil, err
+		}
 		if err := t.validate(); err != nil {
 			return nil, err
 		}
 		tasks[i] = &TaskExec{
 			task:   t,
 			server: server,
-			target: &Server{Name: "localhost"},
+			target: target,
 			logger: NewLogger(t.LogLevel, logOutput, false).With(
 				slog.String("name", t.Name),
 				slog.String("shell", t.Shell),

@@ -62,7 +62,7 @@ any of them.
 - **Nothing runs by accident.** You pick servers and tasks in a picker first, and every task has a
   timeout.
 - **Grows with you.** Dependencies, bundles, server groups, tags, templates with per-task
-  variables, file copies, retries and secrets from your environment, when you need them. Large
+  variables (for commands, checks, verifies, copy sources and destinations, and envvars), file copies, retries and secrets from your environment, when you need them. Large
   fleets can be split across files with `include`.
 - **Write a task once.** Keep tasks in a git repository and include them in any Gorunfile, pinned to
   a tag or commit and locked in `Gorunfile.lock`:

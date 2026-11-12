@@ -592,7 +592,7 @@ func newTaskDetail(cfg *gorun.Config, task gorun.Task) *taskDetail {
 		details:       task.Details,
 		execution:     taskExecutionOptions(task),
 		check:         taskCheckText(task),
-		verify:        task.Verify,
+		verify:        task.VerifyText(),
 		copies:        task.CopySummaries(),
 		commandSource: "none",
 		commandLoaded: true,
@@ -603,8 +603,10 @@ func newTaskDetail(cfg *gorun.Config, task gorun.Task) *taskDetail {
 	for key, value := range cfg.EnvVars {
 		d.envVars[strings.ToUpper(key)] = value
 	}
-	for key, value := range task.EnvVars {
-		d.envVars[strings.ToUpper(key)] = value
+	for _, layer := range []map[string]string{task.EnvVars, task.EnvVarsTemplate} {
+		for key, value := range layer {
+			d.envVars[strings.ToUpper(key)] = value
+		}
 	}
 
 	switch {
@@ -677,9 +679,9 @@ func taskExecutionOptions(task gorun.Task) []taskOption {
 		{name: "Log level", value: logLevel},
 		{name: "Depends on", value: dependsOn},
 		{name: "File copies", value: fmt.Sprint(copies)},
-		{name: "Check", value: cmp.Or(task.Check, "none")},
+		{name: "Check", value: cmp.Or(task.CheckText(), "none")},
 		{name: "Check copies", value: yesNo(task.CheckCopies)},
-		{name: "Verify", value: cmp.Or(task.Verify, "none")},
+		{name: "Verify", value: cmp.Or(task.VerifyText(), "none")},
 	}
 }
 
@@ -1112,7 +1114,7 @@ func bundleTreeNodes(cfg *gorun.Config) []*treeNode {
 // taskCheckText is a task's check as it runs: the copy comparison first, when it has one.
 func taskCheckText(task gorun.Task) string {
 	if !task.CheckCopies {
-		return task.Check
+		return task.CheckText()
 	}
-	return strings.TrimSuffix("compare copies (md5); "+task.Check, "; ")
+	return strings.TrimSuffix("compare copies (md5); "+task.CheckText(), "; ")
 }

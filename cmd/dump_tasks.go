@@ -140,8 +140,13 @@ func dumpTasks(cfg *gorun.Config, dir string, servers map[string]gorun.Server, s
 // writeDumpedTask writes one task to dir as a runnable shell script, with its command rendered for server when there is one.
 func writeDumpedTask(cfg *gorun.Config, dir string, task gorun.Task, server gorun.Server, haveServer bool) error {
 	var target any // nil renders templates without a server
+	var srv *gorun.Server
 	if haveServer {
-		target = server
+		target, srv = server, &server
+	}
+	task, err := task.ForServer(srv) // envvars_template, so the script exports them too
+	if err != nil {
+		return err
 	}
 	cmd, err := task.CommandFor(target)
 	if err != nil {

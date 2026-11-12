@@ -148,9 +148,9 @@ func taskCards(cfg *gorun.Config, avg map[string]time.Duration) []ui.TaskCard {
 			Average:     avg[name],
 			Options:     executionOptions(t),
 			Copies:      t.CopySummaries(),
-			Check:       t.Check,
+			Check:       t.CheckText(),
 			CheckCopies: t.CheckCopies,
-			Verify:      t.Verify,
+			Verify:      t.VerifyText(),
 			DependsOn:   t.DependsOn,
 			InBundles:   inBundles[name],
 			RunsOn:      runsOn[name],
@@ -165,8 +165,10 @@ func taskCards(cfg *gorun.Config, avg map[string]time.Duration) []ui.TaskCard {
 		for k, v := range cfg.EnvVars {
 			c.EnvVars[strings.ToUpper(k)] = v
 		}
-		for k, v := range t.EnvVars {
-			c.EnvVars[strings.ToUpper(k)] = v
+		for _, layer := range []map[string]string{t.EnvVars, t.EnvVarsTemplate} {
+			for k, v := range layer {
+				c.EnvVars[strings.ToUpper(k)] = v
+			}
 		}
 		c.CommandSource, c.Command = taskCommand(t, filepath.Dir(cfg.Path))
 		cards = append(cards, c)
@@ -194,10 +196,10 @@ func taskBadges(t gorun.Task) []string {
 	if t.Local {
 		b = append(b, "local only")
 	}
-	if t.Check != "" || t.CheckCopies {
+	if t.CheckText() != "" || t.CheckCopies {
 		b = append(b, "check")
 	}
-	if t.Verify != "" {
+	if t.VerifyText() != "" {
 		b = append(b, "verify")
 	}
 	if t.Rerun == gorun.RerunUnsafe {
@@ -275,9 +277,9 @@ func executionOptions(t gorun.Task) []ui.Option {
 		{Name: "Local only", Value: yes(t.Local)},
 		{Name: "Log level", Value: or(t.LogLevel, "inherit")},
 		{Name: "File copies", Value: fmt.Sprint(copies)},
-		{Name: "Check", Value: or(t.Check, "none")},
+		{Name: "Check", Value: or(t.CheckText(), "none")},
 		{Name: "Check copies", Value: yes(t.CheckCopies)},
-		{Name: "Verify", Value: or(t.Verify, "none")},
+		{Name: "Verify", Value: or(t.VerifyText(), "none")},
 	}
 }
 
@@ -297,7 +299,7 @@ func taskFiles(t gorun.Task, dir string) []ui.FileRef {
 	add("cmd_file", t.CmdFile)
 	add("cmd_template_file", t.CmdTemplateFile)
 	for _, c := range slices.Concat(t.Copy, t.Copies, t.Upload, t.Files) {
-		dst := cmp.Or(c.Dst, c.DstPath, c.Dest, c.Dir)
+		dst := cmp.Or(c.Dst, c.DstPath, c.Dest, c.DstTpl, c.Dir)
 		add("template → "+dst, cmp.Or(c.SrcTpl, c.Template, c.SrcTmpl))
 		add("copy → "+dst, cmp.Or(c.Src, c.SrcFile))
 	}

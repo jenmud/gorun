@@ -910,7 +910,7 @@ func copyLines(body map[string]any) (lines string, inline int) {
 				inline++
 				continue
 			}
-			dst := cmp.Or(str(c, "dst"), str(c, "dst_path"), str(c, "dest"))
+			dst := cmp.Or(str(c, "dst"), str(c, "dst_path"), str(c, "dest"), str(c, "dst_template"))
 			src := cmp.Or(str(c, "src"), str(c, "src_file"))
 			if dst == "" && str(c, "dir") != "" && src != "" {
 				dst = path.Join(str(c, "dir"), filepath.Base(src))
@@ -926,7 +926,7 @@ func copyLines(body map[string]any) (lines string, inline int) {
 }
 
 // parseCopyLines reads the form's copy lines: "local -> server", or "template local -> server".
-// Blank lines are skipped.
+// A server path with "{{" in it is saved as dst_template. Blank lines are skipped.
 func parseCopyLines(text string) ([]map[string]any, error) {
 	var out []map[string]any
 	for _, line := range strings.Split(text, "\n") {
@@ -939,10 +939,15 @@ func parseCopyLines(text string) ([]map[string]any, error) {
 		if !ok || src == "" || dst == "" {
 			return nil, fmt.Errorf("can't read the copy %q: write it as local/path -> /path/on/server", line)
 		}
+		// a destination with a template action in it is rendered for each server
+		dstKey := "dst"
+		if strings.Contains(dst, "{{") {
+			dstKey = "dst_template"
+		}
 		if tpl, isTpl := strings.CutPrefix(src, "template "); isTpl {
-			out = append(out, map[string]any{"src_template": strings.TrimSpace(tpl), "dst": dst})
+			out = append(out, map[string]any{"src_template": strings.TrimSpace(tpl), dstKey: dst})
 		} else {
-			out = append(out, map[string]any{"src": src, "dst": dst})
+			out = append(out, map[string]any{"src": src, dstKey: dst})
 		}
 	}
 	return out, nil

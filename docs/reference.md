@@ -92,16 +92,16 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | Key | Description |
 |---|---|
 | `cmd`, `cmd_file`, `cmd_template`, `cmd_template_file` | the command (pick one) |
-| `copy` (also `copies`, `upload`, `files`) | file copies: `src`, `src_template` or `content`; `dst` (or `dir` with `src`) |
+| `copy` (also `copies`, `upload`, `files`) | file copies: `src`, `src_template` or `content`; `dst`, `dst_template` (or `dir` with `src`) |
 | `depends_on` | tasks that must run first |
 | `sudo` | run with `sudo -n` |
 | `shell` | shell for local hosts (default `sh -c`) |
-| `envvars` | env vars for this task |
+| `envvars`, `envvars_template` | env vars for this task; `envvars_template` values are templates rendered per server |
 | `vars` | [template variables](gorunfile.md#task-variables) for this task: a map, which may hold nested tables and lists |
 | `log_level` | log level for this task |
 | `timeout` | Go duration, default `30m` |
 | `retries`, `retry_delay`, `retry_unsafe` | [retries](gorunfile.md#retries) |
-| `check`, `check_copies`, `verify` | [checks](gorunfile.md#checks-run-only-when-needed): skip the task when there is nothing to do (a command, or an MD5 comparison of its copies), and confirm the change afterwards |
+| `check`, `check_template`, `check_copies`, `verify`, `verify_template` | [checks](gorunfile.md#checks-run-only-when-needed): skip the task when there is nothing to do (a command, or an MD5 comparison of its copies), and confirm the change afterwards |
 | `description`, `details`, `rerun` | [descriptions and rerun safety](gorunfile.md#descriptions-and-rerun-safety) |
 | `local` | run only on local (no-SSH) servers; without it, the task runs only over SSH |
 

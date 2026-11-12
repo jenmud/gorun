@@ -95,6 +95,21 @@ Templates are [Go templates](https://pkg.go.dev/text/template) that see the serv
 cmd_template = "echo 'hello from {{.Name}} on {{.Hostname}}'"
 ```
 
+The same data reaches every templated key. Each one is the `_template` form of a plain key,
+and a task sets one or the other, never both:
+
+| Plain | Template |
+|---|---|
+| `cmd`, `cmd_file` | `cmd_template`, `cmd_template_file` |
+| `check` | `check_template` ([checks](#checks-run-only-when-needed)) |
+| `verify` | `verify_template` |
+| a copy's `src` | a copy's `src_template` ([copies](#copying-files)) |
+| a copy's `dst` | a copy's `dst_template` |
+| `envvars` | `envvars_template` ([env vars](#environment-variables-and-secrets)) |
+
+The plain keys are never rendered, so a literal `{{` in one (`docker ps --format '{{.Names}}'`)
+stays as written.
+
 ### Task variables
 
 A task can carry its own data in `[tasks.<name>.vars]` (or inline as `vars = { ... }`), which its
@@ -132,8 +147,8 @@ Inside a `range`, `.` is the item being looped over and `$` is still the whole t
 `{{$.vars.port}}` reaches the port from inside the loop.
 
 `vars` belong to the task, so they are the same wherever it runs, and they reach that task's
-templates only — `cmd_template`, `cmd_template_file` and a copy's `src_template` — never the
-command's environment. For a value the command needs, a secret, or anything that differs per
+templates only — the [`_template` keys](#templates) — and reach the command's environment only
+through `envvars_template`. For a value the command needs, a secret, or anything that differs per
 server or group, use [envvars](#environment-variables-and-secrets) and read it in a template with
 `{{index .EnvVars "NAME"}}`.
 
@@ -177,6 +192,7 @@ dst = "/tmp/site.conf"
 | Target | Means |
 |---|---|
 | `dst` | the target path |
+| `dst_template` | the target path as a template, rendered for each server: `"{{ .Server.Vars.config }}/app.conf"` |
 | `dir` | a target directory, keeping the file's name (with `src` only) |
 
 Good to know:
@@ -269,6 +285,15 @@ envvars = { TOKEN = "${REGISTRY_TOKEN}" }
 ```
 
 - Use `$$` for a literal `$`. An unset variable becomes an empty string.
+- `envvars_template` on a task is envvars whose values are [templates](#templates), rendered for
+  each server and then treated exactly like `envvars` (so `$VAR` still expands). A name may be
+  in `envvars` or `envvars_template`, not both:
+
+  ```toml
+  [tasks.compose-up]
+  cmd = 'docker compose -f "$COMPOSE_FILE" up -d'
+  envvars_template = { COMPOSE_FILE = "{{ .Server.Vars.config }}/docker-compose.yml" }
+  ```
 - Values are sent to the task over stdin, so they don't appear in gorun's logs, the history, NATS
   events or the server's process list.
 
@@ -341,7 +366,16 @@ sudo   = true
   `timeout`. The timeout covers all three. A retry runs the check again.
 - A check runs before the task's copies, so it can't look at the files being copied; use
   `check_copies` for that.
-- They are plain commands, like `cmd`: they aren't templates.
+- `check` and `verify` are plain commands, like `cmd`. For one rendered for each server, use
+  `check_template` and `verify_template`, which see the same data as `cmd_template`:
+
+  ```toml
+  [tasks.config-dir]
+  check_template  = "test -d {{ .Server.Vars.config }}"
+  cmd_template    = "mkdir -p {{ .Server.Vars.config }}"
+  verify_template = "test -d {{ .Server.Vars.config }}"
+  sudo = true
+  ```
 - The live view shows *checking* and *verifying* as they run, and a task the check skipped
   as `=` *unchanged*. History keeps each one's command, exit code and output.
 
@@ -741,6 +775,9 @@ Every key, grouped by the table it belongs to. `gorun -dump` prints the same lis
 | `sudo` | run with `sudo -n` |
 | `shell` | shell for local hosts (default `sh -c`) |
 | `envvars` | env vars for this task |
+| `envvars_template` | env vars whose values are templates, rendered for each server |
+| `check`, `check_template`, `check_copies` | checks: skip the task when there is nothing to do |
+| `verify`, `verify_template` | confirm the change after the command |
 | `vars` | template variables for this task (map, may nest) |
 | `log_level` | log level for this task |
 | `timeout` | Go duration, default `30m` |
@@ -757,6 +794,7 @@ Every key, grouped by the table it belongs to. `gorun -dump` prints the same lis
 | `src_template` (also `src_tmpl`, `template`) | a template rendered for each server |
 | `content` | inline text written to `dst` |
 | `dst` (also `dst_path`, `dest`) | destination path on the server |
+| `dst_template` | destination path as a template, rendered for each server |
 | `dir` | destination directory (keeps the source file name) |
 | `mode` (also `perm`) | file mode, e.g. `0644` |
 

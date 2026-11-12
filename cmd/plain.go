@@ -22,6 +22,9 @@ type plainPrinter struct {
 	copied map[string]int
 	// checkOnly is set for a dry run, whose summary says what would run.
 	checkOnly bool
+	// servers and ok feed the closing summary line; ProcessFinishedEvent has no count of either.
+	servers int
+	ok      int
 }
 
 // event prints what one run event means for the plain output.
@@ -44,6 +47,7 @@ func (p *plainPrinter) event(event any) {
 				}
 			}
 		case gorun.TaskDone:
+			p.ok++
 			verified := ""
 			if ev.Verify != nil {
 				verified = "verified, "
@@ -87,16 +91,17 @@ func (p *plainPrinter) event(event any) {
 	case gorun.ServerErrorEvent:
 		fmt.Fprintf(p.w, "%s: FAILED: %v\n", ev.Server, ev.Err)
 	case gorun.ProcessStartedEvent:
+		p.servers = len(ev.Servers)
 		if p.checkOnly = ev.CheckOnly; ev.CheckOnly {
 			fmt.Fprintln(p.w, "check only: running checks, nothing will change")
 		}
 	case gorun.ProcessFinishedEvent:
-		switch {
-		case p.checkOnly:
+		if p.checkOnly {
 			fmt.Fprintf(p.w, "%d would run, %d unchanged\n", ev.WouldRun, ev.Unchanged)
-		case ev.Unchanged > 0:
-			fmt.Fprintf(p.w, "%d unchanged (their checks found nothing to do)\n", ev.Unchanged)
+			break
 		}
+		fmt.Fprintf(p.w, "summary: %d servers, %d tasks, %d ok, %d unchanged, %d skipped, %d failed (%s)\n",
+			p.servers, ev.TotalTasks, p.ok, ev.Unchanged, ev.Skipped, ev.Failed, ev.Duration.Round(time.Millisecond))
 	case gorun.CopyProgressEvent:
 		p.copyProgress(ev)
 	}

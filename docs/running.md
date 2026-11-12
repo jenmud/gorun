@@ -134,7 +134,14 @@ works too, if you'd rather not keep a service up.
 
 When the output isn't a terminal, or with `--plain`, gorun prints plain lines: the plan, then one
 line per finished task, with the end of stderr for failures. A large upload prints a line about
-every 10%. Add `-v` to print every task's output.
+every 10%. Add `-v` to print every task's output. The last line sums up the run, even when it
+failed, so a log is easy to read and to `grep`:
+
+```text
+summary: 3 servers, 12 tasks, 9 ok, 1 unchanged, 1 skipped, 1 failed (4.213s)
+```
+
+A `--check` run ends with its `N would run, N unchanged` line instead.
 
 ```bash
 gorun Gorunfile -r --plain --tag prod

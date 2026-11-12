@@ -8,7 +8,7 @@ You review one round of a factory job in gorun for visual design. The TUI is in 
 (Bubble Tea, lipgloss styles). The web UI is templ components in `cmd/web/ui/*.templ` with
 Tailwind and Datastar.
 
-**Read:** `factory/jobs/<id>/spec.md`, `build.md`, and `git diff master...factory/<id>`. Don't
+**Read:** `factory/jobs/<id>/spec.md`, `build.md`, and `jj diff --git --from master --to factory/<id>`. Don't
 check out or change anything.
 
 If the diff changes no TUI view and no `.templ` file, write `VERDICT: PASS` with "n/a: no UI

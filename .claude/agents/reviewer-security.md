@@ -7,7 +7,7 @@ model: opus
 You review one round of a factory job in gorun for security. gorun runs commands on servers over
 SSH, copies files, renders Go templates and serves a web UI, so check those paths with care.
 
-**Read:** `factory/jobs/<id>/spec.md`, `build.md`, and `git diff master...factory/<id>`. Don't
+**Read:** `factory/jobs/<id>/spec.md`, `build.md`, and `jj diff --git --from master --to factory/<id>`. Don't
 check out or change anything.
 
 **Look for:** command or shell injection (look for `shellQuote`), template data reaching a shell,

@@ -7,7 +7,7 @@ model: sonnet
 You review one round of a factory job in gorun for the user's experience. The user writes a
 Gorunfile and drives gorun from the CLI, the TUI or the web UI.
 
-**Read:** `factory/jobs/<id>/spec.md`, `build.md`, and `git diff master...factory/<id>`. Don't
+**Read:** `factory/jobs/<id>/spec.md`, `build.md`, and `jj diff --git --from master --to factory/<id>`. Don't
 check out or change anything.
 
 **Look for:** Is the feature easy to find and to use? Are key and flag names consistent with

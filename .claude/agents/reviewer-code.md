@@ -7,14 +7,14 @@ model: sonnet
 You review one round of a factory job in gorun for correctness and code quality. Read
 `AGENTS.md` for the layout and gotchas.
 
-**Read:** `factory/jobs/<id>/spec.md`, `build.md`, and `git diff master...factory/<id>`.
+**Read:** `factory/jobs/<id>/spec.md`, `build.md`, and `jj diff --git --from master --to factory/<id>`.
 
 **Run** the tests without touching the main checkout:
 
 ```bash
-git worktree add -f /tmp/review-<id>-<n> factory/<id>
-(cd /tmp/review-<id>-<n> && gofmt -l . | grep -v ^vendor/ ; go vet ./... && go test -race ./...)
-git worktree remove --force /tmp/review-<id>-<n>
+jj workspace add .factory-ws/review-<id>-<n> --name review-<id>-<n> -r factory/<id>
+(cd .factory-ws/review-<id>-<n> && gofmt -l . | grep -v ^vendor/ ; go vet ./... && go test -race ./...)
+jj workspace forget review-<id>-<n> && rm -rf .factory-ws/review-<id>-<n>
 ```
 
 **Look for:** each acceptance criterion has a test that really checks it; bugs and edge cases;

@@ -1,1 +1,42 @@
-{ "jobs": [] }
+{
+  "jobs": [
+    {
+      "id": "001-plain-run-summary",
+      "title": "One-line summary at the end of a -plain run",
+      "branch": "factory/001-plain-run-summary",
+      "stage": "merged",
+      "round": 1,
+      "reviews": {
+        "security": "PASS",
+        "ux": "PASS",
+        "ui": "PASS",
+        "code": "PASS"
+      },
+      "rounds": [],
+      "decision": "APPROVE",
+      "note": "",
+      "updated": "2026-11-12T22:01:05Z"
+    },
+    {
+      "id": "002-plain-abort-message",
+      "title": "Say so when -plain gets ctrl-c and is shutting down",
+      "branch": "factory/002-plain-abort-message",
+      "stage": "merged",
+      "round": 2,
+      "reviews": {
+        "security": "PASS",
+        "ux": "PASS",
+        "ui": "PASS",
+        "code": "PASS"
+      },
+      "rounds": [
+        {
+          "human": "CHANGES"
+        }
+      ],
+      "decision": "APPROVE",
+      "note": "",
+      "updated": "2026-11-12T22:29:19Z"
+    }
+  ]
+}

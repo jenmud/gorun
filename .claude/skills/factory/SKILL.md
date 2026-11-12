@@ -21,7 +21,9 @@ feature → spec-writer (opus) → builder (opus)
 
 - `MAX_FIX_ROUNDS = 2`. The builder can be sent back twice, so a job has at most 3 review rounds.
 - `REVIEWERS = security, ux, ui, code`. Agent `reviewer-<r>` writes `round-<n>/review-<r>.md`.
-- The default branch is `master`. Never push. The human pushes.
+- The default bookmark is `master`. Never push. The human pushes.
+- The repo uses jj, not git. Agents build and test in jj workspaces under the gitignored
+  `.factory-ws/`, so the main checkout (where `factory/` lives) never moves.
 - Run one job at a time.
 
 ## Files
@@ -38,7 +40,8 @@ factory/jobs/<id>/decision.md      # approver, starts "APPROVE" or "ESCALATE"
 ```
 
 A job id is `NNN-slug`: the next free 3-digit number in `factory/jobs/`, then a short kebab-case
-slug of the feature (`003-rate-limiting`). Its branch is `factory/<id>`.
+slug of the feature (`003-rate-limiting`). Its bookmark is `factory/<id>`, built in the workspace
+`.factory-ws/<id>` (named `factory-<id>`).
 
 ## board.json
 
@@ -67,11 +70,11 @@ Rewrite the whole file each time something changes, so the dashboard moves as th
 2. **Spec.** Spawn `spec-writer` and wait for it: "Job <id>. Read factory/jobs/<id>/feature.md,
    write factory/jobs/<id>/spec.md."
 3. **Build.** Set stage `build`, round 1. Spawn `builder` **with the name `builder-<id>`** and wait
-   for it: "Job <id>. Read factory/jobs/<id>/spec.md. Work on branch factory/<id>, write
+   for it: "Job <id>. Read factory/jobs/<id>/spec.md. Work in jj workspace .factory-ws/<id> on bookmark factory/<id>, write
    factory/jobs/<id>/build.md."
 4. **Review round n.** Set stage `review`, and set every reviewer to `pending`. In one message, spawn
    the four reviewers in the background: "Job <id>, round <n>. Read factory/jobs/<id>/spec.md and
-   build.md, review `git diff master...factory/<id>`, write
+   build.md, review `jj diff --git --from master --to factory/<id>`, write
    factory/jobs/<id>/round-<n>/review-<r>.md." As each one finishes, read the first line of its
    file and update its chip on the board.
 5. **Wait for all.** The round is done only when all four `review-*.md` files exist in
@@ -94,15 +97,21 @@ If an agent fails or doesn't write its file, set stage `needs-human` with a note
 
 ## Merge
 
+Merge in a throwaway workspace, so the main checkout's `@` stays put:
+
 ```bash
-git switch master
-git merge --no-ff factory/<id> -m "Merge factory/<id>: <title>"
+jj workspace add .factory-ws/merge-<id> --name merge-<id> -r master
+cd .factory-ws/merge-<id>
+jj new master factory/<id> -m "Merge factory/<id>: <title>"
+jj st                                  # must show no conflicts
 make test
-git add factory/jobs/<id> && git commit -m "factory: record job <id>"
+jj bookmark set master -r @
+cd ../.. && jj workspace forget merge-<id> factory-<id> && rm -rf .factory-ws/merge-<id> .factory-ws/<id>
 ```
 
-If the merge conflicts or `make test` fails, run `git merge --abort` (or `git reset --hard
-ORIG_HEAD` after a merge that went through), set stage `needs-human`, and note why.
+If `jj st` shows conflicts or `make test` fails, run `jj abandon @` in the merge workspace, forget
+and delete it (keep the builder's), set stage `needs-human`, and note why. The job's `factory/`
+records stay in the main checkout's working-copy change; don't commit them to `master`.
 
 ## /factory next
 

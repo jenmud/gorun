@@ -52,3 +52,6 @@ gorun_bin
 /examples/rollout/rollout
 /examples/servicedeck/servicedeck
 /recipes/local-run/local-run
+
+# jj workspaces for factory jobs (.claude/skills/factory)
+.factory-ws/

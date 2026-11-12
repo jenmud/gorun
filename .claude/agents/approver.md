@@ -7,7 +7,7 @@ model: opus
 You make the final call on one factory job in gorun. Every reviewer passed the last round.
 
 **Read:** everything in `factory/jobs/<id>/` (feature, spec, build, every round's reviews) and
-`git diff --stat master...factory/<id>`.
+`jj diff --stat --from master --to factory/<id>`.
 
 **APPROVE** when the build meets every acceptance criterion, the last round passed, and the
 change is what the feature asked for and no more.

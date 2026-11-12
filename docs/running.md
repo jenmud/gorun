@@ -141,7 +141,11 @@ failed, so a log is easy to read and to `grep`:
 summary: 3 servers, 12 tasks, 9 ok, 1 unchanged, 1 skipped, 1 failed (4.213s)
 ```
 
-A `--check` run ends with its `N would run, N unchanged` line instead.
+A `--check` run ends with its `N would run, N unchanged` line instead. Ctrl+C
+prints `abort: received interrupt, waiting for running tasks to stop (press ctrl+c again to force
+quit)` straight away. gorun then waits for running tasks to stop, skips the rest and prints the
+summary line last. A second Ctrl+C quits at once with exit code 130, without waiting or printing
+the summary.
 
 ```bash
 gorun Gorunfile -r --plain --tag prod

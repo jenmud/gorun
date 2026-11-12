@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +27,79 @@ type plainPrinter struct {
 	// servers and ok feed the closing summary line; ProcessFinishedEvent has no count of either.
 	servers int
 	ok      int
+	// aborted keeps the abort line to one per run; watchStopped silences it once Run returns.
+	aborted      bool
+	watchStopped bool
+}
+
+// abortLine is printed once when a -plain run is interrupted; forceQuitLine on a second interrupt.
+const (
+	abortLine     = "abort: received interrupt, waiting for running tasks to stop (press ctrl+c again to force quit)"
+	forceQuitLine = "abort: received second interrupt, force quitting without waiting"
+)
+
+// watchAbort prints abortLine as soon as ctx is cancelled, so an interrupted run does not look
+// hung while its tasks stop. It then listens for a second interrupt on the channel interrupts
+// returns, and on one prints forceQuitLine and calls quit. interrupts is called only after the
+// first abort, so the interrupt that cancelled ctx is not counted twice. Call stop when Run
+// returns: the deferred cancel at exit stays silent.
+func (p *plainPrinter) watchAbort(ctx context.Context, interrupts func() (<-chan os.Signal, func()), quit func()) (stop func()) {
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		select {
+		case <-ctx.Done():
+		case <-done:
+			return
+		}
+		if !p.abort() {
+			return
+		}
+		again, unregister := interrupts()
+		defer unregister()
+		select {
+		case <-again:
+			if p.say(forceQuitLine) {
+				quit()
+			}
+		case <-done:
+		}
+	}()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			p.mu.Lock()
+			p.watchStopped = true
+			p.mu.Unlock()
+			close(done)
+			<-finished
+		})
+	}
+}
+
+// abort prints abortLine, at most once and never after the watcher was stopped. It reports
+// whether it printed.
+func (p *plainPrinter) abort() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.aborted || p.watchStopped {
+		return false
+	}
+	p.aborted = true
+	fmt.Fprintln(p.w, abortLine)
+	return true
+}
+
+// say prints line unless the watcher was stopped, and reports whether it printed.
+func (p *plainPrinter) say(line string) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.watchStopped {
+		return false
+	}
+	fmt.Fprintln(p.w, line)
+	return true
 }
 
 // event prints what one run event means for the plain output.

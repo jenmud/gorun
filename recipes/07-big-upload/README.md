@@ -22,7 +22,7 @@ gorun recipes/07-big-upload/Gorunfile -r --check # dry run: which uploads would 
 gorun recipes/07-big-upload/Gorunfile -r --force # upload everything again anyway
 gorun recipes/07-big-upload/Gorunfile -r -v      # a row and a bar per task
 gorun recipes/07-big-upload/Gorunfile -r --plain # plain lines, as in CI
-gorun -web recipes/07-big-upload/Gorunfile       # the web UI: tick the servers and run
+gorun -serve recipes/07-big-upload/Gorunfile       # the web UI: tick the servers and run
 ```
 
 ![The TUI uploading the release to three servers](../../docs/screenshot-upload.png)

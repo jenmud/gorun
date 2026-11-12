@@ -438,7 +438,7 @@ type NATSStatus struct {
 func natsModeLabel(mode string) string {
 	switch mode {
 	case "embedded":
-		return "embedded, started by gorun -web"
+		return "embedded, started by gorun -serve"
 	case "external":
 		return "external, already running"
 	}

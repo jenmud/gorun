@@ -251,7 +251,7 @@ The terminal shows a bar on the server's line, and on the task's row in the verb
 
 ![The verbose view: each server's upload-release row has its own bar](screenshot-upload-verbose.png)
 
-`gorun -web` shows a bar under the running task, and the upload on a closed server's line:
+`gorun -serve` shows a bar under the running task, and the upload on a closed server's line:
 
 ![The web dashboard uploading the release](screenshot-web-upload.png)
 
@@ -703,7 +703,7 @@ tasks = ["@web-baseline"]                 # a bundle from the library
   tasks = ["prepare", "@lib-deploy"]   # your step, then the library's, in that order
   ```
 - **Every run records what it used.** The run's history lists each git include with the ref asked
-  for and the commit it ran, under **Task libraries** on its page in `gorun -web`, so an old run can
+  for and the commit it ran, under **Task libraries** on its page in `gorun -serve`, so an old run can
   always be traced to the exact commands.
 
 A task library is an ordinary repository of TOML files, for example:
@@ -725,7 +725,7 @@ groups and hosts across multiple files.
 ## Schedules
 
 A `[[schedule]]` table runs a task or bundle on every server, on a cron pattern or once at a
-set time. The scheduler runs inside `gorun -web`. See [schedules](schedules.md) for the
+set time. The scheduler runs inside `gorun -serve`. See [schedules](schedules.md) for the
 syntax, time zones and missed runs.
 
 ```toml

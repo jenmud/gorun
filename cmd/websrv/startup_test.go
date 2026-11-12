@@ -199,3 +199,30 @@ func TestNATSOffReasonHidesCredentials(t *testing.T) {
 		t.Errorf("off reason should keep the hosts: %s", line)
 	}
 }
+
+func TestNATSOffReasonHidesCredentialsInABadURL(t *testing.T) {
+	for _, raw := range []string{"nats://u:a/b@127.0.0.1:1", "nats://u:a#b@127.0.0.1:1"} {
+		t.Setenv("GORUN_NATS_CLIENT_URL", raw)
+		nc, err := inats.NewClient()
+		if err == nil {
+			nc.Close()
+			t.Fatalf("%s: connect should fail", raw)
+		}
+		line := lineFor(message(startupInfo{nats: natsStartState(nil, nil, err, false)}), "NATS")
+		if !strings.Contains(line, "off (GORUN_NATS_CLIENT_URL is not a valid URL)") {
+			t.Errorf("%s: NATS line = %q, want the fixed reason", raw, line)
+		}
+		for _, secret := range []string{"u:", "a/b", "a#b", ":a"} {
+			if strings.Contains(line, secret) {
+				t.Errorf("%s: NATS line leaks %q: %s", raw, secret, line)
+			}
+		}
+	}
+}
+
+func TestScrubUserinfoRunsToTheLastAt(t *testing.T) {
+	got := scrubUserinfo(`dial "nats://u:a/b@c@host:4222" failed`)
+	if want := `dial "nats://host:4222" failed`; got != want {
+		t.Errorf("scrubUserinfo = %q, want %q", got, want)
+	}
+}

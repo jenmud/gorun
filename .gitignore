@@ -53,5 +53,12 @@ gorun_bin
 /examples/servicedeck/servicedeck
 /recipes/local-run/local-run
 
-# jj workspaces for factory jobs (.claude/skills/factory)
-.factory-ws/
+# software factory: local-only, never committed
+/factory/
+/.worktrees/
+/.claude/agents/
+/.claude/skills/factory/
+/.codex/
+/.agents/
+/CLAUDE.local.md
+__pycache__/

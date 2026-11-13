@@ -80,7 +80,10 @@ tests execute tasks locally.
   `go test -race -v ./...` — a failing otelc build breaks CI even though `make build-go` passes.
 - After TUI changes, regenerate the terminal screenshots with `docs/screenshots/capture.sh`
   (needs tmux, chromium, ImageMagick, python3). Dashboard screenshots are taken by hand.
-- The working copy is also a colocated jj repo (`.jj/`); git commands work normally.
+- The repo is a colocated jj repo (`.jj/`). Use jj, not git: `jj st`, `jj log`, `jj commit`,
+  `jj bookmark set`, `jj git push`. A hook blocks git commands in agent shells.
+- Run the web UI on a chosen port with
+  `GORUN_SKIP_NATS=1 GORUN_ADDRESS=127.0.0.1:<port> go run ./cmd -serve <Gorunfile>`.
 
 ## Docs
 

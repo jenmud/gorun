@@ -90,8 +90,9 @@ type RunRow struct {
 	TotalTasks int
 	Failed     int
 	Skipped    int
-	Schedule   string // the schedule that started the run, or empty
-	CheckOnly  bool   // a check-only run, which changed nothing
+	Schedule   string        // the schedule that started the run, or empty
+	CheckOnly  bool          // a check-only run, which changed nothing
+	Origin     *store.Origin // who started the run, where, and with what; nil for older runs
 }
 
 // HistoryPageData is everything the history list shows.

@@ -60,7 +60,11 @@ templ historyRow(r RunRow) {
 					}
 				</div>
 			}
-			<div class="font-mono text-xs text-zinc-500">{ r.Hostname }</div>
+			if r.Origin != nil {
+				@originLine(r.Origin)
+			} else {
+				<div class="font-mono text-xs text-zinc-500">{ r.Hostname }</div>
+			}
 		</td>
 		<td class="px-4 py-3 text-zinc-400">{ startedText(r) }</td>
 		<td class="px-4 py-3 text-right font-mono text-xs text-zinc-300">{ formatDuration(r.Duration) }</td>
@@ -93,7 +97,8 @@ templ HistoryDetailPage(d RunDetailData) {
 				}
 			</div>
 			<p class="mt-1 font-mono text-xs text-zinc-500">{ d.Summary.ID }</p>
-			<p class="mt-1 text-sm text-zinc-400">Started { startedText(d.Summary) } on <span class="font-mono">{ d.Summary.Hostname }</span></p>
+			<p class="mt-1 text-sm text-zinc-400">Started { startedText(d.Summary) } { runWhere(d.Summary) }</p>
+			@originLine(d.Summary.Origin)
 		</div>
 		<form method="post" action={ deletePath(d.Summary.ID) }>
 			<button class="rounded-lg border border-red-900/60 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-950/40">Delete this run</button>
@@ -105,6 +110,11 @@ templ HistoryDetailPage(d RunDetailData) {
 		@statTile("Failed", itoa(d.Summary.Failed), "tasks that exited non-zero or errored")
 		@statTile("Skipped", itoa(d.Summary.Skipped), "because a dependency failed")
 	</div>
+	if d.Summary.Origin != nil {
+		<div class="mb-6">
+			@originPanel(d.Summary.Origin)
+		</div>
+	}
 	if len(d.Run.RunEnvVars) > 0 || len(d.Run.RunVars) > 0 {
 		<div class="mb-6">
 			@varsPanel("Run", d.Run.RunEnvVars, d.Run.RunVars)

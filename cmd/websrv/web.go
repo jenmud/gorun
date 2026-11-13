@@ -43,6 +43,9 @@ var (
 		metric.WithDescription("Number of events that could not be read"), metric.WithUnit("{error}"))
 )
 
+// Version is gorun's version, recorded with every run the web server starts.
+var Version string
+
 // app holds the state the handlers share. Each piece is guarded by mu.
 type app struct {
 	saveMu sync.Mutex // one direct save from a page at a time, so edits can't overwrite each other

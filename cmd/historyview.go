@@ -938,9 +938,16 @@ func (m historyModel) listView() tea.View {
 						line += mutedStyle.Render(fmt.Sprintf(" (%d failed)", r.Failed))
 					}
 				}
-				if isLocalHost(r.Hostname) {
+				switch {
+				case r.Origin.Where() != "":
+					where := r.Origin.Where()
+					if r.Origin.Trigger != "" {
+						where += " · " + r.Origin.Trigger
+					}
+					line += skipStyle.Render(fmt.Sprintf("  [%s]", where))
+				case isLocalHost(r.Hostname):
 					line += mutedStyle.Render("  [local]")
-				} else if r.Hostname != "" {
+				case r.Hostname != "":
 					line += skipStyle.Render(fmt.Sprintf("  [%s]", r.Hostname))
 				}
 				if selected {
@@ -984,7 +991,11 @@ func (m historyModel) historyDetailView(title, muted, ok, fail, skip, timing lip
 		status = ok.Render("✓ success")
 	}
 	meta := fmt.Sprintf("%s · %s · %d tasks · %d failed · %d skipped · %s", started, status, run.TotalTasks, run.Failed, run.Skipped, run.Duration.Round(time.Millisecond))
-	b.WriteString(truncateANSI(title.Render("gorun history")+"  "+muted.Render(shortID(run.ID)), m.width) + "\n")
+	header := title.Render("gorun history") + "  " + muted.Render(shortID(run.ID))
+	if bits := run.Origin.Bits(); len(bits) > 0 {
+		header += "  " + skip.Render(strings.Join(bits, " · "))
+	}
+	b.WriteString(truncateANSI(header, m.width) + "\n")
 	b.WriteString(truncateANSI(lipgloss.NewStyle().Bold(true).Render(run.Title)+"  "+muted.Render(meta), m.width) + "\n\n")
 
 	leftWidth := max(m.width/3, 24)

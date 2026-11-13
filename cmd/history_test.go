@@ -307,3 +307,34 @@ func TestHistoryTaskInspectorExpandsAndScrollsSections(t *testing.T) {
 		}
 	}
 }
+
+// The history list and a run's header show who started the run, where and how.
+func TestHistoryShowsWhoStartedARun(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "history.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	const runID = "origin-run"
+	recordEvent(context.Background(), st, gorun.ProcessStartedEvent{Type: "process_started", GorunUUID: runID, Title: "deploy",
+		Servers: []string{"host-1"}, StartedAt: time.Now(), Hostname: "laptop",
+		Origin: &gorun.Origin{User: "jen", Hostname: "laptop", Trigger: "tui", Version: "v0.21.0",
+			Git: &gorun.GitInfo{Commit: "abc1234def", Branch: "main"}}})
+
+	m := newHistoryModel(st)
+	m.width, m.height = 160, 30
+	runs, err := st.ListRuns(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.runs = runs
+	if list := ansi.Strip(m.View().Content); !strings.Contains(list, "[jen@laptop · tui]") {
+		t.Errorf("the runs list should say who and where, got:\n%s", list)
+	}
+
+	next, _ := m.Update(m.loadRun(runID))
+	m = next.(historyModel)
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "jen@laptop · tui · v0.21.0 · main@abc1234") {
+		t.Errorf("the run header should say who and where, got:\n%s", view)
+	}
+}

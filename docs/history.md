@@ -129,6 +129,7 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
 | `CheckOnly` | set for a check-only run (`--check`): only checks ran, and nothing changed |
 | `Includes` | the [git includes](gorunfile.md#tasks-from-a-git-repository) the Gorunfile read: each one's `Source`, `Ref` and the `Commit` it used |
 | `Schedule` | the [schedule](schedules.md) that started the run, or empty when it was started any other way |
+| `Origin` | who started the run, where, and with what: the user, machine, gorun version, trigger, command line, CI job, the Gorunfile's git commit and labels (see [Who ran it, and where](integrations.md#who-ran-it-and-where)). The SQLite recorder saves it as `Run.Origin`, which is nil for runs saved by an older gorun |
 
 ### `PlanEvent` (`plan`)
 

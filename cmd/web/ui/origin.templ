@@ -1,0 +1,38 @@
+package ui
+
+import "github.com/jenmud/gorun/internal/store"
+
+// originLine is who started a run and where, in one line of small tags.
+templ originLine(o *store.Origin) {
+	if bits := originBits(o); len(bits) > 0 {
+		<div class="mt-1 flex flex-wrap items-center gap-1 text-[11px]" data-origin>
+			for i, b := range bits {
+				<span class={ originTagClass(i) }>{ b }</span>
+			}
+		</div>
+	}
+}
+
+// originPanel is everything gorun recorded about who started a run, where and with what.
+templ originPanel(o *store.Origin) {
+	if rows := originRows(o); len(rows) > 0 {
+		<details class="group/origin rounded-xl border border-zinc-800 bg-zinc-900/40 p-3" data-origin-panel>
+			<summary class="flex cursor-pointer list-none items-center gap-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+				<span class="inline-block text-zinc-500 transition group-open/origin:rotate-90">▸</span>
+				Who and where
+			</summary>
+			<dl class="mt-2 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-xs">
+				for _, r := range rows {
+					<dt class="text-zinc-500">{ r.Label }</dt>
+					<dd class="min-w-0 break-all font-mono text-zinc-200">
+						if r.Link != "" {
+							<a href={ templ.URL(r.Link) } class="underline decoration-zinc-600 underline-offset-2 hover:text-accent" target="_blank" rel="noopener">{ r.Value }</a>
+						} else {
+							{ r.Value }
+						}
+					</dd>
+				}
+			</dl>
+		</details>
+	}
+}

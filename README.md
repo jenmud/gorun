@@ -85,6 +85,9 @@ any of them.
   direct editing of file-backed commands.
 - **History.** Past runs are saved with commands and output; expanded servers list tasks slowest
   first.
+- **Who and where.** Every run records who started it, on which machine, how, with which gorun
+  version, CI job and Gorunfile commit, plus your own labels (`GORUN_LABELS`). The dashboard, the
+  history and the OpenTelemetry traces all show it.
 - **Schedules.** A `[[schedule]]` runs a task or bundle on a cron pattern or once at a set time,
   in any time zone. `gorun -web` fires them and keeps a history of every run, skipped run and
   failed run. Pause, resume or skip them from the web UI.

@@ -32,6 +32,12 @@ type RunDetail = store.RunDetail
 // Task is one task on one server in a saved run. State holds a gorun.TaskState value.
 type Task = store.TaskDetail
 
+// Origin is who started a run, from where, and with what (Run.Origin).
+type Origin = store.Origin
+
+// GitInfo is the git commit a run's Gorunfile was at (Origin.Git).
+type GitInfo = store.GitInfo
+
 var _ gorun.Recorder = (*Store)(nil)
 
 // ErrNotFound is returned by Run and Task when nothing was saved under that name.

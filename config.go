@@ -87,6 +87,11 @@ type Config struct {
 	// SelectedTasks, when non-empty, limits execution to these tasks (and their
 	// dependencies). Bundle references ("@name") are expanded. Used by the --task CLI flag.
 	SelectedTasks []string `toml:"-"`
+
+	// Origin is who starts the run and from where. Run fills in what isn't set (user, host,
+	// version, command line, CI job, the Gorunfile's git commit) and sends it on the
+	// process_started event, so the dashboard and history show who ran what, where.
+	Origin Origin `toml:"-"`
 }
 
 // configFile is the layout of a Gorunfile on disk. Load flattens the [servers] section

@@ -20,6 +20,7 @@ type Event struct {
 	PID        int       `json:"pid"`
 	Includes   []Include `json:"includes,omitempty"`
 	Schedule   string    `json:"schedule,omitempty"`
+	Origin     *Origin   `json:"origin,omitempty"`
 	CheckOnly  bool      `json:"check_only,omitempty"`
 	WouldRun   int       `json:"would_run"`
 	Success    bool      `json:"success"`
@@ -108,6 +109,9 @@ func (s *Store) Apply(ctx context.Context, ev *Event) {
 			check("set run includes", s.SetRunIncludes(ctx, ev.GorunUUID, ev.Includes))
 		}
 		check("set run envvars", s.SetRunEnvVars(ctx, ev.GorunUUID, ev.EnvVars, ev.Vars))
+		if ev.Origin != nil {
+			check("set run origin", s.SetRunOrigin(ctx, ev.GorunUUID, ev.Origin))
+		}
 	case "plan":
 		if ev.Server == "" {
 			return

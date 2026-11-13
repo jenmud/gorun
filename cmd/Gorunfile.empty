@@ -153,7 +153,7 @@ tags = ["dev"]
 
 #
 # Schedules: run a target (a task or "@bundle") on every server, on a cron pattern or once.
-# They are checked when the Gorunfile loads. The scheduler runs inside `gorun -web`.
+# They are checked when the Gorunfile loads. The scheduler runs inside `gorun -serve`.
 # See docs/schedules.md.
 #
 

@@ -86,9 +86,9 @@ any of them.
 - **History.** Past runs are saved with commands and output; expanded servers list tasks slowest
   first.
 - **Schedules.** A `[[schedule]]` runs a task or bundle on a cron pattern or once at a set time,
-  in any time zone. `gorun -web` fires them and keeps a history of every run, skipped run and
+  in any time zone. `gorun -serve` fires them and keeps a history of every run, skipped run and
   failed run. Pause, resume or skip them from the web UI.
-- **Web UI.** `gorun -web` shows the tasks, bundles, schedules and history, and lets you add and
+- **Web UI.** `gorun -serve` shows the tasks, bundles, schedules and history, and lets you add and
   edit them, with names linked to where they're defined. It starts its own NATS server when none
   is running.
 
@@ -204,7 +204,7 @@ that draws its own progress bars. The events and the rest of the API are in
 | [The Gorunfile](docs/gorunfile.md) | understand every option: tasks, copies, secrets, servers, bundles, groups |
 | [Schedules](docs/schedules.md) | run a task or bundle on a cron pattern or at a set time, in any time zone |
 | [Running gorun](docs/running.md) | use the picker, the live view, filters, CI mode and the history |
-| [The web UI](docs/web.md) | use `gorun -web`: run, browse, add and edit tasks, bundles and schedules, and read the history |
+| [The web UI](docs/web.md) | use `gorun -serve`: run, browse, add and edit tasks, bundles and schedules, and read the history |
 | [Recording runs](docs/history.md) | keep runs with the built-in SQLite recorder or your own, and what each event carries |
 | [Integrations](docs/integrations.md) | use the web UI, OpenTelemetry, NATS events, the Go library and shell completion |
 | [Reference](docs/reference.md) | look up any flag, Gorunfile key, environment variable or shortcut |

@@ -7,7 +7,7 @@ the schedule sits next to the tasks it runs.
 ## Status
 
 Parsing, validation, next-run times and the scheduler are built. The library's
-`gorun.NewScheduler` has start, stop, pause, resume, skip and status. `gorun -web` starts one
+`gorun.NewScheduler` has start, stop, pause, resume, skip and status. `gorun -serve` starts one
 for the loaded Gorunfile, with pause, resume and skip on the Schedules page. Skipped and missed
 runs appear in History. Schedules can be added, edited and removed on the Config page.
 
@@ -72,7 +72,7 @@ for _, st := range s.Status() {
 - **Gorunfile, not a separate file.** Includes merge schedules the same way they merge tasks.
 - **Cron plus one-off `at`.** Cron comes from `github.com/robfig/cron/v3`, the standard
   parser for this syntax.
-- **Scheduler in `-web` only.** It checks each minute and fires due runs through the same
+- **Scheduler in `-serve` only.** It checks each minute and fires due runs through the same
   path as the web UI's run button. A plain CLI run (`gorun -r`) never fires schedules; it still
   validates them when the file loads.
 - **Skip overlaps.** A run still going when the next one is due is skipped and logged.
@@ -123,7 +123,7 @@ a local server in the Gorunfile:
 ```
 
 The Schedules page warns about a schedule like this before it fires, and the error names the task
-and the fix. When you add or edit a local task, or a schedule for one, in `gorun -web` and the
+and the fix. When you add or edit a local task, or a schedule for one, in `gorun -serve` and the
 Gorunfile has no local server, the web UI adds one for you and says so:
 
 ```toml

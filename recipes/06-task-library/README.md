@@ -26,7 +26,7 @@ the lock file, so they work offline.
   repository; in a repository of its own it would be `scripts/hello.sh`.
 - **Checks travel with the task.** `lib-motd` has a `check` and a `verify` like any task: the
   first run writes `/tmp/gorun-library/motd`, and later runs show it *unchanged*.
-- **History:** run it with `gorun -web recipes/06-task-library/Gorunfile` and press Run. The run's
+- **History:** run it with `gorun -serve recipes/06-task-library/Gorunfile` and press Run. The run's
   page in History lists the library under *Task libraries*, with the commit it used.
 
 ## Make your own

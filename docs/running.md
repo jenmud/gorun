@@ -128,7 +128,7 @@ In the verbose view the failed task is marked ✗ and opens by itself:
 need it: with no terminal there is no picker, so gorun stops with an error rather than run
 anything you didn't ask for.
 
-To run tasks on a timetable, add [schedules](schedules.md) to the Gorunfile and keep `gorun -web`
+To run tasks on a timetable, add [schedules](schedules.md) to the Gorunfile and keep `gorun -serve`
 running: it fires them, with pause, skip and a history of every run. Running `gorun -r` from cron
 works too, if you'd rather not keep a service up.
 

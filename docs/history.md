@@ -35,7 +35,7 @@ err = cfg.Run(ctx)
 ```
 
 `history.DefaultPath()` is the database the CLI and web UI use: `GORUN_DB_PATH`, or
-`~/.gorun/gorun.db`. Runs you save there show in `gorun -history` and `gorun -web` too. To keep a
+`~/.gorun/gorun.db`. Runs you save there show in `gorun -history` and `gorun -serve` too. To keep a
 separate history, pass your own path to `Open`, which creates the file and its folder.
 
 Read the runs back with:

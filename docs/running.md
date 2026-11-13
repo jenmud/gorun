@@ -128,13 +128,24 @@ In the verbose view the failed task is marked ✗ and opens by itself:
 need it: with no terminal there is no picker, so gorun stops with an error rather than run
 anything you didn't ask for.
 
-To run tasks on a timetable, add [schedules](schedules.md) to the Gorunfile and keep `gorun -web`
+To run tasks on a timetable, add [schedules](schedules.md) to the Gorunfile and keep `gorun -serve`
 running: it fires them, with pause, skip and a history of every run. Running `gorun -r` from cron
 works too, if you'd rather not keep a service up.
 
 When the output isn't a terminal, or with `--plain`, gorun prints plain lines: the plan, then one
 line per finished task, with the end of stderr for failures. A large upload prints a line about
-every 10%. Add `-v` to print every task's output.
+every 10%. Add `-v` to print every task's output. The last line sums up the run, even when it
+failed, so a log is easy to read and to `grep`:
+
+```text
+summary: 3 servers, 12 tasks, 9 ok, 1 unchanged, 1 skipped, 1 failed (4.213s)
+```
+
+A `--check` run ends with its `N would run, N unchanged` line instead. Ctrl+C
+prints `abort: received interrupt, waiting for running tasks to stop (press ctrl+c again to force
+quit)` straight away. gorun then waits for running tasks to stop, skips the rest and prints the
+summary line last. A second Ctrl+C quits at once with exit code 130, without waiting or printing
+the summary.
 
 ```bash
 gorun Gorunfile -r --plain --tag prod

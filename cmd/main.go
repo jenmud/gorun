@@ -116,12 +116,12 @@ func (s *stringSlice) Set(v string) error { *s = append(*s, v); return nil }
 
 // options are the command line flags. printUsage documents each one.
 type options struct {
-	verbose, plain, run, dump, version, web, history, updateIncludes, force, checkOnly bool
-	listTasks, listServers, listTags, listGroups, listBundles                          bool
-	tasks, bundles, servers, exclude, tags, groups                                     stringSlice
-	parallel                                                                           int
-	parallelSet                                                                        bool // -parallel was given
-	dumpTasksDir, complete, filename                                                   string
+	verbose, plain, run, dump, version, serve, history, updateIncludes, force, checkOnly bool
+	listTasks, listServers, listTags, listGroups, listBundles                            bool
+	tasks, bundles, servers, exclude, tags, groups                                       stringSlice
+	parallel                                                                             int
+	parallelSet                                                                          bool // -parallel was given
+	dumpTasksDir, complete, filename                                                     string
 }
 
 // lists reports whether a flag that only prints and exits was given.
@@ -131,34 +131,40 @@ func (o *options) lists() bool {
 
 // parseFlags reads the command line. Flags may come before or after the Gorunfile.
 func parseFlags() *options {
+	flag.CommandLine.Usage = printUsage
+	return parseArgs(flag.CommandLine, os.Args[1:])
+}
+
+// parseArgs defines gorun's flags on fs and parses args with it.
+func parseArgs(fs *flag.FlagSet, args []string) *options {
 	o := &options{}
 	for name, dst := range map[string]*bool{
 		"v": &o.verbose, "plain": &o.plain, "run": &o.run, "r": &o.run, "dump": &o.dump, "version": &o.version,
-		"web": &o.web, "history": &o.history, "update-includes": &o.updateIncludes, "force": &o.force, "check": &o.checkOnly,
+		"serve": &o.serve, "web": &o.serve, "history": &o.history,
+		"update-includes": &o.updateIncludes, "force": &o.force, "check": &o.checkOnly,
 		"list-tasks": &o.listTasks, "list-servers": &o.listServers, "list-tags": &o.listTags,
 		"list-groups": &o.listGroups, "list-server-groups": &o.listGroups, "list-bundles": &o.listBundles,
 	} {
-		flag.BoolVar(dst, name, false, "")
+		fs.BoolVar(dst, name, false, "")
 	}
 	for name, dst := range map[string]*stringSlice{
 		"task": &o.tasks, "bundles": &o.bundles, "server": &o.servers,
 		"exclude-server": &o.exclude, "tag": &o.tags, "group": &o.groups,
 	} {
-		flag.Var(dst, name, "")
+		fs.Var(dst, name, "")
 	}
-	flag.IntVar(&o.parallel, "parallel", 0, "")
-	flag.StringVar(&o.dumpTasksDir, "dump-tasks", "", "")
-	flag.StringVar(&o.complete, "complete", "", "")
-	flag.Usage = printUsage
-	flag.Parse()
+	fs.IntVar(&o.parallel, "parallel", 0, "")
+	fs.StringVar(&o.dumpTasksDir, "dump-tasks", "", "")
+	fs.StringVar(&o.complete, "complete", "", "")
+	_ = fs.Parse(args)
 
-	o.filename = flag.Arg(0)
+	o.filename = fs.Arg(0)
 	// the flag package stops at the first positional argument, so parse again
 	// to allow flags after the filename, e.g. `gorun Gorunfile --run -v`
-	if flag.NArg() > 1 && !o.version && o.complete == "" && !o.dump {
-		_ = flag.CommandLine.Parse(flag.Args()[1:])
+	if fs.NArg() > 1 && !o.version && o.complete == "" && !o.dump {
+		_ = fs.Parse(fs.Args()[1:])
 	}
-	flag.Visit(func(f *flag.Flag) { o.parallelSet = o.parallelSet || f.Name == "parallel" })
+	fs.Visit(func(f *flag.Flag) { o.parallelSet = o.parallelSet || f.Name == "parallel" })
 	return o
 }
 
@@ -208,9 +214,9 @@ func main() {
 	case o.history:
 		check(runHistoryTUI())
 		return
-	case o.web:
+	case o.serve:
 		web.Version = version
-		web.Run(o.filename)
+		web.Run(o.filename, logPath)
 		return
 	case o.filename == "":
 		printUsage()
@@ -316,18 +322,30 @@ func main() {
 		fmt.Printf("%s: %s\n", server.Name, strings.Join(names, " -> "))
 	}
 
-	cfg.OnEvent = (&plainPrinter{w: os.Stdout, verbose: o.verbose}).event
+	printer := &plainPrinter{w: os.Stdout, verbose: o.verbose}
+	cfg.OnEvent = printer.event
 	if h, err := history.Open(getHistoryDBPath()); err == nil {
 		defer func() { _ = h.Close() }()
 		cfg.Recorder = h
 	}
-	if err := cfg.Run(ctx); err != nil {
+	stopAbortWatch := printer.watchAbort(ctx, notifyInterrupts, func() { os.Exit(130) })
+	err = cfg.Run(ctx)
+	stopAbortWatch()
+	if err != nil {
 		slog.Error("error executing tasks", slog.String("reason", err.Error()))
 		if logPath != "" {
 			err = fmt.Errorf("%w (logs: %s)", err, logPath)
 		}
 		fatal(err)
 	}
+}
+
+// notifyInterrupts returns a channel of further interrupts, for a second ctrl+c to force quit,
+// and the func that stops delivering them.
+func notifyInterrupts() (<-chan os.Signal, func()) {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
+	return ch, func() { signal.Stop(ch) }
 }
 
 // applySelection applies -parallel, -task or -bundles, and the server filters to cfg. It
@@ -446,9 +464,12 @@ func check(err error) {
 	}
 }
 
-// printUsage prints the help text: every flag and environment variable.
-func printUsage() {
-	fmt.Fprintf(os.Stderr, `Usage: gorun [options] <Gorunfile>
+// printUsage prints the help text to stderr.
+func printUsage() { writeUsage(os.Stderr) }
+
+// writeUsage writes the help text: every flag and environment variable.
+func writeUsage(w io.Writer) {
+	fmt.Fprint(w, `Usage: gorun [options] <Gorunfile>
 
 Run the tasks defined in a Gorunfile across one or more servers. By default gorun first
 opens a picker to choose the servers (and tasks) to run; pass -run to skip it.
@@ -477,7 +498,7 @@ Options:
   -dump-tasks DIR  dump each task as a file in DIR and exit
   -update-includes  look up every git include's ref again, update the lock file and exit
   -version  print version and exit
-  -web      start the web server
+  -serve [Gorunfile]  start the web service (scheduler, NATS, web UI); -web is an alias
   -history  view historical runs
 
 Environment variables (can be overridden via the process environment or a .env file
@@ -485,7 +506,7 @@ in the current working directory; .env values never override variables already s
 in the environment):
 
   GORUN_NAME                          default: gorun
-  GORUN_ADDRESS                       default: :8080 (web server listen address)
+  GORUN_ADDRESS                       default: :8080 (-serve listen address)
   GORUN_DB_PATH                       default: ~/.gorun/gorun.db (falls back to gorun.db)
   GORUN_CACHE_DIR                     default: ~/.cache/gorun (git includes are kept here)
   GORUN_LOG_FILE                      default: ~/.gorun/gorun.log (appended to on every run)
@@ -497,7 +518,7 @@ in the environment):
   GORUN_NATS_CLIENT_ALLOW_RECONNECT   default: true
   GORUN_NATS_CLIENT_RECONNECT_WAIT    default: nats default (e.g. 2s)
   GORUN_NATS_CLIENT_TIMEOUT           default: nats default (e.g. 5s)
-  GORUN_NATS_SERVER_CONFIG            default: none (NATS server config for the server -web starts)
+  GORUN_NATS_SERVER_CONFIG            default: none (NATS server config for the server -serve starts)
 
 OpenTelemetry SDK variables (OTEL_*) are also honoured by the instrumented build.
 Exporters are disabled unless an OTLP endpoint or exporter is configured.

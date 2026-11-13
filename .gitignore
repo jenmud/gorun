@@ -52,3 +52,13 @@ gorun_bin
 /examples/rollout/rollout
 /examples/servicedeck/servicedeck
 /recipes/local-run/local-run
+
+# software factory: local-only, never committed
+/factory/
+/.worktrees/
+/.claude/agents/
+/.claude/skills/factory/
+/.codex/
+/.agents/
+/CLAUDE.local.md
+__pycache__/

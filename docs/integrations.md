@@ -11,7 +11,7 @@
 
 ## Web UI
 
-`gorun -web Gorunfile` runs a web service with pages for the Run picker, tasks, bundles, schedules,
+`gorun -serve Gorunfile` runs a web service with pages for the Run picker, tasks, bundles, schedules,
 history and config. It starts its own NATS server when none is running, and it fires the
 [schedules](schedules.md) while it runs. The full guide, with examples and walkthroughs, is in
 [The web UI](web.md).
@@ -88,7 +88,7 @@ When a [NATS](https://nats.io) server is reachable, gorun publishes each run's e
 JSON on `gorun.events` (or `GORUN_EVENT_TOPIC`); the web UI's live dashboard uses them. Without
 NATS gorun runs as normal. Set `GORUN_SKIP_NATS=1` to not try at all.
 
-**`gorun -web` starts its own NATS server** when none is running at `nats://127.0.0.1:4222`, so
+**`gorun -serve` starts its own NATS server** when none is running at `nats://127.0.0.1:4222`, so
 the live view and history work with no setup. Its settings come from a
 [NATS server config](https://docs.nats.io/running-a-nats-service/configuration) file named by
 `GORUN_NATS_SERVER_CONFIG`; the file overrides the defaults it sets, and a host or port it leaves
@@ -101,7 +101,7 @@ port: 4222
 ```
 
 If `GORUN_NATS_CLIENT_URL` names a server, that server is used and nothing is started. The
-embedded server stops when `gorun -web` exits, so other gorun processes that use it stop with it.
+embedded server stops when `gorun -serve` exits, so other gorun processes that use it stop with it.
 The web UI's header shows how it reaches NATS and the address, next to **live**.
 
 ```bash
@@ -204,7 +204,7 @@ The library doesn't save runs by itself: it hands every event to `Config.Recorde
 the `history` package, or implement the interface yourself. [Recording runs](history.md) has the
 order of a run's events, every field, and a complete recorder. It
 writes to the same SQLite database as the CLI and the web UI, so runs from your program show in
-`gorun -history` and `gorun -web` too, and it reads them back so you can show history without the
+`gorun -history` and `gorun -serve` too, and it reads them back so you can show history without the
 web UI. The CLI and the web UI record their own runs through the same interface.
 
 ```go
@@ -301,7 +301,7 @@ _gorun_complete() {
     esac
 
     if [[ $cur == -* ]]; then
-        COMPREPLY=($(compgen -W "-v -plain -run -r -task -bundles -server -exclude-server -tag -group -parallel -list-tasks -list-servers -list-tags -list-groups -list-bundles -dump -dump-tasks -version -web -history -h --task --bundles --server --exclude-server --tag --group --parallel --run --plain --list-tasks --list-servers --list-tags --list-groups --list-bundles --dump --dump-tasks --version --web --history --help" -- "$cur"))
+        COMPREPLY=($(compgen -W "-v -plain -run -r -task -bundles -server -exclude-server -tag -group -parallel -list-tasks -list-servers -list-tags -list-groups -list-bundles -dump -dump-tasks -version -serve -web -history -h --task --bundles --server --exclude-server --tag --group --parallel --run --plain --list-tasks --list-servers --list-tags --list-groups --list-bundles --dump --dump-tasks --version --serve --web --history --help" -- "$cur"))
     else
         COMPREPLY=($(compgen -f -- "$cur"))
     fi

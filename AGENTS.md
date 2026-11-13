@@ -36,7 +36,7 @@ go build ./... && go vet ./...             # no golangci config; keep gofmt clea
 make build                                 # builds/gorun + builds/gorun-otel-CTI (gitignored)
 make vendor                                # go mod tidy && go mod vendor — vendor/ IS committed
 make templ-gen                             # regenerate committed cmd/web/ui/*_templ.go
-make web-dev                               # templ watch + go run ./cmd -web (GORUN_ADDRESS=:8080 overridable)
+make web-dev                               # templ watch + go run ./cmd -serve (GORUN_ADDRESS=:8080 overridable)
 make up / make down                        # recipes lab: 100 SSH containers + NATS (docker compose)
 go run ./cmd recipes/Gorunfile -r          # run the lab's own starter recipe
 GORUN_SKIP_NATS=1 go run ./cmd cmd/Gorunfile.empty -r -plain   # smoke test: local echo tasks only
@@ -80,7 +80,10 @@ tests execute tasks locally.
   `go test -race -v ./...` — a failing otelc build breaks CI even though `make build-go` passes.
 - After TUI changes, regenerate the terminal screenshots with `docs/screenshots/capture.sh`
   (needs tmux, chromium, ImageMagick, python3). Dashboard screenshots are taken by hand.
-- The working copy is also a colocated jj repo (`.jj/`); git commands work normally.
+- The repo is a colocated jj repo (`.jj/`). Use jj, not git: `jj st`, `jj log`, `jj commit`,
+  `jj bookmark set`, `jj git push`. A hook blocks git commands in agent shells.
+- Run the web UI on a chosen port with
+  `GORUN_SKIP_NATS=1 GORUN_ADDRESS=127.0.0.1:<port> go run ./cmd -serve <Gorunfile>`.
 
 ## Docs
 

@@ -522,7 +522,7 @@ For a complete example, see [`recipes/large-inventory`](../recipes/large-invento
 ## 11. Run jobs on a schedule
 
 A `[[schedule]]` table runs a target, a task or a `@bundle`, on a cron pattern or once at a set
-time. Schedules run inside the web service, `gorun -web`, not in a plain run. Add these to the
+time. Schedules run inside the web service, `gorun -serve`, not in a plain run. Add these to the
 file:
 
 ```toml
@@ -547,7 +547,7 @@ names it, when the file loads.
 Start the web service with the file and open the **Schedules** page:
 
 ```bash
-gorun -web Gorunfile
+gorun -serve Gorunfile
 ```
 
 The page lists each schedule with its next run, in your browser's time zone (change it with the
@@ -638,7 +638,7 @@ gorun Gorunfile --run --task app-image
 
 ![gorun uploading to three servers at different speeds](screenshot-upload.png)
 
-Press **v** for a row per task, with its own bar. `gorun -web` shows the same under the running
+Press **v** for a row per task, with its own bar. `gorun -serve` shows the same under the running
 task, and `--plain` prints a line about every 10%, so CI logs show it too. Ctrl-C stops the
 uploads where they are. See [upload progress](gorunfile.md#upload-progress) for the details.
 

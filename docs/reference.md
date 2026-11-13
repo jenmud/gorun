@@ -42,7 +42,7 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 | `-dump-tasks DIR` | dump each task as a runnable shell file in DIR |
 | `-update-includes` | look up every git include's ref again, update `Gorunfile.lock`, print the commits and exit |
 | `-history` | browse past runs |
-| `-web [Gorunfile]` | start the web UI, optionally loading a Gorunfile |
+| `-serve [Gorunfile]` | start the web service (scheduler, NATS, web UI), optionally loading a Gorunfile; `-web` is an alias |
 | `-complete <kind>` | print shell completion candidates |
 | `-version` | print the version |
 
@@ -66,7 +66,7 @@ already set.
 | `GORUN_NATS_CLIENT_ALLOW_RECONNECT` | `true` | reconnect automatically |
 | `GORUN_NATS_CLIENT_RECONNECT_WAIT` | NATS default | wait between reconnects, e.g. `2s` |
 | `GORUN_NATS_CLIENT_TIMEOUT` | NATS default | connection timeout, e.g. `5s` |
-| `GORUN_NATS_SERVER_CONFIG` | none | NATS server config file for the server `gorun -web` starts when none is running; see [integrations](integrations.md#events-nats) |
+| `GORUN_NATS_SERVER_CONFIG` | none | NATS server config file for the server `gorun -serve` starts when none is running; see [integrations](integrations.md#events-nats) |
 
 The instrumented build also honours the standard `OTEL_*` variables (see
 [Logs and OpenTelemetry](integrations.md#logs-and-opentelemetry)).

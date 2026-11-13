@@ -59,3 +59,34 @@ func TestApplyKeepsCheckAndVerify(t *testing.T) {
 		t.Errorf("task = %+v, check = %+v; want unchanged with the check kept", task, task.Check)
 	}
 }
+
+// A run keeps who started it and where; runs saved before that have no origin.
+func TestApplyKeepsTheRunsOrigin(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "gorun.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	ctx := context.Background()
+	o := &Origin{User: "jen", Hostname: "laptop", Trigger: "cli", Command: []string{"gorun", "-r"},
+		Git: &GitInfo{Commit: "abc", Dirty: true}, Labels: map[string]string{"ticket": "CHG-42"}}
+	st.Apply(ctx, &Event{Type: "process_started", GorunUUID: "r1", Origin: o})
+	st.Apply(ctx, &Event{Type: "process_started", GorunUUID: "r2"})
+
+	run, err := st.GetRun(ctx, "r1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Origin == nil || run.Origin.Where() != "jen@laptop" || !run.Origin.Git.Dirty || run.Origin.Labels["ticket"] != "CHG-42" {
+		t.Errorf("origin = %+v", run.Origin)
+	}
+	runs, err := st.ListRuns(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range runs {
+		if (r.ID == "r1") != (r.Origin != nil) {
+			t.Errorf("run %s origin = %+v", r.ID, r.Origin)
+		}
+	}
+}

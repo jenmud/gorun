@@ -4,6 +4,7 @@
 
 - [Web UI](#web-ui)
 - [Logs and OpenTelemetry](#logs-and-opentelemetry)
+- [Who ran it, and where](#who-ran-it-and-where)
 - [Events (NATS)](#events-nats)
 - [Using gorun as a Go library](#using-gorun-as-a-go-library)
 - [Shell completion](#shell-completion)
@@ -37,6 +38,50 @@ OTEL_TRACES_EXPORTER=console gorun Gorunfile -r --plain                     # sp
 Each signal is configured on its own. `GORUN_NAME` is the service name unless `OTEL_SERVICE_NAME`
 is set. The standard build has no OpenTelemetry.
 
+Each run is one trace. Its `gorun.run` span carries the run's [origin](#who-ran-it-and-where),
+and each server's `server.run` span is a child of it.
+
+## Who ran it, and where
+
+Every run records who started it, on which machine, and with what. The live dashboard shows it on
+each run, as does the history in the web UI and the terminal. It is sent on the
+`process_started` event as `origin`, and on the run's OpenTelemetry trace.
+
+| Recorded | Event field | Trace attribute |
+|---|---|---|
+| the user gorun runs as, and their id | `user`, `uid` | `user.name`, `user.id` |
+| the machine, its OS and CPU, gorun's process id | `hostname`, `os`, `arch`, `pid` | `host.name`, `os.type`, `host.arch`, `process.pid` |
+| gorun's version | `version` | `gorun.version` |
+| how the run started: `cli` (`-r -plain`), `tui`, `web`, `schedule`, or `library` for a program built on gorun | `trigger` | `gorun.trigger` |
+| the directory gorun ran in, the Gorunfile, and gorun's command line | `workdir`, `gorunfile`, `command` | `process.working_directory`, `gorun.gorunfile`, `process.command_line` |
+| the address the user is logged in from, when gorun runs in an SSH session | `ssh_client` | `gorun.ssh_client` |
+| for a web run, the browser's address, and the user an auth proxy says is signed in | `client`, `web_user` | `client.address`, `gorun.web_user` |
+| the CI system, who started the job, and a link to it | `ci`, `ci_user`, `ci_url` | `cicd.system`, `gorun.ci.user`, `cicd.pipeline.run.url.full` |
+| the git commit and branch of the Gorunfile's repository, whether it had uncommitted changes, and its remote | `git.commit`, `git.branch`, `git.dirty`, `git.remote` | `vcs.ref.head.revision`, `vcs.ref.head.name`, `gorun.git.dirty`, `vcs.repository.url.full` |
+| your own labels | `labels` | `gorun.label.<key>` |
+
+The `gorun.run` span also has `gorun.run.id`, `gorun.title`, `gorun.schedule`, `gorun.check_only`,
+`gorun.force`, and when the run ends, `gorun.tasks.total`, `.failed`, `.skipped` and `.unchanged`.
+Each `server.run` span repeats the run id, title, user, host, trigger, version, commit and labels,
+so you can search servers' spans by who ran them.
+
+Add your own labels with `GORUN_LABELS`, for example the change ticket a run is for:
+
+```bash
+GORUN_LABELS="ticket=CHG-42,team=ops" gorun Gorunfile -r
+```
+
+- **CI.** GitHub Actions, GitLab CI, Jenkins, Buildkite and CircleCI are recognised by the
+  variables they set; any other system that sets `CI` shows as `ci`.
+- **Git.** gorun asks `git` about the folder the Gorunfile is in, and gives up after 2 seconds.
+  A password or token in the remote's URL is never recorded.
+- **The web UI has no login.** A web run's user is the account the web server runs as. Put the web
+  UI behind an auth proxy to record who clicked Run: gorun reads `X-Forwarded-User`,
+  `X-Auth-Request-User` or `Remote-User`. Those headers are only as trustworthy as the proxy,
+  so don't let browsers reach gorun directly.
+- **Programs built on gorun** can set fields on `Config.Origin` before `Run` (a version, a
+  trigger, labels). `Run` fills in the rest.
+
 ## Events (NATS)
 
 When a [NATS](https://nats.io) server is reachable, gorun publishes each run's events to it, as
@@ -67,7 +112,7 @@ Every event has a `type` and the run's `gorun_uuid`:
 
 | Type | Sent | Fields |
 |---|---|---|
-| `process_started` | when a run starts | `title`, `servers`, `started_at`, `hostname`, `pid`, `schedule` (when a schedule started it), `check_only` |
+| `process_started` | when a run starts | `title`, `servers`, `started_at`, `hostname`, `pid`, `schedule` (when a schedule started it), `check_only`, `origin` ([who ran it, and where](#who-ran-it-and-where)) |
 | `plan` | per server, before it starts | `server`, `address`, `tasks`, `task_meta` |
 | `task` | every task state change | `server`, `task`, `state`, `command`, `stdout`, `stderr`, `exit_code`, `duration`, `attempt`, `attempts`, `phase`, `check`, `verify` |
 | `server_error` | a server couldn't run (e.g. SSH failed) | `server` |

@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/ssh"
 
 	"github.com/jenmud/gorun/internal/nats"
@@ -62,6 +63,11 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		total += len(s.Tasks)
 	}
 
+	origin := c.origin()
+	// one span for the whole run, carrying who started it and where; the servers' spans are its
+	// children and repeat the main fields, so either can be searched by user or host
+	ctx, span := tracer.Start(ctx, "gorun.run", trace.WithAttributes(runAttributes(c, origin)...))
+	defer span.End()
 	c.emit(ProcessStartedEvent{
 		Type:      "process_started",
 		GorunUUID: c.GorunUUID,
@@ -75,6 +81,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		Includes:  c.Includes,
 		Schedule:  c.Schedule,
 		CheckOnly: c.CheckOnly,
+		Origin:    origin,
 	})
 	// every server's plan is announced before any task starts
 	for _, s := range servers {
@@ -87,7 +94,7 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		c.emit(plan)
 	}
 
-	r := &run{cfg: c}
+	r := &run{cfg: c, spanAttrs: runSpanSummary(c, origin)}
 	limit := len(servers)
 	if c.MaxParallel > 0 {
 		limit = min(limit, c.MaxParallel)
@@ -119,7 +126,10 @@ func (c *Config) Run(ctx context.Context, server ...Server) error {
 		WouldRun:   int(r.wouldRun.Load()),
 		FinishedAt: time.Now(),
 	})
+	span.SetAttributes(attribute.Int("gorun.tasks.total", total), attribute.Int("gorun.tasks.failed", failed),
+		attribute.Int("gorun.tasks.skipped", int(r.skipped.Load())), attribute.Int("gorun.tasks.unchanged", int(r.unchanged.Load())))
 	if failed > 0 {
+		span.SetStatus(codes.Error, "one or more tasks failed")
 		return errors.New("one or more tasks failed")
 	}
 	return nil
@@ -202,7 +212,8 @@ func withDefaults[V any](m, defaults map[string]V) map[string]V {
 // run is the state shared by every server of one Run.
 type run struct {
 	cfg                                  *Config
-	failed, skipped, unchanged, wouldRun atomic.Int64 // tasks, counted for ProcessFinishedEvent
+	spanAttrs                            []attribute.KeyValue // the run's main fields, for every server span
+	failed, skipped, unchanged, wouldRun atomic.Int64         // tasks, counted for ProcessFinishedEvent
 }
 
 // runServer connects to the server and runs its tasks: one at a time by default, or up to
@@ -212,6 +223,7 @@ func (r *run) runServer(ctx context.Context, server Server) {
 	ctx, span := tracer.Start(ctx, "server.run")
 	defer span.End()
 	span.SetAttributes(attribute.String("server.name", server.Name), attribute.String("server.address", server.Hostname))
+	span.SetAttributes(r.spanAttrs...)
 	logger := NewLogger(server.LogLevel, logOutput, false).With(
 		slog.String("gorun_uuid", c.GorunUUID),
 		slog.Group("server", slog.String("name", server.Name), slog.String("address", server.Hostname)),

@@ -41,6 +41,9 @@ type RunSummary struct {
 	Schedule string
 	// CheckOnly is set for a check-only run (--check), which changed nothing.
 	CheckOnly bool
+	// Origin is who started the run, from where, and with what; nil for runs saved before
+	// gorun recorded it.
+	Origin *Origin
 }
 
 // TaskDetail is one task on one server in a run.
@@ -168,6 +171,7 @@ var addedColumns = [][2]string{
 	{"runs", "schedule"},
 	{"tasks", "steps"},
 	{"runs", "check_only"},
+	{"runs", "origin"},
 }
 
 // migrate creates the tables and adds the columns newer versions need.
@@ -287,14 +291,19 @@ func (s *Store) SetTaskEnvVars(ctx context.Context, runID, server, name string, 
 		toJSON(envvars), toJSON(vars), runID, server, name)
 }
 
+// SetRunOrigin stores who started a run, from where, and with what.
+func (s *Store) SetRunOrigin(ctx context.Context, id string, o *Origin) error {
+	return s.exec(ctx, `UPDATE runs SET origin=? WHERE id=?`, toJSON(o), id)
+}
+
 // runColumns are the columns scanRun reads, in order.
-const runColumns = `id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns,schedule,check_only`
+const runColumns = `id,title,hostname,pid,started_at,finished_at,success,total_tasks,failed,skipped,duration_ns,schedule,check_only,origin`
 
 // scanRun reads runColumns, followed by any extra columns, into r.
 func scanRun(scan func(...any) error, r *RunSummary, extra ...any) error {
-	var started, finished, schedule, checkOnly sql.NullString
+	var started, finished, schedule, checkOnly, origin sql.NullString
 	var pid, success, total, failed, skipped, duration sql.NullInt64
-	dest := append([]any{&r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &success, &total, &failed, &skipped, &duration, &schedule, &checkOnly}, extra...)
+	dest := append([]any{&r.ID, &r.Title, &r.Hostname, &pid, &started, &finished, &success, &total, &failed, &skipped, &duration, &schedule, &checkOnly, &origin}, extra...)
 	if err := scan(dest...); err != nil {
 		return err
 	}
@@ -311,6 +320,10 @@ func scanRun(scan func(...any) error, r *RunSummary, extra ...any) error {
 	r.Duration = time.Duration(duration.Int64)
 	r.Schedule = schedule.String
 	r.CheckOnly = checkOnly.String == "1"
+	if origin.String != "" {
+		r.Origin = &Origin{}
+		fromJSON(origin, r.Origin)
+	}
 	return nil
 }
 

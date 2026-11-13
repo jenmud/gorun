@@ -215,6 +215,7 @@ func main() {
 		check(runHistoryTUI())
 		return
 	case o.serve:
+		web.Version = version
 		web.Run(o.filename, logPath)
 		return
 	case o.filename == "":
@@ -233,7 +234,7 @@ func main() {
 			fatal(fmt.Errorf("%s: %w", o.filename, err))
 		}
 	}
-	cfg := &gorun.Config{UpdateIncludes: o.updateIncludes}
+	cfg := &gorun.Config{UpdateIncludes: o.updateIncludes, Origin: gorun.Origin{Version: version, Trigger: "cli"}}
 	inFile(cfg.LoadFile(o.filename))
 	if o.updateIncludes {
 		if len(cfg.Includes) == 0 {
@@ -299,6 +300,7 @@ func main() {
 	}
 
 	if useTUI {
+		cfg.Origin.Trigger = "tui"
 		if err := runTUI(ctx, cancel, cfg, o.verbose); err != nil {
 			os.Exit(1)
 		}
@@ -510,6 +512,7 @@ in the environment):
   GORUN_LOG_FILE                      default: ~/.gorun/gorun.log (appended to on every run)
   GORUN_EVENT_TOPIC                   default: gorun.events
   GORUN_SKIP_NATS                     default: unset (set to skip NATS publishing)
+  GORUN_LABELS                        default: unset (labels for every run: ticket=CHG-42,team=ops)
   GORUN_NATS_CLIENT_URL               default: nats://127.0.0.1:4222
   GORUN_NATS_CLIENT_NAME              default: GORUN_NAME (or gorun)
   GORUN_NATS_CLIENT_ALLOW_RECONNECT   default: true

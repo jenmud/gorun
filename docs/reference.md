@@ -60,6 +60,7 @@ already set.
 | `GORUN_ADDRESS` | `:8080` | web UI listen address |
 | `GORUN_EVENT_TOPIC` | `gorun.events` | NATS topic for events |
 | `GORUN_SKIP_NATS` | unset | set to skip NATS |
+| `GORUN_LABELS` | unset | your own labels for every run, e.g. `ticket=CHG-42,team=ops` (see [who ran it](integrations.md#who-ran-it-and-where)) |
 | `GORUN_NATS_CLIENT_URL` | `nats://127.0.0.1:4222` | NATS server |
 | `GORUN_NATS_CLIENT_NAME` | `GORUN_NAME` | NATS client name |
 | `GORUN_NATS_CLIENT_ALLOW_RECONNECT` | `true` | reconnect automatically |

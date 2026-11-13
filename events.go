@@ -102,6 +102,9 @@ type ProcessStartedEvent struct {
 	// Schedule is the name of the schedule that started the run, or empty when it wasn't
 	// started by a schedule.
 	Schedule string `json:"schedule,omitempty"`
+
+	// Origin is who started the run, from where, and with what.
+	Origin *Origin `json:"origin,omitempty"`
 }
 
 // ProcessFinishedEvent is published when a gorun process finishes running.

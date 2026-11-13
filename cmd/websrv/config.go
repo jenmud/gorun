@@ -71,6 +71,7 @@ func (a *app) startScheduler(cfg *gorun.Config) {
 	if a.nc == nil {
 		cfg.Recorder = a
 	}
+	cfg.Origin.Version = Version
 	s := gorun.NewScheduler(cfg, func(ev gorun.ScheduleEvent) {
 		slog.Info("schedule", "schedule", ev.Schedule, "kind", ev.Kind, "at", ev.At, "reason", ev.Reason)
 		a.recordScheduleEvent(ev)

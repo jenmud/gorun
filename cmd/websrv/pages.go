@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"maps"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -136,6 +137,7 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 
 	uuid := fmt.Sprintf("web-%d-%d", os.Getpid(), time.Now().UnixNano())
 	cfg.GorunUUID = uuid
+	cfg.Origin = webOrigin(r)
 	cfg.Force, cfg.CheckOnly = r.PostFormValue("force") != "", r.PostFormValue("check") != ""
 	if cfg.Force && cfg.CheckOnly {
 		redirectWith(w, r, "/", "Force and check only can't be used together.", true)
@@ -158,6 +160,27 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	redirectWith(w, r, "/", fmt.Sprintf("Started on %d server(s).", len(servers)), false)
+}
+
+// webOrigin is the origin of a run started from the web UI: the browser's address, and the
+// user an auth proxy in front of gorun says is signed in. The rest (this machine, its user,
+// the Gorunfile) gorun fills in when the run starts.
+func webOrigin(r *http.Request) gorun.Origin {
+	client := r.RemoteAddr
+	if host, _, err := net.SplitHostPort(client); err == nil {
+		client = host
+	}
+	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+		client += " (forwarded for " + fwd + ")"
+	}
+	o := gorun.Origin{Version: Version, Trigger: "web", Client: client}
+	for _, h := range []string{"X-Forwarded-User", "X-Auth-Request-User", "Remote-User"} {
+		if u := r.Header.Get(h); u != "" {
+			o.WebUser = u
+			break
+		}
+	}
+	return o
 }
 
 // planRun loads the saved Gorunfile and works out what each ticked server runs. Ticked tasks or

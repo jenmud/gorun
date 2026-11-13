@@ -19,7 +19,7 @@ below for a dry run, or `--force` to run every task anyway. See
 5. `04-dev-server` - ~230 tasks across fetch/install/configure/smoke tiers, bundles and fan-in. A rerun leaves about 175 of them unchanged.
 6. `large-inventory` - split a large Gorunfile across multiple files with `include`; demonstrates organizing tasks, groups and hosts, with Ansible-style ok/changed checks.
 7. `local-run` - Go library example: run tasks on the local machine with `RunLocal`, and read each task's state, check and verify from its events.
-8. `05-scheduled-jobs` - schedules on this machine: cron, a one-off time, missed runs, and the Schedules page in `gorun -web`. A check keeps the backup to once a day.
+8. `05-scheduled-jobs` - schedules on this machine: cron, a one-off time, missed runs, and the Schedules page in `gorun -serve`. A check keeps the backup to once a day.
 9. `06-task-library` - a Gorunfile with no tasks of its own: it includes a shared task library from git, pinned to a commit. Library tasks can have checks too.
 10. `07-big-upload` - upload a 1 GB release and a folder of 200 files to three servers, with a progress bar per upload. `check_copies` makes a rerun send nothing that is already there. Run `07-big-upload/make-files.sh` first.
 
@@ -47,7 +47,7 @@ gorun recipes/03-mega-pipeline/Gorunfile -r
 gorun recipes/03-mega-pipeline/Gorunfile -r --check  # dry run: what would change
 gorun recipes/04-dev-server/Gorunfile -r
 gorun recipes/large-inventory/Gorunfile -r
-gorun recipes/05-scheduled-jobs/Gorunfile -r        # a plain run; schedules need -web
+gorun recipes/05-scheduled-jobs/Gorunfile -r        # a plain run; schedules need -serve
 gorun recipes/06-task-library/Gorunfile -r          # tasks fetched from git (needs network once)
 recipes/07-big-upload/make-files.sh && gorun recipes/07-big-upload/Gorunfile -r  # upload progress
 ```

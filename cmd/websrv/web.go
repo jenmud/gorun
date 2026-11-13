@@ -7,7 +7,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -66,9 +69,19 @@ type app struct {
 }
 
 // Run starts the web server on GORUN_ADDRESS (default :8080). configPath, when set, is the
-// Gorunfile to load; it can also be loaded from the config page.
-func Run(configPath string) {
-	st := openStore()
+// Gorunfile to load; it can also be loaded from the config page. logPath is shown in the startup
+// message; empty means logs go to stderr. Run exits with status 1 when it can't listen.
+func Run(configPath, logPath string) {
+	if err := run(configPath, logPath); err != nil {
+		fmt.Fprintf(os.Stderr, "gorun: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// run is Run without the exit, so deferred cleanup happens before gorun exits.
+func run(configPath, logPath string) error {
+	dbPath := history.DefaultPath()
+	st, dbErr := openStore(dbPath)
 	if st != nil {
 		defer func() { _ = st.Close() }()
 	}
@@ -112,9 +125,15 @@ func Run(configPath string) {
 			log.Printf("gorun web: subscribed to %s", a.topic)
 		}
 	}
+	info := startupInfo{nats: a.nats, topic: a.topic, dbPath: dbPath, dbErr: dbErr, logPath: logPath}
 	if configPath != "" {
-		if err := a.loadConfig(configPath); err != nil {
-			log.Printf("gorun web: %v", err)
+		info.cfgErr = a.loadConfig(configPath)
+		if info.cfgErr != nil {
+			log.Printf("gorun web: %v", info.cfgErr)
+		} else {
+			a.mu.Lock()
+			info.cfgPath, info.schedules, info.schedulerOn = a.cfgPath, len(a.cfg.Schedules), a.sched != nil
+			a.mu.Unlock()
 		}
 	}
 
@@ -135,10 +154,25 @@ func Run(configPath string) {
 		_ = srv.Shutdown(shutdownCtx)
 	}()
 
-	log.Printf("gorun web listening on %s", addr)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatal(err)
+	return listenAndServe(srv, addr, func(bound net.Addr) {
+		log.Printf("gorun web listening on %s", bound)
+		info.listen = bound.String()
+		startupMessage(os.Stdout, info)
+	})
+}
+
+// listenAndServe binds addr, calls started with the bound address, then serves until srv shuts
+// down. Binding first means the startup message is only printed once the port is really ours.
+func listenAndServe(srv *http.Server, addr string, started func(net.Addr)) error {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", addr, err)
 	}
+	started(ln.Addr())
+	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
 
 // routes maps every page and action to its handler.
@@ -180,17 +214,17 @@ func (a *app) routes() *http.ServeMux {
 	return mux
 }
 
-// openStore opens the history database, or returns nil so the UI still works without it.
-func openStore() *store.Store {
-	path := history.DefaultPath()
+// openStore opens the history database at path. On error it returns a nil store, so the UI
+// still works without history.
+func openStore(path string) (*store.Store, error) {
 	_ = os.MkdirAll(filepath.Dir(path), 0o755)
 	st, err := store.Open(path)
 	if err != nil {
 		log.Printf("gorun web: history disabled: %v", err)
-		return nil
+		return nil, err
 	}
 	log.Printf("gorun web: history at %s", path)
-	return st
+	return st, nil
 }
 
 // onEvent applies one run event from NATS to the dashboard and the history, then pushes

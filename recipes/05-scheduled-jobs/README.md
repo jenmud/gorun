@@ -20,7 +20,7 @@ This runs only the server's own tasks (`heartbeat`), once. Schedules are ignored
 ## Scheduled run: the web service
 
 ```sh
-gorun -web recipes/05-scheduled-jobs/Gorunfile
+gorun -serve recipes/05-scheduled-jobs/Gorunfile
 ```
 
 Open http://localhost:8080 (or the address in `GORUN_ADDRESS`). Then:

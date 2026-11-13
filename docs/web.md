@@ -1,13 +1,27 @@
 # The web UI
 
-`gorun -web` runs a web service for a Gorunfile. It shows the tasks, bundles, schedules and run
+`gorun -serve` runs a web service for a Gorunfile. It shows the tasks, bundles, schedules and run
 history, runs tasks on servers, adds and edits them, and fires the schedules while it runs. It is
 the long-running host for [schedules](schedules.md).
 
 ```bash
-gorun -web Gorunfile                       # open http://localhost:8080
-GORUN_ADDRESS=127.0.0.1:9000 gorun -web    # no file yet: load one on the Config page
+gorun -serve Gorunfile                       # open http://localhost:8080
+GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no file yet: load one on the Config page
 ```
+
+`-web` is an alias for `-serve`. Once it is listening, gorun prints where to find it and what it
+started:
+
+```
+gorun is serving on http://localhost:8080 (listening on :8080, all interfaces)
+  Gorunfile  /abs/path/Gorunfile, 2 schedules, scheduler running
+  NATS       embedded server at nats://127.0.0.1:4222, events on gorun.events
+  history    /home/u/.gorun/gorun.db
+  log        /home/u/.gorun/gorun.log
+Press ctrl+c to stop.
+```
+
+If the address is taken, it prints `gorun: listen <addr>: <err>` and exits with status 1.
 
 ## Start it
 
@@ -23,7 +37,7 @@ GORUN_ADDRESS=127.0.0.1:9000 gorun -web    # no file yet: load one on the Config
 The web service starts its own NATS server on `127.0.0.1:4222` when nothing answers there, so live
 updates and history work with no setup. The header shows how NATS is reached, next to **live**:
 
-- `embedded`: this web service started the server. It stops when `gorun -web` exits.
+- `embedded`: this web service started the server. It stops when `gorun -serve` exits.
 - `external`: an existing server, named by `GORUN_NATS_CLIENT_URL` or already running on the
   default address.
 - `off`: no connection, with the reason (for example `GORUN_SKIP_NATS` is set). Runs and live
@@ -34,14 +48,14 @@ the embedded server was started with (or the defaults), and how many clients are
 
 ```bash
 # use a NATS server that's already running
-GORUN_NATS_CLIENT_URL=nats://nats.internal:4222 gorun -web Gorunfile
+GORUN_NATS_CLIENT_URL=nats://nats.internal:4222 gorun -serve Gorunfile
 
 # start the embedded server on the LAN, with its own config
 printf 'host: "0.0.0.0"\nport: 4222\n' > nats.conf
-GORUN_NATS_SERVER_CONFIG=nats.conf gorun -web Gorunfile
+GORUN_NATS_SERVER_CONFIG=nats.conf gorun -serve Gorunfile
 ```
 
-The embedded server stops when `gorun -web` exits.
+The embedded server stops when `gorun -serve` exits.
 
 > **No login.** The web UI listens on all interfaces by default, so anyone who can reach the port
 > can run tasks, browse folders and edit the Gorunfile. Keep it on a trusted network, or set
@@ -146,7 +160,7 @@ which runs only on this machine.
 1. Start the web service with the recipe's Gorunfile:
 
    ```bash
-   gorun -web recipes/05-scheduled-jobs/Gorunfile
+   gorun -serve recipes/05-scheduled-jobs/Gorunfile
    ```
 
 2. Open http://localhost:8080 and go to **Schedules**. The `heartbeat` schedule shows its next

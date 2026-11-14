@@ -876,11 +876,11 @@ class Converter:
                 name = name[:-3]
             entry["src"] = self.ship_text(conv_text(text, self.scope()), name)
             entry["render"] = True
-        cmds = []
-        if owner or group:
-            cmds.append(f"chown {sh(str(owner or '') + ':' + str(group or ''))} {sh(dst)}")
-        spec = {"cmd": " && ".join(cmds) or "true", "copy": [entry], "check_copies": True}
-        return spec
+        if owner:
+            entry["owner"] = str(owner)
+        if group:
+            entry["group"] = str(group)
+        return {"cmd": "true", "copy": [entry], "check_copies": True}
 
     # ---- plays and roles -------------------------------------------------------------------
 

@@ -23,6 +23,9 @@ type copyDigest struct {
 	dst   string
 	dir   bool
 	files map[string]string
+	// perm is the copy, when it sets a mode, an owner or a group: the target's permissions are
+	// checked as well as its contents.
+	perm *Copy
 }
 
 // copyDigests works out the MD5 of everything the task's copies would write: inline content, a
@@ -31,6 +34,10 @@ func copyDigests(task *Task, server any) ([]copyDigest, error) {
 	var out []copyDigest
 	for _, c := range task.copies() {
 		d := copyDigest{dst: c.target(), files: map[string]string{}}
+		if c.setsPerms() {
+			cc := c
+			d.perm = &cc
+		}
 		switch {
 		case c.Content != "":
 			d.files[""] = md5Hex([]byte(c.Content))
@@ -161,6 +168,9 @@ else echo '` + noMD5Tool + `'; exit 0; fi
 		} else {
 			fmt.Fprintf(&b, "h %s 2>/dev/null\n", shellQuote(d.dst))
 		}
+		if d.perm != nil {
+			b.WriteString(lsScript(i, d.dst) + "\n")
+		}
 	}
 	b.WriteString("true\n")
 	return "sh -c " + shellQuote(b.String())
@@ -213,6 +223,7 @@ func (t *TaskExec) compareCopies(ctx context.Context, run runFunc) (*StepResult,
 	res := &StepResult{Command: "compare copies (md5)"}
 
 	remote, reason := localDigests(local), ""
+	perms := map[int]permLine{}
 	if t.server != nil {
 		stdout, stderr, err := run(ctx, digestScript(local), false)
 		if ctx.Err() != nil {
@@ -221,6 +232,7 @@ func (t *TaskExec) compareCopies(ctx context.Context, run runFunc) (*StepResult,
 		res.Stderr = string(stderr)
 		var ok bool
 		remote, ok = parseDigests(string(stdout), len(local))
+		perms = parsePerms(string(stdout))
 		switch {
 		case err != nil:
 			reason = "couldn't hash on the server: " + err.Error()
@@ -231,6 +243,21 @@ func (t *TaskExec) compareCopies(ctx context.Context, run runFunc) (*StepResult,
 
 	var report strings.Builder
 	for i, d := range local {
+		// the target's permissions, when the copy sets any and the server could be asked
+		why := ""
+		if d.perm != nil && reason == "" {
+			got, found := perms[i], true
+			if t.server == nil {
+				got, found = lsLocal(ctx, d.dst)
+			} else if _, ok := perms[i]; !ok {
+				found = false
+			}
+			why = permMismatch(*d.perm, got, found)
+		}
+		suffix := ""
+		if why != "" {
+			suffix = " (" + why + ")"
+		}
 		changed := []string{}
 		for _, path := range slices.Sorted(maps.Keys(d.files)) {
 			if reason != "" {
@@ -251,14 +278,14 @@ func (t *TaskExec) compareCopies(ctx context.Context, run runFunc) (*StepResult,
 		switch {
 		case reason != "":
 			fmt.Fprintf(&report, "changed  %s (not compared: %s, so it is copied)\n", d.dst, reason)
-		case len(changed) == 0:
+		case len(changed) == 0 && why == "":
 			fmt.Fprintf(&report, "same     %s\n", d.dst)
-		case !d.dir:
-			fmt.Fprintf(&report, "changed  %s\n", d.dst)
+		case len(changed) == 0 || !d.dir:
+			fmt.Fprintf(&report, "changed  %s%s\n", d.dst, suffix)
 		default:
-			fmt.Fprintf(&report, "changed  %s (%d of %d files: %s)\n", d.dst, len(changed), len(d.files), strings.Join(firstN(changed, 5), ", "))
+			fmt.Fprintf(&report, "changed  %s (%d of %d files: %s)%s\n", d.dst, len(changed), len(d.files), strings.Join(firstN(changed, 5), ", "), suffix)
 		}
-		if len(changed) > 0 || reason != "" {
+		if len(changed) > 0 || reason != "" || why != "" {
 			res.ExitCode = 1
 		}
 	}

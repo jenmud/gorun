@@ -196,7 +196,11 @@ func (t Task) CopySummaries() []string {
 		case c.Render:
 			from = "template " + c.Src
 		}
-		out = append(out, from+" → "+c.target())
+		line := from + " → " + c.target()
+		if o := c.options(); o != "" {
+			line += " (" + o + ")"
+		}
+		out = append(out, line)
 	}
 	return out
 }

@@ -187,3 +187,15 @@ func TestPermCommands(t *testing.T) {
 		t.Errorf("a copy with no mode or owner runs %q", got)
 	}
 }
+
+// The task's summary lines say what each copy sets, after where it goes.
+func TestCopySummaryShowsModeAndOwner(t *testing.T) {
+	task := Task{Name: "copy", Copy: []Copy{
+		{Src: "app.conf", Dst: "/etc/app.conf", Mode: "0640", Owner: "nobody", Group: "nogroup"},
+		{Src: "plain.txt", Dst: "/etc/plain.txt"},
+	}}
+	got := task.CopySummaries()
+	if got[0] != "app.conf → /etc/app.conf (mode 0640, owner nobody, group nogroup)" || got[1] != "plain.txt → /etc/plain.txt" {
+		t.Errorf("summaries = %q", got)
+	}
+}

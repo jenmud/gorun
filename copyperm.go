@@ -17,15 +17,22 @@ import (
 // perm, is an octal permission such as "0644". Only the nine permission bits are kept: setuid,
 // setgid and sticky bits are not set by a copy.
 func (c Copy) modeOf() (os.FileMode, bool, error) {
-	s := strings.TrimSpace(cmp.Or(c.Mode, c.Perm))
-	if s == "" {
+	s := cmp.Or(c.Mode, c.Perm)
+	if strings.TrimSpace(s) == "" {
 		return 0, false, nil
 	}
+	mode, err := ParseMode(s)
+	return mode, err == nil, err
+}
+
+// ParseMode reads an octal permission such as "0644" or "644", keeping its nine permission bits.
+func ParseMode(s string) (os.FileMode, error) {
+	s = strings.TrimSpace(s)
 	n, err := strconv.ParseUint(s, 8, 32)
 	if err != nil || n > 0o7777 {
-		return 0, false, fmt.Errorf("mode %q is not an octal permission such as 0644", s)
+		return 0, fmt.Errorf("mode %q is not an octal permission such as 0644", s)
 	}
-	return os.FileMode(n) & os.ModePerm, true, nil
+	return os.FileMode(n) & os.ModePerm, nil
 }
 
 // ownerSpec is what chown takes for a copy's owner and group: "user", ":group" or
@@ -40,6 +47,22 @@ func (c Copy) ownerSpec() string {
 		return ":" + c.Group
 	}
 	return ""
+}
+
+// options says what the copy sets beyond its paths, such as "mode 0640, owner deploy", or "" when
+// it sets nothing.
+func (c Copy) options() string {
+	var parts []string
+	if m, ok, err := c.modeOf(); ok && err == nil {
+		parts = append(parts, fmt.Sprintf("mode %04o", m))
+	}
+	if c.Owner != "" {
+		parts = append(parts, "owner "+c.Owner)
+	}
+	if c.Group != "" {
+		parts = append(parts, "group "+c.Group)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // setsPerms reports whether the copy sets a mode, an owner or a group.

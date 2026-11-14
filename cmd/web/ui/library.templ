@@ -73,8 +73,8 @@ templ taskAddForm(files []FileOption) {
 // forms, then its dependencies, timeout and retries.
 templ taskFilesField(e EditFields) {
 	<label class="block text-xs text-zinc-400 sm:col-span-2">
-		Files to copy <span class="text-zinc-600">one per line: a local file or folder, then -&gt; and where it goes on the server. Start a line with template to render a Go template for each server. Copied before the command, as the login user; local paths are relative to the Gorunfile.</span>
-		<textarea name="copies" rows="3" placeholder={ "scripts/stack-ok.sh -> /home/ubuntu/stack-ok.sh\ntemplate templates/app.conf.tmpl -> /etc/app/app.conf" } class={ inputClass() + " font-mono" }>{ e.Copies }</textarea>
+		Files to copy <span class="text-zinc-600">one per line: a local file or folder, then -&gt; and where it goes on the server. Start a line with template to render a Go template for each server. Add mode=0644, owner=name or group=name after the path to set them (owner and group need sudo on the task). Copied before the command, as the login user; local paths are relative to the Gorunfile.</span>
+		<textarea name="copies" rows="3" placeholder={ "scripts/stack-ok.sh -> /home/ubuntu/stack-ok.sh mode=0755\ntemplate templates/app.conf.tmpl -> /etc/app/app.conf owner=app group=app" } class={ inputClass() + " font-mono" }>{ e.Copies }</textarea>
 		if e.InlineCopies > 0 {
 			<span class="text-zinc-500">{ inlineCopiesNote(e.InlineCopies) }</span>
 		}

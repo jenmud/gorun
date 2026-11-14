@@ -364,7 +364,7 @@ func taskFilesField(e EditFields) templ.Component {
 			templ_7745c5c3_Var17 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<label class=\"block text-xs text-zinc-400 sm:col-span-2\">Files to copy <span class=\"text-zinc-600\">one per line: a local file or folder, then -&gt; and where it goes on the server. Start a line with template to render a Go template for each server. Copied before the command, as the login user; local paths are relative to the Gorunfile.</span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<label class=\"block text-xs text-zinc-400 sm:col-span-2\">Files to copy <span class=\"text-zinc-600\">one per line: a local file or folder, then -&gt; and where it goes on the server. Start a line with template to render a Go template for each server. Add mode=0644, owner=name or group=name after the path to set them (owner and group need sudo on the task). Copied before the command, as the login user; local paths are relative to the Gorunfile.</span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -378,9 +378,9 @@ func taskFilesField(e EditFields) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var19 string
-		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs("scripts/stack-ok.sh -> /home/ubuntu/stack-ok.sh\ntemplate templates/app.conf.tmpl -> /etc/app/app.conf")
+		templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs("scripts/stack-ok.sh -> /home/ubuntu/stack-ok.sh mode=0755\ntemplate templates/app.conf.tmpl -> /etc/app/app.conf owner=app group=app")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/library.templ`, Line: 77, Col: 153}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/library.templ`, Line: 77, Col: 183}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 		if templ_7745c5c3_Err != nil {
@@ -406,7 +406,7 @@ func taskFilesField(e EditFields) templ.Component {
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(e.Copies)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/library.templ`, Line: 77, Col: 204}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/library.templ`, Line: 77, Col: 234}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {

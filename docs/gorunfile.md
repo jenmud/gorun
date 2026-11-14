@@ -223,9 +223,18 @@ dst = "/tmp/site.conf"
 Good to know:
 
 - **Copies don't use sudo.** They run as the login user, so copy to somewhere writable like
-  `/tmp` and move the file into place in the command.
-- Files are written with mode `0644` and overwrite what's there. Directory copies keep local
-  permissions.
+  `/tmp` and move the file into place in the command. The exception is the owner and mode step
+  below.
+- Files overwrite what's there. Content and templates are written with mode `0644`, and a file or
+  folder copy keeps its local permissions, unless the copy sets `mode`.
+- **Mode, owner and group.** `mode` is octal (`0644`) and applies to the copied file, or to each
+  file in a copied folder. `owner` and `group` are set with `chown`, so they need root: put
+  `sudo = true` on the task to run the change under `sudo -n`. Without `sudo`, the change runs as
+  the login user, and it fails unless that user may give the file away. These are set after the
+  copy, and a folder's `owner` and `group` cover the whole tree.
+- `check_copies = true` also compares the target's mode, owner and group, so a changed mode alone
+  is copied again. On a server, the check reads them with `ls -ld`, which works on Linux and macOS.
+  Names are compared, not numeric IDs.
 - A copy creates the folders it needs on the server, as the login user. A directory copy leaves
   other files in the target alone and follows symlinks.
 - Files from `src` are streamed, so a multi-gigabyte release is fine. Rendered files and

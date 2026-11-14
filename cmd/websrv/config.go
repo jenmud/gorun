@@ -917,17 +917,39 @@ func copyLines(body map[string]any) (lines string, inline int) {
 				dst = path.Join(str(c, "dir"), filepath.Base(src))
 			}
 			if render, _ := c["render"].(bool); render {
-				out = append(out, "template "+src+" -> "+dst)
+				out = append(out, "template "+src+" -> "+dst+copyOptionWords(c))
 			} else {
-				out = append(out, src+" -> "+dst)
+				out = append(out, src+" -> "+dst+copyOptionWords(c))
 			}
 		}
 	}
 	return strings.Join(out, "\n"), inline
 }
 
+// copyOptionWords writes a copy's mode, owner and group as the form's trailing words, such as
+// "mode=0640 owner=deploy", or "" when the copy sets none.
+func copyOptionWords(c map[string]any) string {
+	var words []string
+	if mode := cmp.Or(str(c, "mode"), str(c, "perm")); mode != "" {
+		words = append(words, "mode="+mode) // perm is shown as mode
+	}
+	for _, key := range []string{"owner", "group"} {
+		if v := str(c, key); v != "" {
+			words = append(words, key+"="+v)
+		}
+	}
+	if len(words) == 0 {
+		return ""
+	}
+	return " " + strings.Join(words, " ")
+}
+
+// copyOptionKeys are the words that can follow a copy's destination on the form's line.
+var copyOptionKeys = map[string]string{"mode": "mode", "perm": "mode", "owner": "owner", "group": "group"}
+
 // parseCopyLines reads the form's copy lines: "local -> server", or "template local -> server"
-// for a file to fill in as a template. Blank lines are skipped.
+// for a file to fill in as a template. A line can end with mode=0644, owner=name and group=name,
+// in any order. Blank lines are skipped.
 func parseCopyLines(text string) ([]map[string]any, error) {
 	var out []map[string]any
 	for _, line := range strings.Split(text, "\n") {
@@ -935,16 +957,40 @@ func parseCopyLines(text string) ([]map[string]any, error) {
 		if line == "" {
 			continue
 		}
-		src, dst, ok := strings.Cut(line, "->")
-		src, dst = strings.TrimSpace(src), strings.TrimSpace(dst)
-		if !ok || src == "" || dst == "" {
+		src, dstPart, ok := strings.Cut(line, "->")
+		src = strings.TrimSpace(src)
+		if !ok || src == "" {
 			return nil, fmt.Errorf("can't read the copy %q: write it as local/path -> /path/on/server", line)
 		}
-		if tpl, isTpl := strings.CutPrefix(src, "template "); isTpl {
-			out = append(out, map[string]any{"src": strings.TrimSpace(tpl), "render": true, "dst": dst})
-		} else {
-			out = append(out, map[string]any{"src": src, "dst": dst})
+		// the options come last, after the destination; the rest of the line is the destination
+		words := strings.Fields(dstPart)
+		end := len(words)
+		c := map[string]any{}
+		for end > 0 {
+			key, value, isOpt := strings.Cut(words[end-1], "=")
+			field, known := copyOptionKeys[key]
+			if !isOpt || !known || value == "" {
+				break
+			}
+			c[field] = value
+			end--
 		}
+		dst := strings.Join(words[:end], " ")
+		if dst == "" {
+			return nil, fmt.Errorf("can't read the copy %q: write it as local/path -> /path/on/server", line)
+		}
+		if mode, has := c["mode"].(string); has {
+			if _, err := gorun.ParseMode(mode); err != nil {
+				return nil, fmt.Errorf("can't read the copy %q: %w", line, err)
+			}
+		}
+		c["dst"] = dst
+		if tpl, isTpl := strings.CutPrefix(src, "template "); isTpl {
+			c["src"], c["render"] = strings.TrimSpace(tpl), true
+		} else {
+			c["src"] = src
+		}
+		out = append(out, c)
 	}
 	return out, nil
 }

@@ -1,0 +1,4 @@
+- name: Mark the release as verified
+  copy:
+    content: "verified {{ release }}\n"
+    dest: "{{ release_dir }}/VERIFIED"

@@ -47,8 +47,15 @@ type Copy struct {
 	DstPath string `toml:"dst_path,omitempty"`
 	Dir     string `toml:"dir,omitempty"`
 	Dest    string `toml:"dest,omitempty"`
-	Mode    string `toml:"mode,omitempty"`
-	Perm    string `toml:"perm,omitempty"`
+	// Mode is the permission bits the copied files get, as octal, such as "0644". Without it a
+	// file keeps its local permissions. Perm is another spelling of Mode.
+	Mode string `toml:"mode,omitempty"`
+	Perm string `toml:"perm,omitempty"`
+	// Owner and Group are who the copied files belong to, as chown sets them. A copy keeps the
+	// login user's ownership without them. Setting them needs root: the task's sudo = true runs
+	// the chown under sudo.
+	Owner string `toml:"owner,omitempty"`
+	Group string `toml:"group,omitempty"`
 	// Render fills in the source file as a template for each server before copying it. A file
 	// is copied as it is without it: it may be a binary, an archive or another tool's template.
 	Render bool `toml:"render,omitempty"`
@@ -189,7 +196,11 @@ func (t Task) CopySummaries() []string {
 		case c.Render:
 			from = "template " + c.Src
 		}
-		out = append(out, from+" → "+c.target())
+		line := from + " → " + c.target()
+		if o := c.options(); o != "" {
+			line += " (" + o + ")"
+		}
+		out = append(out, line)
 	}
 	return out
 }
@@ -263,13 +274,16 @@ func (t Task) ForServer(server *Server) (Task, error) {
 			if c.Raw {
 				continue
 			}
-			for _, field := range []*string{&c.Dst, &c.DstPath, &c.Dest, &c.Dir, &c.Content} {
+			for _, field := range []*string{&c.Dst, &c.DstPath, &c.Dest, &c.Dir, &c.Content, &c.Mode, &c.Perm, &c.Owner, &c.Group} {
 				if *field, err = render(*field); err != nil {
 					return fail("copy", err)
 				}
 			}
 			if strings.TrimSpace(cmp.Or(c.Dst, c.DstPath, c.Dest, c.Dir)) == "" {
 				return fail("copy", errors.New("its destination is empty once filled in"))
+			}
+			if _, _, err := c.modeOf(); err != nil {
+				return fail("copy", err)
 			}
 		}
 	}

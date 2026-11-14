@@ -74,7 +74,8 @@ any of them.
   `include = ["git::https://github.com/you/tasks.git//web/*.toml?ref=v1.2.0"]`. See the
   [task library recipe](recipes/06-task-library/README.md).
 - **Big uploads.** Copy a file or a whole directory to every server and watch each upload's
-  percentage, size and speed in the terminal and the web UI. See
+  percentage, size and speed in the terminal and the web UI. Set the copied files' `mode`, `owner`
+  and `group`, and `check_copies` notices when only those have changed. See
   [upload progress](docs/gorunfile.md#upload-progress) and the
   [big upload recipe](recipes/07-big-upload/README.md).
 - **Remembers.** Every run is saved, with its commands and output, to look back on later.

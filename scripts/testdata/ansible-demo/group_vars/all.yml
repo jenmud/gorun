@@ -1,0 +1,6 @@
+app_name: demo
+app_env: prod
+deploy_root: /tmp/ansible2gorun-demo
+packages:
+  - curl
+  - jq

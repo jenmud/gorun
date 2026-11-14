@@ -95,6 +95,8 @@ it, with what each does; a task without them says so. The `check` and
 - **Files to copy** takes one copy per line: a local file or folder, `->`, and where it goes on
   the server, such as `scripts/stack-ok.sh -> /home/ubuntu/stack-ok.sh`. Start a line with
   `template` to render a Go template for each server. Local paths are relative to the Gorunfile.
+  After the destination, add `mode=0640`, `owner=name` or `group=name` to set the permissions and
+  owner (owner and group need the task's sudo). Those words always come last on the line.
   Copies of inline text (`content = ...`) can't be written this way, so the form says how many
   there are and keeps them.
 

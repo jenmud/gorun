@@ -1,0 +1,4 @@
+nginx_worker_processes: 2
+vhost_domains:
+  - example.test
+  - www.example.test

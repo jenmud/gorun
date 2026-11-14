@@ -1,0 +1,20 @@
+- name: Make the deploy root
+  file:
+    path: "{{ deploy_root }}"
+    state: directory
+
+- name: Install the packages each host needs
+  shell: "echo installing {{ item }}"
+  loop: "{{ packages }}"
+  when: app_env == 'prod'
+
+- name: Write the banner
+  template:
+    src: motd.j2
+    dest: "{{ deploy_root }}/motd"
+  notify: refresh banner
+
+- name: Check the environment is known
+  assert:
+    that:
+      - app_env in ['prod', 'staging']

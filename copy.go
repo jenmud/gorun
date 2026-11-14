@@ -21,6 +21,8 @@ type scpSender struct {
 	r *bufio.Reader
 	// wrap, when set, wraps each file's contents as they are sent, to count them.
 	wrap func(io.Reader) io.Reader
+	// mode, when set, is the permission each file is sent with, in place of its local one.
+	mode *os.FileMode
 }
 
 // ack reads the sink's reply: 0 is OK, 1 (warning) and 2 (fatal) carry a message.
@@ -107,7 +109,11 @@ func (s *scpSender) localFile(path, name string, info os.FileInfo) error {
 		return err
 	}
 	defer f.Close()
-	return s.file(name, info.Mode(), info.Size(), f)
+	mode := info.Mode()
+	if s.mode != nil {
+		mode = *s.mode
+	}
+	return s.file(name, mode, info.Size(), f)
 }
 
 // shellQuote quotes s for a POSIX shell.
@@ -182,12 +188,9 @@ func writeFile(path string, r io.Reader, mode os.FileMode) error {
 	return f.Close()
 }
 
-// copyFile copies r (size bytes) to path on the server, creating its directory if needed. A nil
-// client writes on this machine. A zero mode means 0644.
+// copyFile copies r (size bytes) to path on the server, creating its directory if needed, with
+// the given permission bits. A nil client writes on this machine.
 func copyFile(ctx context.Context, client *ssh.Client, r io.Reader, size int64, path string, mode os.FileMode) error {
-	if mode == 0 {
-		mode = 0644
-	}
 	if client == nil {
 		return writeFile(path, r, mode)
 	}
@@ -198,10 +201,12 @@ func copyFile(ctx context.Context, client *ssh.Client, r io.Reader, size int64, 
 
 // copyDir recursively copies the contents of localDir into dir on the server, creating dir (and
 // its parents) if needed, overwriting files and following symlinks. A nil client copies on this
-// machine. wrap, when not nil, wraps each file's contents as they are copied.
-func copyDir(ctx context.Context, client *ssh.Client, localDir, dir string, wrap func(io.Reader) io.Reader) error {
+// machine. wrap, when not nil, wraps each file's contents as they are copied. mode, when not nil,
+// is the permission every file gets, in place of its local one.
+func copyDir(ctx context.Context, client *ssh.Client, localDir, dir string, wrap func(io.Reader) io.Reader, mode *os.FileMode) error {
 	if client != nil {
 		return runSCP(ctx, client, "-r -d", dir, wrap, func(s *scpSender) error {
+			s.mode = mode
 			return s.dirContents(localDir)
 		})
 	}
@@ -223,7 +228,7 @@ func copyDir(ctx context.Context, client *ssh.Client, localDir, dir string, wrap
 			return err
 		}
 		if info.IsDir() {
-			if err := copyDir(ctx, nil, from, to, wrap); err != nil {
+			if err := copyDir(ctx, nil, from, to, wrap, mode); err != nil {
 				return err
 			}
 			continue
@@ -236,7 +241,11 @@ func copyDir(ctx context.Context, client *ssh.Client, localDir, dir string, wrap
 		if wrap != nil {
 			r = wrap(in)
 		}
-		err = writeFile(to, r, info.Mode().Perm())
+		perm := info.Mode().Perm()
+		if mode != nil {
+			perm = *mode
+		}
+		err = writeFile(to, r, perm)
 		_ = in.Close()
 		if err != nil {
 			return err
@@ -269,8 +278,24 @@ func CopyFilesContext(ctx context.Context, client *ssh.Client, server any, task 
 
 // copyOne makes one copy: inline content, a rendered template, a directory or a file.
 func copyOne(ctx context.Context, client *ssh.Client, server any, task *Task, c Copy, dst string, progress CopyProgressFunc) error {
+	mode, hasMode, err := c.modeOf()
+	if err != nil {
+		return err
+	}
+	var fileMode *os.FileMode
+	if hasMode {
+		fileMode = &mode
+	}
+	// text is inline content or a rendered template: a new file, 0644 unless the copy sets a mode
 	text := func(s []byte) error {
-		return copyFile(ctx, client, bytes.NewReader(s), int64(len(s)), dst, 0)
+		perm := os.FileMode(0644)
+		if hasMode {
+			perm = mode
+		}
+		if err := copyFile(ctx, client, bytes.NewReader(s), int64(len(s)), dst, perm); err != nil {
+			return err
+		}
+		return applyPerms(ctx, client, c, dst, false, task.Sudo)
 	}
 	switch {
 	case c.Content != "":
@@ -295,21 +320,25 @@ func copyOne(ctx context.Context, client *ssh.Client, server any, task *Task, c 
 			return err
 		}
 		tr := newCopyTracker(ctx, progress, dst, total)
-		if err := copyDir(ctx, client, c.Src, dst, tr.wrap); err != nil {
+		if err := copyDir(ctx, client, c.Src, dst, tr.wrap, fileMode); err != nil {
 			return err
 		}
 		tr.done()
-		return nil
+		return applyPerms(ctx, client, c, dst, true, task.Sudo)
 	}
 	f, err := os.Open(c.Src)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = f.Close() }()
+	perm := info.Mode().Perm()
+	if hasMode {
+		perm = mode
+	}
 	tr := newCopyTracker(ctx, progress, dst, info.Size())
-	if err := copyFile(ctx, client, tr.wrap(f), info.Size(), dst, info.Mode().Perm()); err != nil {
+	if err := copyFile(ctx, client, tr.wrap(f), info.Size(), dst, perm); err != nil {
 		return err
 	}
 	tr.done()
-	return nil
+	return applyPerms(ctx, client, c, dst, false, task.Sudo)
 }

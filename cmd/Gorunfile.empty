@@ -80,7 +80,9 @@ local = true
 # [[tasks.example.copy]]          # copies run before the command
 # src = "./files/nginx.conf"      # a file, or a directory (copied recursively)
 # dst = "/etc/nginx/nginx.conf"   # or dir = "/etc/nginx/" to keep the file name
-# mode = "0644"
+# mode = "0644"                   # permission bits of the copied files (perm is another spelling)
+# owner = "deploy"                # who owns them, as chown sets it: needs root, so sudo = true
+# group = "www-data"              # and their group
 #
 # [[tasks.example.copy]]
 # src = "./templates/site.conf.tmpl"  # or content = "inline text {{ .Name }}", a template

@@ -94,7 +94,7 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 | Key | Description |
 |---|---|
 | `cmd`, `cmd_file` | the command (pick one); a [template](gorunfile.md#templates), like every setting |
-| `copy` (also `copies`, `upload`, `files`) | file copies: `src` (with `render = true` to fill the file in) or `content`; `dst` (or `dir` with `src`); `raw` |
+| `copy` (also `copies`, `upload`, `files`) | file copies: `src` (with `render = true` to fill the file in) or `content`; `dst` (or `dir` with `src`); `mode` (octal, e.g. `0644`); `owner` and `group`; `raw` |
 | `depends_on` | tasks that must run first |
 | `sudo` | run with `sudo -n` |
 | `shell` | shell for local hosts (default `sh -c`) |

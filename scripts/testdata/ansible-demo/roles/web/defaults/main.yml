@@ -1,0 +1,1 @@
+web_root: "{{ deploy_root }}/www/{{ inventory_hostname }}"

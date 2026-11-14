@@ -1,0 +1,14 @@
+- name: Make the database directory
+  file:
+    path: "{{ db_dir }}"
+    state: directory
+
+- name: Create the database once
+  command: "touch {{ db_dir }}/{{ db_name }}.db"
+  args:
+    creates: "{{ db_dir }}/{{ db_name }}.db"
+
+- name: Ask the database for its version
+  shell: echo "{{ db_name }} v1"
+  register: db_version
+  changed_when: false

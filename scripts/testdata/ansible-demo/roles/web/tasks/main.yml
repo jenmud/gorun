@@ -1,0 +1,26 @@
+- name: Make the web root
+  file:
+    path: "{{ web_root }}"
+    state: directory
+
+- name: Copy the static page
+  copy:
+    src: index.html
+    dest: "{{ web_root }}/index.html"
+    mode: "0644"
+
+- name: Render the vhost config
+  template:
+    src: vhost.conf.j2
+    dest: "{{ web_root }}/vhost.conf"
+  notify: reload web
+
+- name: Mark production hosts
+  shell: echo prod > "{{ web_root }}/env"
+  when: app_env == "prod"
+  args:
+    creates: "{{ web_root }}/env"
+
+- name: Each domain gets a file
+  shell: "echo {{ item }} > {{ web_root }}/{{ item }}.domain"
+  loop: "{{ vhost_domains }}"

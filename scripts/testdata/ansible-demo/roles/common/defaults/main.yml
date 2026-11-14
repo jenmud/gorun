@@ -1,0 +1,1 @@
+motd_text: "Welcome to {{ app_name }}"

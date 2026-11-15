@@ -58,6 +58,12 @@ Press **ctrl+e** on a file-backed task to open its `cmd_file` in `$EDITOR`
 
 ![the Tasks tab with task details and execution settings beside the dependency tree](screenshot-tasks.png)
 
+Press **/** on the Tasks or Bundles tab to filter the tree. Type to narrow it: a task or bundle
+shows when its name, description, command, copies, check or verify matches, along with the
+entries it sits under. **enter** keeps the filter and returns to moving around, and **esc**
+clears it (a second **esc** goes back to the servers). While you type, letters are text, so
+**q** and the other keys don't act on the tree.
+
 The other tabs, **Bundles** and **Groups**, let you browse what's in the Gorunfile.
 On **Bundles**, press **space** to check one or more bundles, then go back to **Servers** and
 select the hosts to run them against. The tasks pane lists only the checked bundles' tasks (and

@@ -77,6 +77,13 @@ type treeModel struct {
 
 	// hint is shown under the title in an embedded view that needs instructions
 	hint string
+
+	// query filters the tree to the nodes whose label or detail contains it, ignoring case. The
+	// ancestors of each match are shown, so a match is always in its place. filtering is set
+	// while the query is being typed, and keep is the nodes shown, or nil when there is no query.
+	query     string
+	filtering bool
+	keep      map[*treeNode]bool
 }
 
 // newTreeModel returns the tree browser for nodes.
@@ -86,13 +93,29 @@ func newTreeModel(title, kind string, roots []*treeNode) treeModel {
 	return m
 }
 
-// rebuild flattens the expanded parts of the tree into rows.
+// rebuild flattens the expanded parts of the tree into rows. With a query, only the matching
+// nodes and their ancestors are rows, and the ancestors are open.
 func (m *treeModel) rebuild() {
 	m.rows = m.rows[:0]
+	m.keep = nil
+	if m.query != "" {
+		m.keep = m.matchSet()
+	}
 	var walk func(nodes []*treeNode, depth int, prefix string, parent int)
 	walk = func(nodes []*treeNode, depth int, prefix string, parent int) {
-		for i, n := range nodes {
-			last := i == len(nodes)-1
+		shown := 0
+		for _, n := range nodes {
+			if m.keep == nil || m.keep[n] {
+				shown++
+			}
+		}
+		i := 0
+		for _, n := range nodes {
+			if m.keep != nil && !m.keep[n] {
+				continue
+			}
+			last := i == shown-1
+			i++
 			guide, childPrefix := "", ""
 			if depth == 0 {
 				childPrefix = "  " // shift the subtree in from the top-level entries
@@ -103,13 +126,107 @@ func (m *treeModel) rebuild() {
 				}
 			}
 			m.rows = append(m.rows, treeRow{node: n, depth: depth, prefix: guide, parent: parent})
-			if n.expanded {
+			if n.expanded || (m.keep != nil && m.hasKeptChild(n)) {
 				walk(n.children, depth+1, childPrefix, len(m.rows)-1)
 			}
 		}
 	}
 	walk(m.roots, 0, "", -1)
 	m.cursor = max(0, min(m.cursor, len(m.rows)-1))
+}
+
+// matchSet returns the nodes a query shows: those whose label or detail matches, and every
+// node with a shown descendant.
+func (m treeModel) matchSet() map[*treeNode]bool {
+	keep := map[*treeNode]bool{}
+	q := strings.ToLower(m.query)
+	var visit func(nodes []*treeNode) bool
+	visit = func(nodes []*treeNode) bool {
+		any := false
+		for _, n := range nodes {
+			self := strings.Contains(strings.ToLower(nodeText(n)), q)
+			if childHit := visit(n.children); self || childHit {
+				keep[n] = true
+				any = true
+			}
+		}
+		return any
+	}
+	visit(m.roots)
+	return keep
+}
+
+// nodeText is the text a query searches for a node: its label and detail, and for a task, its
+// description, copies, check, verify and command as far as they are loaded.
+func nodeText(n *treeNode) string {
+	parts := []string{n.label, n.detail}
+	if t := n.task; t != nil {
+		parts = append(parts, t.description, t.details, t.check, t.verify, t.command, strings.Join(t.copies, " "))
+	}
+	return strings.Join(parts, " ")
+}
+
+// hasKeptChild reports whether a shown node has a shown child, so the query opens it.
+func (m treeModel) hasKeptChild(n *treeNode) bool {
+	for _, c := range n.children {
+		if m.keep[c] {
+			return true
+		}
+	}
+	return false
+}
+
+// matchCount is how many top-level entries the query shows, and how many there are.
+func (m treeModel) matchCount() (shown, total int) {
+	total = len(m.roots)
+	for _, r := range m.roots {
+		if m.keep == nil || m.keep[r] {
+			shown++
+		}
+	}
+	return shown, total
+}
+
+// setQuery changes the query, and shows the first match of the new filter.
+func (m *treeModel) setQuery(q string) {
+	m.query = q
+	m.offset, m.cursor = 0, 0
+	m.rebuild()
+}
+
+// filterLine is the query as it is shown above the tree: the text being typed, or the query
+// that is kept, and how many entries it shows. It is "" when there is no query.
+func (m treeModel) filterLine() string {
+	if m.query == "" && !m.filtering {
+		return ""
+	}
+	cursor := ""
+	if m.filtering {
+		cursor = "▏"
+	}
+	shown, total := m.matchCount()
+	return titleStyle.Render("/") + " " + m.query + cursor + mutedStyle.Render(fmt.Sprintf("  %d of %d", shown, total))
+}
+
+// filterKey handles a key while the query is being typed: letters and spaces extend it,
+// backspace shortens it, enter keeps it and esc drops it. It reports whether the key was used.
+func (m *treeModel) filterKey(key tea.KeyPressMsg) bool {
+	switch key.String() {
+	case "enter":
+		m.filtering = false
+	case "esc":
+		m.filtering = false
+		m.setQuery("")
+	case "backspace":
+		if r := []rune(m.query); len(r) > 0 {
+			m.setQuery(string(r[:len(r)-1]))
+		}
+	default:
+		if key.Text != "" && key.Mod == 0 {
+			m.setQuery(m.query + key.Text)
+		}
+	}
+	return true
 }
 
 // Init has nothing to load.
@@ -170,6 +287,10 @@ func wrapText(s string, width int) []string {
 // Update handles key presses, mouse clicks and the editor closing.
 func (m treeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	oldCursor := m.cursor
+	if key, ok := msg.(tea.KeyPressMsg); ok && m.filtering && key.String() != "ctrl+c" {
+		m.filterKey(key)
+		return m, nil
+	}
 	if m.kind == "tasks" && m.embedded && m.detailFocus {
 		if key, ok := msg.(tea.KeyPressMsg); ok {
 			switch key.String() {
@@ -223,7 +344,18 @@ func (m treeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		switch msg.String() {
-		case "ctrl+c", "q", "esc":
+		case "/":
+			if !m.detailFocus {
+				m.filtering = true
+				return m, nil
+			}
+		case "esc":
+			if m.query != "" {
+				m.setQuery("")
+				return m, nil
+			}
+			return m, tea.Quit
+		case "ctrl+c", "q":
 			return m, tea.Quit
 		case "tab":
 			if m.kind == "tasks" && m.embedded {
@@ -419,12 +551,9 @@ func (m treeModel) View() tea.View {
 		return v
 	}
 
-	lines := []string{titleStyle.Render("gorun") + " " + mutedStyle.Render(m.title+" · "+m.kind)}
+	lines := []string{titleStyle.Render("gorun") + " " + mutedStyle.Render(m.title+" · "+m.kind), m.filterLine()}
 	if hint := m.hintLines(); len(hint) > 0 {
-		lines = append(lines, "")
 		lines = append(lines, hint...)
-		lines = append(lines, "")
-	} else {
 		lines = append(lines, "")
 	}
 
@@ -441,7 +570,7 @@ func (m treeModel) View() tea.View {
 	if m.embedded {
 		quit = "esc/q back to servers · shift+tab switch"
 	}
-	lines = append(lines, "", truncateANSI(mutedStyle.Render(fmt.Sprintf("%d/%d · ↑/↓ move · →/← expand/collapse · e/E expand · c/C collapse · %s", m.cursor+1, len(m.rows), quit)), m.width))
+	lines = append(lines, "", truncateANSI(mutedStyle.Render(fmt.Sprintf("%d/%d · ↑/↓ move · →/← expand/collapse · e/E expand · c/C collapse · / filter · %s", m.cursor+1, len(m.rows), quit)), m.width))
 	v.SetContent(strings.Join(lines, "\n"))
 	return v
 }
@@ -489,11 +618,11 @@ func (m treeModel) taskView() string {
 	}
 	rightBox := paneBox(name, visibleDetails, rightWidth, bodyHeight, m.detailFocus)
 
-	lines := []string{titleStyle.Render("gorun") + " " + mutedStyle.Render(m.title+" · tasks"), ""}
+	lines := []string{titleStyle.Render("gorun") + " " + mutedStyle.Render(m.title+" · tasks"), m.filterLine()}
 	for i := range leftBox {
 		lines = append(lines, leftBox[i]+rightBox[i])
 	}
-	help := fmt.Sprintf("%d/%d · ↑/↓ move · tab details · pgup/dn tree · →/← expand · ctrl+e edit file · e/E/c/C tree", m.cursor+1, len(m.rows))
+	help := fmt.Sprintf("%d/%d · ↑/↓ move · tab details · pgup/dn tree · →/← expand · ctrl+e edit file · e/E/c/C tree · / filter", m.cursor+1, len(m.rows))
 	if m.detailFocus {
 		help = fmt.Sprintf("%d/%d · ↑/↓ section · enter/→ expand · ← collapse/back · ctrl+e edit file · pgup/dn scroll · home/end · tab tree", m.cursor+1, len(m.rows))
 	}

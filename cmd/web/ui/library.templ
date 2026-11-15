@@ -14,7 +14,10 @@ templ TasksPage(d TasksPageData) {
 			<p class="mt-1 text-sm text-zinc-400">Every task in your Gorunfile. Open one to see what it runs, how it is set up, what it depends on and where it runs. Sorted slowest first by average time in recent runs; tasks that have not run yet come last.</p>
 		</div>
 		if d.Loaded {
-			<input type="search" placeholder="Filter tasks" oninput="gorunFilter(this, 'task-cards')" class={ inputClass() + " max-w-xs" }/>
+			<div class="flex max-w-xs flex-1 flex-col items-end gap-1">
+				<input type="search" placeholder="Filter tasks: name, command, copies, sudo…" oninput="gorunFilter(this, 'task-cards')" onkeydown="gorunFilterKey(event, this, 'task-cards')" class={ inputClass() + " w-full" }/>
+				<span id="task-cards-count" class="text-xs text-zinc-500" aria-live="polite"></span>
+			</div>
 		}
 	</div>
 	@pageNotes(d.Notice, d.Error)
@@ -278,7 +281,10 @@ templ BundlesPage(d BundlesPageData) {
 			<p class="mt-1 text-sm text-zinc-400">A bundle is a named list of tasks, written <span class="font-mono">{ "@name" }</span> wherever a task list goes. Open one to see its tasks in order and everything it expands to.</p>
 		</div>
 		if d.Loaded {
-			<input type="search" placeholder="Filter bundles" oninput="gorunFilter(this, 'bundle-cards')" class={ inputClass() + " max-w-xs" }/>
+			<div class="flex max-w-xs flex-1 flex-col items-end gap-1">
+				<input type="search" placeholder="Filter bundles: name, description, task…" oninput="gorunFilter(this, 'bundle-cards')" onkeydown="gorunFilterKey(event, this, 'bundle-cards')" class={ inputClass() + " w-full" }/>
+				<span id="bundle-cards-count" class="text-xs text-zinc-500" aria-live="polite"></span>
+			</div>
 		}
 	</div>
 	@pageNotes(d.Notice, d.Error)

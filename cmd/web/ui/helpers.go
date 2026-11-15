@@ -379,12 +379,17 @@ func notRunNote(n int) string {
 
 // taskFilter is the text the Tasks filter box searches.
 func taskFilter(t TaskCard) string {
-	return strings.ToLower(t.Name + " " + t.Description + " " + t.Command)
+	return strings.ToLower(strings.Join([]string{
+		t.Name, t.Description, t.Details, t.Source, strings.Join(t.Badges, " "), t.CommandSource, t.Command,
+		strings.Join(t.Copies, " "), t.Check, t.Verify, strings.Join(t.DependsOn, " "),
+	}, " "))
 }
 
 // bundleFilter is the text the Bundles filter box searches.
 func bundleFilter(b BundleCard) string {
-	return strings.ToLower(b.Name + " " + b.Description + " " + strings.Join(b.Expanded, " "))
+	return strings.ToLower(strings.Join([]string{
+		b.Name, b.Description, b.Source, strings.Join(b.Expanded, " "), strings.Join(b.UsedBy, " "),
+	}, " "))
 }
 
 // runsOn shortens a long server list, so a task used everywhere stays readable.

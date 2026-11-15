@@ -102,9 +102,16 @@ it, with what each does; a task without them says so. The `check` and
 
 The Config page's **Add a task** form and **Edit** dialog have the same check and verify fields.
 
+**Filter tasks** searches each task's name, description, details, command, copies, check, verify,
+dependencies, flags and source file. Every word typed must match, so `deploy sudo` finds the sudo
+tasks that mention deploy. The count under the box says how many are shown, and **esc** clears it.
+
 ### Bundles
 
 Each bundle, its tasks in order, and what it expands to, with **Run this bundle**.
+
+**Filter bundles** searches each bundle's name, description, source file, the tasks it expands to,
+and the bundles that use it, with the same word matching and count as the Tasks page.
 
 - **Add a bundle**: name, tasks (comma separated, `@bundles` allowed), description, file.
 - **Edit** on a bundle: change its tasks and description.

@@ -4,7 +4,7 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
-## Unreleased: v0.30.0 (since v0.29.0)
+## v0.30.0 (since v0.29.0)
 
 ### Writing a Gorunfile from Go
 - `Config.Encode(w)` and `Config.Marshal()` write a config as a Gorunfile, the inverse of `Load`:
@@ -16,7 +16,7 @@ the release notes when a version is cut.
 - The TOML tags on `Config`, `Task`, `Copy`, `Bundle`, `ServerGroup`, `Schedule`, `Server` and
   `SSH` gain `omitempty`/`omitzero`. Reading a Gorunfile is unchanged.
 
-## Unreleased (since v0.25.0)
+## v0.26.0 to v0.29.0 (since v0.25.0)
 
 ### Copies: permissions and ownership
 - A copy takes `mode` (or `perm`), an octal permission such as `0644`, and `owner` and `group`.

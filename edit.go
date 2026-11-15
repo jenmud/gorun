@@ -207,9 +207,9 @@ func sectionName(lines []string, s section) string {
 	return ""
 }
 
-// encodeTable renders body as the TOML tables base.name, base.name.<sub-table>..., with the
-// parent headers that the encoder adds left out.
-func encodeTable(base []string, name string, body map[string]any) ([]string, error) {
+// encodeTable renders body, a map or a struct, as the TOML tables base.name,
+// base.name.<sub-table>..., with the parent headers that the encoder adds left out.
+func encodeTable(base []string, name string, body any) ([]string, error) {
 	var nest any = map[string]any{name: body}
 	for i := len(base) - 1; i >= 0; i-- {
 		nest = map[string]any{base[i]: nest}

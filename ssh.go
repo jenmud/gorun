@@ -19,10 +19,10 @@ import (
 
 // SSH is how gorun connects to a server. A server with none of it set runs on this machine.
 type SSH struct {
-	User         string `toml:"username"`
-	Password     string `toml:"password"`
-	Port         int    `toml:"port"`
-	Identityfile string `toml:"identityfile"`
+	User         string `toml:"username,omitempty"`
+	Password     string `toml:"password,omitempty"`
+	Port         int    `toml:"port,omitzero"`
+	Identityfile string `toml:"identityfile,omitempty"`
 	// ConfigFile is an OpenSSH config file to fill the gaps from; Config is another name for it.
 	ConfigFile string `toml:"config_file,omitempty"`
 	Config     string `toml:"config,omitempty"`

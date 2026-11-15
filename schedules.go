@@ -24,14 +24,14 @@ const atLayout = "2006-01-02T15:04"
 // or once at a time. It is defined as [[schedule]] in a Gorunfile; docs/schedules.md
 // describes the design.
 type Schedule struct {
-	Name        string `toml:"name"`
+	Name        string `toml:"name,omitempty"`
 	Source      string `toml:"-"` // the file that defines it
-	Description string `toml:"description"`
-	Target      string `toml:"target"`   // a task name, or "@bundle"
-	Cron        string `toml:"cron"`     // five fields, such as "0 2 * * *"; set this or at
-	At          string `toml:"at"`       // one time: RFC 3339, or "2006-01-02T15:04" in Timezone
-	Timezone    string `toml:"timezone"` // IANA name, such as "Australia/Sydney"; default UTC
-	Missed      string `toml:"missed"`   // skip (default) or run
+	Description string `toml:"description,omitempty"`
+	Target      string `toml:"target,omitempty"`   // a task name, or "@bundle"
+	Cron        string `toml:"cron,omitempty"`     // five fields, such as "0 2 * * *"; set this or at
+	At          string `toml:"at,omitempty"`       // one time: RFC 3339, or "2006-01-02T15:04" in Timezone
+	Timezone    string `toml:"timezone,omitempty"` // IANA name, such as "Australia/Sydney"; default UTC
+	Missed      string `toml:"missed,omitempty"`   // skip (default) or run
 }
 
 // location returns the schedule's time zone, UTC when none is set.

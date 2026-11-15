@@ -175,6 +175,36 @@ if err := cfg.Run(context.Background(), servers...); err != nil {
 machine, and `RunLocal` runs tasks locally without needing an SSH server. `NewLocalTaskExec`
 creates task executors that run locally, and `Server.IsLocal` reports whether a server has no SSH.
 
+`Config.Encode(w)` writes a config back out as a Gorunfile, and `Config.Marshal()` returns the
+same bytes: the inverse of `Load`, for a program that builds a config in code, or loads a task
+library and adds its own servers, and wants the Gorunfile to show, save or diff. It writes the
+settings, `[vars]`, `[envvars]`, `[ssh]`, every task, bundle, server group and `[[schedule]]`, then
+a `[servers.hosts.<name>]` table for each entry in `Config.Servers`, in that order. Map keys are
+sorted and empty values left out, so the same config always gives the same bytes. Values are
+written exactly as they are: templates, `$VAR` references and passwords are not filled in,
+expanded or hidden. Fields a Gorunfile has no key for (`Path`, `OnEvent`, a server's resolved
+`Tasks`, ...) are not written, and an include is not kept: a loaded config is written as one file
+holding everything it read.
+
+```go
+cfg.Servers = append(cfg.Servers, gorun.Server{Name: "web-01", Hostname: "10.0.0.1",
+	SSH: gorun.SSH{User: "deploy"}, TaskNames: []string{"@baseline"}})
+data, err := cfg.Marshal() // the Gorunfile text
+if err != nil {
+	log.Fatal(err)
+}
+var run gorun.Config // run what the text says
+if err := run.Load(bytes.NewReader(data)); err != nil {
+	log.Fatal(err)
+}
+```
+
+A server added to a loaded config isn't composed with its groups and the global vars until the
+config is loaded again, so load the encoded text to run exactly what it says. A server read by
+`LoadFile` is composed already, so its group and global values are written on the server too;
+loading that output gives the same config, unless a `raw = true` layer left `{{` in a value the
+server's own, templated, vars then hold.
+
 A local server runs only tasks marked [`local = true`](gorunfile.md#local-only-tasks), and every
 other task runs only over SSH. This holds for `Run`, `RunLocal` and the pipelines
 (`ServersPipeline`, `ServerPipeline`): tasks of the wrong kind, and tasks that depend on them, are

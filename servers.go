@@ -4,12 +4,12 @@ import "fmt"
 
 // Server is a server to connect to and execute tasks.
 type Server struct {
-	LogLevel        string `toml:"log_level"`
-	MaxTaskParallel int    `toml:"max_task_parallel"` // 0 (default) = one at a time; -1 = all at once
-	Name            string `toml:"-"`                 // the <name> in [servers.hosts.<name>]
-	Source          string `toml:"-"`                 // the file that defines it
-	Hostname        string `toml:"hostname"`
-	SSH             SSH    `toml:"ssh"`
+	LogLevel        string `toml:"log_level,omitempty"`
+	MaxTaskParallel int    `toml:"max_task_parallel,omitzero"` // 0 (default) = one at a time; -1 = all at once
+	Name            string `toml:"-"`                          // the <name> in [servers.hosts.<name>]
+	Source          string `toml:"-"`                          // the file that defines it
+	Hostname        string `toml:"hostname,omitempty"`
+	SSH             SSH    `toml:"ssh,omitempty"`
 
 	// TaskNames are the tasks to run, by name. Load replaces them with the server's
 	// final task list: its own tasks (or the global and group lists), plus AddTasks,
@@ -18,14 +18,14 @@ type Server struct {
 
 	// Groups are the [server_groups.<name>] this server joins, in order. Load applies
 	// their defaults to the server.
-	Groups []string `toml:"groups"`
+	Groups []string `toml:"groups,omitempty"`
 
 	// Tags label the server for --tag selection. Load adds its groups' tags.
-	Tags []string `toml:"tags"`
+	Tags []string `toml:"tags,omitempty"`
 
 	// EnvVars are exported to every task on this server. Load merges in its groups'
 	// envvars; a task's own envvars still win.
-	EnvVars map[string]string `toml:"envvars"`
+	EnvVars map[string]string `toml:"envvars,omitempty"`
 
 	// Vars are template variables for this server (and its tasks). Load merges in its
 	// groups' vars; a task's own vars still win in its templates.
@@ -35,8 +35,8 @@ type Server struct {
 	Raw bool `toml:"raw,omitempty"`
 
 	// AddTasks are appended to the server's task list and SkipTasks removed from it.
-	AddTasks  []string `toml:"add_tasks"`
-	SkipTasks []string `toml:"skip_tasks"`
+	AddTasks  []string `toml:"add_tasks,omitempty"`
+	SkipTasks []string `toml:"skip_tasks,omitempty"`
 
 	// Tasks is the resolved pipeline, including dependencies, set by ServerPipeline.
 	Tasks []Task `toml:"-"`

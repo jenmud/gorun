@@ -4,6 +4,18 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## Unreleased: v0.30.0 (since v0.29.0)
+
+### Writing a Gorunfile from Go
+- `Config.Encode(w)` and `Config.Marshal()` write a config as a Gorunfile, the inverse of `Load`:
+  settings, vars, envvars, ssh, tasks, bundles, server groups, schedules, and a
+  `[servers.hosts.<name>]` table per server in `Config.Servers` order. Keys are sorted and empty
+  values left out, so the output is stable and minimal; values are written exactly as they are,
+  never filled in or expanded. A program that loads a task library and adds servers from its own
+  inventory can show, save or diff the Gorunfile, and load the text to run it.
+- The TOML tags on `Config`, `Task`, `Copy`, `Bundle`, `ServerGroup`, `Schedule`, `Server` and
+  `SSH` gain `omitempty`/`omitzero`. Reading a Gorunfile is unchanged.
+
 ## Unreleased (since v0.25.0)
 
 ### Copies: permissions and ownership

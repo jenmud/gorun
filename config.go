@@ -28,28 +28,28 @@ func init() {
 
 // Config is a loaded Gorunfile: the task library, the servers and how to run them.
 type Config struct {
-	Title           string            `toml:"title"`
+	Title           string            `toml:"title,omitempty"`
 	GorunUUID       string            `toml:"-"`
-	LogLevel        string            `toml:"log_level"`
-	MaxParallel     int               `toml:"max_parallel"`      // 0 means run every selected host at once
-	MaxTaskParallel int               `toml:"max_task_parallel"` // 0 (default) = one at a time; -1 = all at once
-	EnvVars         map[string]string `toml:"envvars"`
+	LogLevel        string            `toml:"log_level,omitempty"`
+	MaxParallel     int               `toml:"max_parallel,omitzero"`      // 0 means run every selected host at once
+	MaxTaskParallel int               `toml:"max_task_parallel,omitzero"` // 0 (default) = one at a time; -1 = all at once
+	EnvVars         map[string]string `toml:"envvars,omitempty"`
 	Vars            map[string]any    `toml:"vars,omitempty"`
-	SSH             SSH               `toml:"ssh"`
+	SSH             SSH               `toml:"ssh,omitempty"`
 	// Raw keeps the global vars and envvars exactly as written, with no templating.
 	Raw bool `toml:"raw,omitempty"`
 
 	// Tasks is the task library, keyed by task name. Servers pick tasks from it by name.
-	Tasks map[string]Task `toml:"tasks"`
+	Tasks map[string]Task `toml:"tasks,omitempty"`
 
 	// Bundles are named task lists, referred to as "@<name>" wherever a task list is accepted.
-	Bundles map[string]Bundle `toml:"bundles"`
+	Bundles map[string]Bundle `toml:"bundles,omitempty"`
 
 	// Groups hold defaults shared by the servers that join them.
-	Groups map[string]ServerGroup `toml:"server_groups"`
+	Groups map[string]ServerGroup `toml:"server_groups,omitempty"`
 
 	// Schedules are the [[schedule]] tables, in file order; see docs/schedules.md.
-	Schedules []Schedule `toml:"schedule"`
+	Schedules []Schedule `toml:"schedule,omitempty"`
 
 	// Servers are the [servers.hosts.<name>] tables, in the order they appear in the file.
 	Servers []Server `toml:"-"`

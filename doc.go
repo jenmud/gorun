@@ -46,6 +46,29 @@
 //	cfg.ResolvePaths(filepath.Dir("Gorunfile"))
 //	return cfg.Run(ctx)
 //
+// # Writing a Gorunfile
+//
+// [Config.Encode] (and [Config.Marshal], for the bytes) is the inverse of loading: it writes a
+// config, built in code or loaded and changed, as a Gorunfile. Servers are written in the order of
+// [Config.Servers], map keys sorted and empty values left out, so the same config always gives the
+// same bytes, and values are written exactly as they are, with nothing filled in. Loading the
+// output gives the config to run, with its servers composed the way the text says:
+//
+//	cfg.Servers = append(cfg.Servers, gorun.Server{
+//		Name:      "web-01",
+//		Hostname:  "10.0.0.1",
+//		SSH:       gorun.SSH{User: "deploy"},
+//		TaskNames: []string{"@baseline"},
+//	})
+//	data, err := cfg.Marshal()
+//	if err != nil {
+//		return err
+//	}
+//	var run gorun.Config
+//	if err := run.Load(bytes.NewReader(data)); err != nil {
+//		return err
+//	}
+//
 // # Choosing servers and tasks
 //
 // [Config.SelectServers] picks servers the way the --server, --tag and --group flags do, and

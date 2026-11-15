@@ -152,3 +152,35 @@ func ExampleCopyFilesContext() {
 		log.Fatal(err)
 	}
 }
+
+// Load a task library, add a server built in code, and write the result as a Gorunfile.
+func ExampleConfig_Encode() {
+	var cfg gorun.Config
+	if err := cfg.Load(strings.NewReader(`
+[tasks.uptime]
+cmd = "uptime"
+description = "Show how long {{.Name}} has been up"
+`)); err != nil {
+		log.Fatal(err)
+	}
+	cfg.Servers = append(cfg.Servers, gorun.Server{
+		Name:      "web-01",
+		Hostname:  "10.0.0.1",
+		SSH:       gorun.SSH{User: "deploy", Port: 2222},
+		TaskNames: []string{"uptime"},
+	})
+	if err := cfg.Encode(os.Stdout); err != nil {
+		log.Fatal(err)
+	}
+	// Output:
+	// [tasks.uptime]
+	// cmd = "uptime"
+	// description = "Show how long {{.Name}} has been up"
+	//
+	// [servers.hosts.web-01]
+	// hostname = "10.0.0.1"
+	// tasks = ["uptime"]
+	// [servers.hosts.web-01.ssh]
+	// username = "deploy"
+	// port = 2222
+}

@@ -18,8 +18,8 @@ const BundlePrefix = "@"
 type Bundle struct {
 	Name        string         `toml:"-"` // the <name> in [bundles.<name>]
 	Source      string         `toml:"-"` // the file that defines it
-	Description string         `toml:"description"`
-	Tasks       []string       `toml:"tasks"`
+	Description string         `toml:"description,omitempty"`
+	Tasks       []string       `toml:"tasks,omitempty"`
 	Vars        map[string]any `toml:"vars,omitempty"`
 	// Raw keeps the bundle's vars exactly as written, with no templating.
 	Raw bool `toml:"raw,omitempty"`
@@ -30,12 +30,12 @@ type Bundle struct {
 type ServerGroup struct {
 	Name     string            `toml:"-"` // the <name> in [server_groups.<name>]
 	Source   string            `toml:"-"` // the file that defines it
-	LogLevel string            `toml:"log_level"`
-	Tags     []string          `toml:"tags"`
-	Tasks    []string          `toml:"tasks"`
-	EnvVars  map[string]string `toml:"envvars"`
+	LogLevel string            `toml:"log_level,omitempty"`
+	Tags     []string          `toml:"tags,omitempty"`
+	Tasks    []string          `toml:"tasks,omitempty"`
+	EnvVars  map[string]string `toml:"envvars,omitempty"`
 	Vars     map[string]any    `toml:"vars,omitempty"`
-	SSH      SSH               `toml:"ssh"`
+	SSH      SSH               `toml:"ssh,omitempty"`
 	// Raw keeps the group's vars and envvars exactly as written, with no templating.
 	Raw bool `toml:"raw,omitempty"`
 }

@@ -40,10 +40,10 @@ const (
 // templates, filled in for each server; a source file is copied as it is unless Render is set.
 // Raw turns templating off for the copy. The other fields are alternative spellings.
 type Copy struct {
-	Src     string `toml:"src"`
+	Src     string `toml:"src,omitempty"`
 	SrcFile string `toml:"src_file,omitempty"`
 	Content string `toml:"content,omitempty"`
-	Dst     string `toml:"dst"`
+	Dst     string `toml:"dst,omitempty"`
 	DstPath string `toml:"dst_path,omitempty"`
 	Dir     string `toml:"dir,omitempty"`
 	Dest    string `toml:"dest,omitempty"`
@@ -86,21 +86,21 @@ func (c Copy) normalized() Copy {
 
 // Task is a task to execute on one or more servers.
 type Task struct {
-	LogLevel  string            `toml:"log_level"`
+	LogLevel  string            `toml:"log_level,omitempty"`
 	Name      string            `toml:"-"` // the <name> in [tasks.<name>]
 	Source    string            `toml:"-"` // the file that defines it
-	Sudo      bool              `toml:"sudo"`
+	Sudo      bool              `toml:"sudo,omitempty"`
 	Cmd       string            `toml:"cmd,omitempty"`
 	CmdFile   string            `toml:"cmd_file,omitempty"`
 	Copy      []Copy            `toml:"copy,omitempty"`
 	Copies    []Copy            `toml:"copies,omitempty"`
 	Upload    []Copy            `toml:"upload,omitempty"`
 	Files     []Copy            `toml:"files,omitempty"`
-	EnvVars   map[string]string `toml:"envvars"`
+	EnvVars   map[string]string `toml:"envvars,omitempty"`
 	Vars      map[string]any    `toml:"vars,omitempty"`
-	DependsOn []string          `toml:"depends_on"`
-	Shell     string            `toml:"shell"`
-	Timeout   time.Duration     `toml:"timeout,omitempty"`
+	DependsOn []string          `toml:"depends_on,omitempty"`
+	Shell     string            `toml:"shell,omitempty"`
+	Timeout   time.Duration     `toml:"timeout,omitzero"`
 
 	// Description is a one-line summary shown in task lists and the TUI.
 	Description string `toml:"description,omitempty"`
@@ -112,7 +112,7 @@ type Task struct {
 	// server that connects over SSH. Tasks without it run only over SSH.
 	Local bool `toml:"local,omitempty"`
 	// Retries is how many extra times to run a failed task. Zero means run once.
-	Retries int `toml:"retries,omitempty"`
+	Retries int `toml:"retries,omitzero"`
 	// RetryDelay is how long to wait before each retry. Unset uses
 	// DefaultRetryDelay; an explicit zero retries immediately.
 	RetryDelay *time.Duration `toml:"retry_delay,omitempty"`

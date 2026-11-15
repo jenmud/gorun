@@ -24,5 +24,12 @@ the release notes when a version is cut.
   it can't convert are kept and fail on purpose, and are listed in the output. It doesn't handle
   Ansible facts yet. See `scripts/testdata/ansible-demo` for an example it converts in full.
 
+### Search
+- The Tasks and Bundles tabs of the TUI filter the tree: press **/**, type, then **enter** to keep
+  the filter or **esc** to clear it. A task matches on its name, description, command, copies,
+  check and verify.
+- The web Tasks and Bundles pages search more of each task or bundle, match every word typed, and
+  show how many are shown. **esc** clears the box.
+
 ### Fixes
 - `copy` ignored a copy's `mode`, as above.

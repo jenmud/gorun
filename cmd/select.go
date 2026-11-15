@@ -264,6 +264,13 @@ func (m serverSelectionModel) updateTree(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	// a query being typed, or one that esc clears first, takes the keys before the tabs do
+	if t := m.treeTab(); t != nil {
+		if key, ok := msg.(tea.KeyPressMsg); ok && key.String() != "ctrl+c" &&
+			(t.filtering || (key.String() == "esc" && t.query != "")) {
+			return m.passToTree(msg)
+		}
+	}
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		if msg.String() == "ctrl+e" && m.tab == tabTasks {
@@ -319,6 +326,11 @@ func (m serverSelectionModel) updateTree(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	return m.passToTree(msg)
+}
+
+// passToTree gives msg to the tree on the current tab.
+func (m serverSelectionModel) passToTree(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// the tree is shared by pointer, so copy it before updating to keep models immutable
 	t := *m.treeTab()
 	next, _ := t.Update(msg)

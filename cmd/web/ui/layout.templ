@@ -26,10 +26,21 @@ templ Layout(title string, active string, nats NATSStatus, body templ.Component)
 			</script>
 			<script>
 function gorunFilter(input, listId) {
-	var q = input.value.toLowerCase();
-	document.querySelectorAll('#' + listId + ' [data-filter]').forEach(function (row) {
-		row.style.display = row.dataset.filter.indexOf(q) === -1 ? 'none' : '';
+	// every word typed must appear in a row, so "deploy sudo" finds sudo tasks about deploys
+	var terms = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+	var rows = document.querySelectorAll('#' + listId + ' [data-filter]');
+	var shown = 0;
+	rows.forEach(function (row) {
+		var ok = terms.every(function (t) { return row.dataset.filter.indexOf(t) !== -1; });
+		row.style.display = ok ? '' : 'none';
+		if (ok) shown++;
 	});
+	var count = document.getElementById(listId + '-count');
+	if (count) count.textContent = terms.length ? shown + ' of ' + rows.length + ' shown' : '';
+}
+// esc in a filter box clears it and shows every row again
+function gorunFilterKey(event, input, listId) {
+	if (event.key === 'Escape') { input.value = ''; gorunFilter(input, listId); }
 }
 // Sections on the live page rebuild with every event. Remember which ones the person opened and
 // reopen them after each update.

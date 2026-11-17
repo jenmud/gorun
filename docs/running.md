@@ -89,8 +89,8 @@ Every screen moves the same way, with [vim keys or the arrow keys](#moving-aroun
 | alt+v | tasks pane: the server under the cursor / every server |
 | alt+e / alt+E | show the details of this server / every server |
 | alt+c / alt+C | hide the details of this server / every server |
-| alt+t / ctrl+x | tick / untick all of this server's tasks |
-| ctrl+a | select every server shown (again to deselect) |
+| alt+t / alt+x | tick / untick all of this server's tasks |
+| alt+s | select every server shown (again to deselect) |
 | alt+d | clear the whole selection |
 | enter | run the selection |
 | alt+a | select every server and run |

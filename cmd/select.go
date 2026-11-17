@@ -1322,7 +1322,7 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "alt+a", "alt+A", "alt+shift+a":
 			return m.runAll()
-		case "ctrl+a":
+		case "alt+s":
 			// select every visible server, or deselect them if they are all selected already
 			all := true
 			for _, match := range m.matches {
@@ -1337,7 +1337,7 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "alt+d":
 			clear(m.selected)
 			clear(m.skipped)
-		case "ctrl+x":
+		case "alt+x":
 			// untick every task of the focused server
 			if s, ok := m.focusServer(); ok {
 				m.setAllTasks(s, false)
@@ -1544,12 +1544,12 @@ func (m serverSelectionModel) viewContent() string {
 
 	// the first line selects, the second moves
 	help := []string{
-		"space select · ctrl+a select all · alt+d deselect all · enter run",
+		"space select · alt+s select all · alt+d deselect all · enter run",
 		"j/k move · h/l details · L or tab tasks · / filter · ? help · q quit",
 	}
 	if m.focus == paneTasks {
 		help = []string{
-			"space toggle task · alt+t tick all · ctrl+x untick all · enter run",
+			"space toggle task · alt+t tick all · alt+x untick all · enter run",
 			"j/k move · H or tab servers · / filter · ? help · q quit",
 		}
 	}
@@ -1892,9 +1892,9 @@ func (m serverSelectionModel) helpContent() string {
 			{"alt+e / alt+E", "show details of one/all servers"},
 			{"alt+c / alt+C", "hide details of one/all servers"},
 			{"alt+a", "select all servers and run"},
-			{"ctrl+a", "select all shown servers"},
+			{"alt+s", "select all shown servers (again to deselect them)"},
 			{"alt+d", "clear selection"},
-			{"ctrl+x", "clear a server's tasks"},
+			{"alt+x", "untick all of a server's tasks"},
 			{"alt+t", "tick all of a server's tasks"},
 		}},
 		{"Filter", [][2]string{

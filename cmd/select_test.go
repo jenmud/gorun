@@ -49,8 +49,10 @@ func press(m serverSelectionModel, keys ...string) serverSelectionModel {
 			msg = tea.KeyPressMsg{Code: tea.KeyUp}
 		case "space":
 			msg = tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
-		case "ctrl+a":
-			msg = tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl}
+		case "alt+s":
+			msg = tea.KeyPressMsg{Code: 's', Mod: tea.ModAlt}
+		case "alt+x":
+			msg = tea.KeyPressMsg{Code: 'x', Mod: tea.ModAlt}
 		case "ctrl+s":
 			msg = tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}
 		case "ctrl+b":
@@ -229,7 +231,7 @@ func TestServerSelectionModel_SelectTasks(t *testing.T) {
 	}
 
 	// task choices are per server
-	m = press(m, "ctrl+a")
+	m = press(m, "alt+s")
 	if diff := cmp.Diff(map[string][]string{
 		"web-1": {"greet", "timezone", "deploy-user"},
 		"web-2": {"greet", "timezone", "deploy-user"},
@@ -562,18 +564,13 @@ func TestServerSelectionModel_StatusLineHeight(t *testing.T) {
 
 func TestServerSelectionModel_AllTasks(t *testing.T) {
 	m := newServerSelectionModel("test", pipelineServers())
-	ctrl := func(m serverSelectionModel, r rune) serverSelectionModel {
-		next, _ := m.Update(tea.KeyPressMsg{Code: r, Mod: tea.ModCtrl})
-		return next.(serverSelectionModel)
-	}
 
 	// select both servers, leave a task out on web-2
-	m = press(m, "ctrl+a")
+	m = press(m, "alt+s")
 	m.toggleTask(m.servers[1], "greet")
 
-	// ctrl+x in web-1's tasks clears only web-1's tasks
-	m = press(m, "tab", "down")
-	m = ctrl(m, 'x')
+	// alt+x in web-1's tasks clears only web-1's tasks
+	m = press(m, "tab", "down", "alt+x")
 	if m.countTasks(m.servers[0]) != 0 || m.selected["web-1"] {
 		t.Errorf("web-1 should have no tasks and be deselected, got %d tasks, selected=%v", m.countTasks(m.servers[0]), m.selected["web-1"])
 	}

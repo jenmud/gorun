@@ -251,11 +251,12 @@ func TestServerSelectionModel_PaneFocus(t *testing.T) {
 		t.Fatalf("left in the tasks pane should go back to the servers, got focus=%d", m.focus)
 	}
 
-	// typing in the tasks pane still filters
+	// / in the tasks pane opens the filter
 	m = press(m, "tab")
-	next, _ := m.Update(tea.KeyPressMsg{Code: 'w', Text: "w"})
-	if m = next.(serverSelectionModel); m.query != "w" {
-		t.Errorf("typing in the tasks pane should filter, got query %q", m.query)
+	m, _ = send(m, tea.KeyPressMsg{Code: '/', Text: "/"})
+	m, _ = send(m, tea.KeyPressMsg{Code: 'w', Text: "w"})
+	if m.query != "w" {
+		t.Errorf("/ then w in the tasks pane should filter, got query %q", m.query)
 	}
 
 	// with no server under the cursor there are no tasks to focus
@@ -545,14 +546,15 @@ func TestServerSelectionModel_CursorKeepsItsRow(t *testing.T) {
 	}
 }
 
-func TestServerSelectionModel_SearchBoxHeight(t *testing.T) {
+// The line over the panes is always one line, with or without a filter, as layout() counts on.
+func TestServerSelectionModel_StatusLineHeight(t *testing.T) {
 	m, _ := sectionModel(t)
 	for _, width := range []int{20, 40, 58, 60, 62, 80, 200} {
 		m.width = width
 		for _, query := range []string{"", strings.Repeat("x", 100)} {
-			m.query = query
-			if h := lipgloss.Height(m.searchBox()); h != 3 {
-				t.Errorf("width %d, query %q: search box is %d lines, layout() expects 3", width, query, h)
+			m.query, m.filtering = query, query != ""
+			if h := lipgloss.Height(m.statusLine()); h != 1 {
+				t.Errorf("width %d, query %q: status line is %d lines, layout() expects 1", width, query, h)
 			}
 		}
 	}
@@ -752,7 +754,7 @@ func TestHistoryListFitsTheScreen(t *testing.T) {
 		if !strings.Contains(view, "▶ ") || !strings.Contains(view, "run 19") {
 			t.Errorf("height %d: the selected run should be on screen, got:\n%s", height, view)
 		}
-		if !strings.Contains(lines[len(lines)-1], "esc/q back to servers") {
+		if !strings.Contains(lines[len(lines)-1], "esc/q back") {
 			t.Errorf("height %d: the help line should be the last line, got %q", height, lines[len(lines)-1])
 		}
 	}
@@ -781,11 +783,12 @@ func TestServerSelectionModel_LongTitleKeepsTabs(t *testing.T) {
 func TestServerSelectionModel_TypeLetters(t *testing.T) {
 	for _, query := range []string{"docker", "aAeEcCT"} {
 		m := newServerSelectionModel("test", pipelineServers())
+		m, _ = send(m, tea.KeyPressMsg{Code: '/', Text: "/"})
 		for _, r := range query {
 			m, _ = send(m, tea.KeyPressMsg{Code: r, Text: string(r)})
 		}
 		if m.query != query {
-			t.Errorf("typing %q should reach the filter, got query %q", query, m.query)
+			t.Errorf("after /, typing %q should reach the filter, got query %q", query, m.query)
 		}
 		if len(m.chosen()) != 0 {
 			t.Errorf("typing %q must not select or run anything, got %v", query, chosenTasks(m))

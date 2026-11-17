@@ -4,6 +4,21 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## Unreleased (since v0.30.0)
+
+### Vim keys and / to filter, on every screen
+- The picker no longer filters as you type. Press **/** to filter, then type; **enter** keeps
+  the filter and **esc** clears it. The search box above the servers is gone: the filter shows
+  on the counts line. **/** also filters the Groups tab, the history's runs and an opened run's
+  servers and tasks, the live view's servers, and the `--list-*` trees.
+- Every screen takes vim keys as well as the plain ones: j/k, h/l, gg/G, ctrl+u/ctrl+d for half
+  a page, H/L and ctrl+w h/l/w for panes, gt/gT for tabs, and 1 to 5 to jump to a tab. The
+  arrows, pgup/pgdn, home/end, tab and shift+tab still work.
+- **?** opens the help, as ctrl+k does. The help lists each vim key next to its plain key, and
+  scrolls with j/k when it is taller than the screen. The live view has a help too.
+- **Changed:** clearing the picker's selection moves from ctrl+d to **alt+d**, since ctrl+d now
+  moves half a page. A single **g** no longer jumps to the top; use **gg** or home.
+
 ## v0.30.0 (since v0.29.0)
 
 ### Writing a Gorunfile from Go

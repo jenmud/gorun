@@ -30,7 +30,8 @@ Unless you pass `--run`, every run starts in the picker. **Nothing runs until yo
 
 1. **Select servers** with **space** (or a click). Selecting a **group** or **tag** selects all of
    its servers.
-2. **Type to filter.** The match is fuzzy: `wp` finds `web-prod-1`.
+2. **Press / to filter**, then type. The match is fuzzy: `wp` finds `web-prod-1`. **enter**
+   keeps the filter and goes back to moving around; **esc** clears it.
 3. **Check the tasks.** The right-hand pane lists the tasks of the server under the cursor. Press
    **tab** to move into it, then untick a task to leave it out of this run; tasks that need it are
    unticked too. **alt+v** lists every server's tasks at once instead.
@@ -41,7 +42,7 @@ Unless you pass `--run`, every run starts in the picker. **Nothing runs until yo
 A checkbox shows `[x]` when all of a group's servers are selected, `[-]` when some are, and `[ ]`
 when none are. A server's row shows how many of its tasks are ticked, e.g. `11/15 tasks`.
 
-Press **→** on a server to see its details: hostname, SSH user, port, identity file, groups, tags
+Press **→** (or **l**) on a server to see its details: hostname, SSH user, port, identity file, groups, tags
 and vars. A password shows as `********`. Env vars are listed in a table that opens with space or
 enter.
 The **Tasks** tab keeps the dependency tree on the left and previews the selected task on the
@@ -51,14 +52,14 @@ unresolved placeholders stay as written. Under the command are the task's **Copi
 **Verify**: each heading names what it does (a single copy shows its source and destination),
 so it shows even folded, and a task without one says `none`. In the live view, an expanded task
 lists its copies before its command, and marks them *copying…* while they upload. Description and details stay open; the other sections start collapsed. Execution settings and env vars appear as tables when expanded. Press **tab** to
-focus the details pane, **↑/↓** to select a section, and **enter** or **→** to expand/collapse it.
-Use **pgup/pgdn** or **home/end** to scroll the details, then press **tab** to return to the tree.
+focus the details pane (or **L**), **↑/↓** to select a section, and **enter** or **→** to expand/collapse it.
+Use **pgup/pgdn**, **ctrl+u/ctrl+d** or **home/end** to scroll the details, then press **tab** (or **H**) to return to the tree.
 Press **ctrl+e** on a file-backed task to open its `cmd_file` in `$EDITOR`
 (`vi` if unset); gorun exits when the editor closes.
 
 ![the Tasks tab with task details and execution settings beside the dependency tree](screenshot-tasks.png)
 
-Press **/** on the Tasks or Bundles tab to filter the tree. Type to narrow it: a task or bundle
+Press **/** on the Tasks, Bundles or Groups tab to filter the tree. Type to narrow it: a task or bundle
 shows when its name, description, command, copies, check or verify matches, along with the
 entries it sits under. **enter** keeps the filter and returns to moving around, and **esc**
 clears it (a second **esc** goes back to the servers). While you type, letters are text, so
@@ -70,32 +71,54 @@ select the hosts to run them against. The tasks pane lists only the checked bund
 their dependencies), and that is what runs instead of each server's own pipeline. Each server
 still runs only the tasks of its kind: [`local = true`](gorunfile.md#local-only-tasks) tasks on
 local servers, the rest over SSH. Press **space** on the bundle again to uncheck it. **History**
-shows [past runs](#history). Press **shift+tab** to move between tabs, and **ctrl+k** for a list
-of every shortcut.
+shows [past runs](#history). Press **shift+tab** (or **gt**) to move between tabs, **1** to **5** to
+jump to one, and **?** or **ctrl+k** for a list of every shortcut.
 
 Command-line filters narrow what the picker offers: `gorun Gorunfile --tag prod --task @baseline`
 opens a picker with just those servers and tasks.
 
+Every screen moves the same way, with [vim keys or the arrow keys](#moving-around).
+
 | Key | Does |
 |---|---|
-| type, backspace | edit the filter (ctrl+w deletes a word, ctrl+u clears it) |
-| ↑ / ↓, mouse wheel | move |
+| / | filter; while you type, backspace deletes a letter, ctrl+w a word and ctrl+u the lot |
+| j / k, ↑ / ↓, mouse wheel | move |
 | space, click | select the row under the cursor (in the tasks pane, tick or untick a task; on Bundles, check a bundle) |
-| tab | switch between the servers and tasks panes |
-| → / ← | show / hide a server's details; open / close its env vars |
+| tab, L / H, ctrl+w l / h | switch between the servers and tasks panes |
+| l / h, → / ← | show / hide a server's details; open / close its env vars |
 | alt+v | tasks pane: the server under the cursor / every server |
 | alt+e / alt+E | show the details of this server / every server |
 | alt+c / alt+C | hide the details of this server / every server |
 | alt+t / ctrl+x | tick / untick all of this server's tasks |
 | ctrl+a | select every server shown (again to deselect) |
-| ctrl+d | clear the whole selection |
+| alt+d | clear the whole selection |
 | enter | run the selection |
 | alt+a | select every server and run |
-| shift+tab | next tab |
-| ctrl+s / t / b / g / h | jump to Servers / Tasks / Bundles / Groups / History |
-| ctrl+k | show all shortcuts |
-| esc | clear the filter, then quit |
+| shift+tab, gt / gT | next / previous tab |
+| 1 – 5, ctrl+s / t / b / g / h | jump to Servers / Tasks / Bundles / Groups / History |
+| ?, ctrl+k | show all shortcuts |
+| esc, q | clear the filter, then quit |
 | ctrl+c | quit without running anything |
+
+### Moving around
+
+Every screen (the picker and its tabs, the live view, the history and the `--list-*` trees) takes
+vim keys and the plain keys that do the same, so use whichever you know:
+
+| Vim | Plain | Does |
+|---|---|---|
+| j / k | ↓ / ↑ | move down / up |
+| h / l | ← / → | collapse or go back / expand or open |
+| gg / G | home / end | go to the top / bottom |
+| ctrl+u / ctrl+d | pgup / pgdn | half a page up / down (pgup and pgdn move a whole page) |
+| ctrl+w h / l, H / L | tab | move to the left / right pane |
+| ctrl+w w | tab | move to the next pane |
+| gt / gT | shift+tab | next / previous tab |
+| 1 – 5 | ctrl+s / t / b / g / h | go to the 1st to 5th tab |
+| / | / | filter what the screen lists: type, **enter** keeps it, **esc** clears it |
+| ? | ctrl+k | show or hide the help |
+
+While a filter is being typed, every key is text, so **q**, **j** and the rest go into the filter.
 
 ## Watching a run
 
@@ -103,7 +126,8 @@ The live view shows a progress bar per server and what each one is doing:
 
 ![gorun provisioning ten servers in parallel](screenshot.png)
 
-- **↑ / ↓** move between servers, **enter** or **→** shows a server's tasks, **←** hides them.
+- **j / k** (or **↑ / ↓**) move between servers, **enter** or **l** shows a server's tasks, **h** hides them.
+- **/** filters the servers by name or address, and **?** lists every key.
 - **v** switches to the verbose view, which lists every task. There, **enter** opens a task's output.
 - The view stays open when the run ends, so you can read the output. **q** quits.
 
@@ -232,13 +256,15 @@ to see exactly what ran:
 
 | Key | Does |
 |---|---|
-| ↑ / ↓ | move |
-| enter | open a run; expand a server or task |
+| j / k, ↑ / ↓ | move |
+| enter, l | open a run; expand a server or task |
+| tab, L / H | move between the servers and tasks and the details |
+| / | filter the runs, or an opened run's servers and tasks |
 | y | copy the task's command to the clipboard |
 | d | delete the run |
 | t | keep only the N most recent runs (asks for N) |
-| esc, q | go back |
-| ctrl+k | show all shortcuts |
+| esc, q | clear the filter, then go back |
+| ?, ctrl+k | show all shortcuts |
 
 **Where it's stored:** a SQLite file: `GORUN_DB_PATH` when it is set (created if it doesn't exist
 yet), otherwise `./gorun.db` if there is one, otherwise `~/.gorun/gorun.db`.

@@ -17,6 +17,8 @@ the release notes when a version is cut.
 - The filter's matches are picked out in every list: server names and addresses, task and
   bundle names and descriptions, run titles, IDs and hosts. The row under the cursor keeps them
   picked out too.
+- The Servers tab's help is two lines: the first selects (space, ctrl+a select all, alt+d
+  deselect all, enter run; in the tasks pane alt+t tick all, ctrl+x untick all), the second moves.
 - Each tab shows its number before its name (`1 Servers │ 2 Tasks │ …`), the key that goes to it.
 - **?** opens the help, as ctrl+k does. The help lists each vim key next to its plain key, and
   scrolls with j/k when it is taller than the screen. The live view has a help too.

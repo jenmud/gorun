@@ -1475,8 +1475,8 @@ type selectionLayout struct {
 // layout works out where each part of the picker goes for the window size.
 func (m serverSelectionModel) layout() selectionLayout {
 	// title, blank, filter and count, blank, pane top border | panes | pane bottom border,
-	// blank, button, blank, help
-	const above, below = 5, 5
+	// blank, button, blank, two lines of help
+	const above, below = 5, 6
 
 	l := selectionLayout{listTop: above, rows: max(m.height-above-below, 3), leftWidth: m.width / 2}
 
@@ -1542,15 +1542,24 @@ func (m serverSelectionModel) viewContent() string {
 		lines = append(lines, left[i]+right[i])
 	}
 
-	help := "j/k move · space select · h/l details · L or tab tasks · / filter · ? help · enter run · q quit"
+	// the first line selects, the second moves
+	help := []string{
+		"space select · ctrl+a select all · alt+d deselect all · enter run",
+		"j/k move · h/l details · L or tab tasks · / filter · ? help · q quit",
+	}
 	if m.focus == paneTasks {
-		help = "j/k move · space toggle task · H or tab servers · / filter · ? help · enter run · q quit"
+		help = []string{
+			"space toggle task · alt+t tick all · ctrl+x untick all · enter run",
+			"j/k move · H or tab servers · / filter · ? help · q quit",
+		}
 	}
 	if m.filtering {
-		help = "type to filter · enter keep · esc clear · ctrl+w word · ctrl+u all"
+		help = []string{"type to filter · enter keep · esc clear · ctrl+w word · ctrl+u all", ""}
 	}
 	lines = append(lines, "", truncateANSI(m.runButton()+"  "+m.runAllButton()+mutedStyle.Render("  enter / alt+a"), m.width), "")
-	lines = append(lines, truncateANSI(mutedStyle.Render(help), m.width))
+	for _, h := range help {
+		lines = append(lines, truncateANSI(mutedStyle.Render(h), m.width))
+	}
 	return strings.Join(lines, "\n")
 }
 

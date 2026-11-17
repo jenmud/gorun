@@ -51,8 +51,8 @@ func press(m serverSelectionModel, keys ...string) serverSelectionModel {
 			msg = tea.KeyPressMsg{Code: tea.KeySpace, Text: " "}
 		case "alt+s":
 			msg = tea.KeyPressMsg{Code: 's', Mod: tea.ModAlt}
-		case "alt+x":
-			msg = tea.KeyPressMsg{Code: 'x', Mod: tea.ModAlt}
+		case "alt+d":
+			msg = tea.KeyPressMsg{Code: 'd', Mod: tea.ModAlt}
 		case "ctrl+s":
 			msg = tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}
 		case "ctrl+b":
@@ -569,8 +569,8 @@ func TestServerSelectionModel_AllTasks(t *testing.T) {
 	m = press(m, "alt+s")
 	m.toggleTask(m.servers[1], "greet")
 
-	// alt+x in web-1's tasks clears only web-1's tasks
-	m = press(m, "tab", "down", "alt+x")
+	// alt+d in web-1's tasks clears only web-1's tasks
+	m = press(m, "tab", "down", "alt+d")
 	if m.countTasks(m.servers[0]) != 0 || m.selected["web-1"] {
 		t.Errorf("web-1 should have no tasks and be deselected, got %d tasks, selected=%v", m.countTasks(m.servers[0]), m.selected["web-1"])
 	}
@@ -581,16 +581,16 @@ func TestServerSelectionModel_AllTasks(t *testing.T) {
 		t.Errorf("web-1 should show 0/5 tasks, got:\n%s", m.viewContent())
 	}
 
-	// alt+t ticks them all again and selects web-1
-	m = press(m, "alt+t")
+	// alt+s ticks them all again and selects web-1
+	m = press(m, "alt+s")
 	if m.countTasks(m.servers[0]) != 5 || !m.selected["web-1"] {
 		t.Errorf("web-1 should have all 5 tasks and be selected, got %d tasks, selected=%v", m.countTasks(m.servers[0]), m.selected["web-1"])
 	}
 
-	// on web-2's row, alt+t brings back the task left out there
+	// in web-2's tasks, alt+s brings back the task left out there
 	m = press(m, "tab")
 	m = cursorTo(t, m, rowServer, "web-2")
-	m = press(m, "alt+t")
+	m = press(m, "tab", "alt+s")
 	if diff := cmp.Diff(map[string][]string{
 		"web-1": {"greet", "timezone", "deploy-user"},
 		"web-2": {"greet", "timezone", "deploy-user"},
@@ -790,5 +790,35 @@ func TestServerSelectionModel_TypeLetters(t *testing.T) {
 		if len(m.chosen()) != 0 {
 			t.Errorf("typing %q must not select or run anything, got %v", query, chosenTasks(m))
 		}
+	}
+}
+
+func TestServerSelectionModel_AltSelectsEverywhere(t *testing.T) {
+	m := newServerSelectionModel("test", pipelineServers())
+
+	// servers pane: alt+s selects every shown server, again deselects them, alt+d clears
+	if m = press(m, "alt+s"); m.countSelected() != len(m.servers) {
+		t.Fatalf("alt+s should select every server, got %d", m.countSelected())
+	}
+	if m = press(m, "alt+s"); m.countSelected() != 0 {
+		t.Fatalf("alt+s again should deselect them, got %d", m.countSelected())
+	}
+	m = press(m, "alt+s", "alt+d")
+	if m.countSelected() != 0 {
+		t.Fatalf("alt+d should deselect every server, got %d", m.countSelected())
+	}
+
+	// tasks pane: the same keys tick and untick the server's tasks, and leave the others alone
+	m = press(m, "alt+s")
+	m = cursorTo(t, m, rowServer, "web-1")
+	m = press(m, "tab", "alt+d")
+	if m.countTasks(m.servers[0]) != 0 || m.countTasks(m.servers[1]) == 0 {
+		t.Fatalf("alt+d in the tasks pane should untick only web-1's tasks, got %d and %d", m.countTasks(m.servers[0]), m.countTasks(m.servers[1]))
+	}
+	if m = press(m, "alt+s"); m.countTasks(m.servers[0]) != len(m.servers[0].Tasks) {
+		t.Fatalf("alt+s in the tasks pane should tick all of web-1's tasks, got %d", m.countTasks(m.servers[0]))
+	}
+	if m = press(m, "alt+s"); m.countTasks(m.servers[0]) != 0 {
+		t.Fatalf("alt+s again should untick them, got %d", m.countTasks(m.servers[0]))
 	}
 }

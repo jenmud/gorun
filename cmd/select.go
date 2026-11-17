@@ -164,7 +164,7 @@ func (m serverSelectionModel) withLists(cfg *gorun.Config) serverSelectionModel 
 		expandAll(nodes)
 		t := newTreeModel(m.title, "bundles", nodes)
 		t.embedded = true
-		t.hint = "space checks a bundle · go back to Servers and select hosts · the tasks pane lists only that bundle's tasks"
+		t.hint = "space checks a bundle · alt+s checks all · alt+d unchecks all · go back to Servers and select hosts · the tasks pane lists only the checked bundles' tasks"
 		t.checkbox = func(n *treeNode) (bool, bool) {
 			name, ok := strings.CutPrefix(n.label, gorun.BundlePrefix)
 			if !ok {
@@ -272,6 +272,10 @@ func (m serverSelectionModel) updateTree(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editorOpened = true
 				return m, cmd
 			}
+		}
+		if m.tab == tabBundles && (msg.String() == "alt+s" || msg.String() == "alt+d") {
+			m.checkAllBundles(msg.String() == "alt+s")
+			return m, nil
 		}
 		if m.tab == tabBundles && msg.String() == "space" {
 			t := m.treeTab()
@@ -1322,7 +1326,19 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "alt+a", "alt+A", "alt+shift+a":
 			return m.runAll()
-		case "alt+s":
+		case "alt+s", "alt+d":
+			// in the tasks pane these tick and untick the focused server's tasks
+			if m.focus == paneTasks {
+				if s, ok := m.focusServer(); ok {
+					m.setAllTasks(s, msg.String() == "alt+s" && m.countTasks(s) < len(s.Tasks))
+				}
+				return m, nil
+			}
+			if msg.String() == "alt+d" {
+				clear(m.selected)
+				clear(m.skipped)
+				return m, nil
+			}
 			// select every visible server, or deselect them if they are all selected already
 			all := true
 			for _, match := range m.matches {
@@ -1334,24 +1350,35 @@ func (m serverSelectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.toggleServer(s)
 				}
 			}
-		case "alt+d":
-			clear(m.selected)
-			clear(m.skipped)
-		case "alt+x":
-			// untick every task of the focused server
-			if s, ok := m.focusServer(); ok {
-				m.setAllTasks(s, false)
-			}
-		case "alt+t":
-			// tick every task of the focused server
-			if s, ok := m.focusServer(); ok {
-				m.setAllTasks(s, true)
-			}
 		}
 		return m, nil
 	}
 
 	return m, nil
+}
+
+// checkAllBundles checks every bundle the Bundles tab shows, or unchecks them if they are all
+// checked already; with all false it unchecks every bundle.
+func (m *serverSelectionModel) checkAllBundles(all bool) {
+	if !all {
+		clear(m.selectedBundles)
+		m.applyBundles()
+		return
+	}
+	var names []string
+	for _, row := range m.bundles.rows {
+		if name, ok := strings.CutPrefix(row.node.label, gorun.BundlePrefix); ok && row.depth == 0 {
+			names = append(names, name)
+		}
+	}
+	every := true
+	for _, name := range names {
+		every = every && m.selectedBundles[name]
+	}
+	for _, name := range names {
+		m.selectedBundles[name] = !every
+	}
+	m.applyBundles()
 }
 
 // filterKey handles a key while the filter is typed after /: text and backspace change it,
@@ -1549,7 +1576,7 @@ func (m serverSelectionModel) viewContent() string {
 	}
 	if m.focus == paneTasks {
 		help = []string{
-			"space toggle task · alt+t tick all · alt+x untick all · enter run",
+			"space toggle task · alt+s select all · alt+d deselect all · enter run",
 			"j/k move · H or tab servers · / filter · ? help · q quit",
 		}
 	}
@@ -1892,10 +1919,8 @@ func (m serverSelectionModel) helpContent() string {
 			{"alt+e / alt+E", "show details of one/all servers"},
 			{"alt+c / alt+C", "hide details of one/all servers"},
 			{"alt+a", "select all servers and run"},
-			{"alt+s", "select all shown servers (again to deselect them)"},
-			{"alt+d", "clear selection"},
-			{"alt+x", "untick all of a server's tasks"},
-			{"alt+t", "tick all of a server's tasks"},
+			{"alt+s", "select all: the shown servers, the server's tasks in the tasks pane, the shown bundles; again to deselect them"},
+			{"alt+d", "deselect all: servers, the server's tasks in the tasks pane, or bundles"},
 		}},
 		{"Filter", [][2]string{
 			{"/", "filter what the tab lists: servers, groups and tags; tasks; bundles; runs"},

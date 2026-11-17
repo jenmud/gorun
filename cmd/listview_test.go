@@ -543,3 +543,24 @@ func TestTasksTreeSaysWhenThereIsNoCheckOrVerify(t *testing.T) {
 		}
 	}
 }
+
+func TestPickerBundlesAltSelect(t *testing.T) {
+	cfg := loadList(t)
+	m := newServerSelectionModel("t", pipelineServers()).withLists(&cfg).withHistory(nil, errors.New("none"))
+	m = press(m, "shift+tab", "shift+tab", "alt+s")
+	n := 0
+	for _, on := range m.selectedBundles {
+		if on {
+			n++
+		}
+	}
+	if n == 0 || n != len(cfg.Bundles) {
+		t.Fatalf("alt+s should check every bundle, got %d of %d", n, len(cfg.Bundles))
+	}
+	m = press(m, "alt+d")
+	for name, on := range m.selectedBundles {
+		if on {
+			t.Errorf("alt+d should uncheck every bundle, %s is still checked", name)
+		}
+	}
+}

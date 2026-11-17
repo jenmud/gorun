@@ -17,14 +17,16 @@ the release notes when a version is cut.
 - The filter's matches are picked out in every list: server names and addresses, task and
   bundle names and descriptions, run titles, IDs and hosts. The row under the cursor keeps them
   picked out too.
-- The Servers tab's help is two lines: the first selects (space, alt+s select all, alt+d
-  deselect all, enter run; in the tasks pane alt+t tick all, alt+x untick all), the second moves.
+- Selecting works the same everywhere: **alt+s** selects all and **alt+d** deselects all. On the
+  servers they select every shown server (alt+s again deselects them); in the tasks pane they tick
+  and untick the server's tasks; on Bundles they check and uncheck every bundle shown. The Servers
+  tab's help is two lines: the first selects, the second moves.
 - Each tab shows its number before its name (`1 Servers │ 2 Tasks │ …`), the key that goes to it.
 - **?** opens the help, as ctrl+k does. The help lists each vim key next to its plain key, and
   scrolls with j/k when it is taller than the screen. The live view has a help too.
-- **Changed:** the picker's selection keys all use alt: **alt+s** selects every shown server
-  (was ctrl+a), **alt+d** clears the selection (was ctrl+d, which now moves half a page), and
-  **alt+x** unticks a server's tasks (was ctrl+x), next to alt+t, alt+a, alt+v, alt+e and alt+c.
+- **Changed:** select all shown servers moves from ctrl+a to **alt+s**, clear the selection
+  from ctrl+d (which now moves half a page) to **alt+d**, and tick and untick a server's tasks
+  from alt+t and ctrl+x to **alt+s** and **alt+d** in the tasks pane.
   A single **g** no longer jumps to the top; use **gg** or home.
 
 ## v0.30.0 (since v0.29.0)

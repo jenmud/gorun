@@ -1712,6 +1712,44 @@ func (m serverSelectionModel) taskLine(s gorun.Server, t gorun.Task) string {
 	return line
 }
 
+// highlightQuery renders s with style, picking out each place that holds query, ignoring
+// case, with matchStyle.
+func highlightQuery(s, query string, style lipgloss.Style) string {
+	pos := queryPositions(s, query)
+	if pos == nil {
+		return style.Render(s)
+	}
+	return highlight(s, pos, style)
+}
+
+// queryPositions are the rune indexes of s inside each place that holds query, ignoring case.
+func queryPositions(s, query string) []int {
+	q := []rune(strings.ToLower(strings.TrimSpace(query)))
+	if len(q) == 0 {
+		return nil
+	}
+	text := []rune(s)
+	var pos []int
+	for i := 0; i+len(q) <= len(text); {
+		match := true
+		for j, r := range q {
+			if unicode.ToLower(text[i+j]) != r {
+				match = false
+				break
+			}
+		}
+		if !match {
+			i++
+			continue
+		}
+		for j := range q {
+			pos = append(pos, i+j)
+		}
+		i += len(q)
+	}
+	return pos
+}
+
 // highlight renders s with style, picking out the runes at positions with matchStyle.
 func highlight(s string, positions []int, style lipgloss.Style) string {
 	b := strings.Builder{}

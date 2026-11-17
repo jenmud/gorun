@@ -1062,19 +1062,20 @@ func (m treeModel) renderRow(i int) string {
 		}
 	}
 
-	label := n.label
+	labelStyle := lipgloss.NewStyle()
 	switch {
 	case i == m.cursor:
-		label = cursorStyle.Render(label)
+		labelStyle = cursorStyle
 	case row.depth == 0:
-		label = serverStyle.Render(label)
+		labelStyle = serverStyle
 	}
+	label := highlightQuery(n.label, m.query, labelStyle)
 	if n.detail != "" {
 		sep := n.detailSep
 		if sep == "" {
 			sep = " — "
 		}
-		label += mutedStyle.Render(sep + n.detail)
+		label += mutedStyle.Render(sep) + highlightQuery(n.detail, m.query, mutedStyle)
 	}
 
 	pointer := "  "

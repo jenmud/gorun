@@ -118,6 +118,7 @@ vim keys and the plain keys that do the same, so use whichever you know:
 | / | / | filter what the screen lists: type, **enter** keeps it, **esc** clears it |
 | ? | ctrl+k | show or hide the help |
 
+The filter's matches are picked out in the list, including on the row under the cursor.
 While a filter is being typed, every key is text, so **q**, **j** and the rest go into the filter.
 
 ## Watching a run

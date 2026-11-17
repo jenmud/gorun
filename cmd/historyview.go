@@ -1120,7 +1120,8 @@ func (m historyModel) listView() tea.View {
 						status = failStyle.Render("✗ failed")
 					}
 				}
-				line := fmt.Sprintf("%s%s %s %s", cursor, status, shortID(r.ID), r.Title)
+				plain := lipgloss.NewStyle()
+				line := fmt.Sprintf("%s%s %s %s", cursor, status, highlightQuery(shortID(r.ID), m.query, plain), highlightQuery(r.Title, m.query, plain))
 				if r.Servers > 0 {
 					line += mutedStyle.Render(fmt.Sprintf("  [%d servers]", r.Servers))
 				}
@@ -1143,11 +1144,11 @@ func (m historyModel) listView() tea.View {
 					if r.Origin.Trigger != "" {
 						where += " · " + r.Origin.Trigger
 					}
-					line += skipStyle.Render(fmt.Sprintf("  [%s]", where))
+					line += skipStyle.Render("  [") + highlightQuery(where, m.query, skipStyle) + skipStyle.Render("]")
 				case isLocalHost(r.Hostname):
 					line += mutedStyle.Render("  [local]")
 				case r.Hostname != "":
-					line += skipStyle.Render(fmt.Sprintf("  [%s]", r.Hostname))
+					line += skipStyle.Render("  [") + highlightQuery(r.Hostname, m.query, skipStyle) + skipStyle.Render("]")
 				}
 				if selected {
 					line = highlightSelectedRow(line, m.width)
@@ -1232,7 +1233,7 @@ func (m historyModel) historyDetailView(title, muted, ok, fail, skip, timing lip
 			if msg := run.ServerErrors[item.server]; msg != "" {
 				state = fail.Render("  ✗")
 			}
-			line = pointer + arrow + " " + serverStyle.Render(item.server) + state
+			line = pointer + arrow + " " + highlightQuery(item.server, m.query, serverStyle) + state
 		} else if item.taskIdx >= 0 && item.taskIdx < len(run.Tasks) {
 			task := run.Tasks[item.taskIdx]
 			mark := muted.Render("○")
@@ -1250,7 +1251,7 @@ func (m historyModel) historyDetailView(title, muted, ok, fail, skip, timing lip
 			case store.StateWouldRun:
 				mark = skip.Render("~")
 			}
-			line = pointer + "  " + mark + " " + task.Name + timing.Render("  "+task.Duration.Round(time.Millisecond).String())
+			line = pointer + "  " + mark + " " + highlightQuery(task.Name, m.query, lipgloss.NewStyle()) + timing.Render("  "+task.Duration.Round(time.Millisecond).String())
 		}
 		line = truncateANSI(line, leftInner)
 		if selected && !m.focusRight {

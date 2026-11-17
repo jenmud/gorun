@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
@@ -696,8 +697,8 @@ func (m tuiModel) serverSummary(s *serverView) string {
 
 	return fmt.Sprintf(
 		"%s %s\n%s %s  %s",
-		serverNameStyle.Render(s.name),
-		mutedStyle.Render(s.address),
+		highlightQuery(s.name, m.query, serverNameStyle),
+		highlightQuery(s.address, m.query, mutedStyle),
 		mutedStyle.Render("[")+bar.ViewAs(percent)+mutedStyle.Render("]"),
 		mutedStyle.Render(fmt.Sprintf("%2d/%d", finished, total)),
 		status,
@@ -1508,13 +1509,74 @@ func formatDuration(d time.Duration) string {
 	return d.Round(time.Second).String()
 }
 
-// highlightSelectedRow draws line as the row under the cursor, width cells wide.
+// highlightSelectedRow draws line as the row under the cursor, width cells wide. Its colours
+// give way to the row's, except a filter's matches, which stay picked out.
 func highlightSelectedRow(line string, width int) string {
 	if width > 0 {
 		line = truncateANSI(line, width)
-		return selectedRowStyle.Width(width).Render(ansi.Strip(line))
 	}
-	return selectedRowStyle.Render(ansi.Strip(line))
+	plain, matched := splitMatches(line)
+	if matched == nil {
+		if width > 0 {
+			return selectedRowStyle.Width(width).Render(plain)
+		}
+		return selectedRowStyle.Render(plain)
+	}
+	var b strings.Builder
+	runes := []rune(plain)
+	for i := 0; i < len(runes); {
+		j := i
+		for j < len(runes) && matched[j] == matched[i] {
+			j++
+		}
+		style := selectedRowStyle
+		if matched[i] {
+			style = selectedMatchStyle
+		}
+		b.WriteString(style.Render(string(runes[i:j])))
+		i = j
+	}
+	if pad := width - ansi.StringWidth(plain); pad > 0 {
+		b.WriteString(selectedRowStyle.Render(strings.Repeat(" ", pad)))
+	}
+	return b.String()
+}
+
+// matchPrefix is the escape sequence matchStyle starts its text with.
+var matchPrefix = func() string {
+	s := matchStyle.Render("x")
+	return s[:strings.Index(s, "x")]
+}()
+
+// selectedMatchStyle picks out a filter's match on the row under the cursor.
+var selectedMatchStyle = matchStyle.Background(selectedRowStyle.GetBackground())
+
+// splitMatches strips the escape sequences from line, and says which runes of what is left
+// were drawn with matchStyle. matched is nil when none were.
+func splitMatches(line string) (plain string, matched []bool) {
+	if matchPrefix == "" || !strings.Contains(line, matchPrefix) {
+		return ansi.Strip(line), nil
+	}
+	var b strings.Builder
+	in := false
+	for i := 0; i < len(line); {
+		if line[i] == '\x1b' {
+			end := i + 1
+			if end < len(line) && line[end] == '[' {
+				for end++; end < len(line) && (line[end] < 0x40 || line[end] > 0x7e); end++ {
+				}
+			}
+			end = min(end+1, len(line))
+			in = line[i:end] == matchPrefix
+			i = end
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(line[i:])
+		b.WriteRune(r)
+		matched = append(matched, in)
+		i += size
+	}
+	return b.String(), matched
 }
 
 // runTUI runs the deployment with the interactive TUI and returns an error if anything failed.

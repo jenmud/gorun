@@ -1,6 +1,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -226,5 +227,56 @@ func TestTUIModel_FilterAndVimKeys(t *testing.T) {
 	press("?")
 	if help := ansi.Strip(m.View().Content); !m.helpOpen || !strings.Contains(help, "ctrl+u / ctrl+d") || strings.Contains(help, "gt / gT") {
 		t.Errorf("? should open the help with the vim keys and no tab keys, got:\n%s", help)
+	}
+}
+
+func TestQueryPositions(t *testing.T) {
+	if got := queryPositions("Web-web", "WEB"); !slices.Equal(got, []int{0, 1, 2, 4, 5, 6}) {
+		t.Errorf("both places should match, ignoring case, got %v", got)
+	}
+	if queryPositions("db-1", "") != nil || queryPositions("db-1", "web") != nil {
+		t.Error("no query, or no match, has no positions")
+	}
+}
+
+func TestHighlightSelectedRowKeepsMatches(t *testing.T) {
+	line := "  " + highlightQuery("web-1", "web", serverStyle) + mutedStyle.Render(" local")
+	plain, matched := splitMatches(line)
+	if plain != "  web-1 local" {
+		t.Fatalf("got plain %q", plain)
+	}
+	want := []bool{false, false, true, true, true, false, false, false, false, false, false, false, false}
+	if !slices.Equal(matched, want) {
+		t.Errorf("only web should be marked, got %v", matched)
+	}
+	row := highlightSelectedRow(line, 20)
+	if !strings.Contains(row, selectedMatchStyle.Render("web")) {
+		t.Errorf("the selected row should keep the match picked out, got %q", row)
+	}
+	if w := ansi.StringWidth(row); w != 20 {
+		t.Errorf("the selected row should fill 20 cells, got %d", w)
+	}
+	if strings.Contains(highlightSelectedRow(mutedStyle.Render("db-1"), 10), matchPrefix) {
+		t.Error("a row without matches should be drawn as before")
+	}
+}
+
+func TestFilterHighlightsOnEveryScreen(t *testing.T) {
+	hasMatch := func(s string) bool { return strings.Contains(s, matchPrefix) || strings.Contains(s, selectedMatchStyle.Render("w")) }
+
+	// live view
+	lv := newTUIModel("deploy", false, func() {})
+	lv.servers = append(lv.servers, &serverView{name: "web-1"})
+	lv.query = "web"
+	if !hasMatch(lv.serverSummary(lv.servers[0])) {
+		t.Error("the live view should pick out the match in a server's name")
+	}
+
+	// history runs
+	h := newHistoryModel(nil)
+	h.runs = []store.RunSummary{{ID: "run-1", Title: "nightly deploy"}}
+	h.query = "night"
+	if !strings.Contains(h.View().Content, selectedMatchStyle.Render("night")) {
+		t.Error("the history should pick out the match in a run's title")
 	}
 }

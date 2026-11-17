@@ -14,6 +14,9 @@ the release notes when a version is cut.
 - Every screen takes vim keys as well as the plain ones: j/k, h/l, gg/G, ctrl+u/ctrl+d for half
   a page, H/L and ctrl+w h/l/w for panes, gt/gT for tabs, and 1 to 5 to jump to a tab. The
   arrows, pgup/pgdn, home/end, tab and shift+tab still work.
+- The filter's matches are picked out in every list: server names and addresses, task and
+  bundle names and descriptions, run titles, IDs and hosts. The row under the cursor keeps them
+  picked out too.
 - **?** opens the help, as ctrl+k does. The help lists each vim key next to its plain key, and
   scrolls with j/k when it is taller than the screen. The live view has a help too.
 - **Changed:** clearing the picker's selection moves from ctrl+d to **alt+d**, since ctrl+d now

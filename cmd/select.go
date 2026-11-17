@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -518,8 +519,8 @@ func (m serverSelectionModel) tabsWidth() int {
 // tabsLine renders the tab labels, after the title.
 func (m serverSelectionModel) tabsLine() string {
 	labels := []string{}
-	for _, tab := range m.tabs() {
-		labels = append(labels, m.tabLabel(tabNames[tab], tab))
+	for i, tab := range m.tabs() {
+		labels = append(labels, m.tabLabel(tabNames[tab], tab, i+1))
 	}
 	return "   " + strings.Join(labels, mutedStyle.Render(" │ ")) + mutedStyle.Render("  shift+tab")
 }
@@ -544,18 +545,24 @@ func (m serverSelectionModel) titleLine() string {
 	return line + m.tabsLine()
 }
 
-// tabLabel renders a tab's name with its shortcut letter underlined, highlighted when it is the active tab.
-func (m serverSelectionModel) tabLabel(name string, tab int) string {
+// tabLabel renders a tab's number and name, with its shortcut letter underlined, highlighted
+// when it is the active tab.
+func (m serverSelectionModel) tabLabel(name string, tab, n int) string {
 	if name == "" {
 		return ""
 	}
+	// the number key (n) and the ctrl+letter (underlined) that go to the tab
+	num := tabNumberStyle.Render(strconv.Itoa(n)) + " "
 	underlined := lipgloss.NewStyle().Underline(true).Render(string(name[0]))
 	rest := name[1:]
 	if m.tab == tab {
-		return activeTabStyle.Render(underlined) + activeTabStyle.Render(rest)
+		return num + activeTabStyle.Render(underlined) + activeTabStyle.Render(rest)
 	}
-	return mutedStyle.Render(underlined) + mutedStyle.Render(rest)
+	return num + mutedStyle.Render(underlined) + mutedStyle.Render(rest)
 }
+
+// tabNumberStyle draws the number before each tab's name.
+var tabNumberStyle = lipgloss.NewStyle().Foreground(colorAccent)
 
 // tabAt returns the tab whose label is at screen position x, y.
 func (m serverSelectionModel) tabAt(x, y int) (int, bool) {
@@ -564,7 +571,7 @@ func (m serverSelectionModel) tabAt(x, y int) (int, bool) {
 	}
 	start := lipgloss.Width(m.titlePrefix() + "   ")
 	for _, tab := range m.tabs() {
-		w := lipgloss.Width(tabNames[tab])
+		w := lipgloss.Width(tabNames[tab]) + 2 // the number and a space
 		if x >= start && x < start+w {
 			return tab, true
 		}

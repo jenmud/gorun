@@ -355,7 +355,7 @@ func TestPickerListTabs(t *testing.T) {
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
 	m = next.(serverSelectionModel)
 
-	if plain := ansi.Strip(m.titleLine()); !strings.Contains(plain, "Servers │ Tasks │ Bundles │ Groups │ History") {
+	if plain := ansi.Strip(m.titleLine()); !strings.Contains(plain, "1 Servers │ 2 Tasks │ 3 Bundles │ 4 Groups │ 5 History") {
 		t.Fatalf("title line %q is missing the tabs", plain)
 	}
 

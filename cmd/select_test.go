@@ -699,7 +699,7 @@ func TestServerSelectionModel_HistoryTab(t *testing.T) {
 	if m.tab != tabServers {
 		t.Fatal("clicking the Servers tab should show the servers")
 	}
-	m, _ = send(m, tea.MouseClickMsg{X: x + lipgloss.Width("Servers │ "), Y: 0, Button: tea.MouseLeft})
+	m, _ = send(m, tea.MouseClickMsg{X: x + lipgloss.Width("1 Servers │ "), Y: 0, Button: tea.MouseLeft})
 	if m.tab != tabHistory {
 		t.Fatal("clicking the History tab should show the history")
 	}
@@ -768,7 +768,7 @@ func TestServerSelectionModel_LongTitleKeepsTabs(t *testing.T) {
 	if w := lipgloss.Width(line); w > 70 {
 		t.Errorf("the title line is %d wide, want at most 70", w)
 	}
-	if plain := ansi.Strip(line); !strings.Contains(plain, "Servers │ History") || !strings.Contains(plain, "…") {
+	if plain := ansi.Strip(line); !strings.Contains(plain, "1 Servers │ 2 History") || !strings.Contains(plain, "…") {
 		t.Errorf("the title should be shortened to keep the tabs, got %q", plain)
 	}
 

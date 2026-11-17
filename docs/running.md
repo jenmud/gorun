@@ -71,8 +71,8 @@ select the hosts to run them against. The tasks pane lists only the checked bund
 their dependencies), and that is what runs instead of each server's own pipeline. Each server
 still runs only the tasks of its kind: [`local = true`](gorunfile.md#local-only-tasks) tasks on
 local servers, the rest over SSH. Press **space** on the bundle again to uncheck it. **History**
-shows [past runs](#history). Press **shift+tab** (or **gt**) to move between tabs, **1** to **5** to
-jump to one, and **?** or **ctrl+k** for a list of every shortcut.
+shows [past runs](#history). Press **shift+tab** (or **gt**) to move between tabs, or the number shown before a tab's name to
+jump to it, and **?** or **ctrl+k** for a list of every shortcut.
 
 Command-line filters narrow what the picker offers: `gorun Gorunfile --tag prod --task @baseline`
 opens a picker with just those servers and tasks.

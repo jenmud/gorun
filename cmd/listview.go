@@ -654,7 +654,7 @@ func (m treeModel) taskView() string {
 	}
 	help := fmt.Sprintf("%d/%d · j/k move · L or tab details · h/l expand · ctrl+e edit file · e/E/c/C tree · / filter · ? help", m.cursor+1, len(m.rows))
 	if m.detailFocus {
-		help = fmt.Sprintf("%d/%d · ↑/↓ section · enter/→ expand · ← collapse/back · ctrl+e edit file · pgup/dn scroll · home/end · tab tree", m.cursor+1, len(m.rows))
+		help = fmt.Sprintf("%d/%d · j/k section · enter/l expand · h collapse · H or tab tree · ctrl+u/d scroll · ctrl+e edit file · ? help", m.cursor+1, len(m.rows))
 	}
 	if m.embedded {
 		help += " · esc/q servers · shift+tab switch"

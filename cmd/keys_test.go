@@ -262,7 +262,9 @@ func TestHighlightSelectedRowKeepsMatches(t *testing.T) {
 }
 
 func TestFilterHighlightsOnEveryScreen(t *testing.T) {
-	hasMatch := func(s string) bool { return strings.Contains(s, matchPrefix) || strings.Contains(s, selectedMatchStyle.Render("w")) }
+	hasMatch := func(s string) bool {
+		return strings.Contains(s, matchPrefix) || strings.Contains(s, selectedMatchStyle.Render("w"))
+	}
 
 	// live view
 	lv := newTUIModel("deploy", false, func() {})

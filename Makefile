@@ -16,13 +16,17 @@ examples:
 	cd examples/servicedeck && go vet ./... && go build -o /dev/null .
 
 
+# the version -version reports: the tag, or the tag, commits since and commit, e.g. v0.32.0-3-g1a2b3c4
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo devel)
+LDFLAGS := -X main.version=$(VERSION)
+
 build-otel:
 	# CTI - compile time instrumentation
-	go tool otelc go build -o builds/gorun-otel-CTI ./cmd && chmod +x builds/gorun-otel-CTI
+	go tool otelc go build -ldflags "$(LDFLAGS)" -o builds/gorun-otel-CTI ./cmd && chmod +x builds/gorun-otel-CTI
 
 
 build-go:
-	go build -o builds/gorun ./cmd && chmod +x builds/gorun
+	go build -ldflags "$(LDFLAGS)" -o builds/gorun ./cmd && chmod +x builds/gorun
 
 
 build: build-go build-otel

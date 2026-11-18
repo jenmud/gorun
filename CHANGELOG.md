@@ -4,7 +4,22 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
-## Unreleased (since v0.31.0)
+## Unreleased (since v0.32.0)
+
+### Install the latest release, and say which
+- The install script installs the latest release on every machine. The instrumented build is
+  only published for Linux x86-64; elsewhere the script used to build master from source, which
+  reported version 0.1.0. It now installs the standard prebuilt binary instead, and builds from
+  source only when there is none, stamping the release's version in.
+- When GitHub's API won't say which release is the latest (it limits how often it answers),
+  the script asks the release page instead of building master.
+- `gorun -version` no longer falls back to a hard-coded 0.1.0. A release says its tag; a build
+  with `go install ...@v1.2.3` or in a clone at a tag says that version; any other build says
+  `devel` and its commit.
+- `make build` stamps the version from `git describe` (`v0.32.0`, or `v0.32.0-3-g1a2b3c4` between
+  tags). A test fails if a release build, the install script or the Makefile stops stamping it.
+
+## v0.32.0 (since v0.31.0)
 
 ### Web UI: Live and Run are separate pages
 - The front page is now **Live**: the stats, recent runs and the dashboard of what is running,

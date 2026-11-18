@@ -25,7 +25,44 @@ import (
 	"github.com/jenmud/gorun/history"
 )
 
-var version = "0.1.0"
+// version is set for releases with -ldflags "-X main.version=v1.2.3". Without it, buildVersion
+// reports what Go recorded in the binary.
+var version = ""
+
+// buildVersion is the version gorun reports: the release's, else the module version Go stamps in
+// the binary (go install ...@v1.2.3, or go build in a clone at a tag), else "devel" and the
+// commit it was built from.
+func buildVersion() string {
+	if version != "" {
+		return version
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "devel"
+	}
+	if v := info.Main.Version; v != "" && v != "(devel)" {
+		return v
+	}
+	return develVersion(info.Settings)
+}
+
+// develVersion is "devel", the commit a build without a version came from, and "-dirty" when
+// it had uncommitted changes.
+func develVersion(settings []debug.BuildSetting) string {
+	v, dirty := "devel", false
+	for _, s := range settings {
+		switch {
+		case s.Key == "vcs.revision" && len(s.Value) >= 12:
+			v += "-" + s.Value[:12]
+		case s.Key == "vcs.modified":
+			dirty = s.Value == "true"
+		}
+	}
+	if dirty {
+		v += "-dirty"
+	}
+	return v
+}
 
 // emptyGorunfile is the starting Gorunfile printed by -dump.
 //
@@ -176,6 +213,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancel()
 
+	version = buildVersion()
 	o := parseFlags()
 	switch {
 	case o.version:

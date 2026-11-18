@@ -4,7 +4,7 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
-## Unreleased (since v0.32.0)
+## v0.33.0 (since v0.32.0)
 
 ### `gorun -serve` without a Gorunfile only watches
 - Started without a Gorunfile, the web UI shows only **Live** and **History**, for runs started

@@ -16,6 +16,8 @@ the release notes when a version is cut.
 - `gorun -version` no longer falls back to a hard-coded 0.1.0. A release says its tag; a build
   with `go install ...@v1.2.3` or in a clone at a tag says that version; any other build says
   `devel` and its commit.
+- `make build` stamps the version from `git describe` (`v0.32.0`, or `v0.32.0-3-g1a2b3c4` between
+  tags). A test fails if a release build, the install script or the Makefile stops stamping it.
 
 ## v0.32.0 (since v0.31.0)
 

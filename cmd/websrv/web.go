@@ -1,5 +1,5 @@
-// Package websrv serves the gorun web UI: the run page with a live dashboard, the history of
-// saved runs, and the config editor. Runs and live updates go through NATS, and the page
+// Package websrv serves the gorun web UI: the live page of what is running, the run page that
+// starts runs, the history of saved runs, and the config editor. Runs and live updates go through NATS, and the page
 // updates over server-sent events (SSE) using Datastar.
 package websrv
 
@@ -57,8 +57,8 @@ type app struct {
 	topic  string
 	hub    *hub
 
-	// pushSoon is set while a coalesced dashboard push is waiting, so copy progress from many
-	// servers at once costs one render per interval, not one per event.
+	// pushSoon is set while a coalesced dashboard push is waiting, so task events and copy
+	// progress from many servers at once cost one render per interval, not one per event.
 	pushSoon atomic.Bool
 
 	mu      sync.Mutex
@@ -181,7 +181,8 @@ func listenAndServe(srv *http.Server, addr string, started func(net.Addr)) error
 // routes maps every page and action to its handler.
 func (a *app) routes() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", a.runPage)
+	mux.HandleFunc("GET /{$}", a.livePage)
+	mux.HandleFunc("GET /run", a.runPage)
 	mux.HandleFunc("POST /run", a.startRunHandler)
 	mux.HandleFunc("GET /events", a.events)
 	mux.HandleFunc("POST /clear", a.clearFinished)
@@ -267,16 +268,22 @@ func (a *app) applyEvent(data []byte) {
 	a.mu.Unlock()
 
 	if ev.Type == "copy_progress" {
-		// progress isn't kept in the history, and it comes often: coalesce the pushes
-		a.pushDashboardSoon()
+		a.pushDashboardSoon() // progress isn't kept in the history
 		return
 	}
 
 	a.store.Apply(context.Background(), &ev)
-	if ev.Type == "process_finished" {
+	switch ev.Type {
+	case "process_started":
+		a.pushDashboard() // a new run shows at once
+	case "process_finished":
 		a.pushStats(context.Background())
+		a.pushDashboard()
+	default:
+		// a big fleet sends hundreds of task events a second; each push is the whole
+		// dashboard, and a browser that applies them all falls seconds behind
+		a.pushDashboardSoon()
 	}
-	a.pushDashboard()
 }
 
 // render turns a templ component into an HTML string.
@@ -297,15 +304,15 @@ func (a *app) pushDashboard() {
 	a.hub.broadcast(patch("#dashboard", html))
 }
 
-// copyPushInterval is the least time between two dashboard pushes caused by copy progress.
-const copyPushInterval = 250 * time.Millisecond
+// pushInterval is the least time between two coalesced dashboard pushes.
+const pushInterval = 250 * time.Millisecond
 
-// pushDashboardSoon pushes the dashboard after copyPushInterval, unless a push is already waiting.
+// pushDashboardSoon pushes the dashboard after pushInterval, unless a push is already waiting.
 func (a *app) pushDashboardSoon() {
 	if a.pushSoon.Swap(true) {
 		return
 	}
-	time.AfterFunc(copyPushInterval, func() {
+	time.AfterFunc(pushInterval, func() {
 		a.pushSoon.Store(false)
 		a.pushDashboard()
 	})

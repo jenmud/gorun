@@ -43,11 +43,15 @@ func Layout(title string, active string, nats NATSStatus, body templ.Component) 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · gorun</title><script src=\"https://cdn.tailwindcss.com\"></script><script type=\"module\" src=\"https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.8/bundles/datastar.js\"></script><script>\n\t\t\t\ttailwind.config = {\n\t\t\t\t\tdarkMode: 'class',\n\t\t\t\t\ttheme: {\n\t\t\t\t\t\textend: {\n\t\t\t\t\t\t\tcolors: { accent: '#7C3AED' },\n\t\t\t\t\t\t\tfontFamily: {\n\t\t\t\t\t\t\t\tsans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],\n\t\t\t\t\t\t\t\tmono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t},\n\t\t\t\t\t},\n\t\t\t\t}\n\t\t\t</script><script>\nfunction gorunFilter(input, listId) {\n\t// every word typed must appear in a row, so \"deploy sudo\" finds sudo tasks about deploys\n\tvar terms = input.value.toLowerCase().split(/\\s+/).filter(Boolean);\n\tvar rows = document.querySelectorAll('#' + listId + ' [data-filter]');\n\tvar shown = 0;\n\trows.forEach(function (row) {\n\t\tvar ok = terms.every(function (t) { return row.dataset.filter.indexOf(t) !== -1; });\n\t\trow.style.display = ok ? '' : 'none';\n\t\tif (ok) shown++;\n\t});\n\tvar count = document.getElementById(listId + '-count');\n\tif (count) count.textContent = terms.length ? shown + ' of ' + rows.length + ' shown' : '';\n}\n// esc in a filter box clears it and shows every row again\nfunction gorunFilterKey(event, input, listId) {\n\tif (event.key === 'Escape') { input.value = ''; gorunFilter(input, listId); }\n}\n// Sections on the live page rebuild with every event. Remember which ones the person opened and\n// reopen them after each update.\n(function () {\n\tvar open = new Set();\n\ttry { JSON.parse(sessionStorage.getItem('gorunOpen') || '[]').forEach(function (k) { open.add(k); }); } catch (e) {}\n\tfunction save() { try { sessionStorage.setItem('gorunOpen', JSON.stringify(Array.from(open))); } catch (e) {} }\n\tdocument.addEventListener('click', function (ev) {\n\t\tvar sum = ev.target.closest && ev.target.closest('summary');\n\t\tvar d = sum && sum.parentElement;\n\t\tif (!d || !d.dataset.key) { return; }\n\t\tif (d.open) { open.delete(d.dataset.key); } else { open.add(d.dataset.key); }\n\t\tsave();\n\t});\n\tfunction restore() {\n\t\tdocument.querySelectorAll('details[data-key]:not([data-key=\"\"])').forEach(function (d) {\n\t\t\tvar want = open.has(d.dataset.key);\n\t\t\tif (d.open !== want) { d.open = want; }\n\t\t});\n\t}\n\tdocument.addEventListener('DOMContentLoaded', restore);\n\tnew MutationObserver(restore).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });\n})();\n// Opening a task or bundle link expands that item and scrolls to it.\nfunction gorunOpenHash() {\n\tvar id = decodeURIComponent(location.hash.slice(1));\n\tvar el = id ? document.getElementById(id) : null;\n\tif (!el) { return; }\n\tvar card = el.querySelector(':scope > details');\n\tif (card) { card.open = true; }\n\tel.classList.add('ring-2', 'ring-accent', 'bg-accent/10');\n\tsetTimeout(function () { el.classList.remove('ring-2', 'ring-accent', 'bg-accent/10'); }, 2000);\n\tel.scrollIntoView({ block: 'center' });\n}\ndocument.addEventListener('DOMContentLoaded', gorunOpenHash);\nwindow.addEventListener('hashchange', gorunOpenHash);\n// Tasks and bundles can't be run together: ticking one clears the other list.\nfunction gorunExclusive(box, otherId) {\n\tif (!box.checked) { return; }\n\tdocument.querySelectorAll('#' + otherId + ' input[type=checkbox]').forEach(function (b) { b.checked = false; });\n}\nfunction gorunSelect(formId, on) {\n\tdocument.querySelectorAll('#' + formId + ' [data-filter]').forEach(function (row) {\n\t\tif (row.style.display === 'none') { return; }\n\t\tvar box = row.querySelector('input[type=checkbox]');\n\t\tif (box) { box.checked = on; }\n\t});\n}\n\t\t\t</script><link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap\" rel=\"stylesheet\"></head><body class=\"min-h-screen bg-zinc-950 text-zinc-100 antialiased selection:bg-accent/30\"><header class=\"border-b border-zinc-800 bg-zinc-900/80 backdrop-blur\"><div class=\"mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-6 py-3\"><span class=\"rounded bg-accent px-2 py-0.5 text-sm font-bold text-white\">gorun</span><nav class=\"flex gap-1 text-sm\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · gorun</title><script src=\"https://cdn.tailwindcss.com\"></script><script type=\"module\" src=\"https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.8/bundles/datastar.js\"></script><script>\n\t\t\t\ttailwind.config = {\n\t\t\t\t\tdarkMode: 'class',\n\t\t\t\t\ttheme: {\n\t\t\t\t\t\textend: {\n\t\t\t\t\t\t\tcolors: { accent: '#7C3AED' },\n\t\t\t\t\t\t\tfontFamily: {\n\t\t\t\t\t\t\t\tsans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],\n\t\t\t\t\t\t\t\tmono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],\n\t\t\t\t\t\t\t},\n\t\t\t\t\t\t},\n\t\t\t\t\t},\n\t\t\t\t}\n\t\t\t</script><script>\nfunction gorunFilter(input, listId) {\n\t// every word typed must appear in a row, so \"deploy sudo\" finds sudo tasks about deploys\n\tvar terms = input.value.toLowerCase().split(/\\s+/).filter(Boolean);\n\tvar rows = document.querySelectorAll('#' + listId + ' [data-filter]');\n\tvar shown = 0;\n\trows.forEach(function (row) {\n\t\tvar ok = terms.every(function (t) { return row.dataset.filter.indexOf(t) !== -1; });\n\t\trow.style.display = ok ? '' : 'none';\n\t\tif (ok) shown++;\n\t});\n\tvar count = document.getElementById(listId + '-count');\n\tif (count) count.textContent = terms.length ? shown + ' of ' + rows.length + ' shown' : '';\n}\n// esc in a filter box clears it and shows every row again\nfunction gorunFilterKey(event, input, listId) {\n\tif (event.key === 'Escape') { input.value = ''; gorunFilter(input, listId); }\n}\n// Sections on the live page rebuild with every event. Remember which ones the person opened and\n// reopen them after each update.\n(function () {\n\tvar open = new Set();\n\ttry { JSON.parse(sessionStorage.getItem('gorunOpen') || '[]').forEach(function (k) { open.add(k); }); } catch (e) {}\n\tfunction save() { try { sessionStorage.setItem('gorunOpen', JSON.stringify(Array.from(open))); } catch (e) {} }\n\tdocument.addEventListener('click', function (ev) {\n\t\tvar sum = ev.target.closest && ev.target.closest('summary');\n\t\tvar d = sum && sum.parentElement;\n\t\tif (!d || !d.dataset.key) { return; }\n\t\tif (d.open) { open.delete(d.dataset.key); } else { open.add(d.dataset.key); }\n\t\tsave();\n\t});\n\tfunction restore() {\n\t\tdocument.querySelectorAll('details[data-key]:not([data-key=\"\"])').forEach(function (d) {\n\t\t\tvar want = open.has(d.dataset.key);\n\t\t\tif (d.open !== want) { d.open = want; }\n\t\t});\n\t}\n\tdocument.addEventListener('DOMContentLoaded', restore);\n\tnew MutationObserver(restore).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['open'] });\n})();\n// Opening a task or bundle link expands that item and scrolls to it.\nfunction gorunOpenHash() {\n\tvar id = decodeURIComponent(location.hash.slice(1));\n\tvar el = id ? document.getElementById(id) : null;\n\tif (!el) { return; }\n\tvar card = el.querySelector(':scope > details');\n\tif (card) { card.open = true; }\n\tel.classList.add('ring-2', 'ring-accent', 'bg-accent/10');\n\tsetTimeout(function () { el.classList.remove('ring-2', 'ring-accent', 'bg-accent/10'); }, 2000);\n\tel.scrollIntoView({ block: 'center' });\n}\ndocument.addEventListener('DOMContentLoaded', gorunOpenHash);\nwindow.addEventListener('hashchange', gorunOpenHash);\n// Tasks and bundles can't be run together: ticking one clears the other list.\nfunction gorunExclusive(box, otherId) {\n\tif (!box.checked) { return; }\n\tdocument.querySelectorAll('#' + otherId + ' input[type=checkbox]').forEach(function (b) { b.checked = false; });\n}\nfunction gorunSelect(formId, on) {\n\tdocument.querySelectorAll('#' + formId + ' [data-filter]').forEach(function (row) {\n\t\tif (row.style.display === 'none') { return; }\n\t\tvar box = row.querySelector('input[type=checkbox]');\n\t\tif (box) { box.checked = on; }\n\t});\n}\n\t\t\t</script><link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap\" rel=\"stylesheet\"></head><body class=\"min-h-screen bg-zinc-950 text-zinc-100 antialiased selection:bg-accent/30\"><header class=\"border-b border-zinc-800 bg-zinc-900/80 backdrop-blur\"><div class=\"mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-6 py-3\"><span class=\"rounded bg-accent px-2 py-0.5 text-sm font-bold text-white\">gorun</span><nav class=\"flex flex-wrap gap-1 text-sm\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = navLink("/", "Run", active == "run").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = navLink("/", "Live", active == "live").Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = navLink("/run", "Run", active == "run").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -83,7 +87,7 @@ func Layout(title string, active string, nats NATSStatus, body templ.Component) 
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs("NATS is " + natsModeLabel(nats.Mode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 110, Col: 122}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 111, Col: 122}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -96,7 +100,7 @@ func Layout(title string, active string, nats NATSStatus, body templ.Component) 
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(nats.Mode)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 113, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 114, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -109,7 +113,7 @@ func Layout(title string, active string, nats NATSStatus, body templ.Component) 
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(nats.URL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 114, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 115, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -127,7 +131,7 @@ func Layout(title string, active string, nats NATSStatus, body templ.Component) 
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(nats.Reason)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 117, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 118, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -187,7 +191,7 @@ func navLink(href string, label string, on bool) templ.Component {
 		var templ_7745c5c3_Var9 templ.SafeURL
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinURLErrs(href)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 130, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 131, Col: 15}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 		if templ_7745c5c3_Err != nil {
@@ -213,7 +217,7 @@ func navLink(href string, label string, on bool) templ.Component {
 		var templ_7745c5c3_Var11 string
 		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 130, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/layout.templ`, Line: 131, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {

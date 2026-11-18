@@ -49,19 +49,27 @@ func redirectWith(w http.ResponseWriter, r *http.Request, to, msg string, bad bo
 }
 
 // runPage is the run page: the picker, the stats and the live dashboard.
+// livePage shows the recent runs and what is running now.
+func (a *app) livePage(w http.ResponseWriter, r *http.Request) {
+	msg, bad := flashFrom(r)
+	a.mu.Lock()
+	dash := a.dash
+	a.mu.Unlock()
+	d := ui.LivePageData{Dashboard: dash, Stats: a.stats(r.Context()), Flash: msg, FlashBad: bad}
+	a.page(w, "Live", "live", ui.LivePage(d))
+}
+
 func (a *app) runPage(w http.ResponseWriter, r *http.Request) {
 	msg, bad := flashFrom(r)
 	a.mu.Lock()
-	cfg, path, dash := a.cfg, a.cfgPath, a.dash
+	cfg, path := a.cfg, a.cfgPath
 	a.mu.Unlock()
 
 	d := ui.RunPageData{
-		Dashboard: dash,
-		Stats:     a.stats(r.Context()),
-		NATSOK:    a.nc != nil,
-		Path:      path,
-		Flash:     msg,
-		FlashBad:  bad,
+		NATSOK:   a.nc != nil,
+		Path:     path,
+		Flash:    msg,
+		FlashBad: bad,
 	}
 	switch {
 	case cfg != nil:
@@ -115,23 +123,23 @@ func taskOptions(cfg *gorun.Config) []ui.TaskOption {
 // Gorunfile on disk, so unsaved editor changes never run.
 func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		redirectWith(w, r, "/", "Could not read the form.", true)
+		redirectWith(w, r, "/run", "Could not read the form.", true)
 		return
 	}
 	if a.nc == nil {
-		redirectWith(w, r, "/", "NATS is not running, so runs can't start.", true)
+		redirectWith(w, r, "/run", "NATS is not running, so runs can't start.", true)
 		return
 	}
 	a.mu.Lock()
 	path := a.cfgPath
 	a.mu.Unlock()
 	if path == "" {
-		redirectWith(w, r, "/", "Load a Gorunfile on the Config page first.", true)
+		redirectWith(w, r, "/run", "Load a Gorunfile on the Config page first.", true)
 		return
 	}
 	cfg, servers, err := planRun(path, r.Form["server"], r.Form["task"], r.Form["bundle"])
 	if err != nil {
-		redirectWith(w, r, "/", err.Error(), true)
+		redirectWith(w, r, "/run", err.Error(), true)
 		return
 	}
 
@@ -140,7 +148,7 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 	cfg.Origin = webOrigin(r)
 	cfg.Force, cfg.CheckOnly = r.PostFormValue("force") != "", r.PostFormValue("check") != ""
 	if cfg.Force && cfg.CheckOnly {
-		redirectWith(w, r, "/", "Force and check only can't be used together.", true)
+		redirectWith(w, r, "/run", "Force and check only can't be used together.", true)
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())

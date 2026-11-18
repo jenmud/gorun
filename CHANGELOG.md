@@ -4,7 +4,19 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
-## Unreleased (since v0.30.0)
+## Unreleased (since v0.31.0)
+
+### Web UI: Live and Run are separate pages
+- The front page is now **Live**: the stats, recent runs and the dashboard of what is running,
+  from the web UI, the terminal or a schedule. Picking servers and tasks moved to its own **Run**
+  page at `/run`, with the servers, bundles and tasks side by side. Starting a run goes to Live;
+  a run that can't start stays on Run with the reason. "Run this bundle" links open `/run`.
+- The live dashboard keeps up with big fleets: task events now update open pages at most four
+  times a second, as copy progress already did, instead of once per event. A 42-server run sent
+  690 whole-dashboard updates and left a browser about ten seconds behind; it now sends about 50.
+  A run still appears, and finishes, at once.
+
+## v0.31.0 (since v0.30.0)
 
 ### Vim keys and / to filter, on every screen
 - The picker no longer filters as you type. Press **/** to filter, then type; **enter** keeps

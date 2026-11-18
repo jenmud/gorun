@@ -68,16 +68,23 @@ Every task and bundle name in the UI is a link to its card. The link opens the c
 it, so you can click through from a schedule to its target, from a bundle to its tasks, or from a
 task to the bundles that include it.
 
+### Live
+
+The front page (`/`) shows what is running now: runs started from the Run page, from the
+terminal, or by a schedule. Stats and **Recent runs** bars sit above it, and each bar links to
+the run. Each run, server and task starts collapsed. A task that is uploading a file shows a bar
+with the size and rate, and a closed server shows the upload on its line
+([screenshot](screenshot-web-upload.png)). **Stop** cancels a run started from the web UI, and
+**Clear finished** drops the runs that are over. **Start a run** opens the Run page.
+
 ### Run
 
-The picker: tick servers, then tasks or bundles (not both), and start. Stats and a live dashboard
-update as runs go. Each run, server and task starts collapsed. A task that is uploading a file shows
-a bar with the size and rate, and a closed server shows the upload on its line
-([screenshot](screenshot-web-upload.png)). **Recent runs** bars link to the
-run; **Stop** cancels a run started from the page. **Force** runs every task even when its
+The picker (`/run`): tick servers, then tasks or bundles (not both), and press **Run selected**.
+The run starts and the page moves to **Live** to watch it. **Force** runs every task even when its
 [check](gorunfile.md#checks-run-only-when-needed) says there is nothing to do, and **Check only**
 is a dry run that only runs the checks: its tasks end *unchanged* or *would run*, and the run is
-marked *check only*. Runs read the Gorunfile on disk, so save first.
+marked *check only*. Runs read the Gorunfile on disk, so save first. A run that can't start stays
+on the Run page and says why.
 
 ### Tasks
 

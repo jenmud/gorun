@@ -121,7 +121,10 @@ set an `OTEL_*` endpoint. For the **standard** build without it:
 curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install.sh | INSTALL_VARIANTS=1 sh
 ```
 
-Prebuilt binaries are for Linux x86-64; elsewhere the script builds from source.
+The instrumented build is published for Linux x86-64; on other machines the script installs the
+standard build, which is published for Linux and macOS on x86-64 and arm64. Either way it
+installs the latest release (`VERSION=v0.31.0` picks another), and `gorun -version` says which.
+Only when there is no prebuilt binary for the machine does it build from source, with Go.
 
 </details>
 

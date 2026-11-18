@@ -309,7 +309,7 @@ func TestScheduledRunsLinkToTheirSchedule(t *testing.T) {
 
 	link := `href="/schedules#schedule-nightly"`
 	a.mu.Lock()
-	live := render(ui.Dashboard(a.dash))
+	live := a.render(ui.Dashboard(a.dash))
 	a.mu.Unlock()
 	if strings.Count(live, link) != 1 || !strings.Contains(live, "scheduled · nightly") {
 		t.Errorf("the live run does not link to its schedule once:\n%s", live)

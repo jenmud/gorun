@@ -10,6 +10,7 @@ import (
 type startupInfo struct {
 	listen      string // the bound listener address, e.g. "[::]:8080"
 	cfgPath     string // the loaded Gorunfile, empty when none was given
+	noFile      bool   // started without a Gorunfile: only Live and History are served
 	cfgErr      error  // why the Gorunfile did not load
 	schedules   int
 	schedulerOn bool
@@ -59,8 +60,8 @@ func gorunfileLine(info startupInfo) string {
 	switch {
 	case info.cfgErr != nil:
 		return fmt.Sprintf("not loaded: %v", info.cfgErr)
-	case info.cfgPath == "":
-		return "none, load one on the Config page"
+	case info.noFile:
+		return "none: only the Live and History pages, for runs started elsewhere"
 	case info.schedules == 0:
 		return info.cfgPath + ", no schedules"
 	}

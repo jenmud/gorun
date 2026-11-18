@@ -175,7 +175,11 @@ templ historyTask(t TaskView) {
 		<details open?={ t.State == 3 } data-on:toggle__once={ taskLoad(t) }>
 			<summary class="flex cursor-pointer list-none items-center gap-2 px-2 py-1.5 text-sm">
 				<span class={ taskViewClass(t) }>{ taskViewIcon(t) }</span>
-				<a href={ taskHref(t.Name) } class="font-mono text-zinc-200 hover:text-accent underline decoration-zinc-600 underline-offset-2 hover:decoration-accent">{ t.Name }</a>
+				if noGorunfile(ctx) {
+					<span class="font-mono text-zinc-200">{ t.Name }</span>
+				} else {
+					<a href={ taskHref(t.Name) } class="font-mono text-zinc-200 hover:text-accent underline decoration-zinc-600 underline-offset-2 hover:decoration-accent">{ t.Name }</a>
+				}
 				<span class={ taskViewClass(t) + " text-xs" }>{ taskViewLabel(t) }</span>
 				if t.State == 3 {
 					<span class="rounded bg-red-500/15 px-1.5 py-0.5 font-mono text-[11px] text-red-300 ring-1 ring-red-500/40">exit { itoa(t.ExitCode) }</span>
@@ -337,6 +341,17 @@ templ fold(key, label, hint string) {
 
 // scheduleBadge marks a run a schedule started, and links to that schedule.
 templ scheduleBadge(name string) {
+	if noGorunfile(ctx) {
+		<span title={ "Started by the schedule " + name + "." } class="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-300 ring-1 ring-sky-500/40" data-schedule={ name }>
+			<span aria-hidden="true">⏱</span> scheduled · { name }
+		</span>
+	} else {
+		@scheduleBadgeLink(name)
+	}
+}
+
+// scheduleBadgeLink is the badge as a link to the schedule.
+templ scheduleBadgeLink(name string) {
 	<a href={ scheduleHref(name) } title={ "Started by the schedule " + name + ". Open it on the Schedules page." } class="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[11px] font-medium text-sky-300 ring-1 ring-sky-500/40 underline decoration-sky-500/40 underline-offset-2 transition hover:bg-sky-500/20 hover:text-sky-200" data-schedule={ name }>
 		<span aria-hidden="true">⏱</span> scheduled · { name }
 	</a>

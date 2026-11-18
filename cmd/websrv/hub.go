@@ -78,9 +78,9 @@ func (a *app) events(w http.ResponseWriter, r *http.Request) {
 	defer a.hub.remove(msgs)
 
 	a.mu.Lock()
-	dash := render(ui.Dashboard(a.dash))
+	dash := a.render(ui.Dashboard(a.dash))
 	a.mu.Unlock()
-	stats := render(ui.StatsPanel(a.stats(r.Context())))
+	stats := a.render(ui.StatsPanel(a.stats(r.Context())))
 	if _, err := io.WriteString(w, patch("#dashboard", dash)+patch("#stats", stats)); err != nil {
 		return
 	}

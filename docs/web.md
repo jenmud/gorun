@@ -6,8 +6,15 @@ the long-running host for [schedules](schedules.md).
 
 ```bash
 gorun -serve Gorunfile                       # open http://localhost:8080
-GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no file yet: load one on the Config page
+GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no Gorunfile: only Live and History
 ```
+
+Started **without a Gorunfile**, the service only watches: the menu has just **Live** and
+**History**, for runs started elsewhere, such as `gorun Gorunfile -r` in a terminal that reaches
+the same NATS server. The pages that need a Gorunfile (Run, Tasks, Bundles, Schedules and Config)
+aren't served; a link or bookmark to one goes back to Live and says why. Task and schedule names in
+History are plain text rather than links. Start it with a Gorunfile to run, edit and schedule
+tasks.
 
 `-web` is an alias for `-serve`. Once it is listening, gorun prints where to find it and what it
 started:

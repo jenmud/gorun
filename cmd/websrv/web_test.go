@@ -419,3 +419,47 @@ func TestTaskEventPushesAreCoalesced(t *testing.T) {
 		t.Errorf("the end of a run should push the stats and the dashboard at once, got %d pushes in all", n)
 	}
 }
+
+func TestWithoutAGorunfileOnlyLiveAndHistory(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.noFile = true
+	ctx := context.Background()
+	_ = a.store.CreateRun(ctx, "run-1", "deploy", "box", 1, time.Now())
+	_ = a.store.FinishRun(ctx, "run-1", true, 1, 0, 0, time.Second, time.Now())
+
+	for _, page := range []string{"/", "/history"} {
+		rec := get(t, a, page)
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: status %d", page, rec.Code)
+		}
+		if !strings.Contains(body, `href="/history"`) {
+			t.Errorf("%s should link to History", page)
+		}
+		for _, hidden := range []string{`href="/run"`, `href="/tasks"`, `href="/bundles"`, `href="/schedules"`, `href="/config"`, "Start a run"} {
+			if strings.Contains(body, hidden) {
+				t.Errorf("%s should not show %s without a Gorunfile", page, hidden)
+			}
+		}
+	}
+
+	for _, page := range []string{"/run", "/tasks", "/bundles", "/schedules", "/config"} {
+		rec := get(t, a, page)
+		if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || !strings.HasPrefix(loc, "/?") {
+			t.Errorf("GET %s should go back to Live, got %d %q", page, rec.Code, loc)
+		}
+	}
+	rec := post(t, a, "/run", url.Values{"server": {"local-1"}})
+	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/?") || !strings.Contains(loc, "without+a+Gorunfile") {
+		t.Errorf("POST /run should be refused and say why, went to %q", loc)
+	}
+	if rec := post(t, a, "/config/load", url.Values{"path": {"/etc/passwd"}}); !strings.HasPrefix(rec.Header().Get("Location"), "/?") {
+		t.Error("loading a Gorunfile should be refused without one")
+	}
+
+	// the same app with a Gorunfile shows everything
+	a.noFile = false
+	if body := get(t, a, "/").Body.String(); !strings.Contains(body, `href="/run"`) || !strings.Contains(body, `href="/config"`) {
+		t.Error("with a Gorunfile, Run and Config should be in the menu")
+	}
+}

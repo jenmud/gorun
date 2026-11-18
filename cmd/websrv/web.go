@@ -185,7 +185,7 @@ func listenAndServe(srv *http.Server, addr string, started func(net.Addr)) error
 }
 
 // routes maps every page and action to its handler. Without a Gorunfile only the Live and
-// History pages are served; the others send the browser back to Live.
+// History pages exist: the others aren't served at all, so they answer 404.
 func (a *app) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", a.livePage)
@@ -200,10 +200,9 @@ func (a *app) routes() *http.ServeMux {
 
 	// the pages that need a Gorunfile
 	withFile := func(pattern string, h http.HandlerFunc) {
-		if a.noFile {
-			h = a.needsGorunfile
+		if !a.noFile {
+			mux.HandleFunc(pattern, h)
 		}
-		mux.HandleFunc(pattern, h)
 	}
 	withFile("GET /run", a.runPage)
 	withFile("POST /run", a.startRunHandler)
@@ -229,13 +228,6 @@ func (a *app) routes() *http.ServeMux {
 	withFile("POST /config/save", a.saveHandler)
 	withFile("POST /config/discard", a.discardHandler)
 	return mux
-}
-
-// needsGorunfile answers a page or action that needs a Gorunfile when the service has none:
-// it goes back to Live and says why.
-func (a *app) needsGorunfile(w http.ResponseWriter, r *http.Request) {
-	redirectWith(w, r, "/", "gorun -serve was started without a Gorunfile, so only Live and History are here. "+
-		"Start it with one (gorun -serve Gorunfile) to run, edit and schedule tasks.", true)
 }
 
 // renderCtx is the context pages and live updates are drawn with.

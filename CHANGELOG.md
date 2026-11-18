@@ -8,8 +8,8 @@ the release notes when a version is cut.
 
 ### `gorun -serve` without a Gorunfile only watches
 - Started without a Gorunfile, the web UI shows only **Live** and **History**, for runs started
-  elsewhere. Run, Tasks, Bundles, Schedules and Config aren't in the menu, and a link or bookmark
-  to one goes back to Live and says why; so does any form that would run or change something.
+  elsewhere. Run, Tasks, Bundles, Schedules and Config don't exist: they aren't in the menu,
+  and their pages and forms answer 404.
   Task and schedule names in History are plain text, since their pages aren't there. Before, it
   showed every page and asked you to load a Gorunfile on the Config page. The startup message
   says `Gorunfile  none: only the Live and History pages, for runs started elsewhere`.

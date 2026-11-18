@@ -443,18 +443,16 @@ func TestWithoutAGorunfileOnlyLiveAndHistory(t *testing.T) {
 		}
 	}
 
-	for _, page := range []string{"/run", "/tasks", "/bundles", "/schedules", "/config"} {
-		rec := get(t, a, page)
-		if loc := rec.Header().Get("Location"); rec.Code != http.StatusSeeOther || !strings.HasPrefix(loc, "/?") {
-			t.Errorf("GET %s should go back to Live, got %d %q", page, rec.Code, loc)
+	// the pages that need a Gorunfile don't exist
+	for _, page := range []string{"/run", "/tasks", "/bundles", "/schedules", "/config", "/config/edit", "/file"} {
+		if rec := get(t, a, page); rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s should not exist without a Gorunfile, got %d", page, rec.Code)
 		}
 	}
-	rec := post(t, a, "/run", url.Values{"server": {"local-1"}})
-	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/?") || !strings.Contains(loc, "without+a+Gorunfile") {
-		t.Errorf("POST /run should be refused and say why, went to %q", loc)
-	}
-	if rec := post(t, a, "/config/load", url.Values{"path": {"/etc/passwd"}}); !strings.HasPrefix(rec.Header().Get("Location"), "/?") {
-		t.Error("loading a Gorunfile should be refused without one")
+	for _, action := range []string{"/run", "/config/load", "/tasks/add", "/schedules/pause"} {
+		if rec := post(t, a, action, url.Values{"server": {"local-1"}}); rec.Code != http.StatusNotFound {
+			t.Errorf("POST %s should not exist without a Gorunfile, got %d", action, rec.Code)
+		}
 	}
 
 	// the same app with a Gorunfile shows everything

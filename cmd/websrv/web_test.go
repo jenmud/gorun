@@ -2,6 +2,7 @@ package websrv
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -392,5 +393,29 @@ func TestLiveAndRunPagesAreSeparate(t *testing.T) {
 	rec := post(t, a, "/run", url.Values{"server": {"local-1"}, "force": {"1"}, "check": {"1"}})
 	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/run?") {
 		t.Errorf("a refused run should go back to /run, went to %q", loc)
+	}
+}
+
+func TestTaskEventPushesAreCoalesced(t *testing.T) {
+	a, _ := newTestApp(t)
+	c := a.hub.add()
+	defer a.hub.remove(c)
+
+	send := func(js string) { a.applyEvent([]byte(js)) }
+	send(`{"type":"process_started","gorun_uuid":"r1","title":"t","servers":["s1"]}`)
+	if n := len(c); n != 1 {
+		t.Fatalf("a new run should be pushed at once, got %d pushes", n)
+	}
+	for i := range 50 {
+		send(fmt.Sprintf(`{"type":"task","gorun_uuid":"r1","server":"s1","task":"t%d","state":1}`, i))
+	}
+	time.Sleep(2 * pushInterval)
+	if n := len(c); n < 2 || n > 3 {
+		t.Errorf("50 task events should cost one or two coalesced pushes, got %d", n-1)
+	}
+	send(`{"type":"process_finished","gorun_uuid":"r1","success":true}`)
+	time.Sleep(10 * time.Millisecond)
+	if n := len(c); n < 4 {
+		t.Errorf("the end of a run should push the stats and the dashboard at once, got %d pushes in all", n)
 	}
 }

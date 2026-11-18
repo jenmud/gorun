@@ -11,6 +11,10 @@ the release notes when a version is cut.
   from the web UI, the terminal or a schedule. Picking servers and tasks moved to its own **Run**
   page at `/run`, with the servers, bundles and tasks side by side. Starting a run goes to Live;
   a run that can't start stays on Run with the reason. "Run this bundle" links open `/run`.
+- The live dashboard keeps up with big fleets: task events now update open pages at most four
+  times a second, as copy progress already did, instead of once per event. A 42-server run sent
+  690 whole-dashboard updates and left a browser about ten seconds behind; it now sends about 50.
+  A run still appears, and finishes, at once.
 
 ## v0.31.0 (since v0.30.0)
 

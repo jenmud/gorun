@@ -57,8 +57,8 @@ type app struct {
 	topic  string
 	hub    *hub
 
-	// pushSoon is set while a coalesced dashboard push is waiting, so copy progress from many
-	// servers at once costs one render per interval, not one per event.
+	// pushSoon is set while a coalesced dashboard push is waiting, so task events and copy
+	// progress from many servers at once cost one render per interval, not one per event.
 	pushSoon atomic.Bool
 
 	mu      sync.Mutex
@@ -268,16 +268,22 @@ func (a *app) applyEvent(data []byte) {
 	a.mu.Unlock()
 
 	if ev.Type == "copy_progress" {
-		// progress isn't kept in the history, and it comes often: coalesce the pushes
-		a.pushDashboardSoon()
+		a.pushDashboardSoon() // progress isn't kept in the history
 		return
 	}
 
 	a.store.Apply(context.Background(), &ev)
-	if ev.Type == "process_finished" {
+	switch ev.Type {
+	case "process_started":
+		a.pushDashboard() // a new run shows at once
+	case "process_finished":
 		a.pushStats(context.Background())
+		a.pushDashboard()
+	default:
+		// a big fleet sends hundreds of task events a second; each push is the whole
+		// dashboard, and a browser that applies them all falls seconds behind
+		a.pushDashboardSoon()
 	}
-	a.pushDashboard()
 }
 
 // render turns a templ component into an HTML string.
@@ -298,15 +304,15 @@ func (a *app) pushDashboard() {
 	a.hub.broadcast(patch("#dashboard", html))
 }
 
-// copyPushInterval is the least time between two dashboard pushes caused by copy progress.
-const copyPushInterval = 250 * time.Millisecond
+// pushInterval is the least time between two coalesced dashboard pushes.
+const pushInterval = 250 * time.Millisecond
 
-// pushDashboardSoon pushes the dashboard after copyPushInterval, unless a push is already waiting.
+// pushDashboardSoon pushes the dashboard after pushInterval, unless a push is already waiting.
 func (a *app) pushDashboardSoon() {
 	if a.pushSoon.Swap(true) {
 		return
 	}
-	time.AfterFunc(copyPushInterval, func() {
+	time.AfterFunc(pushInterval, func() {
 		a.pushSoon.Store(false)
 		a.pushDashboard()
 	})

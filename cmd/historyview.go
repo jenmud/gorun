@@ -72,6 +72,13 @@ type historyModel struct {
 	askKeep      bool
 	keepInput    string
 
+	// query filters the runs list, or an opened run's servers and tasks; listQuery keeps the
+	// list's while a run is open
+	query     string
+	listQuery string
+	filtering bool
+	chord     keyChord
+
 	// embedded is set when the history is a tab of the server picker, where esc and q
 	// on the runs list go back to the servers instead of quitting
 	embedded bool
@@ -234,10 +241,32 @@ func (m *historyModel) buildItemsForRun(run *store.RunDetail) {
 }
 
 // visibleItems returns the indexes of the rows showing: every server, and the tasks of expanded ones.
+// With a query, it shows the servers whose name holds it, and every task whose name holds it
+// with its server.
 func (m historyModel) visibleItems() []int {
 	visible := make([]int, 0, len(m.items))
+	q := strings.ToLower(strings.TrimSpace(m.query))
+	if q == "" || m.run == nil {
+		for i, item := range m.items {
+			if item.isServer || m.isServerExpanded(item.server) {
+				visible = append(visible, i)
+			}
+		}
+		return visible
+	}
+	named, holds, task := map[string]bool{}, map[string]bool{}, map[int]bool{}
 	for i, item := range m.items {
-		if item.isServer || m.isServerExpanded(item.server) {
+		switch {
+		case item.isServer:
+			named[item.server] = strings.Contains(strings.ToLower(item.server), q)
+		case item.taskIdx >= 0 && item.taskIdx < len(m.run.Tasks) &&
+			strings.Contains(strings.ToLower(m.run.Tasks[item.taskIdx].Name), q):
+			task[i], holds[item.server] = true, true
+		}
+	}
+	for i, item := range m.items {
+		if item.isServer && (named[item.server] || holds[item.server]) ||
+			!item.isServer && (task[i] || named[item.server] && m.isServerExpanded(item.server)) {
 			visible = append(visible, i)
 		}
 	}
@@ -523,14 +552,17 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case historyRunsMsg:
 		wasEmpty := len(m.runs) == 0
+		if m.state == historyDetail {
+			m.query = m.listQuery
+		}
 		m.runs = msg.runs
 		m.err = msg.err
 		m.run = nil
 		m.items = nil
 		m.state = historyList
-		if len(m.runs) > 0 {
-			if wasEmpty || m.cursor >= len(m.runs) {
-				m.cursor = len(m.runs) - 1
+		if shown := len(m.shownRuns()); shown > 0 {
+			if wasEmpty || m.cursor >= shown {
+				m.cursor = shown - 1
 			}
 		} else {
 			m.cursor = 0
@@ -551,6 +583,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.err
 		if m.run != nil {
 			m.listCursor = m.cursor
+			m.listQuery, m.query, m.filtering = m.query, "", false
 			m.status = ""
 			m.buildItemsForRun(m.run)
 			m.state = historyDetail
@@ -588,6 +621,15 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = ""
 		return m, nil
 	case tea.KeyPressMsg:
+		return m.keyPress(msg)
+	}
+	return m, nil
+}
+
+// keyPress handles a key: the keep-N prompt and the filter take every key while open, then
+// navigation keys (vim and plain), then the history's own keys.
+func (m historyModel) keyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	{
 		if m.askKeep {
 			switch msg.String() {
 			case "enter":
@@ -619,33 +661,43 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		switch msg.String() {
+		if m.filtering {
+			return m.filterKey(msg)
+		}
+		if msg.String() == "esc" && m.query != "" {
+			m.query = ""
+			m.refilter()
+			return m, nil
+		}
+		if !m.embedded { // in the picker, the picker reads the navigation keys and calls navigate
+			act, consumed := m.chord.nav(msg.String())
+			if act != navNone {
+				return m.navigate(act)
+			}
+			if consumed {
+				return m, nil
+			}
+		}
+		return m.handleKey(msg.String())
+	}
+}
+
+// handleKey handles a key by its name, after navigation keys have been turned into plain ones.
+func (m historyModel) handleKey(key string) (tea.Model, tea.Cmd) {
+	{
+		switch key {
 		case "ctrl+k":
 			m.helpOpen = !m.helpOpen
 			return m, nil
 		case "ctrl+c", "q":
 			if m.state == historyDetail {
-				m.state = historyList
-				m.run = nil
-				m.items = nil
-				m.status = ""
-				m.cursor = m.listCursor
-				if m.cursor >= len(m.runs) {
-					m.cursor = max(len(m.runs)-1, 0)
-				}
+				m.backToList()
 				return m, nil
 			}
 			return m, tea.Quit
 		case "esc":
 			if m.state == historyDetail {
-				m.state = historyList
-				m.run = nil
-				m.items = nil
-				m.status = ""
-				m.cursor = m.listCursor
-				if m.cursor >= len(m.runs) {
-					m.cursor = max(len(m.runs)-1, 0)
-				}
+				m.backToList()
 				return m, nil
 			}
 			return m, tea.Quit
@@ -684,17 +736,42 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.ensureRightCursorVisible(rows)
 				return m, nil
 			}
-		case "pgup", "pgdown", "home", "end":
+		case "pgup", "pgdown", "home", "end", "ctrl+u", "ctrl+d":
+			if m.state == historyList {
+				n, page := len(m.shownRuns()), m.listRows()
+				switch key {
+				case "pgup":
+					m.cursor -= page
+				case "pgdown":
+					m.cursor += page
+				case "ctrl+u":
+					m.cursor -= max(page/2, 1)
+				case "ctrl+d":
+					m.cursor += max(page/2, 1)
+				case "home":
+					m.cursor = 0
+				case "end":
+					m.cursor = n - 1
+				}
+				m.cursor = max(0, min(m.cursor, n-1))
+				m.offset = min(m.offset, m.cursor)
+				m.offset = max(m.offset, m.cursor-page+1)
+				return m, nil
+			}
 			if m.state == historyDetail {
 				if m.focusRight {
 					meta, sections := m.detailSections()
 					rows := m.detailPanelRows(meta, sections)
 					page := max(m.detailRows()-1, 1)
-					switch msg.String() {
+					switch key {
 					case "pgup":
 						m.rightCursor = max(m.rightCursor-page, 0)
 					case "pgdown":
 						m.rightCursor = min(m.rightCursor+page, max(len(rows)-1, 0))
+					case "ctrl+u":
+						m.rightCursor = max(m.rightCursor-max(page/2, 1), 0)
+					case "ctrl+d":
+						m.rightCursor = min(m.rightCursor+max(page/2, 1), max(len(rows)-1, 0))
 					case "home":
 						m.rightCursor = 0
 					case "end":
@@ -703,11 +780,15 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.ensureRightCursorVisible(rows)
 				} else {
 					page := max(m.detailRows()-1, 1)
-					switch msg.String() {
+					switch key {
 					case "pgup":
 						m.moveLeftCursor(-page)
 					case "pgdown":
 						m.moveLeftCursor(page)
+					case "ctrl+u":
+						m.moveLeftCursor(-max(page/2, 1))
+					case "ctrl+d":
+						m.moveLeftCursor(max(page/2, 1))
 					case "home":
 						m.moveLeftCursor(-len(m.visibleItems()))
 					case "end":
@@ -736,7 +817,7 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "down", "j":
 			if m.state == historyList {
-				if m.cursor < len(m.runs)-1 {
+				if m.cursor < len(m.shownRuns())-1 {
 					m.cursor++
 					visible := m.listRows()
 					if m.cursor >= m.offset+visible {
@@ -755,8 +836,8 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "enter", " ":
 			if m.state == historyList {
-				if m.cursor < len(m.runs) {
-					return m, func() tea.Msg { return m.loadRun(m.runs[m.cursor].ID) }
+				if r, ok := m.runAtCursor(); ok {
+					return m, func() tea.Msg { return m.loadRun(r.ID) }
 				}
 				return m, nil
 			}
@@ -794,8 +875,8 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "d":
-			if m.state == historyList && m.cursor < len(m.runs) {
-				id := m.runs[m.cursor].ID
+			if r, ok := m.runAtCursor(); ok && m.state == historyList {
+				id := r.ID
 				return m, func() tea.Msg {
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 					defer cancel()
@@ -837,7 +918,123 @@ func (m historyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+}
+
+// navigate handles a navigation action, from a vim key or its plain equivalent.
+func (m historyModel) navigate(act navAction) (tea.Model, tea.Cmd) {
+	switch act {
+	case navFilter:
+		m.filtering = true
+		return m, nil
+	case navHelp:
+		m.helpOpen = !m.helpOpen
+		return m, nil
+	case navHalfUp:
+		return m.handleKey("ctrl+u")
+	case navHalfDown:
+		return m.handleKey("ctrl+d")
+	case navPaneLeft, navPaneRight, navPaneNext:
+		want := act == navPaneRight || (act == navPaneNext && !m.focusRight)
+		if m.state == historyDetail && want != m.focusRight {
+			return m.handleKey("tab")
+		}
+		return m, nil
+	case navRight:
+		if m.state == historyList {
+			return m.handleKey("enter") // l opens the run
+		}
+	}
+	if key := keyFor(act); key != "" {
+		return m.handleKey(key)
+	}
 	return m, nil
+}
+
+// filterKey handles a key typed into the filter.
+func (m historyModel) filterKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if msg.String() == "ctrl+c" {
+		return m, tea.Quit
+	}
+	var done bool
+	m.query, done = editQuery(m.query, msg)
+	m.filtering = !done
+	m.refilter()
+	return m, nil
+}
+
+// refilter keeps the cursor on a row the filter still shows.
+func (m *historyModel) refilter() {
+	if m.state == historyList {
+		m.cursor = max(0, min(m.cursor, len(m.shownRuns())-1))
+		m.offset = max(0, m.cursor-m.listRows()+1)
+		return
+	}
+	m.leftOffset = 0
+	m.moveLeftCursor(0)
+}
+
+// backToList closes the opened run and returns to the runs list where it was.
+func (m *historyModel) backToList() {
+	m.state = historyList
+	m.run = nil
+	m.items = nil
+	m.status = ""
+	m.query, m.filtering = m.listQuery, false
+	m.cursor = m.listCursor
+	if n := len(m.shownRuns()); m.cursor >= n {
+		m.cursor = max(n-1, 0)
+	}
+}
+
+// shownRuns is the indexes of the runs the filter keeps, in order. The list's cursor counts
+// these, not every run.
+func (m historyModel) shownRuns() []int {
+	q := strings.ToLower(strings.TrimSpace(m.query))
+	out := make([]int, 0, len(m.runs))
+	for i, r := range m.runs {
+		if m.state != historyList || q == "" || runMatches(r, q) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// runAtCursor is the run under the list's cursor.
+func (m historyModel) runAtCursor() (store.RunSummary, bool) {
+	shown := m.shownRuns()
+	if m.cursor < 0 || m.cursor >= len(shown) {
+		return store.RunSummary{}, false
+	}
+	return m.runs[shown[m.cursor]], true
+}
+
+// runMatches reports whether a run's ID, title, status, start time, host or origin holds q,
+// which is lower case.
+func runMatches(r store.RunSummary, q string) bool {
+	status := "running"
+	if r.Finished {
+		status = "failed"
+		if r.Success {
+			status = "success"
+		}
+	}
+	fields := []string{r.ID, r.Title, status, r.StartedAt.Format("2006-01-02 15:04:05"), r.Hostname}
+	if r.Origin != nil {
+		fields = append(fields, r.Origin.Where(), r.Origin.Trigger)
+	}
+	text := strings.Join(fields, "\x00")
+	return strings.Contains(strings.ToLower(text), q)
+}
+
+// filterHelp is the filter's part of a help line: what is typed, or the query kept.
+func (m historyModel) filterHelp(count string) string {
+	switch {
+	case m.filtering:
+		return "/ " + m.query + "▏ · " + count + " · enter keep · esc clear · ctrl+w word · ctrl+u all"
+	case m.query != "":
+		return "/ " + m.query + " · " + count + " · esc clear · "
+	}
+	return ""
 }
 
 // View draws the opened run, or the list of runs.
@@ -859,17 +1056,19 @@ func (m historyModel) listView() tea.View {
 	if m.helpOpen {
 		var b strings.Builder
 		b.WriteString(titleStyle.Render("gorun history") + "\n\n")
-		b.WriteString("Keyboard shortcuts (ctrl-k to close)\n\n")
+		b.WriteString("Keyboard shortcuts (any key closes)\n\n")
+		b.WriteString(lipgloss.NewStyle().Bold(true).Render("Navigation") + "\n")
+		for _, line := range navHelpLines(m.embedded) {
+			b.WriteString(mutedStyle.Render(line) + "\n")
+		}
+		b.WriteString("\n" + lipgloss.NewStyle().Bold(true).Render("History") + "\n")
 		for _, line := range []string{
-			"↑/↓, j/k       move in the focused pane",
-			"tab            switch between the server list and details",
-			"enter, space   expand a server or toggle a detail section",
-			"pgup/pgdn      page through the focused pane",
-			"y, c           copy the selected task command",
-			"d              delete run",
-			"t              keep N runs",
-			"esc, q         back / quit",
-			"ctrl-k         show/hide this help",
+			"enter, space   open a run, expand a server or toggle a detail section",
+			"y, c           copy the selected task's command",
+			"d              delete the run",
+			"t              keep only the N most recent runs",
+			"/              filter the runs, or an opened run's servers and tasks",
+			"esc, q         clear the filter, go back, or quit",
 		} {
 			b.WriteString(mutedStyle.Render(line) + "\n")
 		}
@@ -885,11 +1084,14 @@ func (m historyModel) listView() tea.View {
 	timeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#38BDF8")).Bold(true)
 
 	if m.state == historyList {
+		shown := m.shownRuns()
 		b.WriteString(titleStyle.Render("gorun history") + "\n\n")
 		if m.err != nil {
 			b.WriteString(failStyle.Render("error: ") + m.err.Error() + "\n")
 		} else if len(m.runs) == 0 {
 			b.WriteString(mutedStyle.Render("No runs recorded yet.") + "\n")
+		} else if len(shown) == 0 {
+			b.WriteString(mutedStyle.Render("No runs match the filter.") + "\n")
 		} else {
 			visible := m.listRows()
 			start := m.offset
@@ -902,12 +1104,9 @@ func (m historyModel) listView() tea.View {
 			if m.cursor >= start+visible {
 				start = m.cursor - visible + 1
 			}
-			end := start + visible
-			if end > len(m.runs) {
-				end = len(m.runs)
-			}
+			end := min(start+visible, len(shown))
 			for i := start; i < end; i++ {
-				r := m.runs[i]
+				r := m.runs[shown[i]]
 				cursor := "  "
 				selected := i == m.cursor
 				if selected {
@@ -921,7 +1120,8 @@ func (m historyModel) listView() tea.View {
 						status = failStyle.Render("✗ failed")
 					}
 				}
-				line := fmt.Sprintf("%s%s %s %s", cursor, status, shortID(r.ID), r.Title)
+				plain := lipgloss.NewStyle()
+				line := fmt.Sprintf("%s%s %s %s", cursor, status, highlightQuery(shortID(r.ID), m.query, plain), highlightQuery(r.Title, m.query, plain))
 				if r.Servers > 0 {
 					line += mutedStyle.Render(fmt.Sprintf("  [%d servers]", r.Servers))
 				}
@@ -944,11 +1144,11 @@ func (m historyModel) listView() tea.View {
 					if r.Origin.Trigger != "" {
 						where += " · " + r.Origin.Trigger
 					}
-					line += skipStyle.Render(fmt.Sprintf("  [%s]", where))
+					line += skipStyle.Render("  [") + highlightQuery(where, m.query, skipStyle) + skipStyle.Render("]")
 				case isLocalHost(r.Hostname):
 					line += mutedStyle.Render("  [local]")
 				case r.Hostname != "":
-					line += skipStyle.Render(fmt.Sprintf("  [%s]", r.Hostname))
+					line += skipStyle.Render("  [") + highlightQuery(r.Hostname, m.query, skipStyle) + skipStyle.Render("]")
 				}
 				if selected {
 					line = highlightSelectedRow(line, m.width)
@@ -956,18 +1156,24 @@ func (m historyModel) listView() tea.View {
 				b.WriteString(line + "\n")
 				b.WriteString("    " + mutedStyle.Render(r.StartedAt.Format("2006-01-02 15:04:05")) + "\n\n")
 			}
-			if len(m.runs) > visible {
-				b.WriteString(mutedStyle.Render(fmt.Sprintf("    [%d/%d]", m.cursor+1, len(m.runs))) + "\n")
+			if len(shown) > visible {
+				b.WriteString(mutedStyle.Render(fmt.Sprintf("    [%d/%d]", m.cursor+1, len(shown))) + "\n")
 			}
 		}
 		if m.askKeep {
 			b.WriteString("\n" + mutedStyle.Render("Keep how many recent runs? ") + m.keepInput + mutedStyle.Render("_ (enter confirm, esc cancel)"))
 		} else {
-			help := "↑/↓ move · enter view · d delete · t keep N · q quit"
+			help := "j/k move · enter view · d delete · t keep N · / filter · ? help · q quit"
 			if m.embedded {
-				help = "↑/↓ move · enter view · d delete · t keep N · esc/q back to servers · shift+tab switch"
+				help = "j/k move · enter view · d delete · t keep N · / filter · ? help · esc/q back"
 			}
-			b.WriteString("\n" + mutedStyle.Render(help))
+			count := fmt.Sprintf("%d/%d runs", len(shown), len(m.runs))
+			if f := m.filterHelp(count); m.filtering {
+				help = f
+			} else {
+				help = f + help
+			}
+			b.WriteString("\n" + truncateANSI(mutedStyle.Render(help), m.width))
 		}
 		v := tea.NewView(b.String())
 		return v
@@ -1027,7 +1233,7 @@ func (m historyModel) historyDetailView(title, muted, ok, fail, skip, timing lip
 			if msg := run.ServerErrors[item.server]; msg != "" {
 				state = fail.Render("  ✗")
 			}
-			line = pointer + arrow + " " + serverStyle.Render(item.server) + state
+			line = pointer + arrow + " " + highlightQuery(item.server, m.query, serverStyle) + state
 		} else if item.taskIdx >= 0 && item.taskIdx < len(run.Tasks) {
 			task := run.Tasks[item.taskIdx]
 			mark := muted.Render("○")
@@ -1045,7 +1251,7 @@ func (m historyModel) historyDetailView(title, muted, ok, fail, skip, timing lip
 			case store.StateWouldRun:
 				mark = skip.Render("~")
 			}
-			line = pointer + "  " + mark + " " + task.Name + timing.Render("  "+task.Duration.Round(time.Millisecond).String())
+			line = pointer + "  " + mark + " " + highlightQuery(task.Name, m.query, lipgloss.NewStyle()) + timing.Render("  "+task.Duration.Round(time.Millisecond).String())
 		}
 		line = truncateANSI(line, leftInner)
 		if selected && !m.focusRight {
@@ -1091,14 +1297,20 @@ func (m historyModel) historyDetailView(title, muted, ok, fail, skip, timing lip
 	if m.status != "" {
 		b.WriteString(ok.Render(m.status) + "\n")
 	}
-	footer := "↑/↓ move · →/tab details · enter expand server / inspect task · d delete · esc back"
+	footer := "j/k move · L or tab details · enter expand server / inspect task · / filter · ? help · d delete · esc back"
 	if m.focusRight {
-		footer = "↑/↓ move/scroll · space/enter toggle section · pgup/pgdn page · tab/← servers · y copy command · esc back"
+		footer = "j/k move/scroll · space/enter toggle section · ctrl+u/d half page · H or tab servers · y copy command · ? help · esc back"
 	}
 	if m.embedded {
 		footer = strings.TrimSuffix(footer, " · esc back") + " · esc/q back to runs"
 	}
-	b.WriteString(muted.Render(footer))
+	count := fmt.Sprintf("%d rows", len(visible))
+	if f := m.filterHelp(count); m.filtering {
+		footer = f
+	} else {
+		footer = f + footer
+	}
+	b.WriteString(truncateANSI(muted.Render(footer), m.width))
 	return tea.NewView(b.String())
 }
 

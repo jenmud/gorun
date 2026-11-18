@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
@@ -144,11 +145,17 @@ type tuiModel struct {
 	servers        []*serverView
 	serverMap      map[string]*serverView
 	flatTasksCache []*taskView
-	spinner        spinner.Model
-	okBar          progress.Model
-	failBar        progress.Model
-	copyBar        progress.Model // a copy's progress, in one solid colour
-	cancel         context.CancelFunc
+
+	// query filters the servers by name or address; filtering is set while it is typed
+	query     string
+	filtering bool
+	helpOpen  bool
+	chord     keyChord
+	spinner   spinner.Model
+	okBar     progress.Model
+	failBar   progress.Model
+	copyBar   progress.Model // a copy's progress, in one solid colour
+	cancel    context.CancelFunc
 
 	// compact view failure/skip boxes are rendered off the UI loop (see
 	// maybeRenderBoxes) so a run with thousands of failures can't freeze input
@@ -213,14 +220,29 @@ func (m tuiModel) server(name string) *serverView {
 
 // flatTasks returns every task across all servers in display order.
 func (m tuiModel) flatTasks() []*taskView {
-	if m.flatTasksCache != nil {
+	if m.flatTasksCache != nil && m.query == "" {
 		return m.flatTasksCache
 	}
 	tasks := []*taskView{}
-	for _, s := range m.servers {
+	for _, s := range m.shown() {
 		tasks = append(tasks, s.tasks...)
 	}
 	return tasks
+}
+
+// shown is the servers the filter keeps: those whose name or address holds the query.
+func (m tuiModel) shown() []*serverView {
+	q := strings.ToLower(strings.TrimSpace(m.query))
+	if q == "" {
+		return m.servers
+	}
+	out := []*serverView{}
+	for _, s := range m.servers {
+		if strings.Contains(strings.ToLower(s.name), q) || strings.Contains(strings.ToLower(s.address), q) {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // failed reports whether any server or task has failed.
@@ -351,7 +373,61 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.maybeRenderBoxes()
 
 	case tea.KeyPressMsg:
-		switch msg.String() {
+		return m.keyPress(msg)
+	}
+	return m.update(msg)
+}
+
+// keyPress handles a key: the help and the filter take keys while open, then navigation keys
+// (vim and plain), then the view's own keys.
+func (m tuiModel) keyPress(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	if m.helpOpen && key != "ctrl+c" {
+		m.helpOpen = false
+		return m, nil
+	}
+	if m.filtering && key != "ctrl+c" {
+		var done bool
+		m.query, done = editQuery(m.query, msg)
+		m.filtering = !done
+		m.selected, m.cursor, m.scroll, m.follow = 0, 0, 0, false
+		return m, nil
+	}
+	if key == "esc" && m.query != "" && !m.quitting {
+		m.query = ""
+		return m, nil
+	}
+	act, consumed := m.chord.nav(key)
+	switch act {
+	case navNone:
+		if consumed {
+			return m, nil
+		}
+	case navFilter:
+		m.filtering = true
+		return m, nil
+	case navHelp:
+		m.helpOpen = true
+		return m, nil
+	case navHalfUp, navHalfDown:
+		half := max(m.compactHeight()/2, 1)
+		if act == navHalfUp {
+			half = -half
+		}
+		if m.verbose {
+			m.cursor = max(0, min(len(m.flatTasks())-1, m.cursor+half))
+		} else {
+			m.scroll = max(0, min(m.compactMaxScroll(), m.compactScroll()+half))
+			m.follow = false
+		}
+		return m, nil
+	default:
+		if k := keyFor(act); k != "" {
+			key = k
+		}
+	}
+	{
+		switch key {
 		case "ctrl+c", "q", "esc":
 			if m.forceQuit {
 				return m, tea.Quit
@@ -380,7 +456,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch {
 			case m.verbose:
 				m.cursor = min(m.cursor+1, len(m.flatTasks())-1)
-			case m.selectedServer() < len(m.servers)-1:
+			case m.selectedServer() < len(m.shown())-1:
 				m.selected = m.selectedServer() + 1
 				m.showSelected()
 			default:
@@ -402,7 +478,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.scroll = min(m.compactMaxScroll(), m.scroll+5)
 				m.follow = false
 			}
-		case "home", "g":
+		case "home":
 			if m.verbose {
 				m.cursor = 0
 			} else {
@@ -410,28 +486,28 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.scroll = 0
 				m.follow = false
 			}
-		case "end", "G":
+		case "end":
 			if m.verbose {
 				if tasks := m.flatTasks(); len(tasks) > 0 {
 					m.cursor = len(tasks) - 1
 				}
 			} else {
-				m.selected = max(0, len(m.servers)-1)
+				m.selected = max(0, len(m.shown())-1)
 				m.scroll = m.compactMaxScroll()
 				m.follow = true
 			}
 		case "enter", "space":
 			if tasks := m.flatTasks(); m.verbose && m.cursor < len(tasks) {
 				tasks[m.cursor].expanded = !tasks[m.cursor].expanded
-			} else if !m.verbose && len(m.servers) > 0 {
-				m.setOpen(!m.servers[m.selectedServer()].open)
+			} else if shown := m.shown(); !m.verbose && len(shown) > 0 {
+				m.setOpen(!shown[m.selectedServer()].open)
 			}
 		case "right", "l":
-			if !m.verbose && len(m.servers) > 0 {
+			if !m.verbose && len(m.shown()) > 0 {
 				m.setOpen(true)
 			}
 		case "left", "h":
-			if !m.verbose && len(m.servers) > 0 {
+			if !m.verbose && len(m.shown()) > 0 {
 				m.setOpen(false)
 			}
 		case "e":
@@ -439,7 +515,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if tasks := m.flatTasks(); m.cursor >= 0 && m.cursor < len(tasks) {
 					tasks[m.cursor].expanded = true
 				}
-			} else if len(m.servers) > 0 {
+			} else if len(m.shown()) > 0 {
 				m.setOpen(true)
 			}
 		case "E":
@@ -448,7 +524,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					t.expanded = true
 				}
 			} else {
-				for _, s := range m.servers {
+				for _, s := range m.shown() {
 					s.open = true
 				}
 			}
@@ -457,7 +533,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if tasks := m.flatTasks(); m.cursor >= 0 && m.cursor < len(tasks) {
 					tasks[m.cursor].expanded = false
 				}
-			} else if len(m.servers) > 0 {
+			} else if len(m.shown()) > 0 {
 				m.setOpen(false)
 			}
 		case "C":
@@ -466,13 +542,18 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					t.expanded = false
 				}
 			} else {
-				for _, s := range m.servers {
+				for _, s := range m.shown() {
 					s.open = false
 				}
 			}
 		}
 		return m, nil
+	}
+}
 
+// update handles everything but key presses.
+func (m tuiModel) update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -521,6 +602,11 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m tuiModel) View() tea.View {
 	var v tea.View
 
+	if m.helpOpen {
+		v.AltScreen = m.verbose && !m.quitting
+		v.SetContent(m.helpView())
+		return v
+	}
 	if m.verbose && !m.quitting {
 		v.AltScreen = true
 		v.SetContent(m.verboseView())
@@ -611,8 +697,8 @@ func (m tuiModel) serverSummary(s *serverView) string {
 
 	return fmt.Sprintf(
 		"%s %s\n%s %s  %s",
-		serverNameStyle.Render(s.name),
-		mutedStyle.Render(s.address),
+		highlightQuery(s.name, m.query, serverNameStyle),
+		highlightQuery(s.address, m.query, mutedStyle),
 		mutedStyle.Render("[")+bar.ViewAs(percent)+mutedStyle.Render("]"),
 		mutedStyle.Render(fmt.Sprintf("%2d/%d", finished, total)),
 		status,
@@ -646,7 +732,7 @@ func serverBlockLines(s *serverView) int {
 // compactLineCount is how many lines the compact view needs in full.
 func (m tuiModel) compactLineCount() int {
 	n := len(m.compactHead()) + len(m.boxLines)
-	for _, s := range m.servers {
+	for _, s := range m.shown() {
 		n += serverBlockLines(s)
 	}
 	return n
@@ -654,12 +740,12 @@ func (m tuiModel) compactLineCount() int {
 
 // selectedServer is the index of the server under the compact view's cursor.
 func (m tuiModel) selectedServer() int {
-	return max(0, min(m.selected, len(m.servers)-1))
+	return max(0, min(m.selected, len(m.shown())-1))
 }
 
 // serverBlock renders lines [from, to) of server i's block in the compact view.
 func (m tuiModel) serverBlock(i, from, to int) []string {
-	s := m.servers[i]
+	s := m.shown()[i]
 	n := serverBlockLines(s)
 	to = min(to, n)
 	lines := make([]string, 0, max(0, to-from))
@@ -701,7 +787,7 @@ func (m tuiModel) compactWindow(from, to int) []string {
 
 	head := m.compactHead()
 	add(len(head), func(from, to int) []string { return head[from:to] })
-	for i, s := range m.servers {
+	for i, s := range m.shown() {
 		if pos >= to {
 			break
 		}
@@ -731,21 +817,24 @@ func (m tuiModel) compactScroll() int {
 
 // setOpen shows or hides the selected server's tasks in the compact view.
 func (m *tuiModel) setOpen(open bool) {
-	m.servers[m.selectedServer()].open = open
+	if shown := m.shown(); len(shown) > 0 {
+		shown[m.selectedServer()].open = open
+	}
 	m.showSelected()
 }
 
 // showSelected scrolls the compact view so the selected server is on screen,
 // as much of it as fits, starting with its summary.
 func (m *tuiModel) showSelected() {
-	if len(m.servers) == 0 {
+	shown := m.shown()
+	if len(shown) == 0 {
 		return
 	}
 	start := len(m.compactHead())
-	for _, s := range m.servers[:m.selectedServer()] {
+	for _, s := range shown[:m.selectedServer()] {
 		start += serverBlockLines(s)
 	}
-	end := start + serverBlockLines(m.servers[m.selectedServer()]) - 1 // without the blank line
+	end := start + serverBlockLines(shown[m.selectedServer()]) - 1 // without the blank line
 
 	scroll := m.compactScroll()
 	if end > scroll+m.compactHeight() {
@@ -940,7 +1029,7 @@ func (m tuiModel) verboseView() string {
 	}
 
 	i := 0
-	for _, s := range m.servers {
+	for _, s := range m.shown() {
 		serverStart := i
 		serverEnd := i + len(s.tasks)
 		if serverEnd <= startIdx || serverStart >= endIdx {
@@ -1334,13 +1423,46 @@ func (m tuiModel) footer() string {
 			}
 			return summary + "\n"
 		}
-		return summary + "\n" + mutedStyle.Render("↑/↓/pgup/pgdown/home/end move · enter details/output · e/E expand all · c/C collapse all · v compact · q quit")
+		return summary + "\n" + m.keyHelp()
 	}
+	return m.keyHelp()
+}
 
+// keyHelp is the footer's key help, or the filter while one is typed or kept.
+func (m tuiModel) keyHelp() string {
+	help := "j/k select server · enter/l show tasks · h hide · e/E expand all · c/C collapse all · / filter · v verbose · ? help · q quit"
 	if m.verbose {
-		return mutedStyle.Render("↑/↓/pgup/pgdown/home/end move · enter details/output · e/E expand all · c/C collapse all · v compact · q quit")
+		help = "j/k move · enter details/output · e/E expand all · c/C collapse all · / filter · v compact · ? help · q quit"
 	}
-	return mutedStyle.Render("↑/↓ select server · enter/→ show tasks · ← hide · e/E expand all · c/C collapse all · pgup/pgdown/home/end scroll · v verbose · q quit")
+	count := fmt.Sprintf("%d/%d servers", len(m.shown()), len(m.servers))
+	switch {
+	case m.filtering:
+		help = "/ " + m.query + "▏ · " + count + " · enter keep · esc clear · ctrl+w word · ctrl+u all"
+	case m.query != "":
+		help = "/ " + m.query + " · " + count + " · esc clear · " + help
+	}
+	return mutedStyle.Render(help)
+}
+
+// helpView lists every key of the live view.
+func (m tuiModel) helpView() string {
+	bold := lipgloss.NewStyle().Bold(true)
+	lines := []string{m.header(), "", "Keyboard shortcuts (any key closes)", "", bold.Render("Navigation")}
+	for _, l := range navHelpLines(false) {
+		lines = append(lines, mutedStyle.Render(l))
+	}
+	lines = append(lines, "", bold.Render("Run"))
+	for _, l := range []string{
+		"enter, space   show or hide a server's tasks; in verbose, a task's details and output",
+		"e / E          expand the selected one / all",
+		"c / C          collapse the selected one / all",
+		"v              switch between the compact and the verbose view",
+		"/              filter the servers by name or address",
+		"q, esc         clear the filter, cancel the run, or quit once it is over",
+	} {
+		lines = append(lines, mutedStyle.Render(l))
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 // tail returns the last n lines of s, noting how many were cut.
@@ -1387,13 +1509,74 @@ func formatDuration(d time.Duration) string {
 	return d.Round(time.Second).String()
 }
 
-// highlightSelectedRow draws line as the row under the cursor, width cells wide.
+// highlightSelectedRow draws line as the row under the cursor, width cells wide. Its colours
+// give way to the row's, except a filter's matches, which stay picked out.
 func highlightSelectedRow(line string, width int) string {
 	if width > 0 {
 		line = truncateANSI(line, width)
-		return selectedRowStyle.Width(width).Render(ansi.Strip(line))
 	}
-	return selectedRowStyle.Render(ansi.Strip(line))
+	plain, matched := splitMatches(line)
+	if matched == nil {
+		if width > 0 {
+			return selectedRowStyle.Width(width).Render(plain)
+		}
+		return selectedRowStyle.Render(plain)
+	}
+	var b strings.Builder
+	runes := []rune(plain)
+	for i := 0; i < len(runes); {
+		j := i
+		for j < len(runes) && matched[j] == matched[i] {
+			j++
+		}
+		style := selectedRowStyle
+		if matched[i] {
+			style = selectedMatchStyle
+		}
+		b.WriteString(style.Render(string(runes[i:j])))
+		i = j
+	}
+	if pad := width - ansi.StringWidth(plain); pad > 0 {
+		b.WriteString(selectedRowStyle.Render(strings.Repeat(" ", pad)))
+	}
+	return b.String()
+}
+
+// matchPrefix is the escape sequence matchStyle starts its text with.
+var matchPrefix = func() string {
+	s := matchStyle.Render("x")
+	return s[:strings.Index(s, "x")]
+}()
+
+// selectedMatchStyle picks out a filter's match on the row under the cursor.
+var selectedMatchStyle = matchStyle.Background(selectedRowStyle.GetBackground())
+
+// splitMatches strips the escape sequences from line, and says which runes of what is left
+// were drawn with matchStyle. matched is nil when none were.
+func splitMatches(line string) (plain string, matched []bool) {
+	if matchPrefix == "" || !strings.Contains(line, matchPrefix) {
+		return ansi.Strip(line), nil
+	}
+	var b strings.Builder
+	in := false
+	for i := 0; i < len(line); {
+		if line[i] == '\x1b' {
+			end := i + 1
+			if end < len(line) && line[end] == '[' {
+				for end++; end < len(line) && (line[end] < 0x40 || line[end] > 0x7e); end++ {
+				}
+			}
+			end = min(end+1, len(line))
+			in = line[i:end] == matchPrefix
+			i = end
+			continue
+		}
+		r, size := utf8.DecodeRuneInString(line[i:])
+		b.WriteRune(r)
+		matched = append(matched, in)
+		i += size
+	}
+	return b.String(), matched
 }
 
 // runTUI runs the deployment with the interactive TUI and returns an error if anything failed.

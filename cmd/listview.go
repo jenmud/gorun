@@ -84,6 +84,8 @@ type treeModel struct {
 	query     string
 	filtering bool
 	keep      map[*treeNode]bool
+
+	chord keyChord // on its own: the first key of gg, until the second arrives
 }
 
 // newTreeModel returns the tree browser for nodes.
@@ -205,7 +207,7 @@ func (m treeModel) filterLine() string {
 		cursor = "▏"
 	}
 	shown, total := m.matchCount()
-	return titleStyle.Render("/") + " " + m.query + cursor + mutedStyle.Render(fmt.Sprintf("  %d of %d", shown, total))
+	return cursorStyle.Render("/") + " " + m.query + cursor + mutedStyle.Render(fmt.Sprintf("  %d of %d", shown, total))
 }
 
 // filterKey handles a key while the query is being typed: letters and spaces extend it,
@@ -291,6 +293,27 @@ func (m treeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.filterKey(key)
 		return m, nil
 	}
+	// on its own (-list-*), the tree reads vim keys itself; in the picker, the picker does
+	if key, ok := msg.(tea.KeyPressMsg); ok && !m.embedded {
+		act, consumed := m.chord.nav(key.String())
+		switch act {
+		case navNone:
+			if consumed {
+				return m, nil
+			}
+		case navHalfUp:
+			msg = keyMsg("ctrl+u")
+		case navHalfDown:
+			msg = keyMsg("ctrl+d")
+		case navFilter:
+			msg = keyMsg("/")
+		case navPaneLeft, navPaneRight, navPaneNext, navHelp, navTabNext, navTabPrev,
+			navTab1, navTab2, navTab3, navTab4, navTab5:
+			return m, nil // one pane and no tabs on its own
+		default:
+			msg = keyMsg(keyFor(act))
+		}
+	}
 	if m.kind == "tasks" && m.embedded && m.detailFocus {
 		if key, ok := msg.(tea.KeyPressMsg); ok {
 			switch key.String() {
@@ -312,6 +335,10 @@ func (m treeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.detailOffset -= m.pageSize()
 			case "pgdown":
 				m.detailOffset += m.pageSize()
+			case "ctrl+u":
+				m.detailOffset -= max(m.pageSize()/2, 1)
+			case "ctrl+d":
+				m.detailOffset += max(m.pageSize()/2, 1)
 			case "home":
 				m.detailOffset = 0
 			case "end":
@@ -345,10 +372,9 @@ func (m treeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "/":
-			if !m.detailFocus {
-				m.filtering = true
-				return m, nil
-			}
+			// from the details, / goes back to the tree to filter it
+			m.detailFocus, m.filtering = false, true
+			return m, nil
 		case "esc":
 			if m.query != "" {
 				m.setQuery("")
@@ -370,7 +396,11 @@ func (m treeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.cursor -= m.pageSize()
 		case "pgdown":
 			m.cursor += m.pageSize()
-		case "home", "g":
+		case "ctrl+u":
+			m.cursor -= max(m.pageSize()/2, 1)
+		case "ctrl+d":
+			m.cursor += max(m.pageSize()/2, 1)
+		case "home":
 			m.cursor = 0
 		case "end", "G":
 			m.cursor = len(m.rows) - 1
@@ -570,7 +600,7 @@ func (m treeModel) View() tea.View {
 	if m.embedded {
 		quit = "esc/q back to servers · shift+tab switch"
 	}
-	lines = append(lines, "", truncateANSI(mutedStyle.Render(fmt.Sprintf("%d/%d · ↑/↓ move · →/← expand/collapse · e/E expand · c/C collapse · / filter · %s", m.cursor+1, len(m.rows), quit)), m.width))
+	lines = append(lines, "", truncateANSI(mutedStyle.Render(fmt.Sprintf("%d/%d · j/k move · h/l collapse/expand · gg/G top/bottom · e/E expand · c/C collapse · / filter · %s", m.cursor+1, len(m.rows), quit)), m.width))
 	v.SetContent(strings.Join(lines, "\n"))
 	return v
 }
@@ -622,9 +652,9 @@ func (m treeModel) taskView() string {
 	for i := range leftBox {
 		lines = append(lines, leftBox[i]+rightBox[i])
 	}
-	help := fmt.Sprintf("%d/%d · ↑/↓ move · tab details · pgup/dn tree · →/← expand · ctrl+e edit file · e/E/c/C tree · / filter", m.cursor+1, len(m.rows))
+	help := fmt.Sprintf("%d/%d · j/k move · L or tab details · h/l expand · ctrl+e edit file · e/E/c/C tree · / filter · ? help", m.cursor+1, len(m.rows))
 	if m.detailFocus {
-		help = fmt.Sprintf("%d/%d · ↑/↓ section · enter/→ expand · ← collapse/back · ctrl+e edit file · pgup/dn scroll · home/end · tab tree", m.cursor+1, len(m.rows))
+		help = fmt.Sprintf("%d/%d · j/k section · enter/l expand · h collapse · H or tab tree · ctrl+u/d scroll · ctrl+e edit file · ? help", m.cursor+1, len(m.rows))
 	}
 	if m.embedded {
 		help += " · esc/q servers · shift+tab switch"
@@ -1032,19 +1062,20 @@ func (m treeModel) renderRow(i int) string {
 		}
 	}
 
-	label := n.label
+	labelStyle := lipgloss.NewStyle()
 	switch {
 	case i == m.cursor:
-		label = cursorStyle.Render(label)
+		labelStyle = cursorStyle
 	case row.depth == 0:
-		label = serverStyle.Render(label)
+		labelStyle = serverStyle
 	}
+	label := highlightQuery(n.label, m.query, labelStyle)
 	if n.detail != "" {
 		sep := n.detailSep
 		if sep == "" {
 			sep = " — "
 		}
-		label += mutedStyle.Render(sep + n.detail)
+		label += mutedStyle.Render(sep) + highlightQuery(n.detail, m.query, mutedStyle)
 	}
 
 	pointer := "  "

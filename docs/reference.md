@@ -133,11 +133,14 @@ The instrumented build also honours the standard `OTEL_*` variables (see
 
 ## Keyboard shortcuts
 
-Press **ctrl+k** in the picker or the history for the full list.
+Press **?** (or **ctrl+k**) on any screen for the full list. Every screen takes vim keys and the
+plain keys that do the same: j/k or ↑/↓, h/l or ←/→, gg/G or home/end, ctrl+u/ctrl+d or pgup/pgdn,
+H/L or ctrl+w h/l or tab for panes, gt/gT or shift+tab for tabs, and **/** to filter
+([the full table](running.md#moving-around)).
 
 | Screen | Keys |
 |---|---|
-| [Picker](running.md#the-picker) | space select (Bundles: check bundle) · → / ← tasks · type to filter · enter run · alt+a run all · shift+tab next tab · ctrl+c quit |
-| [Live view](running.md#watching-a-run) | ↑ / ↓ move · enter, → / ← show / hide tasks · v verbose · e / E, c / C expand / collapse · q quit |
-| [Lists](running.md#checking-a-gorunfile-before-you-run-it) (`--list-*`) | enter, → / ← open / close · e / E, c / C expand / collapse · q quit |
-| [History](running.md#history) | enter open · y copy command · d delete · t keep the N newest · esc back |
+| [Picker](running.md#the-picker) | space select (Bundles: check bundle) · l / h details · L / H panes · / filter · enter run · alt+a run all · alt+d clear selection · gt / 1–5 tabs · q quit |
+| [Live view](running.md#watching-a-run) | j / k move · enter, l / h show / hide tasks · / filter · v verbose · e / E, c / C expand / collapse · q quit |
+| [Lists](running.md#checking-a-gorunfile-before-you-run-it) (`--list-*`) | enter, l / h open / close · gg / G · / filter · e / E, c / C expand / collapse · q quit |
+| [History](running.md#history) | enter, l open · / filter · y copy command · d delete · t keep the N newest · esc back |

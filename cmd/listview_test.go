@@ -355,7 +355,7 @@ func TestPickerListTabs(t *testing.T) {
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 20})
 	m = next.(serverSelectionModel)
 
-	if plain := ansi.Strip(m.titleLine()); !strings.Contains(plain, "Servers │ Tasks │ Bundles │ Groups │ History") {
+	if plain := ansi.Strip(m.titleLine()); !strings.Contains(plain, "1 Servers │ 2 Tasks │ 3 Bundles │ 4 Groups │ 5 History") {
 		t.Fatalf("title line %q is missing the tabs", plain)
 	}
 
@@ -540,6 +540,27 @@ func TestTasksTreeSaysWhenThereIsNoCheckOrVerify(t *testing.T) {
 	for _, want := range []string{"▸ Copies · none [expand]", "▸ Check · none [expand]", "▸ Verify · none [expand]"} {
 		if !strings.Contains(lines, want) {
 			t.Errorf("missing %q:\n%s", want, lines)
+		}
+	}
+}
+
+func TestPickerBundlesAltSelect(t *testing.T) {
+	cfg := loadList(t)
+	m := newServerSelectionModel("t", pipelineServers()).withLists(&cfg).withHistory(nil, errors.New("none"))
+	m = press(m, "shift+tab", "shift+tab", "alt+s")
+	n := 0
+	for _, on := range m.selectedBundles {
+		if on {
+			n++
+		}
+	}
+	if n == 0 || n != len(cfg.Bundles) {
+		t.Fatalf("alt+s should check every bundle, got %d of %d", n, len(cfg.Bundles))
+	}
+	m = press(m, "alt+d")
+	for name, on := range m.selectedBundles {
+		if on {
+			t.Errorf("alt+d should uncheck every bundle, %s is still checked", name)
 		}
 	}
 }

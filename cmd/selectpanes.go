@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
 	"github.com/jenmud/gorun"
@@ -244,8 +243,8 @@ func (m *serverSelectionModel) toggleTaskRow(row taskRow) {
 
 // updateTasksPane handles the keys that act on the tasks pane while it has the focus.
 // It reports false for keys that work the same in both panes.
-func (m serverSelectionModel) updateTasksPane(msg tea.KeyPressMsg) (serverSelectionModel, bool) {
-	switch msg.String() {
+func (m serverSelectionModel) updateTasksPane(key string) (serverSelectionModel, bool) {
+	switch key {
 	case "up":
 		m.moveTaskCursor(-1)
 	case "down":

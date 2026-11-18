@@ -73,7 +73,7 @@ shot screenshot-picker
 
 # the picker's fuzzy filter
 start 100 26 "$repo/recipes/04-dev-server" Gorunfile
-keys w p
+keys / s e r v e r 1
 shot screenshot-picker-filter
 
 # the Tasks tab keeps the tree on the left and shows the selected task on the right

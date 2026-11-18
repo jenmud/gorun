@@ -4,6 +4,31 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## Unreleased (since v0.30.0)
+
+### Vim keys and / to filter, on every screen
+- The picker no longer filters as you type. Press **/** to filter, then type; **enter** keeps
+  the filter and **esc** clears it. The search box above the servers is gone: the filter shows
+  on the counts line. **/** also filters the Groups tab, the history's runs and an opened run's
+  servers and tasks, the live view's servers, and the `--list-*` trees.
+- Every screen takes vim keys as well as the plain ones: j/k, h/l, gg/G, ctrl+u/ctrl+d for half
+  a page, H/L and ctrl+w h/l/w for panes, gt/gT for tabs, and 1 to 5 to jump to a tab. The
+  arrows, pgup/pgdn, home/end, tab and shift+tab still work.
+- The filter's matches are picked out in every list: server names and addresses, task and
+  bundle names and descriptions, run titles, IDs and hosts. The row under the cursor keeps them
+  picked out too.
+- Selecting works the same everywhere: **alt+s** selects all and **alt+d** deselects all. On the
+  servers they select every shown server (alt+s again deselects them); in the tasks pane they tick
+  and untick the server's tasks; on Bundles they check and uncheck every bundle shown. The Servers
+  tab's help is two lines: the first selects, the second moves.
+- Each tab shows its number before its name (`1 Servers │ 2 Tasks │ …`), the key that goes to it.
+- **?** opens the help, as ctrl+k does. The help lists each vim key next to its plain key, and
+  scrolls with j/k when it is taller than the screen. The live view has a help too.
+- **Changed:** select all shown servers moves from ctrl+a to **alt+s**, clear the selection
+  from ctrl+d (which now moves half a page) to **alt+d**, and tick and untick a server's tasks
+  from alt+t and ctrl+x to **alt+s** and **alt+d** in the tasks pane.
+  A single **g** no longer jumps to the top; use **gg** or home.
+
 ## v0.30.0 (since v0.29.0)
 
 ### Writing a Gorunfile from Go

@@ -61,7 +61,7 @@ func TestPagesRenderTheLoadedFile(t *testing.T) {
 	a, _ := newTestApp(t)
 
 	for path, want := range map[string]string{
-		"/":        "local-1",
+		"/run":     "local-1",
 		"/config":  "hello",
 		"/history": "No runs saved yet",
 	} {
@@ -279,15 +279,15 @@ tasks = ["build"]
 		}
 	}
 	bundles := get(t, a, "/bundles").Body.String()
-	for _, want := range []string{"@release", "@all", "Build and ship", "Run this bundle", "/?bundle=release"} {
+	for _, want := range []string{"@release", "@all", "Build and ship", "Run this bundle", "/run?bundle=release"} {
 		if !strings.Contains(bundles, want) {
 			t.Errorf("bundles page does not contain %q", want)
 		}
 	}
-	if run := get(t, a, "/?bundle=release").Body.String(); !strings.Contains(run, `value="release" checked`) {
+	if run := get(t, a, "/run?bundle=release").Body.String(); !strings.Contains(run, `value="release" checked`) {
 		t.Error("run page does not tick the bundle it was sent")
 	}
-	for _, p := range []string{"/", "/tasks", "/bundles", "/history", "/config"} {
+	for _, p := range []string{"/", "/run", "/tasks", "/bundles", "/history", "/config"} {
 		if body := get(t, a, p).Body.String(); !strings.Contains(body, `href="/bundles"`) || !strings.Contains(body, `href="/tasks"`) {
 			t.Errorf("%s does not link the Tasks and Bundles tabs", p)
 		}
@@ -362,5 +362,35 @@ ssh.username = "deploy"
 	}
 	if servers[0].Name != "web" || servers[0].Tasks[0].Name != "remote" || !servers[1].IsLocal() || servers[1].Tasks[0].Name != "extra" {
 		t.Errorf("servers = %+v", servers)
+	}
+}
+
+func TestLiveAndRunPagesAreSeparate(t *testing.T) {
+	a, _ := newTestApp(t)
+
+	live := get(t, a, "/").Body.String()
+	for _, want := range []string{`id="dashboard"`, `id="stats"`, `href="/run"`, "Start a run"} {
+		if !strings.Contains(live, want) {
+			t.Errorf("the live page does not contain %q", want)
+		}
+	}
+	if strings.Contains(live, `action="/run"`) {
+		t.Error("the live page should not have the run form")
+	}
+
+	run := get(t, a, "/run").Body.String()
+	for _, want := range []string{`action="/run"`, "Run selected", "local-1"} {
+		if !strings.Contains(run, want) {
+			t.Errorf("the run page does not contain %q", want)
+		}
+	}
+	if strings.Contains(run, `id="dashboard"`) {
+		t.Error("the run page should not have the live dashboard")
+	}
+
+	// a run that can't start goes back to the run page, with the reason
+	rec := post(t, a, "/run", url.Values{"server": {"local-1"}, "force": {"1"}, "check": {"1"}})
+	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/run?") {
+		t.Errorf("a refused run should go back to /run, went to %q", loc)
 	}
 }

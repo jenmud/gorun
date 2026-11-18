@@ -98,8 +98,9 @@ function gorunSelect(formId, on) {
 			<header class="border-b border-zinc-800 bg-zinc-900/80 backdrop-blur">
 				<div class="mx-auto flex max-w-7xl flex-wrap items-center gap-4 px-6 py-3">
 					<span class="rounded bg-accent px-2 py-0.5 text-sm font-bold text-white">gorun</span>
-					<nav class="flex gap-1 text-sm">
-						@navLink("/", "Run", active == "run")
+					<nav class="flex flex-wrap gap-1 text-sm">
+						@navLink("/", "Live", active == "live")
+						@navLink("/run", "Run", active == "run")
 						@navLink("/tasks", "Tasks", active == "tasks")
 						@navLink("/bundles", "Bundles", active == "bundles")
 						@navLink("/schedules", "Schedules", active == "schedules")

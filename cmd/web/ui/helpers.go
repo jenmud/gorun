@@ -403,7 +403,7 @@ func runsOn(servers []string) []string {
 
 // runBundlePath opens the run page with a bundle ticked.
 func runBundlePath(name string) templ.SafeURL {
-	return templ.SafeURL("/?" + url.Values{"bundle": {name}}.Encode())
+	return templ.SafeURL("/run?" + url.Values{"bundle": {name}}.Encode())
 }
 
 // countLabel says how many entries a collapsed section holds.

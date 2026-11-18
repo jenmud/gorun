@@ -4,7 +4,7 @@ templ Dashboard(s DashboardState) {
 	if len(s.ProcessOrder) == 0 {
 		<div class="rounded-2xl border border-dashed border-zinc-800 p-10 text-center text-sm">
 			<p class="text-zinc-200">Nothing running.</p>
-			<p class="mt-1 text-zinc-500">Pick servers and tasks or bundles on the left, then press <span class="font-semibold text-accent">Run</span>. Runs started from the terminal show up here too.</p>
+			<p class="mt-1 text-zinc-500">Start one on the <a href="/run" class="font-semibold text-accent hover:underline">Run</a> page. Runs started from the terminal or a schedule show up here too.</p>
 		</div>
 	}
 	if hasFinished(s) {

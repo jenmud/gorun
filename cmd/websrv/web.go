@@ -1,5 +1,5 @@
-// Package websrv serves the gorun web UI: the run page with a live dashboard, the history of
-// saved runs, and the config editor. Runs and live updates go through NATS, and the page
+// Package websrv serves the gorun web UI: the live page of what is running, the run page that
+// starts runs, the history of saved runs, and the config editor. Runs and live updates go through NATS, and the page
 // updates over server-sent events (SSE) using Datastar.
 package websrv
 
@@ -181,7 +181,8 @@ func listenAndServe(srv *http.Server, addr string, started func(net.Addr)) error
 // routes maps every page and action to its handler.
 func (a *app) routes() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", a.runPage)
+	mux.HandleFunc("GET /{$}", a.livePage)
+	mux.HandleFunc("GET /run", a.runPage)
 	mux.HandleFunc("POST /run", a.startRunHandler)
 	mux.HandleFunc("GET /events", a.events)
 	mux.HandleFunc("POST /clear", a.clearFinished)

@@ -59,15 +59,21 @@ type StatsView struct {
 
 // RunPageData is everything the run page shows.
 type RunPageData struct {
-	Servers   []ServerOption
-	Tasks     []TaskOption
-	Bundles   []BundleOption
+	Servers  []ServerOption
+	Tasks    []TaskOption
+	Bundles  []BundleOption
+	NATSOK   bool
+	Flash    string
+	FlashBad bool
+	Path     string
+}
+
+// LivePageData is what the live page shows: the recent runs and what is running now.
+type LivePageData struct {
 	Stats     StatsView
 	Dashboard DashboardState
-	NATSOK    bool
 	Flash     string
 	FlashBad  bool
-	Path      string
 }
 
 // BundleOption is a bundle the run page can run.

@@ -6,6 +6,14 @@ the release notes when a version is cut.
 
 ## Unreleased (since v0.32.0)
 
+### `gorun -serve` without a Gorunfile only watches
+- Started without a Gorunfile, the web UI shows only **Live** and **History**, for runs started
+  elsewhere. Run, Tasks, Bundles, Schedules and Config don't exist: they aren't in the menu,
+  and their pages and forms answer 404.
+  Task and schedule names in History are plain text, since their pages aren't there. Before, it
+  showed every page and asked you to load a Gorunfile on the Config page. The startup message
+  says `Gorunfile  none: only the Live and History pages, for runs started elsewhere`.
+
 ### Install the latest release, and say which
 - The install script installs the latest release on every machine. The instrumented build is
   only published for Linux x86-64; elsewhere the script used to build master from source, which

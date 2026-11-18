@@ -100,12 +100,16 @@ function gorunSelect(formId, on) {
 					<span class="rounded bg-accent px-2 py-0.5 text-sm font-bold text-white">gorun</span>
 					<nav class="flex flex-wrap gap-1 text-sm">
 						@navLink("/", "Live", active == "live")
-						@navLink("/run", "Run", active == "run")
-						@navLink("/tasks", "Tasks", active == "tasks")
-						@navLink("/bundles", "Bundles", active == "bundles")
-						@navLink("/schedules", "Schedules", active == "schedules")
+						if !noGorunfile(ctx) {
+							@navLink("/run", "Run", active == "run")
+							@navLink("/tasks", "Tasks", active == "tasks")
+							@navLink("/bundles", "Bundles", active == "bundles")
+							@navLink("/schedules", "Schedules", active == "schedules")
+						}
 						@navLink("/history", "History", active == "history")
-						@navLink("/config", "Config", active == "config")
+						if !noGorunfile(ctx) {
+							@navLink("/config", "Config", active == "config")
+						}
 					</nav>
 					if nats.Mode != "off" {
 						<span class="ml-auto flex items-center gap-2 text-xs text-emerald-400" title={ "NATS is " + natsModeLabel(nats.Mode) }>

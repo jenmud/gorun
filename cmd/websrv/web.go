@@ -69,10 +69,14 @@ type app struct {
 	runs    map[string]context.CancelFunc // runs started from this page, by UUID
 	sched   *gorun.Scheduler              // fires the loaded Gorunfile's schedules, if any
 	nats    natsState                     // how this service reaches NATS; set once at startup
+
+	// noFile is set when the service started without a Gorunfile: it then shows only the Live
+	// and History pages, for runs started elsewhere.
+	noFile bool
 }
 
 // Run starts the web server on GORUN_ADDRESS (default :8080). configPath, when set, is the
-// Gorunfile to load; it can also be loaded from the config page. logPath is shown in the startup
+// Gorunfile to load. Without one the service shows only the Live and History pages. logPath is shown in the startup
 // message; empty means logs go to stderr. Run exits with status 1 when it can't listen.
 func Run(configPath, logPath string) {
 	if err := run(configPath, logPath); err != nil {
@@ -119,6 +123,8 @@ func run(configPath, logPath string) error {
 		hub:   &hub{clients: map[chan string]struct{}{}},
 		runs:  map[string]context.CancelFunc{},
 		nats:  natsStartState(emb, nc, err, envvars.Get("GORUN_SKIP_NATS") != ""),
+
+		noFile: configPath == "",
 	}
 	if nc != nil {
 		defer nc.Close()
@@ -128,7 +134,7 @@ func run(configPath, logPath string) error {
 			log.Printf("gorun web: subscribed to %s", a.topic)
 		}
 	}
-	info := startupInfo{nats: a.nats, topic: a.topic, dbPath: dbPath, dbErr: dbErr, logPath: logPath}
+	info := startupInfo{nats: a.nats, topic: a.topic, dbPath: dbPath, dbErr: dbErr, logPath: logPath, noFile: a.noFile}
 	if configPath != "" {
 		info.cfgErr = a.loadConfig(configPath)
 		if info.cfgErr != nil {
@@ -178,44 +184,58 @@ func listenAndServe(srv *http.Server, addr string, started func(net.Addr)) error
 	return nil
 }
 
-// routes maps every page and action to its handler.
+// routes maps every page and action to its handler. Without a Gorunfile only the Live and
+// History pages exist: the others aren't served at all, so they answer 404.
 func (a *app) routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", a.livePage)
-	mux.HandleFunc("GET /run", a.runPage)
-	mux.HandleFunc("POST /run", a.startRunHandler)
 	mux.HandleFunc("GET /events", a.events)
 	mux.HandleFunc("POST /clear", a.clearFinished)
 	mux.HandleFunc("POST /runs/{id}/cancel", a.cancelRun)
-
-	mux.HandleFunc("GET /tasks", a.tasksPage)
-	mux.HandleFunc("GET /bundles", a.bundlesPage)
-	mux.HandleFunc("GET /schedules", a.schedulesPage)
-	mux.HandleFunc("POST /schedules/pause", a.schedulePause)
-	mux.HandleFunc("POST /schedules/resume", a.scheduleResume)
-	mux.HandleFunc("POST /schedules/skip", a.scheduleSkip)
-	mux.HandleFunc("POST /schedules/edit", a.editEntity(kindSchedule, "/schedules"))
-	mux.HandleFunc("POST /schedules/add", a.addEntity(kindSchedule, "/schedules"))
-	mux.HandleFunc("POST /tasks/add", a.addEntity(kindTask, "/tasks"))
-	mux.HandleFunc("POST /tasks/edit", a.editEntity(kindTask, "/tasks"))
-	mux.HandleFunc("POST /bundles/add", a.addEntity(kindBundle, "/bundles"))
-	mux.HandleFunc("POST /bundles/edit", a.editEntity(kindBundle, "/bundles"))
 	mux.HandleFunc("GET /history", a.historyPage)
 	mux.HandleFunc("GET /history/{id}", a.historyDetail)
 	mux.HandleFunc("GET /history/{id}/task", a.taskDetail)
 	mux.HandleFunc("POST /runs/{id}/delete", a.deleteRun)
 	mux.HandleFunc("POST /runs/truncate", a.truncateRuns)
 
-	mux.HandleFunc("GET /config", a.configPage)
-	mux.HandleFunc("GET /config/edit", a.editPage)
-	mux.HandleFunc("GET /file", a.viewFile)
-	mux.HandleFunc("POST /config/load", a.loadHandler)
-	mux.HandleFunc("POST /config/add", a.addHandler)
-	mux.HandleFunc("POST /config/edit", a.editHandler)
-	mux.HandleFunc("POST /config/remove", a.removeHandler)
-	mux.HandleFunc("POST /config/save", a.saveHandler)
-	mux.HandleFunc("POST /config/discard", a.discardHandler)
+	// the pages that need a Gorunfile
+	withFile := func(pattern string, h http.HandlerFunc) {
+		if !a.noFile {
+			mux.HandleFunc(pattern, h)
+		}
+	}
+	withFile("GET /run", a.runPage)
+	withFile("POST /run", a.startRunHandler)
+	withFile("GET /tasks", a.tasksPage)
+	withFile("GET /bundles", a.bundlesPage)
+	withFile("GET /schedules", a.schedulesPage)
+	withFile("POST /schedules/pause", a.schedulePause)
+	withFile("POST /schedules/resume", a.scheduleResume)
+	withFile("POST /schedules/skip", a.scheduleSkip)
+	withFile("POST /schedules/edit", a.editEntity(kindSchedule, "/schedules"))
+	withFile("POST /schedules/add", a.addEntity(kindSchedule, "/schedules"))
+	withFile("POST /tasks/add", a.addEntity(kindTask, "/tasks"))
+	withFile("POST /tasks/edit", a.editEntity(kindTask, "/tasks"))
+	withFile("POST /bundles/add", a.addEntity(kindBundle, "/bundles"))
+	withFile("POST /bundles/edit", a.editEntity(kindBundle, "/bundles"))
+	withFile("GET /config", a.configPage)
+	withFile("GET /config/edit", a.editPage)
+	withFile("GET /file", a.viewFile)
+	withFile("POST /config/load", a.loadHandler)
+	withFile("POST /config/add", a.addHandler)
+	withFile("POST /config/edit", a.editHandler)
+	withFile("POST /config/remove", a.removeHandler)
+	withFile("POST /config/save", a.saveHandler)
+	withFile("POST /config/discard", a.discardHandler)
 	return mux
+}
+
+// renderCtx is the context pages and live updates are drawn with.
+func (a *app) renderCtx() context.Context {
+	if a.noFile {
+		return ui.WithoutGorunfile(context.Background())
+	}
+	return context.Background()
 }
 
 // openStore opens the history database at path. On error it returns a nil store, so the UI
@@ -287,9 +307,9 @@ func (a *app) applyEvent(data []byte) {
 }
 
 // render turns a templ component into an HTML string.
-func render(c templ.Component) string {
+func (a *app) render(c templ.Component) string {
 	var buf bytes.Buffer
-	if err := c.Render(context.Background(), &buf); err != nil {
+	if err := c.Render(a.renderCtx(), &buf); err != nil {
 		log.Printf("gorun web: render: %v", err)
 		return ""
 	}
@@ -299,7 +319,7 @@ func render(c templ.Component) string {
 // pushDashboard sends the current runs to every open page.
 func (a *app) pushDashboard() {
 	a.mu.Lock()
-	html := render(ui.Dashboard(a.dash))
+	html := a.render(ui.Dashboard(a.dash))
 	a.mu.Unlock()
 	a.hub.broadcast(patch("#dashboard", html))
 }
@@ -320,5 +340,5 @@ func (a *app) pushDashboardSoon() {
 
 // pushStats recomputes the stats from the history and sends them to every open page.
 func (a *app) pushStats(ctx context.Context) {
-	a.hub.broadcast(patch("#stats", render(ui.StatsPanel(a.stats(ctx)))))
+	a.hub.broadcast(patch("#stats", a.render(ui.StatsPanel(a.stats(ctx)))))
 }

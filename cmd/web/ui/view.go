@@ -1,11 +1,27 @@
 package ui
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/jenmud/gorun/internal/store"
 )
+
+type noGorunfileKey struct{}
+
+// WithoutGorunfile marks ctx for a web UI started without a Gorunfile. It shows only the Live
+// and History pages, so the pages that need one are left out of the menu, and names that
+// would link to them are drawn as plain text.
+func WithoutGorunfile(ctx context.Context) context.Context {
+	return context.WithValue(ctx, noGorunfileKey{}, true)
+}
+
+// noGorunfile reports whether ctx was marked by WithoutGorunfile.
+func noGorunfile(ctx context.Context) bool {
+	no, _ := ctx.Value(noGorunfileKey{}).(bool)
+	return no
+}
 
 // ServerOption is a server the run page can pick.
 type ServerOption struct {

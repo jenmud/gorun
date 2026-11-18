@@ -419,3 +419,45 @@ func TestTaskEventPushesAreCoalesced(t *testing.T) {
 		t.Errorf("the end of a run should push the stats and the dashboard at once, got %d pushes in all", n)
 	}
 }
+
+func TestWithoutAGorunfileOnlyLiveAndHistory(t *testing.T) {
+	a, _ := newTestApp(t)
+	a.noFile = true
+	ctx := context.Background()
+	_ = a.store.CreateRun(ctx, "run-1", "deploy", "box", 1, time.Now())
+	_ = a.store.FinishRun(ctx, "run-1", true, 1, 0, 0, time.Second, time.Now())
+
+	for _, page := range []string{"/", "/history"} {
+		rec := get(t, a, page)
+		body := rec.Body.String()
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: status %d", page, rec.Code)
+		}
+		if !strings.Contains(body, `href="/history"`) {
+			t.Errorf("%s should link to History", page)
+		}
+		for _, hidden := range []string{`href="/run"`, `href="/tasks"`, `href="/bundles"`, `href="/schedules"`, `href="/config"`, "Start a run"} {
+			if strings.Contains(body, hidden) {
+				t.Errorf("%s should not show %s without a Gorunfile", page, hidden)
+			}
+		}
+	}
+
+	// the pages that need a Gorunfile don't exist
+	for _, page := range []string{"/run", "/tasks", "/bundles", "/schedules", "/config", "/config/edit", "/file"} {
+		if rec := get(t, a, page); rec.Code != http.StatusNotFound {
+			t.Errorf("GET %s should not exist without a Gorunfile, got %d", page, rec.Code)
+		}
+	}
+	for _, action := range []string{"/run", "/config/load", "/tasks/add", "/schedules/pause"} {
+		if rec := post(t, a, action, url.Values{"server": {"local-1"}}); rec.Code != http.StatusNotFound {
+			t.Errorf("POST %s should not exist without a Gorunfile, got %d", action, rec.Code)
+		}
+	}
+
+	// the same app with a Gorunfile shows everything
+	a.noFile = false
+	if body := get(t, a, "/").Body.String(); !strings.Contains(body, `href="/run"`) || !strings.Contains(body, `href="/config"`) {
+		t.Error("with a Gorunfile, Run and Config should be in the menu")
+	}
+}

@@ -4,7 +4,11 @@ templ Dashboard(s DashboardState) {
 	if len(s.ProcessOrder) == 0 {
 		<div class="rounded-2xl border border-dashed border-zinc-800 p-10 text-center text-sm">
 			<p class="text-zinc-200">Nothing running.</p>
-			<p class="mt-1 text-zinc-500">Start one on the <a href="/run" class="font-semibold text-accent hover:underline">Run</a> page. Runs started from the terminal or a schedule show up here too.</p>
+			if noGorunfile(ctx) {
+				<p class="mt-1 text-zinc-500">Runs started with gorun from a terminal show up here, and in History. This service was started without a Gorunfile, so it can't start runs itself.</p>
+			} else {
+				<p class="mt-1 text-zinc-500">Start one on the <a href="/run" class="font-semibold text-accent hover:underline">Run</a> page. Runs started from the terminal or a schedule show up here too.</p>
+			}
 		</div>
 	}
 	if hasFinished(s) {

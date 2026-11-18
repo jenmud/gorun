@@ -1,2 +1,0 @@
-- name: refresh banner
-  shell: "echo banner refreshed for {{ inventory_hostname }}"

@@ -24,6 +24,8 @@ the release notes when a version is cut.
 - Each tab shows its number before its name (`1 Servers │ 2 Tasks │ …`), the key that goes to it.
 - **?** opens the help, as ctrl+k does. The help lists each vim key next to its plain key, and
   scrolls with j/k when it is taller than the screen. The live view has a help too.
+- **Removed:** `scripts/ansible2gorun.py`, the Ansible converter, with its tests and the
+  `scripts/testdata/ansible-demo` example.
 - **Changed:** select all shown servers moves from ctrl+a to **alt+s**, clear the selection
   from ctrl+d (which now moves half a page) to **alt+d**, and tick and untick a server's tasks
   from alt+t and ctrl+x to **alt+s** and **alt+d** in the tasks pane.

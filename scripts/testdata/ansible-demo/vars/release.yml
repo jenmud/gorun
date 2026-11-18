@@ -1,2 +1,0 @@
-release: "2.14"
-release_dir: "{{ deploy_root }}/releases/{{ release }}/{{ inventory_hostname }}"

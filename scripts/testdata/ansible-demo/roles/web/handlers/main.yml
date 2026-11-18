@@ -1,2 +1,0 @@
-- name: reload web
-  shell: "echo reloading web on {{ inventory_hostname }} >> {{ deploy_root }}/reloads.log"

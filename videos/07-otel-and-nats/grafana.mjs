@@ -8,11 +8,11 @@ const p = await ctx.newPage();
 const explore = (ds, type, query, extra = {}) => `${base}/explore?schemaVersion=1&orgId=1&panes=` + encodeURIComponent(JSON.stringify({
   a: { datasource: ds, queries: [{ refId: "A", datasource: { type, uid: ds }, ...extra, ...(type === "tempo" ? { queryType: "traceql", query } : { expr: query }) }], range: { from: "now-30m", to: "now" } } }));
 // the result panel only: from the anchor text down, without Grafana's menus and query editor
-const shot = async (name, anchor, h = 1000, nth = 0) => {
+const shot = async (name, anchor, h = 1000, nth = 0, left = null) => {
   const loc = p.getByText(anchor, { exact: true });
   const box = await (nth < 0 ? loc.last() : loc.nth(nth)).boundingBox();
-  const y = Math.max(0, box.y - 14);
-  await p.screenshot({ path: `${out}/${name}.png`, clip: { x: Math.max(0, box.x - 16), y, width: 1280 - Math.max(0, box.x - 16) - 8, height: Math.min(1500 - y, h) } });
+  const y = Math.max(0, box.y - 14), x0 = left ?? Math.max(0, box.x - 16);
+  await p.screenshot({ path: `${out}/${name}.png`, clip: { x: x0, y, width: 1280 - x0 - 8, height: Math.min(1500 - y, h) } });
 };
 
 // traces: the runs, then one run's waterfall
@@ -40,7 +40,7 @@ await p.waitForTimeout(4000); await shot("metrics-count", "Graph", 460, -1);
 await p.goto(explore("prometheus", "prometheus", "histogram_quantile(0.95, sum by (le, task_name) (rate(gorun_task_duration_seconds_bucket[5m])))"));
 await p.waitForTimeout(4000); await shot("metrics-duration", "Graph", 460, -1);
 
-// logs: gorun's log file, shipped by a collector
-await p.goto(explore("loki", "loki", '{service_name="gorun"} | level = "ERROR"'));
-await p.waitForTimeout(5000); await shot("logs-errors", "Logs volume", 760);
+// logs: gorun's own log records, sent over OTLP
+await p.goto(explore("loki", "loki", '{service_name="gorun"} | detected_level = "error"'));
+await p.waitForTimeout(5000); await shot("logs-errors", "Logs volume", 760, 0, 490);
 await b.close();

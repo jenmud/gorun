@@ -92,7 +92,8 @@ live view, CI mode, history), `docs/integrations.md` (web UI, OpenTelemetry, NAT
 completion), `docs/reference.md` (flags/keys/env), `recipes/README.md` (demo lab).
 
 `videos/` builds the tutorial videos (script, demo Gorunfile, screen capture and voiceover); see
-`videos/README.md`. Re-record `record.sh` after TUI changes, and update the narration when a feature
+`videos/README.md`. **A change that a video shows or describes must update that video in the same
+work**: narration, recording, rebuilt mp4, then the website copy (gorun-website). Re-record `record.sh` after TUI changes, and update the narration when a feature
 it describes changes. The video files themselves are not committed: the website repo serves them.
 
 # Agent Instructions: Go Development

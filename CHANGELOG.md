@@ -4,6 +4,14 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## Next (since v0.33.0)
+
+### OpenTelemetry logs, and nothing lost on exit
+- The instrumented build now sends gorun's log lines as OpenTelemetry logs, with the trace and
+  span they belong to. The docs said it did, but only traces and metrics were sent.
+- gorun flushes traces, metrics and logs before it exits. A one-shot `gorun -r` run used to lose
+  its `gorun.run` span, and the last logs and metrics, because the SDK only flushed on a signal.
+
 ## v0.33.0 (since v0.32.0)
 
 ### `gorun -serve` without a Gorunfile only watches

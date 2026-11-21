@@ -232,20 +232,20 @@ func (r *run) runServer(ctx context.Context, server Server) {
 	fail := func(err error) {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		logger.Error("error with running tasks", slog.String("reason", err.Error()))
+		logger.ErrorContext(ctx, "error with running tasks", slog.String("reason", err.Error()))
 		r.failed.Add(int64(len(server.Tasks)))
 		c.emit(ServerErrorEvent{Type: "server_error", GorunUUID: c.GorunUUID, Server: server.Name, Err: err})
 	}
 
 	var client *ssh.Client
 	if !server.IsLocal() {
-		logger.Debug("connecting to server via SSH")
+		logger.DebugContext(ctx, "connecting to server via SSH")
 		var err error
 		if client, err = NewSSHClient(ctx, server); err != nil {
 			fail(fmt.Errorf("error creating SSH connection: %w", err))
 			return
 		}
-		logger.Debug("connected to server via SSH")
+		logger.DebugContext(ctx, "connected to server via SSH")
 		defer func() { _ = closeSSHClient(client) }()
 	}
 
@@ -332,7 +332,7 @@ func (sr *serverRun) runTask(ctx context.Context, task *TaskExec) {
 		finish(err)
 	}
 	cancelled := func() {
-		logger.Warn("task skipped due to cancellation", slog.String("reason", ctx.Err().Error()))
+		logger.WarnContext(ctx, "task skipped due to cancellation", slog.String("reason", ctx.Err().Error()))
 		skip(ctx.Err())
 	}
 
@@ -359,7 +359,7 @@ func (sr *serverRun) runTask(ctx context.Context, task *TaskExec) {
 	sr.mu.Unlock()
 	if failedDep != "" {
 		err := fmt.Errorf("dependent task (%s) failed, aborting task (%s)", failedDep, name)
-		logger.Error("error with running tasks", slog.String("reason", err.Error()))
+		logger.ErrorContext(ctx, "error with running tasks", slog.String("reason", err.Error()))
 		skip(err)
 		return
 	}
@@ -442,10 +442,10 @@ func (sr *serverRun) runTask(ctx context.Context, task *TaskExec) {
 		retry := []any{slog.Int("attempt", attempt), slog.Int("attempts", attempts), slog.String("reason", err.Error())}
 		if !task.task.CanRetry() {
 			task.appendStderr("not retried: task is marked unsafe to rerun (set retry_unsafe = true to override)")
-			logger.Warn("task failed; not retrying because it is marked unsafe to rerun", retry...)
+			logger.WarnContext(ctx, "task failed; not retrying because it is marked unsafe to rerun", retry...)
 			break
 		}
-		logger.Warn("task failed, retrying", append(retry, slog.Duration("delay", task.task.RetryDelayDuration()))...)
+		logger.WarnContext(ctx, "task failed, retrying", append(retry, slog.Duration("delay", task.task.RetryDelayDuration()))...)
 		if !task.waitForRetry(ctx) {
 			break
 		}

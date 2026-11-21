@@ -38,6 +38,13 @@ OTEL_TRACES_EXPORTER=console gorun Gorunfile -r --plain                     # sp
 Each signal is configured on its own. `GORUN_NAME` is the service name unless `OTEL_SERVICE_NAME`
 is set. The standard build has no OpenTelemetry.
 
+gorun sends what is still buffered before it exits, so a one-shot `gorun -r` run shows up with its
+whole trace, and its last logs and metrics aren't lost.
+
+Every log line the log file gets is also sent as an OpenTelemetry log record, with the trace and
+span it belongs to, so a trace in Grafana links to its logs. The record's attributes are the log
+line's: the task's `name`, `exitcode` and `reason`, and the run's `gorun_uuid`.
+
 Each run is one trace. Its `gorun.run` span carries the run's [origin](#who-ran-it-and-where),
 and each server's `server.run` span is a child of it.
 

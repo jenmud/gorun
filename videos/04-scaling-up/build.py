@@ -154,6 +154,11 @@ SCENES = [
         (4, code(SCHED, i_m, i_m + 6, "Gorunfile")),
     ]),
     ("schedrun", None, [
+        (8, slide("Schedules need the service", [
+            ("", "gorun -serve Gorunfile", "starts the scheduler and the web dashboard"),
+            ("", "Not running, nothing fires", "a plain gorun -r never fires schedules"),
+            ("", "Keep it up", "on a small server, or as a system service"),
+        ])),
         (8, screenshot("web-schedules", "gorun -serve: the Schedules page")),
         (6, run_output("gorun Gorunfile --run --plain", "sched-bad")),
     ]),

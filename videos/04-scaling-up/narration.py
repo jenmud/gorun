@@ -65,11 +65,13 @@ NARRATION = {
         "The second schedule is a one off, with an at time, for something like a maintenance window."
     ),
     "schedrun": (
-        "Schedules run inside the web service, started with gorun dash serve. "
-        "Here's the Schedules page, with each schedule, its target, its timing and when it's next due. "
+        "There's one thing you must know. Schedules only run while gorun is running as a service. "
+        "Start it with gorun dash serve, and the Gorunfile. That starts a web service, with the scheduler and the web dashboard in one.\n"
+        "If it isn't running, nothing fires. A plain run from the command line never fires schedules, though it does check them. "
+        "So run gorun dash serve somewhere that stays up, like a small server, or a system service.\n"
+        "Here's the Schedules page it serves. It lists each schedule, its target, its timing and when it's next due. "
         "There are buttons to pause, resume, or skip just the next run, for a maintenance window.\n"
-        "A plain run from the command line never fires schedules, but it does check them. A bad cron pattern, "
-        "like this one with four fields, stops the load with a clear message.\n"
+        "And a bad cron pattern, like this one with four fields, stops the load with a clear message.\n"
         "Checks work in scheduled runs too, so a backup with a check runs at most once a day, however often it's started. "
         "And every scheduled run is saved in the history, with a badge that links back to its schedule."
     ),

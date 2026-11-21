@@ -91,6 +91,10 @@ tests execute tasks locally.
 live view, CI mode, history), `docs/integrations.md` (web UI, OpenTelemetry, NATS, Go library,
 completion), `docs/reference.md` (flags/keys/env), `recipes/README.md` (demo lab).
 
+`videos/` builds the tutorial videos (script, demo Gorunfile, screen capture and voiceover); see
+`videos/README.md`. Re-record `record.sh` after TUI changes, and update the narration when a feature
+it describes changes. The video files themselves are not committed: the website repo serves them.
+
 # Agent Instructions: Go Development
 
 This file provides system-level instructions for AI coding agents operating on this Go project. Follow these guidelines for all code generation, refactoring, and testing.

@@ -1,0 +1,31 @@
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    command: caddy file-server --root /srv --listen :80
+    volumes:
+      - stats:/srv:ro
+
+  stats:
+    image: busybox
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          {
+            echo "<meta http-equiv=refresh content=5><title>$$(hostname)</title>"
+            echo "<h1>$$(hostname)</h1><pre>"
+            uptime; echo; free -m; echo; df -h /
+            echo "</pre>"
+          } > /srv/index.html
+          sleep 5
+        done
+    volumes:
+      - stats:/srv
+
+volumes:
+  stats:

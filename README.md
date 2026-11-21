@@ -14,6 +14,7 @@ One Go binary, one TOML file and SSH. Nothing to install on the servers.
 - **[Tutorial](docs/tutorial.md)**: from one task to a full server deployment, step by step
 - **[Documentation](#documentation)**
 - **[Website](https://go-run.dev)**: an overview, the docs and a playground to try a Gorunfile in your browser
+- **[Videos](https://go-run.dev/videos)**: short tutorials, starting with "What is gorun?"
 
 > [!WARNING]
 > **Use at your own risk.** gorun runs commands on your servers, often as root. It comes with no
@@ -207,6 +208,7 @@ that draws its own progress bars. The events and the rest of the API are in
 | Read | To |
 |---|---|
 | [Website](https://go-run.dev) | an overview of gorun, with the docs and a playground to try a Gorunfile in your browser |
+| [Videos](https://go-run.dev/videos) | watch it first: what gorun is, when to use it, and five new Ubuntu servers set up from one file |
 | [Tutorial](docs/tutorial.md) | learn gorun step by step, from hello world to a full deployment |
 | [The Gorunfile](docs/gorunfile.md) | understand every option: tasks, copies, secrets, servers, bundles, groups |
 | [Schedules](docs/schedules.md) | run a task or bundle on a cron pattern or at a set time, in any time zone |

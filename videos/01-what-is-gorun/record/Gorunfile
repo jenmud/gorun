@@ -1,0 +1,65 @@
+title = "Five fresh Ubuntu servers"
+
+[tasks.docker-install]
+check = "test -f /tmp/gorun-video/{{.Name}}-docker-install"
+description = "Install Docker and the compose plugin"
+cmd = "echo Installing docker; sleep $((6 + RANDOM % 5)); mkdir -p /tmp/gorun-video && touch /tmp/gorun-video/{{.Name}}-docker-install"
+rerun = "safe"
+local = true
+timeout = "15m"
+retries = 2
+retry_delay = "15s"
+
+[tasks.docker-group]
+check = "test -f /tmp/gorun-video/{{.Name}}-docker-group"
+description = "Let the login user run docker without sudo"
+cmd = "sleep 1; touch /tmp/gorun-video/{{.Name}}-docker-group"
+rerun = "safe"
+local = true
+depends_on = ["docker-install"]
+
+[tasks.app-dir]
+check = "test -f /tmp/gorun-video/{{.Name}}-app-dir"
+description = "Create the app directory"
+cmd = "sleep 1; touch /tmp/gorun-video/{{.Name}}-app-dir"
+rerun = "safe"
+local = true
+
+[tasks.compose-file]
+check = "test -f /tmp/gorun-video/{{.Name}}-compose-file"
+description = "Install the docker-compose.yml"
+cmd = "sleep 1; touch /tmp/gorun-video/{{.Name}}-compose-file"
+rerun = "safe"
+local = true
+depends_on = ["app-dir"]
+
+[tasks.compose-up]
+check = "test -f /tmp/gorun-video/{{.Name}}-compose-up"
+description = "Start Caddy and the stats page"
+cmd = "sleep $((3 + RANDOM % 3)); touch /tmp/gorun-video/{{.Name}}-compose-up"
+rerun = "safe"
+local = true
+timeout = "10m"
+depends_on = ["docker-group", "compose-file"]
+
+[bundles.docker]
+description = "Docker installed, and usable by the login user"
+tasks = ["docker-install", "docker-group"]
+
+[server_groups.ubuntu]
+tasks = ["@docker", "compose-up"]
+
+[servers.hosts.node-1]
+groups = ["ubuntu"]
+
+[servers.hosts.node-2]
+groups = ["ubuntu"]
+
+[servers.hosts.node-3]
+groups = ["ubuntu"]
+
+[servers.hosts.node-4]
+groups = ["ubuntu"]
+
+[servers.hosts.node-5]
+groups = ["ubuntu"]

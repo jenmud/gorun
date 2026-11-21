@@ -1,0 +1,27 @@
+name: deploy
+on:
+  workflow_dispatch:
+    inputs:
+      ticket:
+        description: Change ticket
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install gorun
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Dry run
+        run: gorun Gorunfile -r --plain --check --tag prod
+
+      - name: Deploy
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          GORUN_LABELS: ticket=${{ inputs.ticket }}
+        run: gorun Gorunfile -r --plain --tag prod

@@ -1,0 +1,45 @@
+title = "Release 3.2"
+
+[tasks.config]
+local = true
+description = "Validate the release config"
+cmd = "echo 'config ok'"
+
+[tasks.migrate]
+local = true
+description = "Migrate the schema"
+depends_on = ["config"]
+check = "test -f migrated"
+cmd = "sleep 0.5; touch migrated; echo 'schema at version 58'"
+
+[tasks.deploy]
+local = true
+description = "Deploy release 3.2"
+depends_on = ["migrate"]
+envvars = { TOKEN = "${DEPLOY_TOKEN}" }
+cmd = 'test -n "$TOKEN" && sleep 0.6 && echo "authenticated, release 3.2 live on {{.Name}}"'
+
+[tasks.smoke]
+local = true
+description = "Smoke test the release"
+depends_on = ["deploy"]
+envvars = { FAIL = "${SMOKE_FAIL}" }
+cmd = 'sleep 0.3; if [ "$FAIL" = 1 ] && [ "{{.Name}}" = prod-2 ]; then echo "GET /health 503" >&2; exit 22; fi; echo "GET /health 200"'
+
+[servers]
+tasks = ["smoke"]
+
+[server_groups.staging]
+tags = ["staging"]
+
+[server_groups.prod]
+tags = ["prod"]
+
+[servers.hosts.stage-1]
+groups = ["staging"]
+
+[servers.hosts.prod-1]
+groups = ["prod"]
+
+[servers.hosts.prod-2]
+groups = ["prod"]

@@ -85,7 +85,6 @@ def gofile(path, title, start, end):
 
 
 NATSSUB = HERE / "natssub" / "main.go"
-FILELOG = (HERE / "record" / "filelog.yaml").read_text()
 NATSCONF = 'host: "0.0.0.0"\nport: 4222\n'
 
 natssub_lines = text_file("natssub")
@@ -119,10 +118,12 @@ SCENES = [
         ])),
     ]),
     ("logs", None, [
-        (3, shell([("cmd", "tail -n 1 ~/.gorun/gorun.log")] + [
-            ("out", "time=… level=ERROR msg=\"task failed\" name=smoke … gorun_uuid=web-428372-…")], "bash")),
-        (7, code(FILELOG, 0, len(FILELOG.rstrip("\n").split("\n")), "filelog.yaml", window_lines=36, font=22)),
-        (5, shot("logs-errors", "Loki: gorun's log file, filtered to errors")),
+        (4, slide("Logs, sent with the traces", [
+            ("", "every log line", "is sent to the same collector"),
+            ("", "trace_id and span_id", "link a log line to its trace"),
+            ("", "service_name=gorun", "the label to filter on in Loki"),
+        ])),
+        (6, shot("logs-errors", "Loki: gorun's logs, filtered to errors")),
     ]),
     ("natswhat", None, [
         (4, slide("gorun publishes every event on NATS", [
@@ -156,8 +157,7 @@ SCENES = [
             ]) + '</table></div><div class="brand mono">gorun</div>', "td{padding:14px 26px}")),
     ]),
     ("outro", None, [(1, slide("Recap", [
-        ("", "OpenTelemetry", "traces and metrics in Grafana"),
-        ("", "gorun.log", "shipped with a collector"),
+        ("", "OpenTelemetry", "traces, metrics and logs in Grafana"),
         ("", "NATS", "embedded, or one you already run"),
     ]))]),
 ]

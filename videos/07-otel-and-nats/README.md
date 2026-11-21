@@ -1,7 +1,6 @@
 # Video 7: OpenTelemetry and NATS
 
-A 5-minute tutorial: sending gorun's traces and metrics to Grafana with OpenTelemetry, shipping the log
-file with a collector, and how gorun uses NATS: the events on `gorun.events`, the embedded server that
+A 5-minute tutorial: sending gorun's traces, metrics and logs to Grafana with OpenTelemetry, and how gorun uses NATS: the events on `gorun.events`, the embedded server that
 `gorun -serve` starts, and joining a server that is already running. Same synthetic voice, pace and look
 as videos [1](../01-what-is-gorun/), [2](../02-gorunfile-and-tui/), [3](../03-reliable-deployments/),
 [4](../04-scaling-up/), [5](../05-web-dashboard/) and [6](../06-go-library/).
@@ -13,7 +12,7 @@ as videos [1](../01-what-is-gorun/), [2](../02-gorunfile-and-tui/), [3](../03-re
 | `record.sh` | runs the instrumented gorun against a local Grafana (`grafana/otel-lgtm`) and NATS, as a made-up user and host, and captures everything |
 | `grafana.mjs`, `runweb.mjs`, `natsweb.mjs` | Playwright scripts run by `record.sh`: Grafana's traces, metrics and logs; runs started from the web UI; gorun's NATS header |
 | `natssub/` | a small Go program that prints every event on `gorun.events` |
-| `record/` | the stand-in web fleet (local servers that only sleep; web-3's smoke test fails) and the collector config that ships `gorun.log` |
+| `record/` | the stand-in web fleet (local servers that only sleep; web-3's smoke test fails) |
 
 The servers are stand-ins, and the video labels them. Grafana, the traces, metrics, logs and NATS events
 are all real.

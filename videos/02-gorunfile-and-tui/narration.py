@@ -105,7 +105,7 @@ NARRATION = {
         "Enter on a task opens its details and output, like the disk usage here."
     ),
     "fail": (
-        "If a task fails, only that server stops. The rest of its tasks are skipped, and the other servers carry on. "
+        "If a task fails, the tasks that depend on it are skipped, and the other servers carry on. "
         "gorun shows a red box with the reason, the exit code, and the end of the error output.\n"
         "Here, the smoke test on web three couldn't reach the web server. "
         "And because gorun exits with a non-zero status, your scripts and CI know that something went wrong."

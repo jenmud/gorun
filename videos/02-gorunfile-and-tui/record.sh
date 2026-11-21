@@ -14,7 +14,7 @@ work=$(mktemp -d); trap 'tmux kill-session -t vid2 2>/dev/null || true; rm -rf "
 
 # g <db> <args...> is gorun with its own history database, as dev@laptop
 g() { local db=$1; shift
-  unshare --map-root-user --uts sh -c 'hostname laptop && exec env HOME=/home/dev USER=dev LOGNAME=dev GORUN_SKIP_NATS=1 GORUN_DB_PATH="$0" GORUN_LOG_FILE="$1" "$2" "${@:3}"' \
+  unshare --map-root-user --uts --mount sh -c 'hostname laptop && printf "dev:x:0:0::/home/dev:/bin/bash\n" > /tmp/passwd.dev && mount --bind /tmp/passwd.dev /etc/passwd && exec env HOME=/home/dev USER=dev LOGNAME=dev GORUN_SKIP_NATS=1 GORUN_DB_PATH="$0" GORUN_LOG_FILE="$1" "$2" "${@:3}"' \
     "$db" "$work/g.log" "$work/gorun" "$@"; }
 tmuxrun() { local dir=$1 db=$2 cols=$3 rows=$4; shift 4; tmux kill-session -t vid2 2>/dev/null || true
   tmux new-session -d -s vid2 -x "$cols" -y "$rows" -e "GDB=$db" "cd '$dir' && $(declare -f g); work='$work'; g '$db' $*; sleep 300"; sleep 1.5; }

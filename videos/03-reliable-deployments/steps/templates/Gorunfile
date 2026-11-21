@@ -1,0 +1,32 @@
+title = "Templates"
+
+envvars = { APP_ENV = "production" }
+
+[tasks.hello]
+description = "Say which server this is"
+cmd = "echo '{{ .Name }} runs {{ index .EnvVars \"APP_ENV\" }} on port {{ .Server.Vars.port }}'"
+local = true
+
+[tasks.config]
+description = "Render the app config"
+cmd = "cat /tmp/gorun-demo/{{ .Name }}.conf"
+local = true
+[[tasks.config.copy]]
+src = "./app.conf.tmpl"
+render = true
+dst = "/tmp/gorun-demo/{{ .Name }}.conf"
+[tasks.config.vars]
+workers = 4
+
+[servers]
+tasks = ["hello", "config"]
+
+[servers.hosts.web-1]
+vars = { port = 8080 }
+
+[servers.hosts.web-2]
+vars = { port = 8080 }
+
+[servers.hosts.staging]
+vars = { port = 9090 }
+envvars = { APP_ENV = "staging" }

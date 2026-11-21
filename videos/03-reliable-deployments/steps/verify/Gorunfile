@@ -1,0 +1,13 @@
+title = "A verify that fails"
+
+[tasks.config]
+description = "Write the app config"
+check = "grep -q 'version=2.4' /tmp/gorun-demo/app.conf"
+cmd = "mkdir -p /tmp/gorun-demo && echo 'version=2.3' > /tmp/gorun-demo/app.conf"
+verify = "grep -q 'version=2.4' /tmp/gorun-demo/app.conf"
+local = true
+
+[servers]
+tasks = ["config"]
+
+[servers.hosts.local]

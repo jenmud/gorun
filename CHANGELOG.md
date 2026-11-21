@@ -4,7 +4,7 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
-## Next (since v0.33.0)
+## v0.34.0 (since v0.33.0)
 
 ### OpenTelemetry logs, and nothing lost on exit
 - The instrumented build now sends gorun's log lines as OpenTelemetry logs, with the trace and

@@ -1,0 +1,39 @@
+title = "Fleet check"
+
+[tasks.disk]
+local = true
+description = "Check free disk space"
+cmd = "sleep 0.3; echo '{{.Name}}: 62% used'"
+
+[tasks.deploy]
+local = true
+description = "Deploy release 3.1"
+depends_on = ["disk"]
+cmd = "sleep 0.4; {{if eq .Name \"web-2\"}}echo 'permission denied' >&2; exit 13{{else}}echo 'release 3.1 is live'{{end}}"
+
+[tasks.restart]
+local = true
+description = "Restart the service"
+depends_on = ["deploy"]
+cmd = "sleep 0.2; echo 'service restarted'"
+
+[bundles.rollout]
+tasks = ["deploy", "restart"]
+
+[servers]
+tasks = ["disk"]
+
+[server_groups.web]
+tags = ["web"]
+
+[server_groups.db]
+tags = ["db"]
+
+[servers.hosts.web-1]
+groups = ["web"]
+
+[servers.hosts.web-2]
+groups = ["web"]
+
+[servers.hosts.db-1]
+groups = ["db"]

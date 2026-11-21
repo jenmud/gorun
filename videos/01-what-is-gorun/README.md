@@ -12,11 +12,11 @@ rendered from `demo/Gorunfile`, and the picker and live view are captured from t
 | File | What |
 |---|---|
 | `narration.py` | the spoken script, one entry per scene |
-| `build.py` | scenes and slides; synthesises the voice, renders frames, writes `build/01-what-is-gorun.mp4`, `captions.srt` and `chapters.json` |
+| `build.py` | scenes and slides (the shared rendering, voice and assembly code is in `../common.py`); synthesises the voice, renders frames, writes `build/01-what-is-gorun.mp4`, `captions.srt` and `chapters.json` |
 | `record.sh` | captures the gorun screens (picker, dry run, live run, rerun) in tmux |
 | `demo/` | the Gorunfile built on screen: five Ubuntu servers, Docker, and Caddy serving a stats page |
 | `record/` | the same tasks and checks on local "servers" that only sleep, so the live view can be recorded without five real hosts |
-| `voice-ref.wav` | a deep-voice sample (made with Kokoro) that Chatterbox imitates |
+| `../voice-ref.wav` | a deep-voice sample (made with Kokoro) that Chatterbox imitates, shared by every video |
 
 ## Rebuild
 

@@ -1,0 +1,22 @@
+title = "My first Gorunfile"
+
+[tasks.hello]
+description = "Say hello"
+cmd = "echo hello from $(hostname)"
+local = true
+
+[tasks.make-dir]
+description = "Create a scratch directory"
+cmd = "mkdir -p /tmp/gorun-demo"
+local = true
+
+[tasks.write-file]
+description = "Write a file into it"
+cmd = "date > /tmp/gorun-demo/last-run"
+depends_on = ["make-dir"]
+local = true
+
+[servers]
+tasks = ["hello", "write-file"]
+
+[servers.hosts.local]

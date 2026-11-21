@@ -1,0 +1,68 @@
+title = "Web fleet"
+
+[tasks.update]
+description = "Update the package index"
+cmd = "sleep $((4 + RANDOM % 3))"
+timeout = "5m"
+retries = 2
+local = true
+
+[tasks.nginx]
+description = "Install nginx"
+cmd = "sleep $((8 + RANDOM % 4))"
+depends_on = ["update"]
+local = true
+
+[tasks.site]
+description = "Install the site's index page"
+cmd = "sleep 1"
+depends_on = ["nginx"]
+local = true
+
+[tasks.smoke]
+description = "Check the site answers"
+cmd = "sleep 1; {{if eq .Name \"web-3\"}}echo 'curl: (7) Failed to connect to localhost port 80' >&2; exit 7{{end}}"
+timeout = "30s"
+depends_on = ["site"]
+local = true
+
+[tasks.disk]
+description = "Report disk usage"
+cmd = "sleep 1; echo '/dev/sda1  40G  12G  26G  32% /'"
+local = true
+
+[bundles.webapp]
+description = "Install nginx, the site, and test it"
+tasks = ["nginx", "site", "smoke"]
+
+[server_groups.ubuntu]
+
+[server_groups.web]
+tags = ["web"]
+tasks = ["@webapp"]
+
+[server_groups.db]
+tags = ["db"]
+tasks = ["update", "disk"]
+
+[server_groups.prod]
+tags = ["prod"]
+
+[server_groups.staging]
+tags = ["staging"]
+
+[servers.hosts.web-1]
+groups = ["ubuntu", "web", "prod"]
+
+[servers.hosts.web-2]
+groups = ["ubuntu", "web", "prod"]
+
+[servers.hosts.web-3]
+groups = ["ubuntu", "web", "prod"]
+
+[servers.hosts.web-4]
+groups = ["ubuntu", "web", "staging"]
+add_tasks = ["disk"]
+
+[servers.hosts.db-1]
+groups = ["ubuntu", "db", "prod"]

@@ -1,0 +1,10 @@
+title = "My first Gorunfile"
+
+[tasks.hello]
+cmd = "echo hello from $(hostname)"
+local = true
+
+[servers]
+tasks = ["hello"]
+
+[servers.hosts.local]

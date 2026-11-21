@@ -1,0 +1,77 @@
+title = "Web fleet"
+
+[tasks.update]
+description = "Update the package index"
+cmd = "apt-get update"
+sudo = true
+timeout = "5m"
+retries = 2
+
+[tasks.nginx]
+description = "Install nginx"
+cmd = "apt-get install -y nginx"
+sudo = true
+depends_on = ["update"]
+
+[tasks.site]
+description = "Install the site's index page"
+cmd = "install -m 644 /tmp/index.html /var/www/html/index.html"
+sudo = true
+depends_on = ["nginx"]
+[[tasks.site.copy]]
+src = "./files/index.html"
+dst = "/tmp/index.html"
+
+[tasks.smoke]
+description = "Check the site answers"
+cmd = "curl -fsS http://localhost/ > /dev/null"
+timeout = "30s"
+depends_on = ["site"]
+
+[tasks.disk]
+description = "Report disk usage"
+cmd = "df -h /"
+
+[bundles.webapp]
+description = "Install nginx, the site, and test it"
+tasks = ["nginx", "site", "smoke"]
+
+[server_groups.ubuntu]
+    [server_groups.ubuntu.ssh]
+    username = "ubuntu"
+    identityfile = "~/.ssh/id_ed25519"
+
+[server_groups.web]
+tags = ["web"]
+tasks = ["@webapp"]
+
+[server_groups.db]
+tags = ["db"]
+tasks = ["update", "disk"]
+
+[server_groups.prod]
+tags = ["prod"]
+
+[server_groups.staging]
+tags = ["staging"]
+
+[servers.hosts.web-1]
+hostname = "10.0.0.11"
+groups = ["ubuntu", "web", "prod"]
+
+[servers.hosts.web-2]
+hostname = "10.0.0.12"
+groups = ["ubuntu", "web", "prod"]
+
+[servers.hosts.web-3]
+hostname = "10.0.0.13"
+groups = ["ubuntu", "web", "prod"]
+
+[servers.hosts.web-4]
+hostname = "10.0.0.14"
+groups = ["ubuntu", "web", "staging"]
+add_tasks = ["disk"]
+
+[servers.hosts.db-1]
+hostname = "10.0.0.21"
+groups = ["ubuntu", "db", "prod"]

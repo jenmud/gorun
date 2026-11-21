@@ -103,7 +103,7 @@ NARRATION = {
     ),
     "live": (
         "And off it goes! All five servers are working at the same time, each with its own progress bar, "
-        "and the task it's on right now. If a server fails, only that server stops, and the others keep going.\n"
+        "and the task it's on right now. If a task fails, the tasks that depend on it are skipped, and the other servers keep going.\n"
         "A real Docker install takes a minute or two, so I've sped this part up. And there we are. "
         "All twenty five tasks, done."
     ),
@@ -120,7 +120,7 @@ NARRATION = {
         "So that's gorun, in a nutshell. If you like plain commands, quick feedback, and not a lot of ceremony, "
         "I think you'll enjoy it.\n"
         "You'll find the install command and the full tutorial linked below. "
-        "In the next video, we'll make this setup more reliable, with templates, secrets and checks.\n"
+        "In the next video, we'll write a Gorunfile from scratch, one small step at a time, and take the terminal interface for a spin.\n"
         "Thanks so much for watching, and I'll see you there!"
     ),
 }

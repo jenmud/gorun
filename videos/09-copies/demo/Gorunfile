@@ -1,0 +1,69 @@
+title = "Ship release 2.4"
+
+[tasks.config]
+description = "Put the app config in place"
+check_copies = true
+cmd = "echo 'config updated on {{.Name}}'; ls -l /tmp/gorun-demo/app.conf"
+    [[tasks.config.copy]]
+    src = "templates/app.conf.tmpl"
+    render = true
+    dst = "/tmp/gorun-demo/app.conf"
+    mode = "0600"
+    [[tasks.config.copy]]
+    content = "release=2.4.0\nserver={{.Name}}\n"
+    dst = "/tmp/gorun-demo/VERSION"
+
+[tasks.site]
+description = "Upload the static site"
+check_copies = true
+depends_on = ["config"]
+cmd = "find /tmp/gorun-demo/site -type f | sort"
+    [[tasks.site.copy]]
+    src = "site"
+    dst = "/tmp/gorun-demo/site"
+
+[tasks.release]
+description = "Upload the release"
+check_copies = true
+depends_on = ["site"]
+verify = "cd /tmp/gorun-demo/releases/2.4.0 && sha256sum -c release.sha256"
+    [[tasks.release.copy]]
+    src = "build/release.tar.gz"
+    dst = "/tmp/gorun-demo/releases/2.4.0/release.tar.gz"
+    [[tasks.release.copy]]
+    src = "build/release.sha256"
+    dst = "/tmp/gorun-demo/releases/2.4.0/release.sha256"
+
+[tasks.cleanup]
+description = "Remove the demo files"
+cmd = "rm -rf /tmp/gorun-demo"
+
+[bundles.ship]
+tasks = ["config", "site", "release"]
+
+[server_groups.lab]
+tags = ["lab"]
+    [server_groups.lab.ssh]
+    username = "testuser"
+    identityfile = "./id_ecdsa"
+
+[servers]
+tasks = ["@ship"]
+
+[servers.hosts.web-1]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.web-1.ssh]
+    port = 2221
+
+[servers.hosts.web-2]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.web-2.ssh]
+    port = 2222
+
+[servers.hosts.web-3]
+hostname = "localhost"
+groups = ["lab"]
+    [servers.hosts.web-3.ssh]
+    port = 2223

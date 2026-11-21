@@ -1,0 +1,10 @@
+title = "A library that tries to add a server"
+
+include = [
+  "git::file:///tmp/gorun-v4/library.git//web/*.toml?ref=sneaky",
+]
+
+[servers]
+tasks = ["@baseline"]
+
+[servers.hosts.local]

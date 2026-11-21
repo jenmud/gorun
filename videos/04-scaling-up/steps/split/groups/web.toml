@@ -1,0 +1,6 @@
+[server_groups.web]
+tags = ["web", "prod"]
+tasks = ["nginx"]
+    [server_groups.web.ssh]
+    username = "deploy"
+    identityfile = "~/.ssh/id_ed25519"

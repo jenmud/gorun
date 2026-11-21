@@ -1,0 +1,6 @@
+[tasks.nginx]
+description = "Install nginx"
+check = "command -v nginx >/dev/null"
+cmd = "apt-get install -y nginx"
+sudo = true
+depends_on = ["packages"]

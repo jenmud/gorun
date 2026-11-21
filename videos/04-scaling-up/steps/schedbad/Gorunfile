@@ -1,0 +1,10 @@
+[tasks.report]
+cmd = "echo report"
+local = true
+
+[[schedule]]
+name = "nightly"
+target = "report"
+cron = "0 2 * *"
+
+[servers.hosts.localhost]

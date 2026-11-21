@@ -1,0 +1,10 @@
+title = "Our fleet"
+
+include = [
+  "tasks/*.toml",    # shared tasks and bundles
+  "groups/*.toml",   # server groups
+  "hosts/*.toml",    # one file per fleet
+]
+
+[servers]
+tasks = ["@base"]

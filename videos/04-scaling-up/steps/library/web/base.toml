@@ -1,0 +1,15 @@
+[tasks.motd]
+description = "Write the message of the day, once"
+check = "test -s /tmp/gorun-v4/motd"
+cmd = "mkdir -p /tmp/gorun-v4 && echo 'managed by the shared library' > /tmp/gorun-v4/motd"
+verify = "grep -q 'shared library' /tmp/gorun-v4/motd"
+local = true
+
+[tasks.uptime]
+description = "Show how long this machine has been up"
+cmd = "uptime"
+local = true
+
+[bundles.baseline]
+description = "What every machine gets"
+tasks = ["motd", "uptime"]

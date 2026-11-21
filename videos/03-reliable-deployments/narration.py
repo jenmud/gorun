@@ -24,7 +24,7 @@ NARRATION = {
         "And its verify, which runs after the command, looks again, to prove the change took."
     ),
     "checkrun": (
-        "Let's run it. The first time, the check fails, because the file isn't there. So the task runs, and gorun says okay, verified.\n"
+        "Let's run it. The first time, the check fails, because the file isn't there. So the task runs, and gorun says okay, verified. That word, verified, is the verify passing.\n"
         "Run it again, and the check passes. The task is unchanged, nothing ran, and the summary says one unchanged. "
         "That's what makes a Gorunfile safe to run again and again.\n"
         "Unchanged counts as a success, so tasks that depend on it still run. And a task with no check always runs."
@@ -37,7 +37,8 @@ NARRATION = {
         "One important rule: a check should only look. It must never change the machine, because in a dry run, it's the only thing that runs."
     ),
     "verify": (
-        "Now, verify. A verify runs after the command, and if it fails, the task fails.\n"
+        "Now, verify, which goes hand in hand with the check. The check runs before the command, and asks: should this run? "
+        "The verify runs after it, and asks: did it work? If it fails, the task fails.\n"
         "Here, I've broken the command on purpose, so it writes version two point three, instead of two point four. "
         "The command itself succeeds, but the verify notices the file is wrong, and the task fails, with the reason: verify failed. "
         "Any tasks that depend on it are skipped.\n"

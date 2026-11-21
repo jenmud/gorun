@@ -119,6 +119,10 @@ SCENES = [
         (3, run_output("gorun Gorunfile --run --plain --force", "c-force")),
     ]),
     ("verify", None, [
+        (3, table_slide("Check and verify: a pair", [
+            ("check", "before the command: is there anything to do?"),
+            ("verify", "after the command: did the change take?"),
+        ])),
         (3, code(VERIFY, VCFG[0] + 3, VCFG[0] + 4, "Gorunfile")),
         (4, run_output("gorun Gorunfile --run --plain", "v-fail")),
     ]),

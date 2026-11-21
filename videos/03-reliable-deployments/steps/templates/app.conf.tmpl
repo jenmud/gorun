@@ -1,0 +1,4 @@
+name = {{ .Name }}
+env = {{ index .EnvVars "APP_ENV" }}
+port = {{ .Server.Vars.port }}
+workers = {{ .vars.workers }}

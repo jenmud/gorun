@@ -80,6 +80,24 @@ def slide(title, bullets=(), sub="", kind=""):
     )
 
 
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def block(marker, text):
+    """Line range [start, end) of the blank-line separated block that begins at `marker`."""
+    lines = text.split("\n")
+    i = next(n for n, ln in enumerate(lines) if ln.startswith(marker))
+    j = i
+    while j < len(lines) and lines[j].strip() != "":
+        j += 1
+    return i, j
+
+
+def text_file(name):
+    """The lines of a captured text file, without colour codes."""
+    return ANSI.sub("", (CAP / f"{name}.txt").read_text()).rstrip("\n").split("\n")
+
+
 def window(title, inner, font=24, lh=1.3, badge="", minw=0):
     return page(
         '<div class="wrap" style="display:flex;align-items:center;justify-content:center;padding:40px">'
@@ -143,7 +161,7 @@ def spoken(text):
     # respell for the voice: "gorun" -> "go run"; keep SSH/TOML letter-by-letter
     text = text.replace("Gorunfile", "Go run file").replace("gorun", "go run")
     text = text.replace("TOML", "tomel").replace("SSH", "S S H").replace("SUDO_USER", "sudo user")
-    return text.replace("TUI", "T U I").replace("CI", "C I")
+    return text.replace("TUI", "T U I").replace("CI", "C I").replace("MD5", "M D 5")
 
 
 _tts = None

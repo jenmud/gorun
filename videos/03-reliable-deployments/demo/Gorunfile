@@ -1,0 +1,79 @@
+title = "Web fleet"
+
+envvars = { APP_ENV = "production" }
+
+[tasks.update]
+description = "Update the package index"
+cmd = "apt-get update"
+sudo = true
+rerun = "safe"
+timeout = "5m"
+retries = 2
+
+[tasks.nginx]
+description = "Install nginx"
+check = "dpkg -s nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx"
+cmd = "apt-get install -y nginx"
+verify = "systemctl is-active --quiet nginx"
+sudo = true
+rerun = "safe"
+depends_on = ["update"]
+
+[tasks.site]
+description = "Install the site's index page"
+check_copies = true
+cmd = "install -m 644 /tmp/index.html /var/www/html/index.html"
+sudo = true
+rerun = "safe"
+depends_on = ["nginx"]
+[[tasks.site.copy]]
+src = "./files/index.html.tmpl"
+render = true
+dst = "/tmp/index.html"
+[tasks.site.vars]
+title = "Web fleet"
+
+[tasks.smoke]
+description = "Check the site answers"
+cmd = "curl -fsS http://localhost/ > /dev/null"
+timeout = "30s"
+retries = 3
+retry_delay = "5s"
+depends_on = ["site"]
+
+[tasks.announce]
+description = "Tell the team this server is up"
+cmd = 'curl -fsS -X POST -H "Authorization: Bearer $DEPLOY_TOKEN" -d "{{ .Name }} is serving {{ index .EnvVars "APP_ENV" }}" https://hooks.example.com/deploys'
+envvars = { DEPLOY_TOKEN = "${DEPLOY_TOKEN}" }
+depends_on = ["smoke"]
+
+[bundles.webapp]
+description = "Install nginx, the site, test it and announce it"
+tasks = ["nginx", "site", "smoke", "announce"]
+
+[server_groups.ubuntu]
+    [server_groups.ubuntu.ssh]
+    username = "ubuntu"
+    identityfile = "~/.ssh/id_ed25519"
+
+[server_groups.web]
+tags = ["web"]
+tasks = ["@webapp"]
+
+[servers.hosts.web-1]
+hostname = "10.0.0.11"
+groups = ["ubuntu", "web"]
+
+[servers.hosts.web-2]
+hostname = "10.0.0.12"
+groups = ["ubuntu", "web"]
+
+[servers.hosts.web-3]
+hostname = "10.0.0.13"
+groups = ["ubuntu", "web"]
+
+[servers.hosts.web-4]
+hostname = "10.0.0.14"
+groups = ["ubuntu", "web"]
+envvars = { APP_ENV = "staging" }
+skip_tasks = ["announce"]

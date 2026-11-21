@@ -1,0 +1,63 @@
+title = "Web fleet"
+
+envvars = { APP_ENV = "production" }
+
+[tasks.update]
+description = "Update the package index"
+cmd = "sleep 2"
+local = true
+timeout = "5m"
+retries = 2
+
+[tasks.nginx]
+description = "Install nginx"
+check = "test -f /tmp/gorun-video/{{ .Name }}-nginx"
+cmd = "sleep 4; mkdir -p /tmp/gorun-video && touch /tmp/gorun-video/{{ .Name }}-nginx"
+verify = "test -f /tmp/gorun-video/{{ .Name }}-nginx"
+local = true
+depends_on = ["update"]
+
+[tasks.site]
+description = "Install the site's index page"
+check = "test -f /tmp/gorun-video/{{ .Name }}-site-v1"
+cmd = "sleep 1; touch /tmp/gorun-video/{{ .Name }}-site-v1"
+local = true
+depends_on = ["nginx"]
+
+[tasks.smoke]
+description = "Check the site answers"
+cmd = "sleep 1"
+timeout = "30s"
+retries = 3
+local = true
+depends_on = ["site"]
+
+[tasks.announce]
+description = "Tell the team this server is up"
+cmd = "sleep 1"
+local = true
+depends_on = ["smoke"]
+
+[bundles.webapp]
+description = "Install nginx, the site, test it and announce it"
+tasks = ["nginx", "site", "smoke", "announce"]
+
+[server_groups.ubuntu]
+
+[server_groups.web]
+tags = ["web"]
+tasks = ["@webapp"]
+
+[servers.hosts.web-1]
+groups = ["ubuntu", "web"]
+
+[servers.hosts.web-2]
+groups = ["ubuntu", "web"]
+
+[servers.hosts.web-3]
+groups = ["ubuntu", "web"]
+
+[servers.hosts.web-4]
+groups = ["ubuntu", "web"]
+envvars = { APP_ENV = "staging" }
+skip_tasks = ["announce"]

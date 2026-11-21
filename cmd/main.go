@@ -212,6 +212,7 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
 	defer cancel()
+	defer flushTelemetry()
 
 	version = buildVersion()
 	o := parseFlags()
@@ -258,7 +259,7 @@ func main() {
 		return
 	case o.filename == "":
 		printUsage()
-		os.Exit(1)
+		exit(1)
 	}
 
 	slog.Info("parsing gorun file", slog.String("filename", o.filename))
@@ -340,7 +341,7 @@ func main() {
 	if useTUI {
 		cfg.Origin.Trigger = "tui"
 		if err := runTUI(ctx, cancel, cfg, o.verbose); err != nil {
-			os.Exit(1)
+			exit(1)
 		}
 		return
 	}
@@ -492,7 +493,7 @@ func setupLogging(useTUI bool) (string, *os.File) {
 // fatal prints err and exits.
 func fatal(err error) {
 	fmt.Fprintf(os.Stderr, "gorun: %v\n", err)
-	os.Exit(1)
+	exit(1)
 }
 
 // check exits with err, if there is one.

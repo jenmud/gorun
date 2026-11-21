@@ -15,6 +15,7 @@ require (
 	github.com/nats-io/nats-server/v2 v2.10.24
 	github.com/nats-io/nats.go v1.55.0
 	github.com/robfig/cron/v3 v3.0.1
+	go.opentelemetry.io/otel/log v0.20.0
 	go.opentelemetry.io/otel/metric v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
 	golang.org/x/term v0.47.0

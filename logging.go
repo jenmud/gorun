@@ -68,13 +68,16 @@ func NewLogger(level string, w io.Writer, json bool) *slog.Logger {
 		l = slog.LevelInfo
 	}
 
+	// every record also goes to OpenTelemetry, which does nothing unless the build has an SDK
+	otel := newGlobalOTelHandler(l)
+
 	if json {
 		handler := slog.NewJSONHandler(w, &slog.HandlerOptions{Level: l})
-		return slog.New(handler)
+		return slog.New(teeHandler{handler, otel})
 	}
 
 	handler := slog.NewTextHandler(w, &slog.HandlerOptions{Level: l})
-	logger := slog.New(handler)
+	logger := slog.New(teeHandler{handler, otel})
 	return logger.With(
 		"gorun",
 		slog.String("name", envvars.Get("GORUN_NAME")),

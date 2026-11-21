@@ -1,0 +1,78 @@
+title = "Five fresh Ubuntu servers"
+
+[tasks.docker-install]
+description = "Install Docker and the compose plugin"
+check = "command -v docker >/dev/null && docker compose version >/dev/null"
+cmd = "curl -fsSL https://get.docker.com | sh"
+sudo = true
+rerun = "safe"
+timeout = "15m"
+retries = 2
+retry_delay = "15s"
+
+[tasks.docker-group]
+description = "Let the login user run docker without sudo"
+check = "id -nG $SUDO_USER | grep -qw docker"
+cmd = "usermod -aG docker $SUDO_USER"
+verify = "id -nG $SUDO_USER | grep -qw docker"
+sudo = true
+rerun = "safe"
+depends_on = ["docker-install"]
+
+[tasks.app-dir]
+description = "Create the app directory"
+check = "test -d /opt/stats"
+cmd = "mkdir -p /opt/stats"
+sudo = true
+rerun = "safe"
+
+[tasks.compose-file]
+description = "Install the docker-compose.yml"
+check_copies = true
+cmd = "install -m 644 /tmp/stats.yml /opt/stats/docker-compose.yml"
+sudo = true
+rerun = "safe"
+depends_on = ["app-dir"]
+[[tasks.compose-file.copy]]
+src = "./files/docker-compose.yml"
+dst = "/tmp/stats.yml"
+
+[tasks.compose-up]
+description = "Start Caddy and the stats page"
+check = "test $(docker compose -f /opt/stats/docker-compose.yml ps --status running -q | wc -l) -eq 2"
+cmd = "cd /opt/stats && docker compose up -d"
+verify = "for i in 1 2 3 4 5; do curl -fsS -o /dev/null http://localhost/ && exit 0; sleep 2; done; exit 1"
+sudo = true
+rerun = "safe"
+timeout = "10m"
+depends_on = ["docker-group", "compose-file"]
+
+[bundles.docker]
+description = "Docker installed, and usable by the login user"
+tasks = ["docker-install", "docker-group"]
+
+[server_groups.ubuntu]
+tasks = ["@docker", "compose-up"]
+    [server_groups.ubuntu.ssh]
+    username = "ubuntu"
+    identityfile = "~/.ssh/id_ed25519"
+
+[servers.hosts.node-1]
+hostname = "10.0.0.11"
+groups = ["ubuntu"]
+
+[servers.hosts.node-2]
+hostname = "10.0.0.12"
+groups = ["ubuntu"]
+
+[servers.hosts.node-3]
+hostname = "10.0.0.13"
+groups = ["ubuntu"]
+
+[servers.hosts.node-4]
+hostname = "10.0.0.14"
+groups = ["ubuntu"]
+
+[servers.hosts.node-5]
+hostname = "10.0.0.15"
+groups = ["ubuntu"]

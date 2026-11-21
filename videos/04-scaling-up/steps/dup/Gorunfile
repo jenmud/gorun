@@ -1,0 +1,6 @@
+include = ["tasks/*.toml"]
+
+[servers]
+tasks = ["hello"]
+
+[servers.hosts.local]

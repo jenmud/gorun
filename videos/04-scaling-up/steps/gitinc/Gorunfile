@@ -1,0 +1,10 @@
+title = "Using a shared library"
+
+include = [
+  "git::file:///tmp/gorun-v4/library.git//web/*.toml?ref=main",
+]
+
+[servers]
+tasks = ["@baseline"]
+
+[servers.hosts.local]

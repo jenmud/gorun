@@ -1,0 +1,3 @@
+[tasks.hello]
+cmd = "echo hello"
+local = true

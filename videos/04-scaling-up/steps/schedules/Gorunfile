@@ -1,0 +1,37 @@
+title = "Scheduled jobs"
+
+[tasks.backup]
+description = "Back up the data"
+check = 'grep -q "^$(date -u +%F)" /tmp/gorun-v4/backup.log 2>/dev/null'
+cmd = 'mkdir -p /tmp/gorun-v4 && echo "$(date -u +%F) backup done" >> /tmp/gorun-v4/backup.log'
+verify = 'grep -q "^$(date -u +%F)" /tmp/gorun-v4/backup.log'
+local = true
+
+[tasks.report]
+description = "Write the nightly report"
+cmd = 'mkdir -p /tmp/gorun-v4 && echo "$(date -u +%FT%TZ) report" >> /tmp/gorun-v4/report.log'
+local = true
+
+[bundles.nightly]
+description = "Back up, then report"
+tasks = ["backup", "report"]
+
+[[schedule]]
+name = "nightly"
+description = "Every night at 02:00 in Sydney"
+target = "@nightly"
+cron = "0 2 * * *"
+timezone = "Australia/Sydney"
+missed = "run"
+
+[[schedule]]
+name = "maintenance"
+description = "Once, at a set time in London"
+target = "report"
+at = "2099-12-01T02:00"
+timezone = "Europe/London"
+
+[servers]
+tasks = ["report"]
+
+[servers.hosts.localhost]

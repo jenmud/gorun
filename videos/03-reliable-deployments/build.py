@@ -9,9 +9,13 @@ Output goes to ./build/ (gitignored). Shared code is in ../common.py.
 """
 
 import html
+import os
 import re
 import sys
 from pathlib import Path
+
+# this script has shorter sentences, so it needs a little more speed to match the other videos' pace (~196 words/min)
+os.environ.setdefault("TEMPO", "1.22")
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

@@ -23,3 +23,26 @@ Feature: Tasks run in dependency order
     And "site" is "skipped"
     And "disk" is "done"
     And the run fails
+
+  Scenario: a skip carries through a chain of dependencies
+    Given a Gorunfile:
+      """
+      [tasks.setup]
+      cmd = "exit 3"
+      local = true
+
+      [tasks.build]
+      cmd = "echo build"
+      local = true
+      depends_on = ["setup"]
+
+      [tasks.deploy]
+      cmd = "echo deploy"
+      local = true
+      depends_on = ["build"]
+      """
+    When I run every task
+    Then "setup" is "failed"
+    And "build" is "skipped"
+    And "deploy" is "skipped"
+    And the run fails

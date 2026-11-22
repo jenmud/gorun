@@ -1,0 +1,22 @@
+# Keep the build context small, and keep local secrets and databases out of the image.
+.git
+.jj
+.github
+.env
+*.db
+*.db-shm
+*.db-wal
+*.log
+builds
+dist
+docs
+videos
+recipes
+examples
+example
+features
+factory
+.claude
+.codex
+.agents
+.worktrees

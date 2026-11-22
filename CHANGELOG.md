@@ -4,6 +4,15 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.35.0 (since v0.34.0)
+
+### A Docker image for the web service
+- A `Dockerfile` runs `gorun -serve` on Alpine, with a static binary. It is about 56 MB on amd64
+  and runs as a non-root user. Configure it with the `GORUN_*` variables. `GORUN_FILE` names an
+  optional Gorunfile; without one, only the Live and History pages run.
+- `.github/workflows/docker.yml` publishes linux/amd64 and linux/arm64 images to Docker Hub on
+  version tags, once the `DOCKERHUB_IMAGE` repository variable is set.
+
 ## v0.34.0 (since v0.33.0)
 
 ### OpenTelemetry logs, and nothing lost on exit

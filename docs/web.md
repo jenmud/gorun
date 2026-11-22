@@ -69,6 +69,34 @@ The embedded server stops when `gorun -serve` exits.
 > `GORUN_ADDRESS=127.0.0.1:8080` and reach it over an SSH tunnel:
 > `ssh -L 8080:127.0.0.1:8080 you@gorun-host`.
 
+## Running in Docker
+
+The image runs `gorun -serve` on port 8080. Configure it with the variables above, plus `GORUN_FILE`,
+the Gorunfile to load. Without one the service starts with only the Live and History pages.
+
+```bash
+docker build -t gorun .
+
+# no Gorunfile: live and history only
+docker run --rm -p 8080:8080 gorun
+
+# with a Gorunfile, kept in ./Gorunfile on the host, and history kept in a named volume
+docker run --rm -p 8080:8080 \
+  -v "$PWD/Gorunfile:/etc/gorun/Gorunfile" -e GORUN_FILE=/etc/gorun/Gorunfile \
+  -v gorun-data:/var/lib/gorun gorun
+
+# join a NATS server that's already running, instead of starting one
+docker run --rm -p 8080:8080 -e GORUN_NATS_CLIENT_URL=nats://nats.internal:4222 gorun
+```
+
+The image is Alpine with a static gorun, and it runs as the `gorun` user. Its state lives in
+`/var/lib/gorun`: the history database, the log and git include checkouts. Mount that folder to keep
+them. Local tasks run with the image's `/bin/sh`. Tasks over SSH need the keys and `known_hosts`
+mounted into the container, with the Gorunfile's `[ssh]` settings pointing at them.
+
+> **No login, again.** A published port gives anyone who can reach it the web UI. Publish it only on
+> a trusted network, for example `-p 127.0.0.1:8080:8080`.
+
 ## The pages
 
 Every task and bundle name in the UI is a link to its card. The link opens the card and scrolls to

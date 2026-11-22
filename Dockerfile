@@ -2,7 +2,7 @@
 
 # Builds gorun as a static binary, then runs it on Alpine, which provides the /bin/sh that
 # local tasks need. Configure it with environment variables; see docs/web.md#running-in-docker.
-FROM golang:1.26-alpine AS build
+FROM golang:1.27-alpine AS build
 ARG VERSION=devel
 WORKDIR /src
 COPY . .

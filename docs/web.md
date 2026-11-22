@@ -97,6 +97,42 @@ mounted into the container, with the Gorunfile's `[ssh]` settings pointing at th
 > **No login, again.** A published port gives anyone who can reach it the web UI. Publish it only on
 > a trusted network, for example `-p 127.0.0.1:8080:8080`.
 
+### Build your own image
+
+Build from a checkout of this repository, in its root (the build reads the whole folder, minus
+what `.dockerignore` leaves out):
+
+```bash
+docker build -t gorun:dev --build-arg VERSION="$(git describe --tags --always)" .
+docker run --rm -p 127.0.0.1:8080:8080 gorun:dev
+```
+
+`VERSION` is what `gorun -version` reports. To build for
+other machines as well, use buildx, which can build an image for several CPU types at once:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -t gorun:dev --build-arg VERSION=v0.34.0 .
+```
+
+A multi-platform build can't be loaded into the local Docker; add `--push` to send it to a registry
+(see below), or build one platform with `--load`.
+
+### Publish to Docker Hub
+
+Sign in once, then tag the image with your Docker Hub name and push it:
+
+```bash
+docker login
+docker tag gorun:dev youruser/gorun:0.34.0
+docker push youruser/gorun:0.34.0
+```
+
+To publish from a release instead, fork or clone the repository, set the repository variable
+`DOCKERHUB_IMAGE` to `youruser/gorun`, and add the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`
+(a Docker Hub access token). Every version tag `vX.Y.Z` then builds an image for `linux/amd64` and
+`linux/arm64`, and pushes it as `X.Y.Z`, `X.Y` and `latest`. The workflow is
+`.github/workflows/docker.yml`.
+
 ## The pages
 
 Every task and bundle name in the UI is a link to its card. The link opens the card and scrolls to

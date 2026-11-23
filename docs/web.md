@@ -117,21 +117,30 @@ docker buildx build --platform linux/amd64,linux/arm64 -t gorun:dev --build-arg 
 A multi-platform build can't be loaded into the local Docker; add `--push` to send it to a registry
 (see below), or build one platform with `--load`.
 
-### Publish to Docker Hub
+### Publish from a release
 
-Sign in once, then tag the image with your Docker Hub name and push it:
+Every version tag `vX.Y.Z` builds an image for `linux/amd64` and `linux/arm64`, and pushes it as
+`X.Y.Z`, `X.Y` and `latest`. The workflow is `.github/workflows/docker.yml`. It always pushes to
+GitHub Container Registry, with the built-in token and no setup:
+
+```bash
+docker pull ghcr.io/jenmud/gorun:latest
+```
+
+The first push creates the package as private. To make it public, open the package's settings on
+GitHub and change its visibility.
+
+To also push to Docker Hub, set the repository variable `DOCKERHUB_IMAGE` to `youruser/gorun`, and
+add the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub access token). Then the same
+tags go to Docker Hub too.
+
+To push by hand, sign in to the registry, tag the image, and push it:
 
 ```bash
 docker login
 docker tag gorun:dev youruser/gorun:0.34.0
 docker push youruser/gorun:0.34.0
 ```
-
-To publish from a release instead, fork or clone the repository, set the repository variable
-`DOCKERHUB_IMAGE` to `youruser/gorun`, and add the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`
-(a Docker Hub access token). Every version tag `vX.Y.Z` then builds an image for `linux/amd64` and
-`linux/arm64`, and pushes it as `X.Y.Z`, `X.Y` and `latest`. The workflow is
-`.github/workflows/docker.yml`.
 
 ## The pages
 

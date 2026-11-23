@@ -4,6 +4,13 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## Next
+
+### Docker images from GitHub
+- The release workflow now pushes the web service image to GitHub Container Registry
+  (`ghcr.io/jenmud/gorun`) on every version tag. It needs no secrets. Docker Hub is still
+  optional, set by `DOCKERHUB_IMAGE`.
+
 ## v0.35.0 (since v0.34.0)
 
 ### A Docker image for the web service

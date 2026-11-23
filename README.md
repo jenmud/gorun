@@ -1,5 +1,7 @@
 # Gorun
 
+<p align="center"><img src="docs/gorun-gopher.png" alt="The gorun gopher, holding a laptop and a terminal" width="260"></p>
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/jenmud/gorun.svg)](https://pkg.go.dev/github.com/jenmud/gorun)
 [![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/jenmud/badge.svg)](https://hub.xerj.org/contributors/jenmud)
 

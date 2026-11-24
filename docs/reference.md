@@ -40,6 +40,7 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 | `-list-bundles` | list bundles and what they expand to (a collapsible tree in a terminal) |
 | `-dump` | print a starting Gorunfile |
 | `-dump-tasks DIR` | dump each task as a runnable shell file in DIR |
+| `-generate TEXT [Gorunfile]` | experimental: print tasks a language model writes from TEXT, checked so they load; with a Gorunfile, its tasks are offered as dependencies. The model runs inside gorun: the first use downloads llama.cpp (about 36 MB) and the model (2.1 GB) into `GORUN_CACHE_DIR/llm`. Set `GORUN_LLM_URL` to use a model server instead |
 | `-update-includes` | look up every git include's ref again, update `Gorunfile.lock`, print the commits and exit |
 | `-history` | browse past runs |
 | `-serve [Gorunfile]` | start the web service (scheduler, NATS, web UI), optionally loading a Gorunfile; `-web` is an alias |
@@ -67,6 +68,9 @@ already set.
 | `GORUN_NATS_CLIENT_RECONNECT_WAIT` | NATS default | wait between reconnects, e.g. `2s` |
 | `GORUN_NATS_CLIENT_TIMEOUT` | NATS default | connection timeout, e.g. `5s` |
 | `GORUN_NATS_SERVER_CONFIG` | none | NATS server config file for the server `gorun -serve` starts when none is running; see [integrations](integrations.md#events-nats) |
+| `GORUN_LLM_URL` | unset | an OpenAI-compatible API for `-generate` to use instead of its built-in model, such as `http://localhost:11434/v1` for Ollama, llama.cpp's `llama-server`, LM Studio or a hosted one |
+| `GORUN_LLM_MODEL` | Qwen2.5 Coder 3B | built in: a GGUF file's path or `https://` URL; with `GORUN_LLM_URL`: the model's name there (default `qwen2.5-coder:3b`) |
+| `GORUN_LLM_API_KEY` | unset | sent as a bearer token, for hosted APIs |
 
 The instrumented build also honours the standard `OTEL_*` variables (see
 [Logs and OpenTelemetry](integrations.md#logs-and-opentelemetry)).

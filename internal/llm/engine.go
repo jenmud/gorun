@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"path/filepath"
 	"sync"
 	"unicode/utf8"
@@ -22,7 +23,8 @@ type Engine struct {
 	Verbose  bool      // let llama.cpp log to stderr
 
 	mu      sync.Mutex
-	loaded  bool
+	started bool // llama.cpp is loaded and started
+	loaded  bool // the model is loaded
 	model   llama.Model
 	lctx    llama.Context
 	vocab   llama.Vocab
@@ -51,27 +53,29 @@ func (e *Engine) load(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := llama.Load(libs); err != nil {
-		return fmt.Errorf("load llama.cpp from %s: %w", libs, err)
-	}
-	if !e.Verbose {
-		llama.LogSet(llama.LogSilent())
-	}
-	if err := llama.Init(); err != nil {
-		return fmt.Errorf("start llama.cpp: %w", err)
+	// llama.cpp is loaded and started once a process, even when the model then fails to load
+	if !e.started {
+		if err := llama.Load(libs); err != nil {
+			return fmt.Errorf("load llama.cpp from %s: %w", libs, err)
+		}
+		if !e.Verbose {
+			llama.LogSet(llama.LogSilent())
+		}
+		if err := llama.Init(); err != nil {
+			return fmt.Errorf("start llama.cpp: %w", err)
+		}
+		e.started = true
 	}
 
-	gorun.ChatTraceFrom(ctx).Statusf("Loading the model; it stays loaded for the next question")
-	params := llama.ModelDefaultParams()
-	params.NGpuLayers = 999 // as many as fit; with no GPU this is a no-op
-	if e.model, err = llama.ModelLoadFromFile(file, params); err != nil || e.model == 0 {
-		return fmt.Errorf("load model %s: %w", filepath.Base(file), errors.Join(err, errors.New("llama.cpp couldn't load it: it isn't a GGUF model, or there isn't enough GPU or system memory free")))
-	}
-	cp := llama.ContextDefaultParams()
-	cp.NCtx = contextSize
-	cp.NBatch = batchSize
-	if e.lctx, err = llama.InitFromModel(e.model, cp); err != nil {
-		return fmt.Errorf("model context: %w", err)
+	trace := gorun.ChatTraceFrom(ctx)
+	trace.Statusf("Loading the model; it stays loaded for the next question")
+	if err := e.open(file, true); err != nil {
+		// another program, or another gorun, may hold the GPU's memory; the CPU is slower but has room
+		slog.WarnContext(ctx, "the model doesn't fit on the GPU; using the CPU", "error", err)
+		trace.Statusf("Not enough GPU memory free, perhaps another program is using it. Loading the model on the CPU instead, which is slower")
+		if cerr := e.open(file, false); cerr != nil {
+			return fmt.Errorf("%w; on the CPU too: %v", err, cerr)
+		}
 	}
 	e.vocab = llama.ModelGetVocab(e.model)
 	e.tmpl = llama.ModelChatTemplate(e.model, "")
@@ -82,6 +86,34 @@ func (e *Engine) load(ctx context.Context) error {
 	sp.Temp = 0.2
 	e.sampler = llama.NewSampler(e.model, []llama.SamplerType{llama.SamplerTypeTopK, llama.SamplerTypeTopP, llama.SamplerTypeTemperature}, sp)
 	e.loaded = true
+	return nil
+}
+
+// open loads the model from file and makes its context, on the GPU when gpu is set and one is
+// found, or else on the CPU. When either step fails, what it loaded is freed, so a retry starts
+// with the memory it needs.
+func (e *Engine) open(file string, gpu bool) error {
+	params := llama.ModelDefaultParams()
+	params.NGpuLayers = 0
+	if gpu {
+		params.NGpuLayers = 999 // as many as fit; with no GPU this is a no-op
+	}
+	m, err := llama.ModelLoadFromFile(file, params)
+	if err != nil || m == 0 {
+		return fmt.Errorf("load model %s: %w", filepath.Base(file), errors.Join(err, errors.New("llama.cpp couldn't load it: there isn't enough memory free, or it isn't a GGUF model")))
+	}
+	cp := llama.ContextDefaultParams()
+	cp.NCtx = contextSize
+	cp.NBatch = batchSize
+	if !gpu { // keep the cache and the work off the GPU too
+		cp.Offload_kqv, cp.OpOffload = 0, 0
+	}
+	lctx, err := llama.InitFromModel(m, cp)
+	if err != nil {
+		_ = llama.ModelFree(m)
+		return fmt.Errorf("start the model: %w; there isn't enough memory free for it", err)
+	}
+	e.model, e.lctx = m, lctx
 	return nil
 }
 

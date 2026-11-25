@@ -296,7 +296,9 @@ are limited to 10 MB.
 as "install postgres and back it up every night". The tasks it writes are checked so they load,
 then queued as unsaved changes: read and fix each one before you save, because the model gets
 commands wrong. The model is Qwen3 4B Instruct (Apache 2.0), run inside `gorun -serve` on the GPU
-when one is found. The first use downloads llama.cpp (about 36 MB) and the model (2.5 GB) into
+when one is found. It needs about 4 GB of GPU memory; when there isn't that much free, such as
+when another program or another `gorun -serve` is using it, the model runs on the CPU instead,
+which is slower, and the chat says so. The first use downloads llama.cpp (about 36 MB) and the model (2.5 GB) into
 `GORUN_CACHE_DIR/llm`. Only the web service does this; the command line and the TUI never load a
 model. To use Ollama or another OpenAI-compatible server instead, set `GORUN_LLM_URL` (and
 `GORUN_LLM_MODEL` to its model name).

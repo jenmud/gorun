@@ -187,9 +187,17 @@ func run(configPath, logPath string, live bool) error {
 	defer a.stopScheduler()
 	defer a.stopBackground()
 
-	srv := &http.Server{Addr: addr, Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second}
+	// requests end with the server: an answer the model is writing stops, rather than holding up
+	// the exit until it is finished
+	reqCtx, cancelRequests := context.WithCancel(context.Background())
+	defer cancelRequests()
+	srv := &http.Server{Addr: addr, Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return reqCtx }}
 	go func() {
 		<-ctx.Done()
+		stop() // a second ctrl-c quits at once
+		fmt.Fprintln(os.Stderr, "gorun: stopping; press ctrl+c again to quit now")
+		cancelRequests()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)

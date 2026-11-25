@@ -3,12 +3,14 @@ package websrv
 import (
 	"cmp"
 	"fmt"
+	"log"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/internal/envvars"
@@ -57,8 +59,19 @@ func (g *generator) describe() string {
 
 // close frees the built-in model, if it was loaded.
 func (g *generator) close() {
-	if g.engine != nil {
+	if g == nil || g.engine == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
 		g.engine.Close()
+		close(done)
+	}()
+	// the model may be partway through a step it can't stop; the process exiting frees it anyway
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		log.Printf("gorun web: the model is still busy; quitting without unloading it")
 	}
 }
 

@@ -204,11 +204,12 @@ func streamEvents(w http.ResponseWriter) func(chatEvent) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no") // keep proxies such as nginx from holding it back
 	w.WriteHeader(http.StatusOK)
-	flusher, _ := w.(http.Flusher)
+	// a ResponseController finds the Flusher through writers that wrap w, such as OpenTelemetry's
+	rc := http.NewResponseController(w)
 	enc := json.NewEncoder(w)
 	return func(ev chatEvent) {
-		if enc.Encode(ev) == nil && flusher != nil {
-			flusher.Flush()
+		if enc.Encode(ev) == nil {
+			_ = rc.Flush()
 		}
 	}
 }

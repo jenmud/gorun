@@ -35,7 +35,8 @@ var _ gorun.Engine = (*Engine)(nil)
 const (
 	contextSize = 8192 // enough for the prompt, a few retries and their replies
 	maxReply    = 1500 // tokens; a few tasks rarely need more
-	batchSize   = 2048 // tokens decoded at once
+	batchSize   = 2048 // the most tokens llama.cpp decodes at once
+	promptChunk = 512  // prompt tokens decoded between checks for a cancelled request
 )
 
 func (e *Engine) load(ctx context.Context) error {
@@ -116,11 +117,11 @@ func (e *Engine) Chat(ctx context.Context, messages []gorun.ChatMessage) (string
 	trace := gorun.ChatTraceFrom(ctx)
 	trace.Statusf("Reading the question, with your Gorunfile and runs (%d tokens)", len(tokens))
 	// the prompt goes in batch-sized pieces: llama.cpp aborts the process on a bigger one
-	for start := 0; start < len(tokens); start += batchSize {
+	for start := 0; start < len(tokens); start += promptChunk {
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
-		if _, err := llama.Decode(e.lctx, llama.BatchGetOne(tokens[start:min(start+batchSize, len(tokens))])); err != nil {
+		if _, err := llama.Decode(e.lctx, llama.BatchGetOne(tokens[start:min(start+promptChunk, len(tokens))])); err != nil {
 			return "", fmt.Errorf("decode: %w", err)
 		}
 	}

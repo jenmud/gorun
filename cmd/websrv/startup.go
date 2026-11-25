@@ -63,7 +63,7 @@ func gorunfileLine(info startupInfo) string {
 	case info.cfgErr != nil:
 		return fmt.Sprintf("not loaded: %v", info.cfgErr)
 	case info.noFile:
-		return "none: only the Live and History pages, for runs started elsewhere"
+		return "none: only the Live, History and Assistant pages, for runs started elsewhere"
 	}
 	name := info.cfgPath
 	if info.storedVersions > 0 {

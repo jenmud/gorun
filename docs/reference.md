@@ -43,6 +43,7 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 | `-update-includes` | look up every git include's ref again, update `Gorunfile.lock`, print the commits and exit |
 | `-history` | browse past runs |
 | `-serve [Gorunfile]` | start the web service (scheduler, NATS, web UI) on a Gorunfile; without one it keeps the Gorunfile in the history database; `-web` is an alias |
+| `-live` | with `-serve`: only the Live, History and Assistant pages, for runs started elsewhere; no Gorunfile, given or kept in the database |
 | `-complete <kind>` | print shell completion candidates |
 | `-version` | print the version |
 

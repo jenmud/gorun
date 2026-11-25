@@ -82,17 +82,17 @@ type app struct {
 
 // Run starts the web server on GORUN_ADDRESS (default :8080). configPath, when set, is the
 // Gorunfile to load. Without one the service uses the Gorunfile kept in the history database,
-// or, when the database doesn't open, shows only the Live and History pages. logPath is shown in the startup
+// or, with live or when the database doesn't open, shows only the Live and History pages. logPath is shown in the startup
 // message; empty means logs go to stderr. Run exits with status 1 when it can't listen.
-func Run(configPath, logPath string) {
-	if err := run(configPath, logPath); err != nil {
+func Run(configPath, logPath string, live bool) {
+	if err := run(configPath, logPath, live); err != nil {
 		fmt.Fprintf(os.Stderr, "gorun: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 // run is Run without the exit, so deferred cleanup happens before gorun exits.
-func run(configPath, logPath string) error {
+func run(configPath, logPath string, live bool) error {
 	dbPath := history.DefaultPath()
 	st, dbErr := openStore(dbPath)
 	if st != nil {
@@ -117,7 +117,7 @@ func run(configPath, logPath string) error {
 	}
 
 	stored := ""
-	if configPath == "" && st != nil {
+	if configPath == "" && st != nil && !live {
 		path := storedPath(dbPath)
 		if err := openStored(context.Background(), st, path); err != nil {
 			log.Printf("gorun web: %v", err)

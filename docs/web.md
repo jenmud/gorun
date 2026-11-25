@@ -7,6 +7,7 @@ the long-running host for [schedules](schedules.md).
 ```bash
 gorun -serve Gorunfile                       # open http://localhost:8080
 GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no Gorunfile: the one kept in the history database
+gorun -serve -live                           # watch only: Live, History and Assistant
 ```
 
 Started **with a Gorunfile**, the service runs and edits that file.
@@ -24,7 +25,8 @@ lasts across restarts:
   absolute paths.
 - **Loading a file** on the Config page switches to that file until the service restarts.
 
-If the history database doesn't open, the service only watches. The menu then has just **Live**,
+With **`-live`**, or if the history database doesn't open, the service only watches, and the
+stored Gorunfile is left alone. The menu then has just **Live**,
 **History** and **Assistant**, for runs started elsewhere, such as `gorun Gorunfile -r` in a
 terminal that reaches the same NATS server. The pages that need a Gorunfile (Run, Tasks, Bundles,
 Schedules and Config) don't exist: they aren't in the menu, and their addresses answer 404.
@@ -93,6 +95,9 @@ docker build -t gorun .
 
 # no Gorunfile: the one kept in the history database, in a named volume
 docker run --rm -p 8080:8080 -v gorun-data:/var/lib/gorun gorun
+
+# watch only: live and history
+docker run --rm -p 8080:8080 gorun -live
 
 # with a Gorunfile, kept in ./Gorunfile on the host, and history kept in a named volume
 docker run --rm -p 8080:8080 \

@@ -427,6 +427,22 @@ func templateData(s *Server, vars map[string]any) map[string]any {
 // validate checks the task can run: its settings are in range, it has one command or at least
 // one copy, and the files it names exist.
 func (t Task) validate() error {
+	if err := t.validateKeys(); err != nil {
+		return err
+	}
+	if missing(t.CmdFile) {
+		return fmt.Errorf("command file %s does not exist", t.CmdFile)
+	}
+	for _, c := range t.copies() {
+		if c.Content == "" && missing(c.Src) {
+			return fmt.Errorf("copy source %s does not exist", c.Src)
+		}
+	}
+	return nil
+}
+
+// validateKeys is validate without looking for the task's files on disk.
+func (t Task) validateKeys() error {
 	switch t.Rerun {
 	case "", RerunSafe, RerunUnsafe:
 	default:
@@ -453,8 +469,6 @@ func (t Task) validate() error {
 		return fmt.Errorf("task %s cannot have both cmd and cmd_file", t.Name)
 	case commands == 0 && len(copies) == 0:
 		return fmt.Errorf("task %s has no command specified", t.Name)
-	case missing(t.CmdFile):
-		return fmt.Errorf("command file %s does not exist", t.CmdFile)
 	case t.CheckCopies && len(copies) == 0:
 		return fmt.Errorf("task %s sets check_copies but copies nothing", t.Name)
 	}
@@ -467,8 +481,6 @@ func (t Task) validate() error {
 			}
 		case c.Src == "":
 			return fmt.Errorf("task %s copy requires src", t.Name)
-		case missing(c.Src):
-			return fmt.Errorf("copy source %s does not exist", c.Src)
 		}
 		if c.Dst == "" && c.Dir == "" {
 			return fmt.Errorf("task %s copy requires dst or dir", t.Name)

@@ -1,0 +1,843 @@
+# Requests for tasks, each with tasks that load. A <<key>> is filled in from each [[task.params]]
+# table, so one entry makes an example per table. note is the sentence a chat reply opens with.
+
+[[task]]
+id = "apt-package"
+request = [
+  "Install <<pkg>>",
+  "install the <<pkg>> package on the servers",
+  "I need <<pkg>> installed everywhere",
+  "Write a task that makes sure <<pkg>> is installed",
+]
+note = "This installs <<pkg>> with apt, and its check skips the task when the package is already there."
+answer = '''
+[tasks.<<name>>]
+description = "Install <<pkg>>"
+check = "dpkg -s <<pkg>> >/dev/null 2>&1"
+cmd = "apt-get update && apt-get install -y <<pkg>>"
+sudo = true
+retries = 2
+rerun = "safe"
+'''
+[[task.params]]
+pkg = "htop"
+name = "htop"
+[[task.params]]
+pkg = "jq"
+name = "jq"
+[[task.params]]
+pkg = "git"
+name = "git"
+[[task.params]]
+pkg = "fail2ban"
+name = "fail2ban-package"
+[[task.params]]
+pkg = "unzip"
+name = "unzip"
+[[task.params]]
+pkg = "rsync"
+name = "rsync"
+[[task.params]]
+pkg = "chrony"
+name = "chrony"
+[[task.params]]
+pkg = "ufw"
+name = "ufw-package"
+
+[[task]]
+id = "apt-service"
+request = [
+  "Install <<pkg>> and keep it running",
+  "set up <<pkg>> as a service that starts on boot",
+  "Make sure <<svc>> is installed, enabled and running",
+  "a task to install <<pkg>> and start it",
+]
+note = "This installs <<pkg>>, enables the <<svc>> service so it starts on boot, and checks it is running afterwards."
+answer = '''
+[tasks.<<name>>]
+description = "Install <<pkg>> and keep it running"
+check = "dpkg -s <<pkg>> >/dev/null 2>&1 && systemctl is-active --quiet <<svc>>"
+cmd = "apt-get update && apt-get install -y <<pkg>> && systemctl enable --now <<svc>>"
+verify = "systemctl is-active <<svc>>"
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+pkg = "nginx"
+svc = "nginx"
+name = "nginx"
+[[task.params]]
+pkg = "redis-server"
+svc = "redis-server"
+name = "redis"
+[[task.params]]
+pkg = "postgresql"
+svc = "postgresql"
+name = "postgres"
+[[task.params]]
+pkg = "haproxy"
+svc = "haproxy"
+name = "haproxy"
+[[task.params]]
+pkg = "memcached"
+svc = "memcached"
+name = "memcached"
+[[task.params]]
+pkg = "fail2ban"
+svc = "fail2ban"
+name = "fail2ban"
+[[task.params]]
+pkg = "prometheus-node-exporter"
+svc = "prometheus-node-exporter"
+name = "node-exporter"
+[[task.params]]
+pkg = "chrony"
+svc = "chrony"
+name = "chrony-service"
+
+[[task]]
+id = "dnf-package"
+request = [
+  "Install <<pkg>> on our RHEL servers",
+  "install <<pkg>> with dnf",
+  "Rocky Linux boxes need <<pkg>>",
+]
+note = "This uses dnf, for RHEL, Rocky and Fedora; rpm -q skips it when <<pkg>> is already installed."
+answer = '''
+[tasks.<<name>>]
+description = "Install <<pkg>> with dnf"
+check = "rpm -q <<pkg>> >/dev/null 2>&1"
+cmd = "dnf install -y <<pkg>>"
+sudo = true
+retries = 2
+rerun = "safe"
+'''
+[[task.params]]
+pkg = "vim-enhanced"
+name = "vim"
+[[task.params]]
+pkg = "tmux"
+name = "tmux"
+[[task.params]]
+pkg = "podman"
+name = "podman"
+[[task.params]]
+pkg = "nginx"
+name = "nginx-rhel"
+
+[[task]]
+id = "timezone"
+request = [
+  "Set the time zone to <<tz>>",
+  "make every server use <<tz>> time",
+  "Write a task that sets the timezone to <<tz>>",
+]
+note = "This sets the time zone with timedatectl; the check skips it when it is already <<tz>>."
+answer = '''
+[tasks.timezone]
+description = "Set the time zone to <<tz>>"
+check = "test \"$(timedatectl show -p Timezone --value)\" = <<tz>>"
+cmd = "timedatectl set-timezone <<tz>>"
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+tz = "UTC"
+[[task.params]]
+tz = "Europe/Berlin"
+[[task.params]]
+tz = "Australia/Sydney"
+[[task.params]]
+tz = "America/New_York"
+
+[[task]]
+id = "user"
+request = [
+  "Create a user called <<user>>",
+  "add a <<user>> system user",
+  "Make sure the <<user>> account exists",
+]
+note = "This creates <<user>> as a system user with its own home folder, and skips it when the user already exists."
+answer = '''
+[tasks.user-<<user>>]
+description = "Create the <<user>> user"
+check = "id -u <<user>> >/dev/null 2>&1"
+cmd = "useradd --system --create-home --shell /usr/sbin/nologin <<user>>"
+verify = "id -u <<user>>"
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+user = "app"
+[[task.params]]
+user = "deploy"
+[[task.params]]
+user = "backup"
+[[task.params]]
+user = "grafana"
+
+[[task]]
+id = "ssh-key"
+request = [
+  "Add my SSH public key for the <<user>> user",
+  "authorise an ssh key for <<user>>",
+  "put a public key in <<user>>'s authorized_keys",
+]
+note = "This copies the key from ./keys/<<user>>.pub to the server and adds it to authorized_keys only when it isn't there yet. Change the src path to where your key is."
+answer = '''
+[tasks.ssh-key-<<user>>]
+description = "Authorise the <<user>> SSH key"
+cmd = """
+install -d -m 700 -o <<user>> -g <<user>> /home/<<user>>/.ssh
+touch /home/<<user>>/.ssh/authorized_keys
+grep -qxF "$(cat /tmp/<<user>>.pub)" /home/<<user>>/.ssh/authorized_keys || cat /tmp/<<user>>.pub >> /home/<<user>>/.ssh/authorized_keys
+chown <<user>>:<<user>> /home/<<user>>/.ssh/authorized_keys
+chmod 600 /home/<<user>>/.ssh/authorized_keys
+"""
+sudo = true
+rerun = "safe"
+[[tasks.ssh-key-<<user>>.copy]]
+src = "./keys/<<user>>.pub"
+dst = "/tmp/<<user>>.pub"
+'''
+[[task.params]]
+user = "deploy"
+[[task.params]]
+user = "admin"
+
+[[task]]
+id = "ufw-port"
+request = [
+  "Open port <<port>> in the firewall",
+  "allow <<port>>/tcp through ufw",
+  "Let traffic in on port <<port>>",
+]
+note = "This allows <<port>>/tcp with ufw. The check looks for the rule first, so running it again changes nothing."
+answer = '''
+[tasks.allow-<<port>>]
+description = "Allow port <<port>>/tcp through ufw"
+check = "ufw status | grep -qE '^<<port>>/tcp +ALLOW'"
+cmd = "ufw allow <<port>>/tcp"
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+port = "80"
+[[task.params]]
+port = "443"
+[[task.params]]
+port = "8080"
+[[task.params]]
+port = "5432"
+[[task.params]]
+port = "9100"
+
+[[task]]
+id = "sysctl"
+request = [
+  "Set the sysctl <<key>> to <<value>>",
+  "make <<key>>=<<value>> permanent",
+  "tune the kernel: <<key>> = <<value>>",
+]
+note = "This writes the setting to a file in /etc/sysctl.d, so it survives a reboot, and loads it with sysctl --system."
+answer = '''
+[tasks.<<name>>]
+description = "Set <<key>> to <<value>>"
+check = "test \"$(sysctl -n <<key>>)\" = \"<<value>>\""
+cmd = "echo '<<key>> = <<value>>' > /etc/sysctl.d/60-<<name>>.conf && sysctl --system"
+verify = "test \"$(sysctl -n <<key>>)\" = \"<<value>>\""
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+key = "vm.swappiness"
+value = "10"
+name = "swappiness"
+[[task.params]]
+key = "net.ipv4.ip_forward"
+value = "1"
+name = "ip-forward"
+[[task.params]]
+key = "fs.inotify.max_user_watches"
+value = "524288"
+name = "inotify-watches"
+[[task.params]]
+key = "net.core.somaxconn"
+value = "4096"
+name = "somaxconn"
+
+[[task]]
+id = "restart"
+request = [
+  "Restart <<svc>>",
+  "a task that restarts the <<svc>> service",
+  "bounce <<svc>> and make sure it comes back",
+]
+note = "This restarts <<svc>> and fails the task if it isn't running afterwards. It has no check, so it runs every time."
+answer = '''
+[tasks.restart-<<svc>>]
+description = "Restart <<svc>>"
+cmd = "systemctl restart <<svc>>"
+verify = "systemctl is-active <<svc>>"
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+svc = "nginx"
+[[task.params]]
+svc = "docker"
+[[task.params]]
+svc = "postgresql"
+[[task.params]]
+svc = "redis-server"
+[[task.params]]
+svc = "app"
+
+[[task]]
+id = "reload-nginx"
+request = [
+  "Reload nginx after checking its config",
+  "test the nginx config and reload it",
+]
+note = "nginx -t stops the task before the reload when the config is broken, so a typo never takes the site down."
+answer = '''
+[tasks.reload-nginx]
+description = "Test the nginx config and reload nginx"
+cmd = "nginx -t && systemctl reload nginx"
+verify = "systemctl is-active nginx"
+sudo = true
+rerun = "safe"
+'''
+
+[[task]]
+id = "nginx-site"
+request = [
+  "Install an nginx site config from templates/<<site>>.conf",
+  "deploy our nginx vhost for <<site>>",
+  "copy the <<site>> site config to nginx and reload it",
+]
+note = "The copy fills the template in for each server and puts it in /tmp, because copies don't use sudo; the command moves it into place, tests the config and reloads nginx. check_copies skips it when the file on the server is already the same."
+answer = '''
+[tasks.site-<<site>>]
+description = "Install the <<site>> nginx site"
+cmd = "mv /tmp/<<site>>.conf /etc/nginx/conf.d/<<site>>.conf && nginx -t && systemctl reload nginx"
+check_copies = true
+sudo = true
+rerun = "safe"
+[[tasks.site-<<site>>.copy]]
+src = "./templates/<<site>>.conf"
+render = true
+dst = "/tmp/<<site>>.conf"
+'''
+[[task.params]]
+site = "shop"
+[[task.params]]
+site = "api"
+[[task.params]]
+site = "docs"
+
+[[task]]
+id = "systemd-unit"
+request = [
+  "Run /usr/local/bin/<<bin>> as a systemd service",
+  "make <<bin>> a service that restarts when it crashes",
+  "write a systemd unit for <<bin>> and start it",
+]
+note = "The unit file is written with an inline copy to /tmp, moved into place, and the service is enabled and started. Change ExecStart and User to suit."
+answer = '''
+[tasks.<<bin>>-service]
+description = "Run <<bin>> as a systemd service"
+cmd = "mv /tmp/<<bin>>.service /etc/systemd/system/<<bin>>.service && systemctl daemon-reload && systemctl enable --now <<bin>>"
+verify = "systemctl is-active <<bin>>"
+sudo = true
+rerun = "safe"
+[[tasks.<<bin>>-service.copy]]
+dst = "/tmp/<<bin>>.service"
+content = """
+[Unit]
+Description=<<bin>>
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/<<bin>>
+User=<<bin>>
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+"""
+'''
+[[task.params]]
+bin = "worker"
+[[task.params]]
+bin = "api"
+[[task.params]]
+bin = "exporter"
+
+[[task]]
+id = "cron-file"
+request = [
+  "Add a cron job that runs <<script>> every night at <<hour>>:00",
+  "schedule <<script>> nightly with cron on the server",
+]
+note = "This writes a file to /etc/cron.d, which cron picks up by itself. If you'd rather gorun ran it, a [[schedule]] in gorun -serve can run a task on a cron pattern instead."
+answer = '''
+[tasks.cron-<<name>>]
+description = "Run <<script>> nightly from cron"
+cmd = "mv /tmp/cron-<<name>> /etc/cron.d/<<name>> && chmod 644 /etc/cron.d/<<name>>"
+check_copies = true
+sudo = true
+rerun = "safe"
+[[tasks.cron-<<name>>.copy]]
+dst = "/tmp/cron-<<name>>"
+content = "0 <<hour>> * * * root <<script>>\n"
+'''
+[[task.params]]
+script = "/usr/local/bin/cleanup.sh"
+hour = "3"
+name = "cleanup"
+[[task.params]]
+script = "/opt/app/bin/report"
+hour = "6"
+name = "report"
+
+[[task]]
+id = "disk-check"
+request = [
+  "Fail if the root disk is more than <<pct>>% full",
+  "a task that checks disk space on /",
+  "warn me when / is over <<pct>> percent used",
+]
+note = "This fails the task, with the usage in its output, when / is more than <<pct>>% full, so the run shows which servers are short of space."
+answer = '''
+[tasks.disk-space]
+description = "Fail when / is more than <<pct>>% full"
+cmd = "used=$(df --output=pcent / | tail -1 | tr -dc 0-9); echo \"/ is ${used}% full\"; test \"$used\" -le <<pct>>"
+rerun = "safe"
+'''
+[[task.params]]
+pct = "80"
+[[task.params]]
+pct = "90"
+
+[[task]]
+id = "uptime"
+request = [
+  "Show the uptime and load of every server",
+  "a quick task that prints uptime",
+  "Print each server's hostname, kernel and uptime",
+]
+note = "This only reads, so it is safe to run any time."
+answer = '''
+[tasks.server-info]
+description = "Show the hostname, kernel and uptime"
+cmd = "hostname; uname -r; uptime"
+rerun = "safe"
+'''
+
+[[task]]
+id = "apt-upgrade"
+request = [
+  "Upgrade all packages",
+  "apply security updates on every server",
+  "run apt upgrade on the fleet",
+]
+note = "This upgrades every package without prompts. It has a long timeout, and retries cover a busy apt lock; reboot-if-needed reboots only when the upgrade asks for it."
+answer = '''
+[tasks.upgrade]
+description = "Upgrade every package"
+cmd = "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold upgrade"
+sudo = true
+timeout = "45m"
+retries = 2
+retry_delay = "30s"
+rerun = "safe"
+
+[tasks.reboot-if-needed]
+description = "Reboot when an upgrade asks for it"
+check = "test ! -f /var/run/reboot-required"
+cmd = "systemctl reboot"
+depends_on = ["upgrade"]
+sudo = true
+rerun = "unsafe"
+'''
+
+[[task]]
+id = "docker-install"
+request = [
+  "Install Docker",
+  "set up docker engine on the servers",
+  "Make sure docker is installed and running",
+]
+note = "This uses Docker's install script, and skips it when docker is already running."
+answer = '''
+[tasks.docker]
+description = "Install Docker Engine"
+check = "command -v docker >/dev/null && systemctl is-active --quiet docker"
+cmd = "curl -fsSL https://get.docker.com | sh && systemctl enable --now docker"
+verify = "docker info >/dev/null"
+sudo = true
+timeout = "10m"
+rerun = "safe"
+'''
+
+[[task]]
+id = "compose-up"
+request = [
+  "Start the compose stack in /opt/<<stack>>",
+  "docker compose up for <<stack>>",
+  "pull and start the <<stack>> containers",
+]
+note = "This pulls the images and starts the stack in the background; verify fails the task when no container is running."
+answer = '''
+[tasks.<<stack>>-up]
+description = "Pull and start the <<stack>> stack"
+cmd = "cd /opt/<<stack>> && docker compose pull && docker compose up -d --remove-orphans"
+verify = "cd /opt/<<stack>> && docker compose ps --status running --quiet | grep -q ."
+sudo = true
+retries = 2
+retry_delay = "10s"
+rerun = "safe"
+'''
+[[task.params]]
+stack = "monitoring"
+[[task.params]]
+stack = "app"
+[[task.params]]
+stack = "gitea"
+
+[[task]]
+id = "registry-login"
+request = [
+  "Log in to our docker registry at <<reg>>",
+  "docker login to <<reg>> with the token from my environment",
+  "authenticate docker against <<reg>>, the password is in REGISTRY_TOKEN",
+]
+note = "The token comes from REGISTRY_TOKEN in gorun's environment (or a .env file), so it never goes in the Gorunfile, and it is passed over stdin so it stays out of logs."
+answer = '''
+[tasks.registry-login]
+description = "Log in to <<reg>>"
+cmd = 'printf %s "$TOKEN" | docker login <<reg>> -u "$REGISTRY_USER" --password-stdin'
+envvars = { TOKEN = "${REGISTRY_TOKEN}", REGISTRY_USER = "${REGISTRY_USER}" }
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+reg = "registry.example.com"
+[[task.params]]
+reg = "ghcr.io"
+
+[[task]]
+id = "secret-inline"
+request = [
+  "Write a task that sets the database password to <<pw>>",
+  "create a postgres user app with password <<pw>>",
+]
+note = "Don't put the password in the Gorunfile. This reads it from APP_DB_PASSWORD in gorun's environment or .env file; set that to the password before you run it."
+answer = '''
+[tasks.db-user-app]
+description = "Create the app database user"
+check = "runuser -u postgres -- psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname = 'app'\" | grep -q 1"
+cmd = "runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c \"CREATE ROLE app LOGIN PASSWORD '$APP_DB_PASSWORD'\""
+envvars = { APP_DB_PASSWORD = "${APP_DB_PASSWORD}" }
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+pw = "hunter2"
+[[task.params]]
+pw = "S3cret!"
+
+[[task]]
+id = "git-checkout"
+request = [
+  "Clone <<repo>> into /srv/<<name>> and keep it up to date",
+  "check out the <<name>> repository on the servers",
+]
+note = "The first run clones the repository; later runs fetch and reset it to origin's main branch."
+answer = '''
+[tasks.checkout-<<name>>]
+description = "Clone or update <<name>> in /srv/<<name>>"
+cmd = "if [ -d /srv/<<name>>/.git ]; then git -C /srv/<<name>> fetch --quiet origin && git -C /srv/<<name>> reset --hard origin/main; else git clone <<repo>> /srv/<<name>>; fi"
+rerun = "safe"
+'''
+[[task.params]]
+repo = "https://github.com/example/site.git"
+name = "site"
+[[task.params]]
+repo = "git@github.com:example/tools.git"
+name = "tools"
+
+[[task]]
+id = "release-upload"
+request = [
+  "Upload build/<<app>>.tar.gz and unpack it into /opt/<<app>>",
+  "deploy the <<app>> release tarball",
+]
+note = "The archive is copied to /tmp first, as copies run as the login user, then unpacked into a folder named after the release."
+answer = '''
+[tasks.deploy-<<app>>]
+description = "Upload and unpack the <<app>> release"
+cmd = "mkdir -p /opt/<<app>> && tar -xzf /tmp/<<app>>.tar.gz -C /opt/<<app>> && rm /tmp/<<app>>.tar.gz"
+sudo = true
+timeout = "15m"
+rerun = "safe"
+[[tasks.deploy-<<app>>.copy]]
+src = "build/<<app>>.tar.gz"
+dst = "/tmp/<<app>>.tar.gz"
+'''
+[[task.params]]
+app = "shop"
+[[task.params]]
+app = "api"
+
+[[task]]
+id = "config-file-per-server"
+request = [
+  "Write /etc/<<app>>/<<app>>.conf with each server's own name in it",
+  "a config file for <<app>> that differs per server",
+]
+note = "The content is a template, so {{.Name}} and {{.Hostname}} are filled in for each server. It goes to /tmp and the command moves it into place as root."
+answer = '''
+[tasks.<<app>>-config]
+description = "Write the <<app>> config for this server"
+cmd = "install -d /etc/<<app>> && install -m 644 /tmp/<<app>>.conf /etc/<<app>>/<<app>>.conf"
+check_copies = true
+sudo = true
+rerun = "safe"
+[[tasks.<<app>>-config.copy]]
+dst = "/tmp/<<app>>.conf"
+content = "node_name = {{.Name}}\nlisten = {{.Hostname}}:9000\n"
+'''
+[[task.params]]
+app = "agent"
+[[task.params]]
+app = "collector"
+
+[[task]]
+id = "swap"
+request = [
+  "Add a <<size>> swap file",
+  "create swap space of <<size>>",
+]
+note = "This creates /swapfile once, turns it on and adds it to /etc/fstab, and the check skips it when swap is already on."
+answer = '''
+[tasks.swapfile]
+description = "Add a <<size>> swap file"
+check = "swapon --show=NAME --noheadings | grep -qx /swapfile"
+cmd = "fallocate -l <<size>> /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && (grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab)"
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+size = "2G"
+[[task.params]]
+size = "4G"
+
+[[task]]
+id = "hostname"
+request = [
+  "Set each server's hostname to its gorun name",
+  "make the hostname match the server name in the Gorunfile",
+]
+note = "{{.Name}} is the server's name in the Gorunfile, filled in for each server."
+answer = '''
+[tasks.set-hostname]
+description = "Set the hostname to the server's name"
+check = "test \"$(hostname)\" = \"{{.Name}}\""
+cmd = "hostnamectl set-hostname {{.Name}}"
+sudo = true
+rerun = "safe"
+'''
+
+[[task]]
+id = "local-build"
+request = [
+  "Build the Go binary on my machine before deploying",
+  "a local task that runs go build",
+  "compile the project locally",
+]
+note = "local = true runs it on a local server, one with no ssh settings, so add one such as [servers.hosts.localhost] if the Gorunfile has none."
+answer = '''
+[tasks.build]
+description = "Build the binary on this machine"
+cmd = "CGO_ENABLED=0 go build -o dist/app ./cmd/app"
+local = true
+'''
+
+[[task]]
+id = "local-tests"
+request = [
+  "Run the tests locally",
+  "a task that runs <<cmd>> on my laptop",
+]
+note = "local = true makes it run on this machine rather than over SSH."
+answer = '''
+[tasks.tests]
+description = "Run the tests"
+cmd = "<<cmd>>"
+timeout = "20m"
+local = true
+'''
+[[task.params]]
+cmd = "go test ./..."
+[[task.params]]
+cmd = "npm test"
+[[task.params]]
+cmd = "pytest -q"
+
+[[task]]
+id = "wait-http"
+request = [
+  "Wait until <<url>> answers",
+  "check the app is healthy at <<url>>",
+  "fail the run if <<url>> doesn't respond",
+]
+note = "curl -f fails on an error status, and the retries give the service a little time to come up."
+answer = '''
+[tasks.healthcheck]
+description = "Check <<url>> answers"
+cmd = "curl -fsS --max-time 5 <<url>>"
+retries = 5
+retry_delay = "3s"
+rerun = "safe"
+'''
+[[task.params]]
+url = "http://127.0.0.1:8080/healthz"
+[[task.params]]
+url = "http://localhost:3000/health"
+
+[[task]]
+id = "pipeline"
+request = [
+  "Deploy the app: upload the release, migrate the database, then restart the service",
+  "write the tasks to ship a release of app, in order",
+]
+note = "These run in order through depends_on: each one waits for the one before, and is skipped when it fails."
+answer = '''
+[tasks.upload-release]
+description = "Upload the release"
+cmd = "mkdir -p /opt/app && tar -xzf /tmp/app.tar.gz -C /opt/app"
+sudo = true
+rerun = "safe"
+[[tasks.upload-release.copy]]
+src = "build/app.tar.gz"
+dst = "/tmp/app.tar.gz"
+
+[tasks.migrate-db]
+description = "Apply database migrations"
+cmd = "/opt/app/bin/app migrate"
+depends_on = ["upload-release"]
+timeout = "20m"
+rerun = "unsafe"
+
+[tasks.restart-app-service]
+description = "Restart the app"
+cmd = "systemctl restart app"
+verify = "systemctl is-active app"
+depends_on = ["migrate-db"]
+sudo = true
+rerun = "safe"
+'''
+
+[[task]]
+id = "logrotate"
+request = [
+  "Rotate /var/log/<<app>>/*.log daily and keep a week",
+  "set up logrotate for <<app>>",
+]
+note = "This installs a logrotate rule; logrotate runs it daily on its own."
+answer = '''
+[tasks.logrotate-<<app>>]
+description = "Rotate <<app>>'s logs daily"
+cmd = "mv /tmp/logrotate-<<app>> /etc/logrotate.d/<<app>> && chmod 644 /etc/logrotate.d/<<app>>"
+check_copies = true
+sudo = true
+rerun = "safe"
+[[tasks.logrotate-<<app>>.copy]]
+dst = "/tmp/logrotate-<<app>>"
+content = "/var/log/<<app>>/*.log {\n  daily\n  rotate 7\n  compress\n  missingok\n  notifempty\n}\n"
+'''
+[[task.params]]
+app = "shop"
+[[task.params]]
+app = "worker"
+
+[[task]]
+id = "clean-tmp"
+request = [
+  "Delete files in /tmp older than <<days>> days",
+  "clean up old temp files",
+]
+note = "find only removes files older than <<days>> days, so it is safe to run again."
+answer = '''
+[tasks.clean-tmp]
+description = "Delete files in /tmp older than <<days>> days"
+cmd = "find /tmp -xdev -type f -mtime +<<days>> -delete"
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+days = "7"
+[[task.params]]
+days = "3"
+
+[[task]]
+id = "certbot"
+request = [
+  "Get a Let's Encrypt certificate for <<domain>>",
+  "set up TLS for <<domain>> with certbot",
+]
+note = "certbot's nginx plugin gets the certificate and sets up renewal; the check skips it once the certificate exists. Change the email."
+answer = '''
+[tasks.tls-<<name>>]
+description = "Get a Let's Encrypt certificate for <<domain>>"
+check = "test -f /etc/letsencrypt/live/<<domain>>/fullchain.pem"
+cmd = "apt-get install -y certbot python3-certbot-nginx && certbot --nginx -d <<domain>> --non-interactive --agree-tos -m admin@<<domain>>"
+sudo = true
+timeout = "10m"
+rerun = "safe"
+'''
+[[task.params]]
+domain = "shop.example.com"
+name = "shop"
+[[task.params]]
+domain = "api.example.org"
+name = "api"
+
+[[task]]
+id = "check-only-report"
+request = [
+  "Report the kernel version and fail if it's older than <<ver>>",
+]
+note = "sort -V compares versions, so the task fails on servers running a kernel older than <<ver>>."
+answer = '''
+[tasks.kernel-version]
+description = "Fail when the kernel is older than <<ver>>"
+cmd = "k=$(uname -r | cut -d- -f1); echo \"kernel $k\"; test \"$(printf '%s\\n' <<ver>> \"$k\" | sort -V | head -1)\" = <<ver>>"
+rerun = "safe"
+'''
+[[task.params]]
+ver = "6.1"
+[[task.params]]
+ver = "5.15"
+
+[[task]]
+id = "multi-line-script"
+request = [
+  "Write a task with a multi-line script that backs up /etc to /var/backups",
+  "archive /etc each run, keeping the last 5 archives",
+]
+note = "A multi-line script goes in a ''' string; set -e stops it at the first failing line."
+answer = """
+[tasks.backup-etc]
+description = "Archive /etc, keeping the newest 5"
+cmd = '''
+set -e
+mkdir -p /var/backups/etc
+tar -czf /var/backups/etc/etc-$(date +%Y%m%d-%H%M%S).tar.gz -C / etc
+ls -1t /var/backups/etc/*.tar.gz | tail -n +6 | xargs -r rm --
+'''
+sudo = true
+rerun = "safe"
+"""

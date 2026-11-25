@@ -72,13 +72,17 @@ type app struct {
 	sched   *gorun.Scheduler              // fires the loaded Gorunfile's schedules, if any
 	nats    natsState                     // how this service reaches NATS; set once at startup
 
-	// noFile is set when the service started without a Gorunfile: it then shows only the Live
-	// and History pages, for runs started elsewhere.
+	// noFile is set when the service has no Gorunfile, given or stored: it then shows only the
+	// Live and History pages, for runs started elsewhere.
 	noFile bool
+	// stored is the working copy of the Gorunfile kept in the history database, when the
+	// service started without one; see stored.go.
+	stored string
 }
 
 // Run starts the web server on GORUN_ADDRESS (default :8080). configPath, when set, is the
-// Gorunfile to load. Without one the service shows only the Live and History pages. logPath is shown in the startup
+// Gorunfile to load. Without one the service uses the Gorunfile kept in the history database,
+// or, when the database doesn't open, shows only the Live and History pages. logPath is shown in the startup
 // message; empty means logs go to stderr. Run exits with status 1 when it can't listen.
 func Run(configPath, logPath string) {
 	if err := run(configPath, logPath); err != nil {
@@ -109,6 +113,16 @@ func run(configPath, logPath string) error {
 		defer emb.Stop()
 		if err := os.Setenv("GORUN_NATS_CLIENT_URL", emb.URL); err != nil {
 			log.Printf("gorun web: %v", err)
+		}
+	}
+
+	stored := ""
+	if configPath == "" && st != nil {
+		path := storedPath(dbPath)
+		if err := openStored(context.Background(), st, path); err != nil {
+			log.Printf("gorun web: %v", err)
+		} else {
+			configPath, stored = path, path
 		}
 	}
 
@@ -146,7 +160,13 @@ func run(configPath, logPath string) error {
 		} else {
 			a.mu.Lock()
 			info.cfgPath, info.schedules, info.schedulerOn = a.cfgPath, len(a.cfg.Schedules), a.sched != nil
+			if stored != "" {
+				a.stored = a.cfgPath // as loadConfig resolved it, so keepStored can compare
+			}
 			a.mu.Unlock()
+		}
+		if stored != "" {
+			info.storedVersions, _ = st.GorunfileVersions(context.Background())
 		}
 	}
 

@@ -6,15 +6,28 @@ the long-running host for [schedules](schedules.md).
 
 ```bash
 gorun -serve Gorunfile                       # open http://localhost:8080
-GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no Gorunfile: only Live, History and Assistant
+GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no Gorunfile: the one kept in the history database
 ```
 
-Started **without a Gorunfile**, the service only watches: the menu has just **Live**,
-**History** and **Assistant**, for runs started elsewhere, such as `gorun Gorunfile -r` in a terminal that reaches
-the same NATS server. The pages that need a Gorunfile (Run, Tasks, Bundles, Schedules and Config)
-don't exist: they aren't in the menu, and their addresses answer 404. Task and schedule names in
-History are plain text rather than links. Start it with a Gorunfile to run, edit and schedule
-tasks.
+Started **with a Gorunfile**, the service runs and edits that file.
+
+Started **without one**, it keeps the Gorunfile in its history database (`GORUN_DB_PATH`), so it
+lasts across restarts:
+
+- **The first start** saves a starter Gorunfile with only a title. Add servers, tasks, bundles and
+  schedules on the Config page, or have the [assistant](#assistant) write and change tasks.
+- **Every save** is kept as a new version. The startup message names the newest:
+  `Gorunfile  kept in the history database (version 3)`.
+- **Runs, the editor and the scheduler** use a working copy at `gorunfile/Gorunfile` next to the
+  database, written from the newest version at each start. Don't edit that file: the next start
+  replaces it. Relative paths in it, such as a copy's `src`, are relative to its folder, so use
+  absolute paths.
+- **Loading a file** on the Config page switches to that file until the service restarts.
+
+If the history database doesn't open, the service only watches. The menu then has just **Live**,
+**History** and **Assistant**, for runs started elsewhere, such as `gorun Gorunfile -r` in a
+terminal that reaches the same NATS server. The pages that need a Gorunfile (Run, Tasks, Bundles,
+Schedules and Config) don't exist: they aren't in the menu, and their addresses answer 404.
 
 `-web` is an alias for `-serve`. Once it is listening, gorun prints where to find it and what it
 started:
@@ -72,13 +85,14 @@ The embedded server stops when `gorun -serve` exits.
 ## Running in Docker
 
 The image runs `gorun -serve` on port 8080. Configure it with the variables above, plus `GORUN_FILE`,
-the Gorunfile to load. Without one the service starts with only the Live and History pages.
+the Gorunfile to load. Without one the service uses the Gorunfile kept in its history database, so
+keep `/var/lib/gorun` in a volume.
 
 ```bash
 docker build -t gorun .
 
-# no Gorunfile: live and history only
-docker run --rm -p 8080:8080 gorun
+# no Gorunfile: the one kept in the history database, in a named volume
+docker run --rm -p 8080:8080 -v gorun-data:/var/lib/gorun gorun
 
 # with a Gorunfile, kept in ./Gorunfile on the host, and history kept in a named volume
 docker run --rm -p 8080:8080 \
@@ -242,8 +256,8 @@ layout elsewhere in the file are kept.
 **Generate tasks** (experimental) asks a language model to write tasks from a description, such
 as "install postgres and back it up every night". The tasks it writes are checked so they load,
 then queued as unsaved changes: read and fix each one before you save, because the model gets
-commands wrong. The model is Qwen2.5 Coder 3B, run inside `gorun -serve` on the GPU when one is
-found. The first use downloads llama.cpp (about 36 MB) and the model (2.1 GB) into
+commands wrong. The model is Qwen3 4B Instruct (Apache 2.0), run inside `gorun -serve` on the GPU
+when one is found. The first use downloads llama.cpp (about 36 MB) and the model (2.5 GB) into
 `GORUN_CACHE_DIR/llm`. Only the web service does this; the command line and the TUI never load a
 model. To use Ollama or another OpenAI-compatible server instead, set `GORUN_LLM_URL` (and
 `GORUN_LLM_MODEL` to its model name).
@@ -252,20 +266,35 @@ model. To use Ollama or another OpenAI-compatible server instead, set `GORUN_LLM
 
 A chat (experimental) with the same language model. Ask it about the loaded Gorunfile's tasks and
 servers, have it summarise runs or explain why a task failed, or have it write tasks. Each
-question sends it the Gorunfile's tasks, bundles and servers, the ten newest runs, and the newest
-run in detail: every task's state, and the command, exit code and end of the output of each
-failed task. Env vars and template variables are never sent. **Ask the assistant** on a run's
-History page starts the chat on that run instead.
+question sends it:
+
+- the Gorunfile's tasks, bundles and servers, with each server's tasks in run order;
+- the tasks the question names, as TOML, so it can change them;
+- the ten newest runs;
+- the newest run in detail: every task's state, and the command, exit code and end of the output
+  of each failed task. A run of more than 40 tasks is counted per server instead, and only its
+  tasks that didn't pass are listed.
+
+Env vars and template variables are never sent. **Ask the assistant** on a run's History page
+starts the chat on that run instead.
 
 When a reply holds tasks that load, the chat offers to add them as unsaved changes, to review and
 save on the Config page. Tasks that don't load are reported, so you can ask it to fix them.
+
+It can change tasks too: ask, for example, "add a timeout to the migrate task". When a question
+names a task, the model is sent that task as it is now. A task in the reply with the name of one
+the Gorunfile has replaces it, in the file it's defined in, and the chat says which tasks it
+replaces. Generate tasks only writes new ones. A
+task may copy or run a file that isn't there yet; create it before you save, as the Gorunfile
+doesn't load without it.
 
 The page says whether the chat is private. It is when the model runs inside gorun, or behind a
 `GORUN_LLM_URL` on this machine (`localhost` or a loopback address). With any other URL, each
 question sends the Gorunfile and run output to that host, and the page says so in amber.
 
 The model is small: it reads failures well when the output says what went wrong, but its tasks
-often hold placeholders, such as paths and passwords, to fill in.
+often hold placeholders, such as paths and passwords, to fill in. [`training/`](../training) builds
+a version of it fine-tuned on gorun; point `GORUN_LLM_MODEL` at the GGUF file it writes.
 
 ## Walkthrough: from nothing to a running schedule
 

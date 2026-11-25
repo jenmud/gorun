@@ -42,7 +42,7 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 | `-dump-tasks DIR` | dump each task as a runnable shell file in DIR |
 | `-update-includes` | look up every git include's ref again, update `Gorunfile.lock`, print the commits and exit |
 | `-history` | browse past runs |
-| `-serve [Gorunfile]` | start the web service (scheduler, NATS, web UI), optionally loading a Gorunfile; `-web` is an alias |
+| `-serve [Gorunfile]` | start the web service (scheduler, NATS, web UI) on a Gorunfile; without one it keeps the Gorunfile in the history database; `-web` is an alias |
 | `-complete <kind>` | print shell completion candidates |
 | `-version` | print the version |
 
@@ -68,7 +68,7 @@ already set.
 | `GORUN_NATS_CLIENT_TIMEOUT` | NATS default | connection timeout, e.g. `5s` |
 | `GORUN_NATS_SERVER_CONFIG` | none | NATS server config file for the server `gorun -serve` starts when none is running; see [integrations](integrations.md#events-nats) |
 | `GORUN_LLM_URL` | unset | an OpenAI-compatible API for the web UI's assistant and task generator to use instead of the built-in model, such as `http://localhost:11434/v1` for Ollama, llama.cpp's `llama-server`, LM Studio or a hosted one |
-| `GORUN_LLM_MODEL` | Qwen2.5 Coder 3B | built in: a GGUF file's path or `https://` URL; with `GORUN_LLM_URL`: the model's name there (default `qwen2.5-coder:3b`) |
+| `GORUN_LLM_MODEL` | Qwen3 4B Instruct | built in: a GGUF file's path or `https://` URL; with `GORUN_LLM_URL`: the model's name there (default `qwen3:4b-instruct`) |
 | `GORUN_LLM_API_KEY` | unset | sent as a bearer token, for hosted APIs |
 
 The instrumented build also honours the standard `OTEL_*` variables (see

@@ -1,0 +1,83 @@
+# The assistant demo: the web fleet on local stand-ins (sleeps, no real hosts); the video labels it "Demo run".
+# nginx fails on web-3, so its site and smoke test are skipped.
+title = "Web fleet"
+
+[[schedule]]
+name = "nightly-disk"
+description = "Report disk usage every night"
+target = "disk"
+cron = "0 2 * * *"
+timezone = "Australia/Sydney"
+
+
+[tasks.update]
+description = "Update the package index"
+cmd = "sleep 1"
+timeout = "5m"
+retries = 2
+local = true
+
+[tasks.nginx]
+description = "Install nginx"
+cmd = "sleep 2; {{if eq .Name \"web-3\"}}echo 'nginx: [emerg] bind() to 0.0.0.0:80 failed (98: Address already in use)' >&2; echo 'nginx: configuration file /etc/nginx/nginx.conf test failed' >&2; exit 1{{end}}"
+depends_on = ["update"]
+local = true
+
+[tasks.site]
+description = "Install the site's index page"
+cmd = "sleep 1"
+depends_on = ["nginx"]
+local = true
+
+[tasks.smoke]
+description = "Check the site answers"
+cmd = "sleep 1"
+timeout = "30s"
+depends_on = ["site"]
+local = true
+
+[tasks.disk]
+description = "Report disk usage"
+cmd = "sleep 1; echo '/dev/sda1  40G  12G  26G  32% /'"
+local = true
+
+[bundles.webapp]
+description = "Install nginx, the site, and test it"
+tasks = ["nginx", "site", "smoke"]
+
+[server_groups.ubuntu]
+
+[server_groups.web]
+tags = ["web"]
+tasks = ["@webapp"]
+
+[server_groups.db]
+tags = ["db"]
+tasks = ["update", "disk"]
+
+[server_groups.prod]
+tags = ["prod"]
+
+[server_groups.staging]
+tags = ["staging"]
+
+[servers.hosts.web-1]
+hostname = "10.0.0.11"
+groups = ["ubuntu", "web", "prod"]
+
+[servers.hosts.web-2]
+hostname = "10.0.0.12"
+groups = ["ubuntu", "web", "prod"]
+
+[servers.hosts.web-3]
+hostname = "10.0.0.13"
+groups = ["ubuntu", "web", "prod"]
+
+[servers.hosts.web-4]
+hostname = "10.0.0.14"
+groups = ["ubuntu", "web", "staging"]
+add_tasks = ["disk"]
+
+[servers.hosts.db-1]
+hostname = "10.0.0.21"
+groups = ["ubuntu", "db", "prod"]

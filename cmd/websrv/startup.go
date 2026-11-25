@@ -8,17 +8,19 @@ import (
 
 // startupInfo is what the startup message reports about a service that is listening.
 type startupInfo struct {
-	listen      string // the bound listener address, e.g. "[::]:8080"
-	cfgPath     string // the loaded Gorunfile, empty when none was given
-	noFile      bool   // started without a Gorunfile: only Live and History are served
-	cfgErr      error  // why the Gorunfile did not load
-	schedules   int
-	schedulerOn bool
-	nats        natsState
-	topic       string
-	dbPath      string
-	dbErr       error // why the history store did not open
-	logPath     string
+	listen  string // the bound listener address, e.g. "[::]:8080"
+	cfgPath string // the loaded Gorunfile, empty when none was given
+	noFile  bool   // started without a Gorunfile: only Live and History are served
+	// storedVersions is set when the Gorunfile is the one kept in the history database
+	storedVersions int
+	cfgErr         error // why the Gorunfile did not load
+	schedules      int
+	schedulerOn    bool
+	nats           natsState
+	topic          string
+	dbPath         string
+	dbErr          error // why the history store did not open
+	logPath        string
 }
 
 // startupMessage writes the lines that tell the user the service is up, where to open it and
@@ -62,8 +64,13 @@ func gorunfileLine(info startupInfo) string {
 		return fmt.Sprintf("not loaded: %v", info.cfgErr)
 	case info.noFile:
 		return "none: only the Live and History pages, for runs started elsewhere"
-	case info.schedules == 0:
-		return info.cfgPath + ", no schedules"
+	}
+	name := info.cfgPath
+	if info.storedVersions > 0 {
+		name = fmt.Sprintf("kept in the history database (version %d)", info.storedVersions)
+	}
+	if info.schedules == 0 {
+		return name + ", no schedules"
 	}
 	noun := "schedules"
 	if info.schedules == 1 {
@@ -73,7 +80,7 @@ func gorunfileLine(info startupInfo) string {
 	if !info.schedulerOn {
 		state = "scheduler not started, see the log"
 	}
-	return fmt.Sprintf("%s, %d %s, %s", info.cfgPath, info.schedules, noun, state)
+	return fmt.Sprintf("%s, %d %s, %s", name, info.schedules, noun, state)
 }
 
 // natsLine says how the service reaches NATS, and what that means for events.

@@ -54,6 +54,7 @@ func (a *app) loadConfig(path string) error {
 	a.pending = nil
 	a.mu.Unlock()
 	a.startScheduler(cfg)
+	a.keepStored()
 	return nil
 }
 

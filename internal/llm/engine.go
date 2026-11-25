@@ -34,6 +34,7 @@ var _ gorun.Engine = (*Engine)(nil)
 const (
 	contextSize = 8192 // enough for the prompt, a few retries and their replies
 	maxReply    = 1500 // tokens; a few tasks rarely need more
+	batchSize   = 2048 // tokens decoded at once
 )
 
 func (e *Engine) load(ctx context.Context) error {
@@ -61,11 +62,11 @@ func (e *Engine) load(ctx context.Context) error {
 	params := llama.ModelDefaultParams()
 	params.NGpuLayers = 999 // as many as fit; with no GPU this is a no-op
 	if e.model, err = llama.ModelLoadFromFile(file, params); err != nil || e.model == 0 {
-		return fmt.Errorf("load model %s: %w", filepath.Base(file), errors.Join(err, errors.New("not a model llama.cpp can read")))
+		return fmt.Errorf("load model %s: %w", filepath.Base(file), errors.Join(err, errors.New("llama.cpp couldn't load it: it isn't a GGUF model, or there isn't enough GPU or system memory free")))
 	}
 	cp := llama.ContextDefaultParams()
 	cp.NCtx = contextSize
-	cp.NBatch = 2048
+	cp.NBatch = batchSize
 	if e.lctx, err = llama.InitFromModel(e.model, cp); err != nil {
 		return fmt.Errorf("model context: %w", err)
 	}
@@ -110,15 +111,20 @@ func (e *Engine) Chat(ctx context.Context, messages []gorun.ChatMessage) (string
 	if len(tokens)+maxReply > contextSize {
 		return "", fmt.Errorf("the prompt is %d tokens, too long for the model's %d", len(tokens), contextSize)
 	}
-	batch := llama.BatchGetOne(tokens)
+	// the prompt goes in batch-sized pieces: llama.cpp aborts the process on a bigger one
+	for start := 0; start < len(tokens); start += batchSize {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+		if _, err := llama.Decode(e.lctx, llama.BatchGetOne(tokens[start:min(start+batchSize, len(tokens))])); err != nil {
+			return "", fmt.Errorf("decode: %w", err)
+		}
+	}
 	var reply []byte
 	buf := make([]byte, 256)
 	for range maxReply {
 		if err := ctx.Err(); err != nil {
 			return "", err
-		}
-		if _, err := llama.Decode(e.lctx, batch); err != nil {
-			return "", fmt.Errorf("decode: %w", err)
 		}
 		token := llama.SamplerSample(e.sampler, e.lctx, -1)
 		if llama.VocabIsEOG(e.vocab, token) {
@@ -130,7 +136,9 @@ func (e *Engine) Chat(ctx context.Context, messages []gorun.ChatMessage) (string
 			n = llama.TokenToPiece(e.vocab, token, buf, 0, false)
 		}
 		reply = append(reply, buf[:max(n, 0)]...)
-		batch = llama.BatchGetOne([]llama.Token{token})
+		if _, err := llama.Decode(e.lctx, llama.BatchGetOne([]llama.Token{token})); err != nil {
+			return "", fmt.Errorf("decode: %w", err)
+		}
 	}
 	return string(reply), nil
 }

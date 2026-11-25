@@ -22,6 +22,11 @@
   terminal). `cmd/websrv` is the web server, `cmd/web/ui` the templ components,
   `internal/store` the sqlite history and the wire event, `internal/nats` the NATS client,
   `internal/envvars` env access.
+- `training/` fine-tunes the assistant's model (see its README). Its seeds become conversations in
+  `cmd/websrv/dataset_test.go` (build tag `dataset`), through the real prompts, so a change to the
+  assistant's prompt or context only reaches a trained model after rebuilding the data and
+  training again. Its `.venv/`, `.hf/`, `.llama.cpp/`, `data/` and `out/` are gitignored, not
+  vendored.
 - `examples/` holds programs built on the library (`servicedeck`, a web app; `rollout`, a CLI). Each
   is its own module with `replace github.com/jenmud/gorun => ../..`, so root `go test ./...` skips
   them; `make examples` vets and builds them (CI runs it). An API change that breaks them must fix

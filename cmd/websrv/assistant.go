@@ -27,6 +27,7 @@ const (
 	maxChatChars    = 8000  // of conversation
 	maxContextChars = 12000 // of Gorunfile and history
 	maxOutputChars  = 1200  // of one failed task's output
+	maxFileChars    = 7000  // of the Gorunfile's tasks and servers
 )
 
 // chatPrompt tells the model what it is for; the Gorunfile and history follow it.
@@ -35,9 +36,10 @@ over SSH, as a Gorunfile describes. Answer briefly and plainly. You can:
 - answer questions about the Gorunfile's servers, tasks and bundles, listed below;
 - summarise runs and diagnose why tasks failed, from the history below: name the task, the
   server and the likely cause, quote the line of output that shows it, and suggest a fix;
-- write new tasks. Put them in one ` + "```toml" + ` code block of [tasks.<name>] tables; the page
-  offers to add them to the Gorunfile.
-Only state what the context shows; say so when it doesn't hold the answer.
+- write new tasks, or change the Gorunfile's tasks. Put them in one ` + "```toml" + ` code block of
+  [tasks.<name>] tables; to change a task, write its whole table again under the same name. The
+  page offers to add them to the Gorunfile, replacing the tasks they change.
+Only state what the context shows or what you know of gorun; say so when you don't know.
 
 How to write tasks:
 `
@@ -98,6 +100,7 @@ type chatReply struct {
 	Reply     string `json:"reply,omitempty"`
 	Tasks     string `json:"tasks,omitempty"`
 	TaskNames string `json:"taskNames,omitempty"`
+	Replaces  string `json:"replaces,omitempty"` // the tasks in Tasks the Gorunfile has already
 	TaskError string `json:"taskError,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
@@ -118,7 +121,8 @@ func (a *app) chatHandler(w http.ResponseWriter, r *http.Request) {
 	a.mu.Unlock()
 
 	conv := trimConversation(req.Messages)
-	messages := append([]gorun.ChatMessage{{Role: "system", Content: a.chatContext(r.Context(), cfg, req.Run)}}, conv...)
+	system := a.chatContext(r.Context(), cfg, req.Run) + mentionedTasks(cfg, conv)
+	messages := append([]gorun.ChatMessage{{Role: "system", Content: system}}, conv...)
 
 	a.genMu.Lock()
 	reply, err := a.gen.assistant.Chat(r.Context(), messages)
@@ -130,11 +134,15 @@ func (a *app) chatHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	out := chatReply{Reply: reply}
 	if strings.Contains(reply, "[tasks.") {
-		if tasks, err := gorun.ExtractTasks(reply, cfg); err != nil {
+		if tasks, err := gorun.ExtractTaskEdits(reply, cfg); err != nil {
 			out.TaskError = err.Error()
 		} else {
+			names := taskNames(tasks)
 			out.Tasks = tasks
-			out.TaskNames = strings.Join(taskNames(tasks), ", ")
+			out.TaskNames = strings.Join(names, ", ")
+			if cfg != nil {
+				out.Replaces = strings.Join(slices.DeleteFunc(names, func(n string) bool { _, ok := cfg.Tasks[n]; return !ok }), ", ")
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, out)
@@ -153,7 +161,7 @@ func (a *app) addTasksHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusConflict, chatReply{Error: "load a Gorunfile first"})
 		return
 	}
-	names, err := a.queueTasks(req.Tasks, req.File)
+	names, err := a.queueTasks(req.Tasks, req.File, true)
 	if err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, chatReply{Error: err.Error()})
 		return
@@ -162,12 +170,13 @@ func (a *app) addTasksHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // queueTasks checks the tasks in text against the loaded file and queues them, to be saved into
-// file. a.mu must be held.
-func (a *app) queueTasks(text, file string) ([]string, error) {
+// file. With replace, a task the Gorunfile (or the unsaved changes) has is queued as an edit of
+// it, where it is defined; without, it is an error. a.mu must be held.
+func (a *app) queueTasks(text, file string, replace bool) ([]string, error) {
 	if !slices.Contains(a.cfg.Files, file) {
 		return nil, fmt.Errorf("pick the file to save into")
 	}
-	if _, err := gorun.ExtractTasks(text, a.cfg); err != nil {
+	if _, err := gorun.ExtractTaskEdits(text, a.cfg); err != nil {
 		return nil, err
 	}
 	var doc struct {
@@ -181,14 +190,74 @@ func (a *app) queueTasks(text, file string) ([]string, error) {
 		if err := validName(kindTask, name); err != nil {
 			return nil, err
 		}
-		if present(a.cfg, a.pending, kindTask, name) {
+		if !replace && present(a.cfg, a.pending, kindTask, name) {
 			return nil, fmt.Errorf("a task named %s already exists", name)
 		}
 	}
 	for _, name := range names {
+		if present(a.cfg, a.pending, kindTask, name) {
+			src := sourceOf(a.cfg, a.pending, kindTask, name)
+			a.pending = append(a.pending,
+				gorun.Change{Kind: kindTask, Name: name, File: src, Remove: true},
+				gorun.Change{Kind: kindTask, Name: name, File: src, Body: doc.Tasks[name]},
+			)
+			continue
+		}
 		a.pending = append(a.pending, gorun.Change{Kind: kindTask, Name: name, File: file, Body: doc.Tasks[name]})
 	}
 	return names, nil
+}
+
+// maxMentioned caps the tasks whose TOML goes in the context, so it stays small.
+const maxMentioned = 3
+
+// mentionedTasks writes out, as TOML, the tasks the newest question names, so the model can
+// change them without guessing what they hold now.
+func mentionedTasks(cfg *gorun.Config, conv []gorun.ChatMessage) string {
+	if cfg == nil || len(conv) == 0 {
+		return ""
+	}
+	question := strings.ToLower(conv[len(conv)-1].Content)
+	var b strings.Builder
+	n := 0
+	for _, name := range slices.Sorted(maps.Keys(cfg.Tasks)) {
+		if n == maxMentioned || !mentions(question, strings.ToLower(name)) {
+			continue
+		}
+		data, err := (&gorun.Config{Tasks: map[string]gorun.Task{name: cfg.Tasks[name]}}).Marshal()
+		if err != nil {
+			continue
+		}
+		if n == 0 {
+			b.WriteString("\n## Tasks the question names, as they are now\nTo change one, write its whole table again under the same name.\n```toml\n")
+		}
+		b.Write(data)
+		n++
+	}
+	if n > 0 {
+		b.WriteString("```\n")
+	}
+	return b.String()
+}
+
+// mentions reports whether name appears in text as a word of its own.
+func mentions(text, name string) bool {
+	for i := strings.Index(text, name); i >= 0; {
+		end := i + len(name)
+		if (i == 0 || !wordByte(text[i-1])) && (end == len(text) || !wordByte(text[end])) {
+			return true
+		}
+		next := strings.Index(text[i+1:], name)
+		if next < 0 {
+			return false
+		}
+		i += 1 + next
+	}
+	return false
+}
+
+func wordByte(c byte) bool {
+	return c == '-' || c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z'
 }
 
 // taskNames lists the tasks in Gorunfile TOML.
@@ -261,12 +330,16 @@ func (a *app) chatContext(ctx context.Context, cfg *gorun.Config, runID string) 
 }
 
 func writeGorunfile(b *strings.Builder, cfg *gorun.Config) {
+	start := b.Len()
 	fmt.Fprintf(b, "## The Gorunfile %s\n", cmp.Or(cfg.Title, cfg.Path))
 	names := slices.Sorted(maps.Keys(cfg.Tasks))
 	fmt.Fprintf(b, "Tasks (%d):\n", len(names))
 	for _, name := range names[:min(len(names), 40)] {
 		t := cfg.Tasks[name]
 		fmt.Fprintf(b, "- %s: %s", name, t.Description)
+		if t.Local {
+			b.WriteString(" (local only)")
+		}
 		if len(t.DependsOn) > 0 {
 			fmt.Fprintf(b, " (depends on %s)", strings.Join(t.DependsOn, ", "))
 		}
@@ -277,16 +350,37 @@ func writeGorunfile(b *strings.Builder, cfg *gorun.Config) {
 	}
 	bundles := slices.Sorted(maps.Keys(cfg.Bundles))
 	if len(bundles) > 0 {
-		fmt.Fprintf(b, "Bundles: %s\n", strings.Join(bundles[:min(len(bundles), 30)], ", "))
+		b.WriteString("Bundles (use them as @name):\n")
+		for _, name := range bundles[:min(len(bundles), 30)] {
+			fmt.Fprintf(b, "- %s: %s\n", name, strings.Join(cfg.Bundles[name].Tasks, ", "))
+		}
 	}
 	fmt.Fprintf(b, "Servers (%d):\n", len(cfg.Servers))
-	for _, s := range cfg.Servers[:min(len(cfg.Servers), 30)] {
-		fmt.Fprintf(b, "- %s at %s", s.Name, s.Address())
+	for i, s := range cfg.Servers[:min(len(cfg.Servers), 30)] {
+		if b.Len()-start > maxFileChars {
+			fmt.Fprintf(b, "- and %d more servers; gorun Gorunfile -list-servers lists them all\n", len(cfg.Servers)-i)
+			return
+		}
+		kind := "over SSH"
+		if s.IsLocal() {
+			kind = "on this machine"
+		}
+		fmt.Fprintf(b, "- %s at %s, runs %s", s.Name, s.Address(), kind)
 		if len(s.Groups) > 0 {
 			fmt.Fprintf(b, ", groups %s", strings.Join(s.Groups, ", "))
 		}
 		if len(s.Tags) > 0 {
 			fmt.Fprintf(b, ", tags %s", strings.Join(s.Tags, ", "))
+		}
+		if p, err := cfg.ServerPipeline(s); err == nil {
+			names := make([]string, 0, len(p.Tasks))
+			for _, t := range p.Tasks[:min(len(p.Tasks), 15)] {
+				names = append(names, t.Name)
+			}
+			if len(p.Tasks) > 15 {
+				names = append(names, fmt.Sprintf("and %d more", len(p.Tasks)-15))
+			}
+			fmt.Fprintf(b, "; its tasks, in run order: %s", cmp.Or(strings.Join(names, ", "), "none"))
 		}
 		b.WriteString("\n")
 	}
@@ -330,25 +424,40 @@ func (a *app) writeRunDetail(ctx context.Context, b *strings.Builder, cfg *gorun
 		fmt.Fprintf(b, "Server %s could not run its tasks: %s\n", srv, run.ServerErrors[srv])
 	}
 	var failed []store.TaskDetail
-	failedOn := map[[2]string]bool{} // server, task
+	state := map[[2]string]int{} // by server and task
 	for _, t := range run.Tasks {
+		state[[2]string{t.Server, t.Name}] = t.State
 		if t.State == store.StateFailed {
 			failed = append(failed, t)
-			failedOn[[2]string{t.Server, t.Name}] = true
 		}
 	}
-	for _, t := range run.Tasks {
+	// a big run is counted per server, and only its tasks that didn't pass are listed
+	listed := run.Tasks
+	if len(run.Tasks) > maxListedTasks {
+		writeServerCounts(b, run.Tasks)
+		listed = slices.DeleteFunc(slices.Clone(run.Tasks), func(t store.TaskDetail) bool {
+			return t.State == store.StateDone || t.State == store.StateUnchanged
+		})
+		if len(listed) > maxListedTasks {
+			fmt.Fprintf(b, "(%d more tasks that didn't pass are left out for space)\n", len(listed)-maxListedTasks)
+			listed = listed[:maxListedTasks]
+		}
+	}
+	for _, t := range listed {
 		fmt.Fprintf(b, "- %s on %s: %s", t.Name, t.Server, stateNames[t.State])
 		// name the dependency that failed: a small model can't follow the chain itself
 		if t.State == store.StateSkipped && cfg != nil {
-			var deps []string
+			var why []string
 			for _, d := range cfg.Tasks[t.Name].DependsOn {
-				if failedOn[[2]string{t.Server, d}] {
-					deps = append(deps, d)
+				switch state[[2]string{t.Server, d}] {
+				case store.StateFailed:
+					why = append(why, d+" failed")
+				case store.StateSkipped:
+					why = append(why, d+" was skipped")
 				}
 			}
-			if len(deps) > 0 {
-				fmt.Fprintf(b, " (%s failed)", strings.Join(deps, ", "))
+			if len(why) > 0 {
+				fmt.Fprintf(b, " (%s)", strings.Join(why, ", "))
 			}
 		}
 		fmt.Fprintf(b, ", took %s\n", t.Duration.Round(time.Millisecond))
@@ -378,6 +487,37 @@ func (a *app) writeRunDetail(ctx context.Context, b *strings.Builder, cfg *gorun
 			}
 		}
 	}
+}
+
+// maxListedTasks is how many of a run's tasks the context lists one by one.
+const maxListedTasks = 40
+
+var shortStates = map[int]string{
+	store.StatePending: "pending", store.StateRunning: "running", store.StateDone: "done", store.StateFailed: "failed",
+	store.StateSkipped: "skipped", store.StateUnchanged: "unchanged", store.StateWouldRun: "would run",
+}
+
+// writeServerCounts writes how many of each server's tasks ended in each state.
+func writeServerCounts(b *strings.Builder, tasks []store.TaskDetail) {
+	var servers []string
+	counts := map[string]map[int]int{}
+	for _, t := range tasks {
+		if counts[t.Server] == nil {
+			servers = append(servers, t.Server)
+			counts[t.Server] = map[int]int{}
+		}
+		counts[t.Server][t.State]++
+	}
+	for _, s := range servers {
+		var parts []string
+		total := 0
+		for _, st := range slices.Sorted(maps.Keys(counts[s])) {
+			total += counts[s][st]
+			parts = append(parts, fmt.Sprintf("%d %s", counts[s][st], shortStates[st]))
+		}
+		fmt.Fprintf(b, "- %s ran %d tasks: %s\n", s, total, strings.Join(parts, ", "))
+	}
+	b.WriteString("The tasks that didn't pass:\n")
 }
 
 // tail is the end of s, at most n bytes, cut at a line start when it can be.

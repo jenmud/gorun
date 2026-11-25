@@ -50,9 +50,9 @@ func (g *generator) describe() string {
 		return filepath.Base(g.assistant.Model) + ", built in"
 	}
 	if !llm.Downloaded(g.engine.Dir) {
-		return "Qwen2.5 Coder 3B, built in; the first answer downloads it, 2.1 GB, so it takes a few minutes"
+		return "Qwen3 4B Instruct, built in; the first answer downloads it, 2.5 GB, so it takes a few minutes"
 	}
-	return "Qwen2.5 Coder 3B, built in"
+	return "Qwen3 4B Instruct, built in"
 }
 
 // close frees the built-in model, if it was loaded.
@@ -120,7 +120,7 @@ func (a *app) generateHandler(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/config", "Another Gorunfile was loaded meanwhile; generate again.", true)
 		return
 	}
-	names, err := a.queueTasks(text, file)
+	names, err := a.queueTasks(text, file, false)
 	if err != nil {
 		redirectWith(w, r, "/config", "The model's tasks can't be added: "+err.Error()+". Try again.", true)
 		return

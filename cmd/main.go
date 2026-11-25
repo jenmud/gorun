@@ -538,6 +538,7 @@ Options:
   -update-includes  look up every git include's ref again, update the lock file and exit
   -version  print version and exit
   -serve [Gorunfile]  start the web service (scheduler, NATS, web UI); -web is an alias
+                      without a Gorunfile, it keeps one in the history database
   -history  view historical runs
 
 Environment variables (can be overridden via the process environment or a .env file
@@ -559,7 +560,7 @@ in the environment):
   GORUN_NATS_CLIENT_TIMEOUT           default: nats default (e.g. 5s)
   GORUN_NATS_SERVER_CONFIG            default: none (NATS server config for the server -serve starts)
   GORUN_LLM_URL                       default: unset (an OpenAI-compatible API for the web UI's assistant, instead of the built-in model)
-  GORUN_LLM_MODEL                     default: Qwen2.5 Coder 3B (a GGUF path or https URL; a model name with GORUN_LLM_URL)
+  GORUN_LLM_MODEL                     default: Qwen3 4B Instruct (a GGUF path or https URL; a model name with GORUN_LLM_URL)
   GORUN_LLM_API_KEY                   default: unset (sent as a bearer token)
 
 OpenTelemetry SDK variables (OTEL_*) are also honoured by the instrumented build.

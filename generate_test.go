@@ -98,7 +98,7 @@ func TestCheckTasks(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := checkTasks(tt.text, cfg)
+			err := checkTasks(tt.text, cfg, false)
 			switch {
 			case tt.wantErr == "" && err != nil:
 				t.Errorf("checkTasks() = %v, want nil", err)
@@ -106,6 +106,28 @@ func TestCheckTasks(t *testing.T) {
 				t.Errorf("checkTasks() = %v, want %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestExtractTaskEditsReplacesExistingTasks(t *testing.T) {
+	cfg := &Config{Tasks: map[string]Task{"update": {Cmd: "apt-get update"}}}
+	reply := "```toml\n[tasks.update]\ncmd = \"apt-get update\"\ntimeout = \"10m\"\n```"
+	if _, err := ExtractTasks(reply, cfg); err == nil {
+		t.Error("ExtractTasks() accepted a task that exists")
+	}
+	if _, err := ExtractTaskEdits(reply, cfg); err != nil {
+		t.Errorf("ExtractTaskEdits() = %v, want the replacement accepted", err)
+	}
+}
+
+func TestExtractTasksSkipsShellBlocks(t *testing.T) {
+	reply := "Stop it first:\n```bash\nsudo systemctl stop nginx\n```\nThen add:\n```toml\n[tasks.a]\ncmd = \"true\"\n```\n"
+	got, err := ExtractTasks(reply, nil)
+	if err != nil {
+		t.Fatalf("ExtractTasks() error = %v", err)
+	}
+	if got != "[tasks.a]\ncmd = \"true\"\n" {
+		t.Errorf("ExtractTasks() = %q", got)
 	}
 }
 

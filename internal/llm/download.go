@@ -48,10 +48,11 @@ func ggml(suffix string) string {
 	return fmt.Sprintf("https://github.com/ggml-org/llama.cpp/releases/download/%[1]s/llama-%[1]s-bin-%[2]s", llamaTag, suffix)
 }
 
-// DefaultModel is the model used when none is named: Qwen2.5 Coder 3B Instruct, 4-bit, 2.1 GB.
+// DefaultModel is the model used when none is named: Qwen3 4B Instruct 2507, 4-bit, 2.5 GB,
+// under the Apache 2.0 license.
 var DefaultModel = asset{
-	"https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/qwen2.5-coder-3b-instruct-q4_k_m.gguf",
-	"724fb256bec1ff062b2f65e4569e871ad2e95ab2a3989723d1769c54294730b7",
+	"https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+	"3605803b982cb64aead44f6c1b2ae36e3acdb41d8e46c8a94c6533bc4c67e597",
 }
 
 // Downloaded reports whether llama.cpp and the default model are already in dir.

@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -153,6 +154,12 @@ var schema = []string{
 		exit_code INTEGER,
 		duration_ns INTEGER,
 		UNIQUE(run_id, server, name)
+	)`,
+	// each save of the Gorunfile kept here, for gorun -serve started without one
+	`CREATE TABLE IF NOT EXISTS gorunfiles (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		content TEXT NOT NULL,
+		saved_at TEXT NOT NULL
 	)`,
 }
 
@@ -466,4 +473,35 @@ func (s *Store) TruncateRuns(ctx context.Context, keep int) error {
 		}
 	}
 	return nil
+}
+
+// Gorunfile returns the newest saved Gorunfile, and false when none has been saved yet.
+func (s *Store) Gorunfile(ctx context.Context) (string, bool, error) {
+	var content string
+	err := s.db.QueryRowContext(ctx, `SELECT content FROM gorunfiles ORDER BY id DESC LIMIT 1`).Scan(&content)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return content, true, nil
+}
+
+// SaveGorunfile keeps content as the newest version of the Gorunfile. It reports false, and
+// saves nothing, when content is the same as the newest version.
+func (s *Store) SaveGorunfile(ctx context.Context, content string, at time.Time) (bool, error) {
+	newest, ok, err := s.Gorunfile(ctx)
+	if err != nil || (ok && newest == content) {
+		return false, err
+	}
+	err = s.exec(ctx, `INSERT INTO gorunfiles (content, saved_at) VALUES (?, ?)`, content, at.UTC().Format(time.RFC3339Nano))
+	return err == nil, err
+}
+
+// GorunfileVersions counts the saved versions of the Gorunfile.
+func (s *Store) GorunfileVersions(ctx context.Context) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM gorunfiles`).Scan(&n)
+	return n, err
 }

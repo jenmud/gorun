@@ -1,0 +1,86 @@
+title = "Docker hosts"
+max_parallel = 2
+
+[tasks.docker]
+description = "Install Docker Engine"
+check = "command -v docker >/dev/null && systemctl is-active --quiet docker"
+cmd = "curl -fsSL https://get.docker.com | sh && systemctl enable --now docker"
+verify = "docker info >/dev/null"
+sudo = true
+timeout = "10m"
+rerun = "safe"
+
+[tasks.registry-login]
+description = "Log in to the container registry"
+cmd = 'printf %s "$TOKEN" | docker login registry.example.com -u ci --password-stdin'
+envvars = { TOKEN = "${REGISTRY_TOKEN}" }
+depends_on = ["docker"]
+sudo = true
+rerun = "safe"
+
+[tasks.compose-file]
+description = "Install the compose file"
+cmd = "mkdir -p /opt/stack && mv /tmp/docker-compose.yml /opt/stack/docker-compose.yml"
+check_copies = true
+sudo = true
+rerun = "safe"
+[[tasks.compose-file.copy]]
+src = "./stack/docker-compose.yml"
+dst = "/tmp/docker-compose.yml"
+
+[tasks.compose-pull]
+description = "Pull the stack's images"
+cmd = "docker compose -f /opt/stack/docker-compose.yml pull"
+depends_on = ["registry-login", "compose-file"]
+sudo = true
+retries = 2
+retry_delay = "10s"
+rerun = "safe"
+
+[tasks.compose-up]
+description = "Start the stack"
+cmd = "docker compose -f /opt/stack/docker-compose.yml up -d --remove-orphans"
+verify = "docker compose -f /opt/stack/docker-compose.yml ps --status running --quiet | grep -q ."
+depends_on = ["compose-pull"]
+sudo = true
+rerun = "safe"
+
+[tasks.prune]
+description = "Remove unused images"
+cmd = "docker image prune -af --filter until=168h"
+depends_on = ["docker"]
+sudo = true
+rerun = "safe"
+
+[bundles.stack]
+description = "Deploy the stack"
+tasks = ["compose-up"]
+
+[[schedule]]
+name = "weekly-prune"
+target = "prune"
+cron = "0 4 * * 0"
+
+[server_groups.dockerhosts]
+tags = ["docker"]
+    [server_groups.dockerhosts.ssh]
+    username = "ops"
+
+[servers]
+tasks = ["docker", "@stack"]
+
+[servers.hosts.docker-1]
+hostname = "docker-1.internal"
+groups = ["dockerhosts"]
+
+[servers.hosts.docker-2]
+hostname = "docker-2.internal"
+groups = ["dockerhosts"]
+
+[servers.hosts.docker-edge]
+hostname = "203.0.113.40"
+groups = ["dockerhosts"]
+tags = ["edge"]
+add_tasks = ["prune"]
+    [servers.hosts.docker-edge.ssh]
+    port = 2222

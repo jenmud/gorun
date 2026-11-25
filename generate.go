@@ -45,7 +45,7 @@ type ChatMessage struct {
 // Assistant defaults, for a local Ollama.
 const (
 	DefaultAssistantURL   = "http://localhost:11434/v1"
-	DefaultAssistantModel = "qwen2.5-coder:3b"
+	DefaultAssistantModel = "qwen3:4b-instruct"
 )
 
 // assistantPrompt teaches the model the subset of a Gorunfile a task needs.
@@ -150,27 +150,46 @@ func existingTasks(cfg *Config, request string) string {
 
 var fence = regexp.MustCompile("(?s)```[a-zA-Z]*\\n(.*?)```")
 
-// stripFences takes the TOML out of a markdown code block, which small models add anyway.
+// stripFences takes the TOML out of a markdown code block, which small models add anyway. A reply
+// may also hold shell commands in blocks of their own, so the first block with a task table wins.
 func stripFences(reply string) string {
-	if m := fence.FindStringSubmatch(reply); m != nil {
-		reply = m[1]
+	blocks := fence.FindAllStringSubmatch(reply, -1)
+	for _, m := range blocks {
+		if strings.Contains(m[1], "[tasks.") {
+			return strings.TrimSpace(m[1])
+		}
+	}
+	if len(blocks) > 0 {
+		reply = blocks[0][1]
 	}
 	return strings.TrimSpace(reply)
 }
 
 // ExtractTasks returns the tasks in a model's reply as Gorunfile TOML: the first markdown code
-// block, or else the whole reply. It fails when they don't load, aren't valid, redefine a task
-// in cfg or depend on one that doesn't exist. cfg may be nil.
+// block holding a [tasks.<name>] table, else the first block, or else the whole reply. It fails
+// when they don't load, aren't valid, redefine a task in cfg or depend on one that doesn't
+// exist. Files the tasks copy or run aren't looked for, as they may not have been written yet.
+// cfg may be nil.
 func ExtractTasks(reply string, cfg *Config) (string, error) {
+	return extractTasks(reply, cfg, false)
+}
+
+// ExtractTaskEdits is ExtractTasks for a reply that may also change tasks cfg has: a task with
+// the name of one in cfg is its replacement.
+func ExtractTaskEdits(reply string, cfg *Config) (string, error) {
+	return extractTasks(reply, cfg, true)
+}
+
+func extractTasks(reply string, cfg *Config, replace bool) (string, error) {
 	text := stripFences(reply)
-	if err := checkTasks(text, cfg); err != nil {
+	if err := checkTasks(text, cfg, replace); err != nil {
 		return "", err
 	}
 	return text + "\n", nil
 }
 
-// checkTasks reports why text isn't a set of new, valid tasks.
-func checkTasks(text string, cfg *Config) error {
+// checkTasks reports why text isn't a set of valid tasks, new ones unless replace is set.
+func checkTasks(text string, cfg *Config, replace bool) error {
 	var file struct {
 		Tasks map[string]Task `toml:"tasks"`
 	}
@@ -191,10 +210,11 @@ func checkTasks(text string, cfg *Config) error {
 	for _, name := range sortedKeys(file.Tasks) {
 		task := file.Tasks[name]
 		task.Name = name
-		if _, ok := existing[name]; ok {
+		if _, ok := existing[name]; ok && !replace {
 			return fmt.Errorf("task %s already exists", name)
 		}
-		if err := task.validate(); err != nil {
+		// the files a task copies may not have been written yet
+		if err := task.validateKeys(); err != nil {
 			return err
 		}
 		for _, dep := range task.DependsOn {

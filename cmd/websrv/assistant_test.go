@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -83,8 +84,30 @@ func TestChatSendsContextAndAddsTasks(t *testing.T) {
 	if added.Error != "" || len(a.pending) != 1 || a.pending[0].Name != "nginx" {
 		t.Fatalf("add = %+v, pending = %+v", added, a.pending)
 	}
-	if again := postJSON(t, a, "/assistant/add", map[string]string{"tasks": out.Tasks, "file": path}); !strings.Contains(again.Error, "already exists") {
-		t.Errorf("adding twice = %+v", again)
+	// a task the Gorunfile (or the unsaved changes) has already is replaced where it is defined
+	if again := postJSON(t, a, "/assistant/add", map[string]string{"tasks": out.Tasks, "file": path}); again.Error != "" || len(a.pending) != 3 || !a.pending[1].Remove {
+		t.Errorf("adding twice = %+v, pending = %+v", again, a.pending)
+	}
+}
+
+// A reply that rewrites a task the Gorunfile has is offered as its replacement, and the model is
+// shown the task as it is now when the question names it.
+func TestChatChangesExistingTasks(t *testing.T) {
+	a, path := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	e := &recordingEngine{reply: "```toml\n[tasks.hello]\ncmd = \"echo hello\"\ntimeout = \"1m\"\n```"}
+	a.gen = &generator{assistant: gorun.Assistant{Engine: e}}
+
+	out := postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "Add a timeout to the hello task"}}})
+	if out.Replaces != "hello" || out.TaskError != "" {
+		t.Fatalf("reply = %+v, want it to replace hello", out)
+	}
+	if system := e.got[0].Content; !strings.Contains(system, "[tasks.hello]") || !strings.Contains(system, `cmd = "echo hi"`) {
+		t.Errorf("the context doesn't show the hello task as it is:\n%s", e.got[0].Content)
+	}
+	postJSON(t, a, "/assistant/add", map[string]string{"tasks": out.Tasks, "file": path})
+	if len(a.pending) != 2 || !a.pending[0].Remove || a.pending[1].Body["timeout"] != "1m" {
+		t.Errorf("pending = %+v, want hello removed and added again", a.pending)
 	}
 }
 
@@ -127,5 +150,22 @@ func TestPrivate(t *testing.T) {
 	}
 	if !(&generator{engine: &llm.Engine{}}).private() {
 		t.Error("the built-in model isn't private")
+	}
+}
+
+// A big run is counted per server, and only the tasks that didn't pass are listed.
+func TestChatContextSummarisesBigRuns(t *testing.T) {
+	a, _ := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	saveFailedRun(t, a.store)
+	ctx := context.Background()
+	for i := range 60 {
+		if err := a.store.UpsertTask(ctx, "run-1", "web-1", fmt.Sprintf("step-%02d", i), store.StateDone, "true", "", "", 0, time.Millisecond); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := a.chatContext(ctx, a.cfg, "")
+	if strings.Contains(got, "step-07") || !strings.Contains(got, "web-1 ran 61 tasks: 60 done, 1 failed") || !strings.Contains(got, "migrate on web-1: failed") {
+		t.Errorf("context:\n%s", got)
 	}
 }

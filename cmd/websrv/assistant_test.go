@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -167,5 +168,70 @@ func TestChatContextSummarisesBigRuns(t *testing.T) {
 	got := a.chatContext(ctx, a.cfg, "")
 	if strings.Contains(got, "step-07") || !strings.Contains(got, "web-1 ran 61 tasks: 60 done, 1 failed") || !strings.Contains(got, "migrate on web-1: failed") {
 		t.Errorf("context:\n%s", got)
+	}
+}
+
+// streamingEngine reports a stage and writes its reply in pieces, as the built-in engine does.
+type streamingEngine struct{}
+
+func (streamingEngine) Chat(ctx context.Context, _ []gorun.ChatMessage) (string, error) {
+	trace := gorun.ChatTraceFrom(ctx)
+	trace.Statusf("Loading the model")
+	for _, p := range []string{"Port 80 ", "is taken."} {
+		trace.Piece(p)
+	}
+	return "Port 80 is taken.", nil
+}
+
+// A streamed chat sends what the assistant is doing, the reply as it is written, then the reply.
+func TestChatStreamsProgress(t *testing.T) {
+	a, _ := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	a.gen = &generator{assistant: gorun.Assistant{Engine: streamingEngine{}}}
+
+	data, _ := json.Marshal(chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "why?"}}, Stream: true})
+	rec := httptest.NewRecorder()
+	a.routes().ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/assistant/chat", bytes.NewReader(data)))
+	if ct := rec.Header().Get("Content-Type"); ct != "application/x-ndjson" {
+		t.Fatalf("Content-Type = %q", ct)
+	}
+	var statuses, tokens []string
+	var done *chatReply
+	for _, line := range strings.Split(strings.TrimSpace(rec.Body.String()), "\n") {
+		var ev chatEvent
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			t.Fatalf("line %q: %v", line, err)
+		}
+		if ev.Status != "" {
+			statuses = append(statuses, ev.Status)
+		}
+		if ev.Token != "" {
+			tokens = append(tokens, ev.Token)
+		}
+		if ev.Done != nil {
+			done = ev.Done
+		}
+	}
+	if !slices.Contains(statuses, "Loading the model") || strings.Join(tokens, "") != "Port 80 is taken." {
+		t.Errorf("statuses = %q, tokens = %q", statuses, tokens)
+	}
+	if done == nil || done.Reply != "Port 80 is taken." {
+		t.Errorf("done = %+v", done)
+	}
+}
+
+func TestTaskBlockNeedsACodeBlock(t *testing.T) {
+	for _, tc := range []struct {
+		reply string
+		want  bool
+	}{
+		{"```toml\n[tasks.a]\ncmd = \"true\"\n```", true},
+		{"Stop it first:\n```bash\nsudo systemctl stop nginx\n```\nthen:\n```toml\n[tasks.a]\ncmd = \"x\"\n```", true},
+		{"[tasks.site]\nDeploys the site's index page.", false},
+		{"```bash\nls\n```\n[tasks.site] deploys it", false},
+	} {
+		if got := hasTaskBlock(tc.reply); got != tc.want {
+			t.Errorf("hasTaskBlock(%q) = %v, want %v", tc.reply, got, tc.want)
+		}
 	}
 }

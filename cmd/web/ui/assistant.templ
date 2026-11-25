@@ -29,6 +29,7 @@ templ AssistantPage(d AssistantPageData) {
 		<form id="chat-form" class="flex items-end gap-2">
 			<textarea id="chat-input" rows="2" required placeholder="Ask something. Enter sends, shift+enter starts a new line." class={ inputClass() + " flex-1 resize-y" }></textarea>
 			<button id="chat-send" class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-600 disabled:opacity-50">Send</button>
+			<button id="chat-stop" type="button" hidden class="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:bg-zinc-800">Stop</button>
 		</form>
 		<button id="chat-clear" type="button" class="self-start text-xs text-zinc-500 hover:text-zinc-300">Start a new conversation</button>
 		if d.CanAdd {
@@ -171,30 +172,102 @@ templ assistantScript() {
 	}
 	messages.forEach(function (m) { bubble(m.role, m.content); });
 
+	var stop = document.getElementById('chat-stop');
+	var running = null; // the AbortController of the answer being written
+
+	// progress is the waiting bubble: what the assistant is doing, and for how long
+	function progress() {
+		empty.style.display = 'none';
+		var b = document.createElement('div');
+		b.className = 'self-start max-w-full rounded-2xl bg-zinc-800/60 px-3 py-2 text-sm text-zinc-200';
+		var status = document.createElement('div');
+		status.className = 'flex items-center gap-2 text-xs text-zinc-400';
+		var dot = document.createElement('span');
+		dot.className = 'h-2 w-2 shrink-0 animate-pulse rounded-full bg-violet-400';
+		var label = document.createElement('span');
+		label.textContent = 'Starting';
+		var clock = document.createElement('span');
+		clock.className = 'tabular-nums text-zinc-500';
+		status.append(dot, label, clock);
+		var text = document.createElement('div');
+		text.className = 'mt-1';
+		text.hidden = true;
+		b.append(status, text);
+		log.appendChild(b);
+		b.scrollIntoView({ block: 'end' });
+		var started = Date.now(), written = '';
+		var tick = setInterval(function () { clock.textContent = Math.round((Date.now() - started) / 1000) + 's'; }, 1000);
+		return {
+			status: function (s) { label.textContent = s; },
+			token: function (t) {
+				written += t;
+				text.hidden = false;
+				text.replaceChildren();
+				body(text, written);
+				b.scrollIntoView({ block: 'end' });
+			},
+			remove: function () { clearInterval(tick); b.remove(); },
+		};
+	}
+
+	// readEvents calls each for every JSON line of a streamed reply
+	function readEvents(body, each) {
+		var reader = body.getReader(), dec = new TextDecoder(), buf = '';
+		function pump() {
+			return reader.read().then(function (r) {
+				buf += dec.decode(r.value || new Uint8Array(), { stream: !r.done });
+				var lines = buf.split('\n');
+				buf = lines.pop();
+				lines.forEach(function (l) { if (l.trim()) { each(JSON.parse(l)); } });
+				if (r.done) {
+					if (buf.trim()) { each(JSON.parse(buf)); }
+					return;
+				}
+				return pump();
+			});
+		}
+		return pump();
+	}
+
 	function ask(text) {
 		text = text.trim();
-		if (!text || send.disabled) { return; }
+		if (!text || running) { return; }
 		messages.push({ role: 'user', content: text });
 		save();
 		bubble('user', text);
 		input.value = '';
-		send.disabled = true;
-		var wait = bubble('assistant', 'Thinking…');
-		wait.classList.add('animate-pulse');
+		send.hidden = true;
+		stop.hidden = false;
+		running = new AbortController();
+		var wait = progress(), done = null;
 		fetch('/assistant/chat', {
 			method: 'POST', headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ messages: messages, run: run }),
-		}).then(function (r) { return r.json(); }).then(function (out) {
+			body: JSON.stringify({ messages: messages, run: run, stream: true }),
+			signal: running.signal,
+		}).then(function (r) {
+			return readEvents(r.body, function (ev) {
+				if (ev.status) { wait.status(ev.status); }
+				if (ev.token) { wait.token(ev.token); }
+				if (ev.done) { done = ev.done; }
+			});
+		}).then(function () {
 			wait.remove();
-			if (out.error) { bubble('error', out.error); return; }
-			messages.push({ role: 'assistant', content: out.reply });
+			if (!done) { bubble('error', 'The answer stopped before it finished.'); return; }
+			if (done.error) { bubble('error', done.error); return; }
+			messages.push({ role: 'assistant', content: done.reply });
 			save();
-			offerTasks(bubble('assistant', out.reply), out);
+			offerTasks(bubble('assistant', done.reply), done);
 		}).catch(function (e) {
 			wait.remove();
-			bubble('error', String(e));
-		}).finally(function () { send.disabled = false; input.focus(); });
+			bubble('error', e.name === 'AbortError' ? 'Stopped.' : String(e));
+		}).finally(function () {
+			running = null;
+			send.hidden = false;
+			stop.hidden = true;
+			input.focus();
+		});
 	}
+	stop.addEventListener('click', function () { if (running) { running.abort(); } });
 	form.addEventListener('submit', function (e) { e.preventDefault(); ask(input.value); });
 	input.addEventListener('keydown', function (e) {
 		if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input.value); }

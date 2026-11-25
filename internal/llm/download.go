@@ -20,6 +20,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/jenmud/gorun"
 )
 
 // llamaTag is the llama.cpp build the yzma version in go.mod is made for: yzma's
@@ -82,6 +84,7 @@ func libraries(ctx context.Context, dir string, progress io.Writer) (string, err
 	}
 	defer func() { _ = os.Remove(archive) }() // the libraries are what's kept
 
+	gorun.ChatTraceFrom(ctx).Statusf("Unpacking llama.cpp")
 	_ = os.RemoveAll(libs)
 	if err := os.MkdirAll(libs, 0o755); err != nil {
 		return "", err
@@ -139,7 +142,7 @@ func fetch(ctx context.Context, a asset, file string, progress io.Writer) error 
 	}
 	defer func() { _ = os.Remove(part) }()
 	hash := sha256.New()
-	counter := &meter{w: progress, name: path.Base(a.URL), total: resp.ContentLength}
+	counter := &meter{w: progress, name: path.Base(a.URL), total: resp.ContentLength, trace: gorun.ChatTraceFrom(ctx)}
 	_, err = io.Copy(io.MultiWriter(out, hash, counter), resp.Body)
 	counter.done()
 	if cerr := out.Close(); err == nil {
@@ -154,24 +157,31 @@ func fetch(ctx context.Context, a asset, file string, progress io.Writer) error 
 	return os.Rename(part, file)
 }
 
-// meter writes a download's progress to w, at most once a second.
+// meter writes a download's progress to w, and to the chat's trace, at most once a second.
 type meter struct {
 	w         io.Writer
 	name      string
 	total, n  int64
 	last      time.Time
 	wroteSome bool
+	trace     *gorun.ChatTrace
 }
 
 func (m *meter) Write(p []byte) (int, error) {
 	m.n += int64(len(p))
-	if m.w != nil && time.Since(m.last) > time.Second {
+	if time.Since(m.last) > time.Second {
 		m.last = time.Now()
-		m.wroteSome = true
+		m.wroteSome = m.w != nil
 		if m.total > 0 {
-			fmt.Fprintf(m.w, "\rdownloading %s  %3d%% of %d MB", m.name, m.n*100/m.total, m.total>>20)
+			m.trace.Statusf("Downloading %s, the first time only: %d%% of %d MB", m.name, m.n*100/m.total, m.total>>20)
+			if m.w != nil {
+				fmt.Fprintf(m.w, "\rdownloading %s  %3d%% of %d MB", m.name, m.n*100/m.total, m.total>>20)
+			}
 		} else {
-			fmt.Fprintf(m.w, "\rdownloading %s  %d MB", m.name, m.n>>20)
+			m.trace.Statusf("Downloading %s, the first time only: %d MB", m.name, m.n>>20)
+			if m.w != nil {
+				fmt.Fprintf(m.w, "\rdownloading %s  %d MB", m.name, m.n>>20)
+			}
 		}
 	}
 	return len(p), nil

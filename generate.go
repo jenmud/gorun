@@ -36,6 +36,46 @@ type Engine interface {
 	Chat(ctx context.Context, messages []ChatMessage) (string, error)
 }
 
+// ChatTrace receives what a chat is doing while it runs, so a page can show it, as
+// net/http/httptrace does for requests. Either field may be nil. Engines read it with
+// ChatTraceFrom.
+type ChatTrace struct {
+	// Status is called with each stage, such as a download's progress or loading the model.
+	Status func(text string)
+	// Token is called with each piece of the reply as the model writes it. A piece is whole
+	// UTF-8. Engines that can't stream don't call it; their reply arrives all at once.
+	Token func(piece string)
+}
+
+type chatTraceKey struct{}
+
+// WithChatTrace returns ctx carrying t, for the chats run with it.
+func WithChatTrace(ctx context.Context, t *ChatTrace) context.Context {
+	return context.WithValue(ctx, chatTraceKey{}, t)
+}
+
+// ChatTraceFrom returns the trace in ctx. It is never nil, so its methods can always be called.
+func ChatTraceFrom(ctx context.Context) *ChatTrace {
+	if t, ok := ctx.Value(chatTraceKey{}).(*ChatTrace); ok && t != nil {
+		return t
+	}
+	return &ChatTrace{}
+}
+
+// Statusf reports a stage, when anyone is listening.
+func (t *ChatTrace) Statusf(format string, args ...any) {
+	if t.Status != nil {
+		t.Status(fmt.Sprintf(format, args...))
+	}
+}
+
+// Piece reports a piece of the reply, when anyone is listening.
+func (t *ChatTrace) Piece(piece string) {
+	if t.Token != nil && piece != "" {
+		t.Token(piece)
+	}
+}
+
 // ChatMessage is one turn of a conversation with a model. Role is system, user or assistant.
 type ChatMessage struct {
 	Role    string `json:"role"`
@@ -247,6 +287,7 @@ func (a Assistant) Chat(ctx context.Context, messages []ChatMessage) (string, er
 		return "", err
 	}
 	url := strings.TrimSuffix(cmp.Or(a.URL, DefaultAssistantURL), "/") + "/chat/completions"
+	ChatTraceFrom(ctx).Statusf("Asking %s at %s; the reply arrives when it's finished", a.model(), strings.TrimSuffix(cmp.Or(a.URL, DefaultAssistantURL), "/"))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return "", err

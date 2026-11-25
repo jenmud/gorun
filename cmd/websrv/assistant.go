@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -93,6 +94,17 @@ func (a *app) assistantPage(w http.ResponseWriter, r *http.Request) {
 type chatRequest struct {
 	Messages []gorun.ChatMessage `json:"messages"`
 	Run      string              `json:"run"`
+	// Stream asks for the reply as it is made: one JSON object a line, each a status, a piece
+	// of the reply, or last, the whole chatReply. See chatEvent.
+	Stream bool `json:"stream"`
+}
+
+// chatEvent is one line of a streamed chat: what the assistant is doing, a piece of the reply,
+// or, with Done, the final reply.
+type chatEvent struct {
+	Status string     `json:"status,omitempty"`
+	Token  string     `json:"token,omitempty"`
+	Done   *chatReply `json:"done,omitempty"`
 }
 
 // chatReply is the model's answer, and the tasks in it when they load.
@@ -116,24 +128,47 @@ func (a *app) chatHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusServiceUnavailable, chatReply{Error: "the assistant is off"})
 		return
 	}
+	send := func(chatEvent) {}
+	ctx := r.Context()
+	if req.Stream {
+		send = streamEvents(w)
+		ctx = gorun.WithChatTrace(ctx, &gorun.ChatTrace{
+			Status: func(text string) { send(chatEvent{Status: text}) },
+			Token:  func(piece string) { send(chatEvent{Token: piece}) },
+		})
+	}
+	finish := func(code int, out chatReply) {
+		if req.Stream {
+			send(chatEvent{Done: &out})
+			return
+		}
+		writeJSON(w, code, out)
+	}
+
 	a.mu.Lock()
 	cfg := a.cfg
 	a.mu.Unlock()
 
+	send(chatEvent{Status: "Reading the Gorunfile and the recent runs"})
 	conv := trimConversation(req.Messages)
-	system := a.chatContext(r.Context(), cfg, req.Run) + mentionedTasks(cfg, conv)
+	system := a.chatContext(ctx, cfg, req.Run) + mentionedTasks(cfg, conv)
 	messages := append([]gorun.ChatMessage{{Role: "system", Content: system}}, conv...)
 
-	a.genMu.Lock()
-	reply, err := a.gen.assistant.Chat(r.Context(), messages)
+	if !a.genMu.TryLock() {
+		send(chatEvent{Status: "Waiting for the model to finish another answer"})
+		a.genMu.Lock()
+	}
+	reply, err := a.gen.assistant.Chat(ctx, messages)
 	a.genMu.Unlock()
 	if err != nil {
-		slog.ErrorContext(r.Context(), "assistant chat", "error", err)
-		writeJSON(w, http.StatusBadGateway, chatReply{Error: err.Error()})
+		if ctx.Err() == nil {
+			slog.ErrorContext(ctx, "assistant chat", "error", err)
+		}
+		finish(http.StatusBadGateway, chatReply{Error: err.Error()})
 		return
 	}
 	out := chatReply{Reply: reply}
-	if strings.Contains(reply, "[tasks.") {
+	if hasTaskBlock(reply) {
 		if tasks, err := gorun.ExtractTaskEdits(reply, cfg); err != nil {
 			out.TaskError = err.Error()
 		} else {
@@ -145,7 +180,37 @@ func (a *app) chatHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	writeJSON(w, http.StatusOK, out)
+	finish(http.StatusOK, out)
+}
+
+// codeBlock is a fenced code block in a reply, and its text.
+var codeBlock = regexp.MustCompile("(?s)```[a-zA-Z]*\n(.*?)```")
+
+// hasTaskBlock reports whether a reply has a code block with a task table. A reply that only
+// names one in its prose, such as "[tasks.site] deploys the page", holds no tasks to offer.
+func hasTaskBlock(reply string) bool {
+	for _, m := range codeBlock.FindAllStringSubmatch(reply, -1) {
+		if strings.Contains(m[1], "[tasks.") {
+			return true
+		}
+	}
+	return false
+}
+
+// streamEvents starts a streamed chat reply on w and returns what sends each event, flushed at
+// once so the page sees it.
+func streamEvents(w http.ResponseWriter) func(chatEvent) {
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no") // keep proxies such as nginx from holding it back
+	w.WriteHeader(http.StatusOK)
+	flusher, _ := w.(http.Flusher)
+	enc := json.NewEncoder(w)
+	return func(ev chatEvent) {
+		if enc.Encode(ev) == nil && flusher != nil {
+			flusher.Flush()
+		}
+	}
 }
 
 // addTasksHandler queues the tasks a chat reply wrote as unsaved changes.

@@ -314,6 +314,10 @@ question sends it:
   of each failed task. A run of more than 40 tasks is counted per server instead, and only its
   tasks that didn't pass are listed.
 
+While it answers, the chat shows what it is doing and for how long: downloading the model on first
+use (with how far along), loading it, reading the question, then the reply as it is written.
+**Stop** ends an answer early.
+
 Env vars and template variables are never sent. **Ask the assistant** on a run's History page
 starts the chat on that run instead.
 

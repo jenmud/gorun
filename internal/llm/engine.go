@@ -7,6 +7,7 @@ import (
 	"io"
 	"path/filepath"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/hybridgroup/yzma/pkg/llama"
 	"github.com/jenmud/gorun"
@@ -59,6 +60,7 @@ func (e *Engine) load(ctx context.Context) error {
 		return fmt.Errorf("start llama.cpp: %w", err)
 	}
 
+	gorun.ChatTraceFrom(ctx).Statusf("Loading the model; it stays loaded for the next question")
 	params := llama.ModelDefaultParams()
 	params.NGpuLayers = 999 // as many as fit; with no GPU this is a no-op
 	if e.model, err = llama.ModelLoadFromFile(file, params); err != nil || e.model == 0 {
@@ -111,6 +113,8 @@ func (e *Engine) Chat(ctx context.Context, messages []gorun.ChatMessage) (string
 	if len(tokens)+maxReply > contextSize {
 		return "", fmt.Errorf("the prompt is %d tokens, too long for the model's %d", len(tokens), contextSize)
 	}
+	trace := gorun.ChatTraceFrom(ctx)
+	trace.Statusf("Reading the question, with your Gorunfile and runs (%d tokens)", len(tokens))
 	// the prompt goes in batch-sized pieces: llama.cpp aborts the process on a bigger one
 	for start := 0; start < len(tokens); start += batchSize {
 		if err := ctx.Err(); err != nil {
@@ -120,7 +124,9 @@ func (e *Engine) Chat(ctx context.Context, messages []gorun.ChatMessage) (string
 			return "", fmt.Errorf("decode: %w", err)
 		}
 	}
+	trace.Statusf("Writing the reply")
 	var reply []byte
+	sent := 0 // bytes of reply already given to the trace
 	buf := make([]byte, 256)
 	for range maxReply {
 		if err := ctx.Err(); err != nil {
@@ -136,6 +142,10 @@ func (e *Engine) Chat(ctx context.Context, messages []gorun.ChatMessage) (string
 			n = llama.TokenToPiece(e.vocab, token, buf, 0, false)
 		}
 		reply = append(reply, buf[:max(n, 0)]...)
+		if end := wholeRunes(reply); end > sent {
+			trace.Piece(string(reply[sent:end]))
+			sent = end
+		}
 		if _, err := llama.Decode(e.lctx, llama.BatchGetOne([]llama.Token{token})); err != nil {
 			return "", fmt.Errorf("decode: %w", err)
 		}
@@ -169,4 +179,18 @@ func (e *Engine) Close() {
 	_ = llama.ModelFree(e.model)
 	llama.Close()
 	e.loaded = false
+}
+
+// wholeRunes is the length of b without a UTF-8 character it ends partway through, which a token
+// can do; the rest of the character comes with the next one.
+func wholeRunes(b []byte) int {
+	for k := 1; k <= min(utf8.UTFMax-1, len(b)); k++ {
+		if i := len(b) - k; utf8.RuneStart(b[i]) {
+			if !utf8.FullRune(b[i:]) {
+				return i
+			}
+			break
+		}
+	}
+	return len(b)
 }

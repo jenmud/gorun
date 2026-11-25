@@ -78,8 +78,9 @@ type app struct {
 	// storedDir holds the working copies of the Gorunfiles kept in the history database, when
 	// the service started without one; see stored.go. bg runs the schedules of those that aren't
 	// open, so every one's schedules fire.
-	storedDir string
-	bg        map[string]*gorun.Scheduler
+	storedDir  string
+	bg         map[string]*gorun.Scheduler
+	openStored atomic.Value // the open stored Gorunfile's name, or ""; read without a.mu
 }
 
 // Run starts the web server on GORUN_ADDRESS (default :8080). configPath, when set, is the

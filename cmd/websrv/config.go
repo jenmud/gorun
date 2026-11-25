@@ -68,6 +68,7 @@ func (a *app) loadConfig(path string) error {
 	}
 	a.cfg = cfg
 	a.cfgPath = cfg.Path
+	a.openStored.Store(a.storedNameOf(cfg.Path))
 	a.pending = nil
 	a.mu.Unlock()
 	if stop != nil {

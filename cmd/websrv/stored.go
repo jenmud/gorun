@@ -102,10 +102,10 @@ func (a *app) storedNameOf(path string) string {
 
 // currentStored is the name of the stored Gorunfile that is open, or "" when the service runs a
 // Gorunfile given to it.
+// It doesn't take a.mu, so pages drawn while a.mu is held can call it.
 func (a *app) currentStored() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.storedNameOf(a.cfgPath)
+	name, _ := a.openStored.Load().(string)
+	return name
 }
 
 // usingStored reports whether the open Gorunfile is one kept in the history database.

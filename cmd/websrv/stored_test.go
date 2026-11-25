@@ -235,3 +235,23 @@ func TestUnpackImportRefusesPathsOutsideTheZip(t *testing.T) {
 		t.Errorf("unpackImport() = %v, want it refused", err)
 	}
 }
+
+// The Live page draws its dashboard while holding a.mu, and the menu asks which stored
+// Gorunfile is open, so that must not take a.mu too.
+func TestLiveDashboardRendersWithAStoredGorunfile(t *testing.T) {
+	a, _ := newStoredApp(t)
+	done := make(chan struct{})
+	go func() {
+		a.pushDashboard()
+		get(t, a, "/assistant")
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("drawing the Live dashboard with a stored Gorunfile open deadlocked")
+	}
+	if a.currentStored() != store.DefaultGorunfile {
+		t.Errorf("currentStored() = %q", a.currentStored())
+	}
+}

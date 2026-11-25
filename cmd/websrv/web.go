@@ -52,6 +52,8 @@ var Version string
 // app holds the state the handlers share. Each piece is guarded by mu.
 type app struct {
 	saveMu sync.Mutex // one direct save from a page at a time, so edits can't overwrite each other
+	genMu  sync.Mutex // one task generation at a time
+	gen    *generator
 	store  *store.Store
 	nc     *inats.Client
 	topic  string
@@ -123,9 +125,11 @@ func run(configPath, logPath string) error {
 		hub:   &hub{clients: map[chan string]struct{}{}},
 		runs:  map[string]context.CancelFunc{},
 		nats:  natsStartState(emb, nc, err, envvars.Get("GORUN_SKIP_NATS") != ""),
+		gen:   newGenerator(),
 
 		noFile: configPath == "",
 	}
+	defer a.gen.close()
 	if nc != nil {
 		defer nc.Close()
 		if _, err := nc.Subscribe(a.topic, a.onEvent); err != nil {
@@ -197,13 +201,16 @@ func (a *app) routes() *http.ServeMux {
 	mux.HandleFunc("GET /history/{id}/task", a.taskDetail)
 	mux.HandleFunc("POST /runs/{id}/delete", a.deleteRun)
 	mux.HandleFunc("POST /runs/truncate", a.truncateRuns)
-
-	// the pages that need a Gorunfile
+	mux.HandleFunc("GET /assistant", a.assistantPage)
+	mux.HandleFunc("POST /assistant/chat", a.chatHandler)
 	withFile := func(pattern string, h http.HandlerFunc) {
 		if !a.noFile {
 			mux.HandleFunc(pattern, h)
 		}
 	}
+	withFile("POST /assistant/add", a.addTasksHandler)
+
+	// the pages that need a Gorunfile
 	withFile("GET /run", a.runPage)
 	withFile("POST /run", a.startRunHandler)
 	withFile("GET /tasks", a.tasksPage)
@@ -227,6 +234,7 @@ func (a *app) routes() *http.ServeMux {
 	withFile("POST /config/remove", a.removeHandler)
 	withFile("POST /config/save", a.saveHandler)
 	withFile("POST /config/discard", a.discardHandler)
+	withFile("POST /config/generate", a.generateHandler)
 	return mux
 }
 

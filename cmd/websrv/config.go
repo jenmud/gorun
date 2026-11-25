@@ -139,6 +139,7 @@ func (a *app) configPage(w http.ResponseWriter, r *http.Request) {
 	d.NATS = a.natsStatus()
 	d.Flash, d.FlashBad = msg, bad
 	d.Browser = browse(pickerDir(r.URL.Query().Get("dir"), d.Path))
+	d.Model = a.gen.describe()
 	a.page(w, "Config", "config", ui.ConfigPage(d))
 }
 
@@ -164,6 +165,7 @@ func (a *app) editPage(w http.ResponseWriter, r *http.Request) {
 	d.NATS = a.natsStatus()
 	d.Browser = browse(pickerDir("", d.Path))
 	d.EditingKind, d.EditingName = kind, name
+	d.Model = a.gen.describe()
 	d.Edit = editFields(body)
 	a.page(w, "Config", "config", ui.ConfigPage(d))
 }

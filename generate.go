@@ -51,7 +51,11 @@ const (
 // assistantPrompt teaches the model the subset of a Gorunfile a task needs.
 const assistantPrompt = `You write tasks for gorun, a tool that runs shell commands on servers over SSH.
 Reply with TOML only: one or more [tasks.<name>] tables, no prose and no markdown fences.
-Task names are short, lowercase, with dashes. Keys a task may use:
+` + TaskFormat
+
+// TaskFormat tells a model how to write gorun tasks: the keys a task may use, the rules and
+// an example. It is part of the prompt GenerateTasks sends, for prompts of your own.
+const TaskFormat = `Task names are short, lowercase, with dashes. Keys a task may use:
 
   description = "one line summary"         # always set this
   cmd = "shell command"                     # required; use '''multi-line''' strings for scripts
@@ -91,14 +95,14 @@ func (a Assistant) GenerateTasks(ctx context.Context, request string, cfg *Confi
 	var err error
 	var reply string
 	for range cmp.Or(a.Attempts, 3) {
-		reply, err = a.chat(ctx, messages)
+		reply, err = a.Chat(ctx, messages)
 		if err != nil {
 			span.RecordError(err)
 			return "", err
 		}
-		text := stripFences(reply)
-		if err = checkTasks(text, cfg); err == nil {
-			return text + "\n", nil
+		var text string
+		if text, err = ExtractTasks(reply, cfg); err == nil {
+			return text, nil
 		}
 		messages = append(messages,
 			ChatMessage{Role: "assistant", Content: reply},
@@ -154,6 +158,17 @@ func stripFences(reply string) string {
 	return strings.TrimSpace(reply)
 }
 
+// ExtractTasks returns the tasks in a model's reply as Gorunfile TOML: the first markdown code
+// block, or else the whole reply. It fails when they don't load, aren't valid, redefine a task
+// in cfg or depend on one that doesn't exist. cfg may be nil.
+func ExtractTasks(reply string, cfg *Config) (string, error) {
+	text := stripFences(reply)
+	if err := checkTasks(text, cfg); err != nil {
+		return "", err
+	}
+	return text + "\n", nil
+}
+
 // checkTasks reports why text isn't a set of new, valid tasks.
 func checkTasks(text string, cfg *Config) error {
 	var file struct {
@@ -201,8 +216,9 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// chat sends messages to the engine, or the chat completions endpoint, and returns the reply.
-func (a Assistant) chat(ctx context.Context, messages []ChatMessage) (string, error) {
+// Chat sends messages to the engine, or else the chat completions API at URL, and returns the
+// model's reply.
+func (a Assistant) Chat(ctx context.Context, messages []ChatMessage) (string, error) {
 	if a.Engine != nil {
 		return a.Engine.Chat(ctx, messages)
 	}

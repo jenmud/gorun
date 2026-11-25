@@ -1,0 +1,187 @@
+package ui
+
+// AssistantPage is a chat with the language model about the Gorunfile and the run history.
+templ AssistantPage(d AssistantPageData) {
+	<div class="mx-auto flex max-w-3xl flex-col gap-4" id="assistant" data-run={ d.RunID }>
+		<div>
+			<h1 class="flex items-center gap-2 text-xl font-semibold text-zinc-100">Assistant <span class="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-zinc-400">experimental</span></h1>
+			<p class="mt-1 text-sm text-zinc-400">Ask about your tasks and servers, have it summarise runs and explain failures, or have it write tasks. It reads the loaded Gorunfile and the run history. The model is { d.Model }. It is small, so check what it says.</p>
+		</div>
+		@privacyNote(d)
+		if d.RunID != "" {
+			<p class="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">About run <a href={ templ.SafeURL("/history/" + d.RunID) } class="text-accent hover:underline">{ d.RunTitle }</a> <span class="font-mono text-zinc-500">{ d.RunID }</span>. <a href="/assistant" class="text-zinc-300 underline underline-offset-2">Ask about the newest run instead</a>.</p>
+		}
+		<div id="chat-log" class="flex min-h-[16rem] flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+			<div id="chat-empty" class="flex flex-wrap gap-2">
+				if d.RunID != "" {
+					@suggestion("Summarise this run")
+					@suggestion("Why did this run fail, and how do I fix it?")
+				} else {
+					@suggestion("Summarise the recent runs")
+					@suggestion("Why did the last run fail?")
+				}
+				@suggestion("Which tasks run on which servers?")
+				if d.CanAdd {
+					@suggestion("Write a task that installs nginx and keeps it running")
+				}
+			</div>
+		</div>
+		<form id="chat-form" class="flex items-end gap-2">
+			<textarea id="chat-input" rows="2" required placeholder="Ask something. Enter sends, shift+enter starts a new line." class={ inputClass() + " flex-1 resize-y" }></textarea>
+			<button id="chat-send" class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-600 disabled:opacity-50">Send</button>
+		</form>
+		<button id="chat-clear" type="button" class="self-start text-xs text-zinc-500 hover:text-zinc-300">Start a new conversation</button>
+		if d.CanAdd {
+			<template id="chat-add">
+				<div class="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-2">
+					<p class="w-full text-xs text-emerald-300" data-names></p>
+					<div class="min-w-0 flex-1">
+						@fileSelect(d.Files)
+					</div>
+					<button type="button" class="rounded-lg border border-emerald-800 px-3 py-1.5 text-xs text-emerald-200 transition hover:bg-emerald-900/40" data-add>Add as unsaved changes</button>
+				</div>
+			</template>
+		}
+		@assistantScript()
+	</div>
+}
+
+templ privacyNote(d AssistantPageData) {
+	if d.Private {
+		<p class="flex items-center gap-2 rounded-lg border border-emerald-900/60 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-300">
+			<span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+			Private: the model runs on this machine. Your Gorunfile and run history don't leave it.
+		</p>
+	} else {
+		<p class="flex items-center gap-2 rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-300">
+			<span class="h-2 w-2 rounded-full bg-amber-400"></span>
+			Not private: each question sends your Gorunfile's tasks and servers, and recent run output, to { d.Host }.
+		</p>
+	}
+}
+
+templ suggestion(text string) {
+	<button type="button" data-suggest class="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 transition hover:bg-zinc-800">{ text }</button>
+}
+
+templ assistantScript() {
+	<script>
+(function () {
+	var root = document.getElementById('assistant');
+	var log = document.getElementById('chat-log');
+	var empty = document.getElementById('chat-empty');
+	var form = document.getElementById('chat-form');
+	var input = document.getElementById('chat-input');
+	var send = document.getElementById('chat-send');
+	var addTmpl = document.getElementById('chat-add');
+	var run = root.dataset.run || '';
+	var key = 'gorunChat:' + run;
+	var messages = [];
+	try { messages = JSON.parse(sessionStorage.getItem(key) || '[]'); } catch (e) {}
+	function save() { try { sessionStorage.setItem(key, JSON.stringify(messages)); } catch (e) {} }
+
+	// text, with ``` blocks drawn as code; nothing is parsed as HTML
+	function body(el, text) {
+		var re = /```[a-zA-Z]*\n?([\s\S]*?)(```|$)/g, last = 0, m;
+		while ((m = re.exec(text)) !== null) {
+			if (m.index > last) { para(el, text.slice(last, m.index)); }
+			var pre = document.createElement('pre');
+			pre.className = 'my-2 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs text-zinc-200';
+			pre.textContent = m[1];
+			el.appendChild(pre);
+			last = re.lastIndex;
+			if (m[0].length === 0) { break; }
+		}
+		if (last < text.length) { para(el, text.slice(last)); }
+	}
+	function para(el, text) {
+		if (!text.trim()) { return; }
+		var p = document.createElement('div');
+		p.className = 'whitespace-pre-wrap';
+		p.textContent = text.trim();
+		el.appendChild(p);
+	}
+	function bubble(role, text) {
+		empty.style.display = 'none';
+		var b = document.createElement('div');
+		b.className = role === 'user'
+			? 'self-end max-w-[85%] rounded-2xl bg-accent/20 px-3 py-2 text-sm text-zinc-100'
+			: 'self-start max-w-full rounded-2xl bg-zinc-800/60 px-3 py-2 text-sm text-zinc-200';
+		if (role === 'error') { b.className = 'self-start rounded-2xl border border-red-900/60 bg-red-950/30 px-3 py-2 text-sm text-red-300'; }
+		body(b, text);
+		log.appendChild(b);
+		b.scrollIntoView({ block: 'end' });
+		return b;
+	}
+	function offerTasks(b, reply) {
+		if (reply.taskError) {
+			var n = document.createElement('p');
+			n.className = 'mt-2 text-xs text-amber-300';
+			n.textContent = "These tasks don't load, so they can't be added: " + reply.taskError + '. Ask it to fix them.';
+			b.appendChild(n);
+		}
+		if (!reply.tasks || !addTmpl) { return; }
+		var box = addTmpl.content.firstElementChild.cloneNode(true);
+		box.querySelector('[data-names]').textContent = 'Tasks that load: ' + reply.taskNames;
+		var btn = box.querySelector('[data-add]');
+		btn.addEventListener('click', function () {
+			btn.disabled = true;
+			fetch('/assistant/add', {
+				method: 'POST', headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ tasks: reply.tasks, file: box.querySelector('select[name=file]').value }),
+			}).then(function (r) { return r.json(); }).then(function (out) {
+				box.innerHTML = '';
+				var p = document.createElement('p');
+				p.className = out.error ? 'text-xs text-red-300' : 'text-xs text-emerald-300';
+				p.textContent = out.error || out.reply;
+				box.appendChild(p);
+				if (!out.error) {
+					var a = document.createElement('a');
+					a.href = '/config'; a.className = 'text-xs text-accent underline'; a.textContent = 'Open Config';
+					box.appendChild(a);
+				}
+			}).catch(function (e) { btn.disabled = false; alert(e); });
+		});
+		b.appendChild(box);
+	}
+	messages.forEach(function (m) { bubble(m.role, m.content); });
+
+	function ask(text) {
+		text = text.trim();
+		if (!text || send.disabled) { return; }
+		messages.push({ role: 'user', content: text });
+		save();
+		bubble('user', text);
+		input.value = '';
+		send.disabled = true;
+		var wait = bubble('assistant', 'Thinking…');
+		wait.classList.add('animate-pulse');
+		fetch('/assistant/chat', {
+			method: 'POST', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ messages: messages, run: run }),
+		}).then(function (r) { return r.json(); }).then(function (out) {
+			wait.remove();
+			if (out.error) { bubble('error', out.error); return; }
+			messages.push({ role: 'assistant', content: out.reply });
+			save();
+			offerTasks(bubble('assistant', out.reply), out);
+		}).catch(function (e) {
+			wait.remove();
+			bubble('error', String(e));
+		}).finally(function () { send.disabled = false; input.focus(); });
+	}
+	form.addEventListener('submit', function (e) { e.preventDefault(); ask(input.value); });
+	input.addEventListener('keydown', function (e) {
+		if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input.value); }
+	});
+	document.querySelectorAll('[data-suggest]').forEach(function (s) {
+		s.addEventListener('click', function () { ask(s.textContent); });
+	});
+	document.getElementById('chat-clear').addEventListener('click', function () {
+		messages = []; save();
+		log.querySelectorAll(':scope > :not(#chat-empty)').forEach(function (n) { n.remove(); });
+		empty.style.display = '';
+	});
+})();
+	</script>
+}

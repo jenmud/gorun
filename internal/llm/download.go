@@ -54,6 +54,16 @@ var DefaultModel = asset{
 	"724fb256bec1ff062b2f65e4569e871ad2e95ab2a3989723d1769c54294730b7",
 }
 
+// Downloaded reports whether llama.cpp and the default model are already in dir.
+func Downloaded(dir string) bool {
+	for _, f := range []string{filepath.Join("llama-"+llamaTag, ".complete"), filepath.Join("models", path.Base(DefaultModel.URL))} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
 // libraries returns the folder holding llama.cpp's libraries for this platform, downloading
 // them into dir first when they aren't there.
 func libraries(ctx context.Context, dir string, progress io.Writer) (string, error) {

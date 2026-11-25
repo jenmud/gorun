@@ -6,11 +6,11 @@ the long-running host for [schedules](schedules.md).
 
 ```bash
 gorun -serve Gorunfile                       # open http://localhost:8080
-GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no Gorunfile: only Live and History
+GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no Gorunfile: only Live, History and Assistant
 ```
 
-Started **without a Gorunfile**, the service only watches: the menu has just **Live** and
-**History**, for runs started elsewhere, such as `gorun Gorunfile -r` in a terminal that reaches
+Started **without a Gorunfile**, the service only watches: the menu has just **Live**,
+**History** and **Assistant**, for runs started elsewhere, such as `gorun Gorunfile -r` in a terminal that reaches
 the same NATS server. The pages that need a Gorunfile (Run, Tasks, Bundles, Schedules and Config)
 don't exist: they aren't in the menu, and their addresses answer 404. Task and schedule names in
 History are plain text rather than links. Start it with a Gorunfile to run, edit and schedule
@@ -238,6 +238,34 @@ Add, edit and remove servers, groups, tasks, bundles and schedules in the loaded
 Gorunfile by browsing folders on the machine running gorun, or by typing its path. Changes queue
 until **Save**, which writes each one into the file it came from and reloads the file. Comments and
 layout elsewhere in the file are kept.
+
+**Generate tasks** (experimental) asks a language model to write tasks from a description, such
+as "install postgres and back it up every night". The tasks it writes are checked so they load,
+then queued as unsaved changes: read and fix each one before you save, because the model gets
+commands wrong. The model is Qwen2.5 Coder 3B, run inside `gorun -serve` on the GPU when one is
+found. The first use downloads llama.cpp (about 36 MB) and the model (2.1 GB) into
+`GORUN_CACHE_DIR/llm`. Only the web service does this; the command line and the TUI never load a
+model. To use Ollama or another OpenAI-compatible server instead, set `GORUN_LLM_URL` (and
+`GORUN_LLM_MODEL` to its model name).
+
+### Assistant
+
+A chat (experimental) with the same language model. Ask it about the loaded Gorunfile's tasks and
+servers, have it summarise runs or explain why a task failed, or have it write tasks. Each
+question sends it the Gorunfile's tasks, bundles and servers, the ten newest runs, and the newest
+run in detail: every task's state, and the command, exit code and end of the output of each
+failed task. Env vars and template variables are never sent. **Ask the assistant** on a run's
+History page starts the chat on that run instead.
+
+When a reply holds tasks that load, the chat offers to add them as unsaved changes, to review and
+save on the Config page. Tasks that don't load are reported, so you can ask it to fix them.
+
+The page says whether the chat is private. It is when the model runs inside gorun, or behind a
+`GORUN_LLM_URL` on this machine (`localhost` or a loopback address). With any other URL, each
+question sends the Gorunfile and run output to that host, and the page says so in amber.
+
+The model is small: it reads failures well when the output says what went wrong, but its tasks
+often hold placeholders, such as paths and passwords, to fill in.
 
 ## Walkthrough: from nothing to a running schedule
 

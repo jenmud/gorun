@@ -158,7 +158,7 @@ type options struct {
 	tasks, bundles, servers, exclude, tags, groups                                       stringSlice
 	parallel                                                                             int
 	parallelSet                                                                          bool // -parallel was given
-	dumpTasksDir, complete, filename, generate                                           string
+	dumpTasksDir, complete, filename                                                     string
 }
 
 // lists reports whether a flag that only prints and exits was given.
@@ -193,7 +193,6 @@ func parseArgs(fs *flag.FlagSet, args []string) *options {
 	fs.IntVar(&o.parallel, "parallel", 0, "")
 	fs.StringVar(&o.dumpTasksDir, "dump-tasks", "", "")
 	fs.StringVar(&o.complete, "complete", "", "")
-	fs.StringVar(&o.generate, "generate", "", "")
 	_ = fs.Parse(args)
 
 	o.filename = fs.Arg(0)
@@ -231,9 +230,6 @@ func main() {
 		return
 	case o.dump:
 		fmt.Print(emptyGorunfile)
-		return
-	case o.generate != "":
-		check(generate(ctx, o.generate, o.filename, o.verbose))
 		return
 	}
 
@@ -539,8 +535,6 @@ Options:
   -list-bundles  list task bundles and what they expand to and exit (a collapsible tree in a terminal)
   -dump     print a starting Gorunfile that works as-is and documents every option
   -dump-tasks DIR  dump each task as a file in DIR and exit
-  -generate TEXT [Gorunfile]  print tasks a built-in language model writes from TEXT (experimental;
-            the first use downloads the model, 2.1 GB)
   -update-includes  look up every git include's ref again, update the lock file and exit
   -version  print version and exit
   -serve [Gorunfile]  start the web service (scheduler, NATS, web UI); -web is an alias
@@ -564,7 +558,7 @@ in the environment):
   GORUN_NATS_CLIENT_RECONNECT_WAIT    default: nats default (e.g. 2s)
   GORUN_NATS_CLIENT_TIMEOUT           default: nats default (e.g. 5s)
   GORUN_NATS_SERVER_CONFIG            default: none (NATS server config for the server -serve starts)
-  GORUN_LLM_URL                       default: unset (an OpenAI-compatible API for -generate, not the built-in model)
+  GORUN_LLM_URL                       default: unset (an OpenAI-compatible API for the web UI's assistant, instead of the built-in model)
   GORUN_LLM_MODEL                     default: Qwen2.5 Coder 3B (a GGUF path or https URL; a model name with GORUN_LLM_URL)
   GORUN_LLM_API_KEY                   default: unset (sent as a bearer token)
 

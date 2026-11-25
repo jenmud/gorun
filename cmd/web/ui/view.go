@@ -192,6 +192,18 @@ type ConfigPageData struct {
 	EditingKind string // kind of entity being edited (e.g. "task")
 	EditingName string // name of entity being edited
 	Edit        EditFields
+	Model       string // the model the task generator asks, as the page names it; empty hides it
+}
+
+// AssistantPageData is the chat page.
+type AssistantPageData struct {
+	Model    string // the model, as the page names it
+	Private  bool   // the model runs on this machine
+	Host     string // where a model that isn't private runs
+	CanAdd   bool   // a Gorunfile is loaded, so tasks can be added
+	Files    []FileOption
+	RunID    string // the run the chat starts on, if any
+	RunTitle string
 }
 
 // EditFields are the current values the edit form starts from.

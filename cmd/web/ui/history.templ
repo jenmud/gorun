@@ -100,9 +100,12 @@ templ HistoryDetailPage(d RunDetailData) {
 			<p class="mt-1 text-sm text-zinc-400">Started { startedText(d.Summary) } { runWhere(d.Summary) }</p>
 			@originLine(d.Summary.Origin)
 		</div>
-		<form method="post" action={ deletePath(d.Summary.ID) }>
-			<button class="rounded-lg border border-red-900/60 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-950/40">Delete this run</button>
-		</form>
+		<div class="flex gap-2">
+			<a href={ templ.SafeURL("/assistant?run=" + d.Summary.ID) } class="rounded-lg border border-violet-900/60 px-3 py-1.5 text-xs text-violet-300 transition hover:bg-violet-950/40">Ask the assistant</a>
+			<form method="post" action={ deletePath(d.Summary.ID) }>
+				<button class="rounded-lg border border-red-900/60 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-950/40">Delete this run</button>
+			</form>
+		</div>
 	</header>
 	<div class="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
 		@statTile("Took", formatDuration(d.Summary.Duration), "wall clock")

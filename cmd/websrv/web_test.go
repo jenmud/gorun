@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/internal/store"
 )
 
@@ -332,7 +333,7 @@ ssh.username = "deploy"
 		t.Fatal(err)
 	}
 
-	_, servers, err := planRun(path, []string{"local"}, []string{"extra"}, nil)
+	_, servers, err := planRun(&gorun.Config{}, path, []string{"local"}, []string{"extra"}, nil)
 	if err != nil {
 		t.Fatalf("a ticked task the server doesn't list should still run: %v", err)
 	}
@@ -340,24 +341,24 @@ ssh.username = "deploy"
 		t.Errorf("tasks = %v, want only extra", got)
 	}
 
-	if _, servers, err = planRun(path, []string{"local"}, nil, nil); err != nil || servers[0].Tasks[0].Name != "own" {
+	if _, servers, err = planRun(&gorun.Config{}, path, []string{"local"}, nil, nil); err != nil || servers[0].Tasks[0].Name != "own" {
 		t.Errorf("with nothing ticked the server's own list should run: %v %v", servers, err)
 	}
 
-	if _, _, err := planRun(path, []string{"local"}, []string{"remote"}, nil); err == nil || !strings.Contains(err.Error(), "Tick a server") {
+	if _, _, err := planRun(&gorun.Config{}, path, []string{"local"}, []string{"remote"}, nil); err == nil || !strings.Contains(err.Error(), "Tick a server") {
 		t.Errorf("an SSH-only task on a local server should be refused, got %v", err)
 	}
 
-	_, servers, err = planRun(path, nil, []string{"extra"}, nil)
+	_, servers, err = planRun(&gorun.Config{}, path, nil, []string{"extra"}, nil)
 	if err != nil || len(servers) != 1 || !servers[0].IsLocal() || servers[0].Tasks[0].Name != "extra" {
 		t.Errorf("a local task should run here with no server ticked: %v %v", servers, err)
 	}
 
-	if _, _, err := planRun(path, nil, []string{"remote"}, nil); err == nil || !strings.Contains(err.Error(), "Tick a server") {
+	if _, _, err := planRun(&gorun.Config{}, path, nil, []string{"remote"}, nil); err == nil || !strings.Contains(err.Error(), "Tick a server") {
 		t.Errorf("an SSH task with no server ticked should be refused, got %v", err)
 	}
 
-	_, servers, err = planRun(path, []string{"web"}, []string{"extra", "remote"}, nil)
+	_, servers, err = planRun(&gorun.Config{}, path, []string{"web"}, []string{"extra", "remote"}, nil)
 	if err != nil || len(servers) != 2 {
 		t.Fatalf("local and SSH tasks should run on this machine and the ticked server: %v %v", servers, err)
 	}

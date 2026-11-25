@@ -44,15 +44,35 @@ var kindNames = map[string]string{
 // loadConfig reads path into the editor. Runs use this file from now on, and unsaved changes
 // are dropped.
 func (a *app) loadConfig(path string) error {
-	cfg := &gorun.Config{}
+	cfg := a.newConfig()
 	if err := cfg.LoadFile(expandHome(path)); err != nil {
 		return err
 	}
 	a.mu.Lock()
+	var stop *gorun.Scheduler
+	if prev, next := a.storedNameOf(a.cfgPath), a.storedNameOf(cfg.Path); prev != next || a.cfgPath != cfg.Path {
+		// a stored Gorunfile's schedules keep firing when another is open; a file's don't
+		if prev != "" && a.sched != nil {
+			if a.bg == nil {
+				a.bg = map[string]*gorun.Scheduler{}
+			}
+			a.bg[prev] = a.sched
+		} else {
+			stop = a.sched
+		}
+		a.sched = nil
+		if next != "" {
+			a.sched = a.bg[next]
+			delete(a.bg, next)
+		}
+	}
 	a.cfg = cfg
 	a.cfgPath = cfg.Path
 	a.pending = nil
 	a.mu.Unlock()
+	if stop != nil {
+		stop.Stop()
+	}
 	a.startScheduler(cfg)
 	a.keepStored()
 	return nil
@@ -63,8 +83,18 @@ func (a *app) loadConfig(path string) error {
 func (a *app) startScheduler(cfg *gorun.Config) {
 	old := a.schedulerStatus()
 	a.stopScheduler()
+	if s := a.newScheduler(cfg, old); s != nil {
+		a.mu.Lock()
+		a.sched = s
+		a.mu.Unlock()
+	}
+}
+
+// newScheduler starts a scheduler for cfg's schedules, keeping the pauses and skips in old, or
+// returns nil when cfg has none.
+func (a *app) newScheduler(cfg *gorun.Config, old []gorun.ScheduleStatus) *gorun.Scheduler {
 	if len(cfg.Schedules) == 0 {
-		return
+		return nil
 	}
 	// Without NATS nothing carries a scheduled run's events to the dashboard and history, so
 	// the web service records them itself. With NATS its subscriber already does, and recording
@@ -79,7 +109,7 @@ func (a *app) startScheduler(cfg *gorun.Config) {
 	})
 	if err := s.Start(context.Background()); err != nil {
 		log.Printf("gorun web: scheduler: %v", err)
-		return
+		return nil
 	}
 	// a reload keeps the pauses and skips set on schedules that still exist
 	for _, st := range old {
@@ -90,9 +120,7 @@ func (a *app) startScheduler(cfg *gorun.Config) {
 			_ = s.Skip(st.Name)
 		}
 	}
-	a.mu.Lock()
-	a.sched = s
-	a.mu.Unlock()
+	return s
 }
 
 // schedulerStatus is the running scheduler's status, or nil when none is running.
@@ -141,6 +169,7 @@ func (a *app) configPage(w http.ResponseWriter, r *http.Request) {
 	d.Flash, d.FlashBad = msg, bad
 	d.Browser = browse(pickerDir(r.URL.Query().Get("dir"), d.Path))
 	d.Model = a.gen.describe()
+	d.Stored = a.usingStored()
 	a.page(w, "Config", "config", ui.ConfigPage(d))
 }
 
@@ -167,6 +196,7 @@ func (a *app) editPage(w http.ResponseWriter, r *http.Request) {
 	d.Browser = browse(pickerDir("", d.Path))
 	d.EditingKind, d.EditingName = kind, name
 	d.Model = a.gen.describe()
+	d.Stored = a.usingStored()
 	d.Edit = editFields(body)
 	a.page(w, "Config", "config", ui.ConfigPage(d))
 }

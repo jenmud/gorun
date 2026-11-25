@@ -211,7 +211,7 @@ func (a *app) reloadConfig() error {
 	a.mu.Lock()
 	path := a.cfgPath
 	a.mu.Unlock()
-	cfg := &gorun.Config{}
+	cfg := a.newConfig()
 	if err := cfg.LoadFile(path); err != nil {
 		return err
 	}

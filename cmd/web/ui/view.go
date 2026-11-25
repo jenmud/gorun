@@ -17,6 +17,20 @@ func WithoutGorunfile(ctx context.Context) context.Context {
 	return context.WithValue(ctx, noGorunfileKey{}, true)
 }
 
+type storedKey struct{}
+
+// WithStored marks ctx for a web UI on the Gorunfiles kept in its history database, with name
+// the open one. The menu then links to the Gorunfiles page, and names the open one.
+func WithStored(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, storedKey{}, name)
+}
+
+// storedName is the open stored Gorunfile, and whether ctx was marked by WithStored.
+func storedName(ctx context.Context) (string, bool) {
+	name, ok := ctx.Value(storedKey{}).(string)
+	return name, ok
+}
+
 // noGorunfile reports whether ctx was marked by WithoutGorunfile.
 func noGorunfile(ctx context.Context) bool {
 	no, _ := ctx.Value(noGorunfileKey{}).(bool)
@@ -193,6 +207,24 @@ type ConfigPageData struct {
 	EditingName string // name of entity being edited
 	Edit        EditFields
 	Model       string // the model the task generator asks, as the page names it; empty hides it
+	Stored      bool   // the Gorunfile is the one kept in the history database, so it can be imported into
+}
+
+// GorunfilesPageData is the list of Gorunfiles kept in the history database.
+type GorunfilesPageData struct {
+	Flash    string
+	FlashBad bool
+	Open     string // the one open now
+	Items    []StoredGorunfileRow
+}
+
+// StoredGorunfileRow is one Gorunfile kept in the history database.
+type StoredGorunfileRow struct {
+	Name     string
+	Versions int
+	SavedAt  string
+	Shares   []string // the stored Gorunfiles it includes, sharing their tasks and bundles
+	SharedBy []string // the stored Gorunfiles that include it
 }
 
 // AssistantPageData is the chat page.

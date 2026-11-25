@@ -12,21 +12,35 @@ gorun -serve -live                           # watch only: Live, History and Ass
 
 Started **with a Gorunfile**, the service runs and edits that file.
 
-Started **without one**, it keeps the Gorunfile in its history database (`GORUN_DB_PATH`), so it
-lasts across restarts:
+Started **without one**, it keeps Gorunfiles in its history database (`GORUN_DB_PATH`), so they
+last across restarts. It can keep several, each with a name:
 
-- **The first start** saves a starter Gorunfile with only a title. Add servers, tasks, bundles and
-  schedules on the Config page, or have the [assistant](#assistant) write and change tasks.
-- **Every save** is kept as a new version. The startup message names the newest:
-  `Gorunfile  kept in the history database (version 3)`.
-- **Runs, the editor and the scheduler** use a working copy at `gorunfile/Gorunfile` next to the
-  database, written from the newest version at each start. Don't edit that file: the next start
-  replaces it. Relative paths in it, such as a copy's `src`, are relative to its folder, so use
-  absolute paths.
-- **Loading a file** on the Config page switches to that file until the service restarts.
+- **The first start** saves a starter Gorunfile called `default`, with only a title. Add servers,
+  tasks, bundles and schedules on the Config page, or have the [assistant](#assistant) write and
+  change tasks.
+- **The Gorunfiles page** lists them. **Open** one, and the Run, Tasks, Bundles, Schedules,
+  Config and Assistant pages show it; the menu names the open one. **Create and open** adds a new
+  one, and **Delete** removes one that isn't open and no other includes. Gorun starts on the one
+  saved most recently.
+- **Every one's schedules run**, whichever is open.
+- **Every save** is kept as a new version. The startup message names the open one:
+  `Gorunfile  web, kept in the history database (version 3), and 2 more whose schedules also run`.
+- **Sharing tasks**: a Gorunfile can use the tasks and bundles of another kept here by including
+  it, `include = ["stored::base"]`. Like a [git include](gorunfile.md#tasks-from-a-git-repository), only tasks and
+  bundles come along: `base`'s servers, groups and schedules stay its own. It is live, so editing
+  a shared task (from either Gorunfile) changes it for every Gorunfile that includes `base`.
+  `stored::` includes only load in `gorun -serve`.
+- **Working copies**: runs, the editor and the schedulers use a copy of each at
+  `gorunfiles/<name>/Gorunfile` next to the database, written from the newest version at each
+  start. Don't edit those files: the next start replaces them. Relative paths in them, such as a
+  copy's `src`, are relative to their folder, so use absolute paths.
+- **Import and export**: the Config page imports a Gorunfile into the open one, and exports it as
+  a zip with each task and bundle in a file of its own; see [Config](#config).
+- **Loading a file** on the Config page switches to that file until the service restarts. The
+  stored Gorunfiles' schedules keep running.
 
 With **`-live`**, or if the history database doesn't open, the service only watches, and the
-stored Gorunfile is left alone. The menu then has just **Live**,
+stored Gorunfiles are left alone, schedules included. The menu then has just **Live**,
 **History** and **Assistant**, for runs started elsewhere, such as `gorun Gorunfile -r` in a
 terminal that reaches the same NATS server. The pages that need a Gorunfile (Run, Tasks, Bundles,
 Schedules and Config) don't exist: they aren't in the menu, and their addresses answer 404.
@@ -257,6 +271,26 @@ Add, edit and remove servers, groups, tasks, bundles and schedules in the loaded
 Gorunfile by browsing folders on the machine running gorun, or by typing its path. Changes queue
 until **Save**, which writes each one into the file it came from and reloads the file. Comments and
 layout elsewhere in the file are kept.
+
+**Export as zip**, next to the list of files, downloads the saved Gorunfile, such as the one kept
+in the history database, as a folder that loads as it is:
+
+```
+gorunfile/
+  Gorunfile            settings, servers, groups and schedules; includes the files below
+  tasks/<name>.toml    one task each
+  bundles/<name>.toml  one bundle each
+```
+
+Local included files are folded in, and so are the tasks and bundles of `stored::` includes, so
+the zip loads anywhere. Git includes are kept, with `Gorunfile.lock`. Unsaved changes,
+comments, and the files tasks copy or run (`copy` sources, `cmd_file`) aren't in the zip.
+
+**Import**, shown when the open Gorunfile is one kept in the history database, replaces it with an
+uploaded Gorunfile, or a zip holding one and the files it includes, such as an export. Local
+includes are folded into one file. It is checked to load before anything changes. The Gorunfile
+before it is kept in the database as an earlier version, and unsaved changes are dropped. Uploads
+are limited to 10 MB.
 
 **Generate tasks** (experimental) asks a language model to write tasks from a description, such
 as "install postgres and back it up every night". The tasks it writes are checked so they load,

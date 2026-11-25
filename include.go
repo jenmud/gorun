@@ -12,6 +12,9 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+// storedPrefix starts an include of a Gorunfile kept by the host; see Config.StoredIncludes.
+const storedPrefix = "stored::"
+
 // rootOnlyKeys can only be set in the root Gorunfile, so an included file can't change
 // settings that apply to the whole run.
 var rootOnlyKeys = [][]string{
@@ -36,6 +39,7 @@ type loader struct {
 	loaded       map[string]bool   // files already merged, so each is read once
 	stack        []string          // files being read, to catch include cycles
 	git          *gitIncludes      // git includes and their lock file, once the first is seen
+	stored       map[string]bool   // files read through a stored:: include
 }
 
 // gitAllowedKeys are what a file from a git include may define: shared tasks and bundles. Servers,
@@ -44,7 +48,7 @@ var gitAllowedKeys = map[string]bool{"tasks": true, "bundles": true, "include": 
 
 // newLoader returns a loader that fills c.
 func newLoader(c *Config) *loader {
-	return &loader{cfg: c, owners: map[string]string{}, loaded: map[string]bool{}}
+	return &loader{cfg: c, owners: map[string]string{}, loaded: map[string]bool{}, stored: map[string]bool{}}
 }
 
 // load reads the root file from r and every file it includes, then validates the result.
@@ -94,6 +98,17 @@ func (l *loader) read(r io.Reader, path string, root bool) error {
 	}
 
 	checkout := l.git.within(path)
+	if l.stored[path] {
+		// a stored Gorunfile runs its own servers and schedules; only its tasks and bundles are shared
+		shared := configFile{Include: f.Include}
+		shared.Tasks, shared.Bundles = f.Tasks, f.Bundles
+		f = shared
+		if err := l.claim(f, path); err != nil {
+			return err
+		}
+		l.merge(f)
+		return l.readIncludes(f, path, "")
+	}
 	if checkout != "" {
 		for _, key := range md.Keys() {
 			if len(key) > 0 && !gitAllowedKeys[key[0]] {
@@ -123,7 +138,12 @@ func (l *loader) read(r io.Reader, path string, root bool) error {
 		l.merge(f)
 	}
 	l.collectHosts(f, &md)
+	return l.readIncludes(f, path, checkout)
+}
 
+// readIncludes reads the files f includes. path is f's file and checkout the git checkout it is
+// in, if any.
+func (l *loader) readIncludes(f configFile, path, checkout string) error {
 	if len(f.Include) > 0 && path == "" {
 		return fmt.Errorf("include needs a file: use LoadFile, not Load")
 	}
@@ -145,6 +165,21 @@ func (l *loader) read(r io.Reader, path string, root bool) error {
 // fetched at its pinned commit; a local pattern in a file from a git include must stay inside that
 // repository's checkout.
 func (l *loader) includeFiles(path, checkout, pattern string) ([]string, error) {
+	if name, ok := strings.CutPrefix(pattern, storedPrefix); ok {
+		if l.cfg.StoredIncludes == nil {
+			return nil, fmt.Errorf("include %q names a Gorunfile kept by gorun -serve, so it only loads there", pattern)
+		}
+		file, err := l.cfg.StoredIncludes(name)
+		if err != nil {
+			return nil, fmt.Errorf("include %q: %w", pattern, err)
+		}
+		real, err := filepath.EvalSymlinks(file)
+		if err != nil {
+			return nil, fmt.Errorf("include %q: %w", pattern, err)
+		}
+		l.stored[real] = true
+		return []string{real}, nil
+	}
 	if isGitInclude(pattern) {
 		if l.git == nil {
 			g, err := newGitIncludes(l.cfg.Path, l.cfg.UpdateIncludes)

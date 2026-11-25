@@ -69,6 +69,11 @@ type Config struct {
 	// commit in the lock file, and save the new commits (the -update-includes flag).
 	UpdateIncludes bool `toml:"-"`
 
+	// StoredIncludes, when set, resolves an include of "stored::<name>" to the file of the
+	// Gorunfile called name, for a host that keeps several, like gorun -serve. Only that file's
+	// tasks and bundles are used. Without it a stored include is an error.
+	StoredIncludes func(name string) (string, error) `toml:"-"`
+
 	// Includes are the git includes LoadFile read, with the commit each one used.
 	Includes []IncludeSource `toml:"-"`
 

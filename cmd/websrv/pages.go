@@ -137,7 +137,7 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/run", "Load a Gorunfile on the Config page first.", true)
 		return
 	}
-	cfg, servers, err := planRun(path, r.Form["server"], r.Form["task"], r.Form["bundle"])
+	cfg, servers, err := planRun(a.newConfig(), path, r.Form["server"], r.Form["task"], r.Form["bundle"])
 	if err != nil {
 		redirectWith(w, r, "/run", err.Error(), true)
 		return
@@ -191,18 +191,17 @@ func webOrigin(r *http.Request) gorun.Origin {
 	return o
 }
 
-// planRun loads the saved Gorunfile and works out what each ticked server runs. Ticked tasks or
+// planRun loads the saved Gorunfile into cfg and works out what each ticked server runs. Ticked tasks or
 // bundles replace each server's own list, as --task and --bundles do; with neither, each server
 // runs its own list. Ticked local tasks run on this machine without a server being ticked, but
 // other tasks need a ticked SSH server. It fails when nothing would run.
-func planRun(path string, names, tasks, bundles []string) (*gorun.Config, []gorun.Server, error) {
+func planRun(cfg *gorun.Config, path string, names, tasks, bundles []string) (*gorun.Config, []gorun.Server, error) {
 	if len(tasks) > 0 && len(bundles) > 0 {
 		return nil, nil, errors.New("Pick tasks or bundles, not both.")
 	}
 	if len(names) == 0 && len(tasks) == 0 && len(bundles) == 0 {
 		return nil, nil, errors.New("Tick a server, or a task marked local = true.")
 	}
-	cfg := &gorun.Config{}
 	if err := cfg.LoadFile(path); err != nil {
 		return nil, nil, err
 	}

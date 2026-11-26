@@ -281,64 +281,91 @@ func streamEvents(w http.ResponseWriter) func(chatEvent) {
 	}
 }
 
-// addTasksHandler queues the tasks a chat reply wrote as unsaved changes.
+// addTasksHandler saves the tasks a chat reply wrote straight into the Gorunfile, as the
+// Tasks page's edits are: there is nothing left to review on the Config page. A task with
+// unsaved changes there is left alone.
 func (a *app) addTasksHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct{ Tasks, File string }
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, chatReply{Error: "send the tasks as JSON"})
 		return
 	}
+	a.saveMu.Lock()
+	defer a.saveMu.Unlock()
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.cfg == nil {
+	cfg, pending := a.cfg, slices.Clone(a.pending)
+	a.mu.Unlock()
+	if cfg == nil {
 		writeJSON(w, http.StatusConflict, chatReply{Error: "load a Gorunfile first"})
 		return
 	}
-	names, err := a.queueTasks(req.Tasks, req.File, true)
+	names, changes, err := taskChanges(cfg, nil, req.Tasks, req.File, true)
 	if err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, chatReply{Error: err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, chatReply{Reply: fmt.Sprintf("Added %s as unsaved changes. Review them on the Config page, then save.", strings.Join(names, ", "))})
+	for _, name := range names {
+		if msg := pendingConflict(pending, kindTask, name); msg != "" {
+			writeJSON(w, http.StatusConflict, chatReply{Error: msg})
+			return
+		}
+	}
+	if err := a.saveDirect(req.File, changes); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, chatReply{Error: "could not save them: " + err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, chatReply{Reply: fmt.Sprintf("Saved %s into %s.", strings.Join(names, ", "), rel(cfg.Path, req.File))})
 }
 
-// queueTasks checks the tasks in text against the loaded file and queues them, to be saved into
-// file. With replace, a task the Gorunfile (or the unsaved changes) has is queued as an edit of
-// it, where it is defined; without, it is an error. a.mu must be held.
+// queueTasks checks the tasks in text against the loaded file and queues them as unsaved
+// changes; see taskChanges. a.mu must be held.
 func (a *app) queueTasks(text, file string, replace bool) ([]string, error) {
-	if !slices.Contains(a.cfg.Files, file) {
-		return nil, fmt.Errorf("pick the file to save into")
-	}
-	if _, err := gorun.ExtractTaskEdits(text, a.cfg); err != nil {
+	names, changes, err := taskChanges(a.cfg, a.pending, text, file, replace)
+	if err != nil {
 		return nil, err
+	}
+	a.pending = append(a.pending, changes...)
+	return names, nil
+}
+
+// taskChanges checks the tasks in text against cfg and the unsaved changes in pending, and
+// returns their names and the changes that save them into file. With replace, a task that is
+// there already is changed where it is defined; without, it is an error.
+func taskChanges(cfg *gorun.Config, pending []gorun.Change, text, file string, replace bool) ([]string, []gorun.Change, error) {
+	if !slices.Contains(cfg.Files, file) {
+		return nil, nil, fmt.Errorf("pick the file to save into")
+	}
+	if _, err := gorun.ExtractTaskEdits(text, cfg); err != nil {
+		return nil, nil, err
 	}
 	var doc struct {
 		Tasks map[string]map[string]any `toml:"tasks"`
 	}
 	if _, err := toml.Decode(text, &doc); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	names := slices.Sorted(maps.Keys(doc.Tasks))
 	for _, name := range names {
 		if err := validName(kindTask, name); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		if !replace && present(a.cfg, a.pending, kindTask, name) {
-			return nil, fmt.Errorf("a task named %s already exists", name)
+		if !replace && present(cfg, pending, kindTask, name) {
+			return nil, nil, fmt.Errorf("a task named %s already exists", name)
 		}
 	}
+	var changes []gorun.Change
 	for _, name := range names {
-		if present(a.cfg, a.pending, kindTask, name) {
-			src := sourceOf(a.cfg, a.pending, kindTask, name)
-			a.pending = append(a.pending,
+		if present(cfg, pending, kindTask, name) {
+			src := sourceOf(cfg, pending, kindTask, name)
+			changes = append(changes,
 				gorun.Change{Kind: kindTask, Name: name, File: src, Remove: true},
 				gorun.Change{Kind: kindTask, Name: name, File: src, Body: doc.Tasks[name]},
 			)
 			continue
 		}
-		a.pending = append(a.pending, gorun.Change{Kind: kindTask, Name: name, File: file, Body: doc.Tasks[name]})
+		changes = append(changes, gorun.Change{Kind: kindTask, Name: name, File: file, Body: doc.Tasks[name]})
 	}
-	return names, nil
+	return names, changes, nil
 }
 
 // maxMentioned caps the tasks whose TOML goes in the context, so it stays small.

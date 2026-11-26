@@ -226,6 +226,26 @@ func TestImportReplacesTheStoredGorunfile(t *testing.T) {
 	}
 }
 
+// A task or schedule saved into a stored Gorunfile opens for editing: its table is read from the
+// database, as there is no file.
+func TestStoredGorunfileEntitiesOpenForEditing(t *testing.T) {
+	a, _ := newStoredApp(t)
+	text := "[tasks.hello]\ncmd = \"echo hi\"\nlocal = true\ntimeout = \"1m\"\n[[schedule]]\nname = \"nightly\"\ntarget = \"hello\"\ncron = \"0 2 * * *\"\n"
+	if msg := upload(t, a, []byte(text)); !strings.Contains(msg, "Imported") {
+		t.Fatalf("import = %q", msg)
+	}
+	for _, page := range []string{"/tasks?edit=hello", "/config/edit?kind=task&name=hello", "/config/edit?kind=schedule&name=nightly"} {
+		rec := get(t, a, page)
+		body := rec.Body.String()
+		if rec.Code >= 300 || strings.Contains(body, "no such file") || strings.Contains(body, "read stored::") {
+			t.Errorf("%s = %d, %q", page, rec.Code, redirectFlash(rec))
+		}
+	}
+	if body, err := currentBody(a.cfg, nil, kindTask, "hello"); err != nil || body["timeout"] != "1m" {
+		t.Errorf("currentBody(hello) = %v, %v", body, err)
+	}
+}
+
 // The Config page names the stored Gorunfile and offers import, not a file to load.
 func TestConfigPageShowsTheStoredGorunfile(t *testing.T) {
 	a, _ := newStoredApp(t)

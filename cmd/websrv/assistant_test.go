@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -81,13 +82,28 @@ func TestChatSendsContextAndAddsTasks(t *testing.T) {
 		t.Error("the context holds a run's env vars")
 	}
 
+	// adding saves them straight into the Gorunfile, with nothing left to save on the Config page
 	added := postJSON(t, a, "/assistant/add", map[string]string{"tasks": out.Tasks, "file": path})
-	if added.Error != "" || len(a.pending) != 1 || a.pending[0].Name != "nginx" {
+	if added.Error != "" || !strings.Contains(added.Reply, "Saved nginx") || len(a.pending) != 0 {
 		t.Fatalf("add = %+v, pending = %+v", added, a.pending)
 	}
-	// a task the Gorunfile (or the unsaved changes) has already is replaced where it is defined
-	if again := postJSON(t, a, "/assistant/add", map[string]string{"tasks": out.Tasks, "file": path}); again.Error != "" || len(a.pending) != 3 || !a.pending[1].Remove {
-		t.Errorf("adding twice = %+v, pending = %+v", again, a.pending)
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), "[tasks.nginx]") {
+		t.Errorf("the Gorunfile doesn't have the task:\n%s", data)
+	}
+	if _, ok := a.cfg.Tasks["nginx"]; !ok {
+		t.Error("the loaded config doesn't have the task")
+	}
+	// adding again replaces it where it is defined
+	if again := postJSON(t, a, "/assistant/add", map[string]string{"tasks": out.Tasks, "file": path}); again.Error != "" {
+		t.Errorf("adding twice = %+v", again)
+	}
+	if data, _ := os.ReadFile(path); strings.Count(string(data), "[tasks.nginx]") != 1 {
+		t.Errorf("adding twice left:\n%s", data)
+	}
+	// a task with unsaved changes on the Config page is left alone
+	a.pending = []gorun.Change{{Kind: kindTask, Name: "nginx", File: path, Remove: true}}
+	if busy := postJSON(t, a, "/assistant/add", map[string]string{"tasks": out.Tasks, "file": path}); !strings.Contains(busy.Error, "unsaved changes") {
+		t.Errorf("adding over unsaved changes = %+v", busy)
 	}
 }
 
@@ -107,8 +123,8 @@ func TestChatChangesExistingTasks(t *testing.T) {
 		t.Errorf("the context doesn't show the hello task as it is:\n%s", e.got[0].Content)
 	}
 	postJSON(t, a, "/assistant/add", map[string]string{"tasks": out.Tasks, "file": path})
-	if len(a.pending) != 2 || !a.pending[0].Remove || a.pending[1].Body["timeout"] != "1m" {
-		t.Errorf("pending = %+v, want hello removed and added again", a.pending)
+	if got := a.cfg.Tasks["hello"]; got.Timeout != time.Minute {
+		t.Errorf("hello = %+v, want it saved with the timeout", got)
 	}
 }
 

@@ -332,8 +332,10 @@ use (with how far along), loading it, reading the question, then the reply as it
 Env vars and template variables are never sent. **Ask the assistant** on a run's History page
 starts the chat on that run instead.
 
-When a reply holds tasks that load, the chat offers to add them as unsaved changes, to review and
-save on the Config page. Tasks that don't load are reported, so you can ask it to fix them.
+When a reply holds tasks that load, the chat offers **Save these tasks**, which saves them into
+the Gorunfile straight away, as an edit on the Tasks page does; there is nothing more to save on
+the Config page. A task with unsaved changes on the Config page is left alone until you save or
+discard them. Tasks that don't load are reported, so you can ask it to fix them.
 
 It can change tasks too: ask, for example, "add a timeout to the migrate task". When a question
 names a task, the model is sent that task as it is now. A task in the reply with the name of one

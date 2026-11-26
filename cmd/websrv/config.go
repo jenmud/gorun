@@ -212,6 +212,21 @@ var entityPath = map[string][]string{
 	kindSchedule: {"schedule"},
 }
 
+// decodeGorunfile decodes one of cfg's Gorunfiles into v: a stored one from the database, which
+// cfg reads it from, and any other from its file.
+func decodeGorunfile(cfg *gorun.Config, file string, v any) error {
+	if name, ok := gorun.StoredName(file); ok && cfg.Stored != nil {
+		text, err := cfg.Stored(name)
+		if err != nil {
+			return err
+		}
+		_, err = toml.Decode(text, v)
+		return err
+	}
+	_, err := toml.DecodeFile(file, v)
+	return err
+}
+
 // currentBody is the entity's table as written: its latest unsaved add, else the table in the
 // file that defines it. Edits start from it so settings the form doesn't show are kept.
 func currentBody(cfg *gorun.Config, pending []gorun.Change, kind, name string) (map[string]any, error) {
@@ -228,10 +243,10 @@ func currentBody(cfg *gorun.Config, pending []gorun.Change, kind, name string) (
 	}
 	file := sourceOf(cfg, pending, kind, name)
 	if kind == kindSchedule {
-		return scheduleBodyIn(file, name)
+		return scheduleBodyIn(cfg, file, name)
 	}
 	var doc map[string]any
-	if _, err := toml.DecodeFile(file, &doc); err != nil {
+	if err := decodeGorunfile(cfg, file, &doc); err != nil {
 		return nil, fmt.Errorf("read %s: %w", file, err)
 	}
 	var node any = doc

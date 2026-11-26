@@ -45,7 +45,7 @@ templ AssistantPage(d AssistantPageData) {
 					<div class="min-w-0 flex-1">
 						@fileSelect(d.Files)
 					</div>
-					<button type="button" class="rounded-lg border border-emerald-800 px-3 py-1.5 text-xs text-emerald-200 transition hover:bg-emerald-900/40" data-add>Add as unsaved changes</button>
+					<button type="button" class="rounded-lg border border-emerald-800 px-3 py-1.5 text-xs text-emerald-200 transition hover:bg-emerald-900/40" data-add>Save these tasks</button>
 				</div>
 			</template>
 		}
@@ -209,7 +209,7 @@ templ assistantScript() {
 				box.appendChild(p);
 				if (!out.error) {
 					var a = document.createElement('a');
-					a.href = '/config'; a.className = 'text-xs text-accent underline'; a.textContent = 'Open Config';
+					a.href = '/tasks'; a.className = 'text-xs text-accent underline'; a.textContent = 'See them on the Tasks page';
 					box.appendChild(a);
 				}
 			}).catch(function (e) { btn.disabled = false; alert(e); });

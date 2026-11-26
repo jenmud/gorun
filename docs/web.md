@@ -369,8 +369,10 @@ The model is small: it reads failures well when the output says what went wrong,
 often hold placeholders, such as paths and passwords, to fill in. [`training/`](../training) builds
 a version of it fine-tuned on gorun, published at
 [jenmud/gorun-qwen3-4b-GGUF](https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF); point
-`GORUN_LLM_MODEL` at the GGUF file or its URL. `make web` and `make web-dev` use it, and
-`make model` downloads it ahead of the first question.
+`GORUN_LLM_MODEL` at the GGUF file or its URL. It was trained before tasks had to have a check
+and a verify, so its tasks are refused until it is retrained. `make model` downloads it, and
+`make web-dev GORUN_LLM_MODEL=$(FINETUNED_MODEL)` runs with it; plain `make web-dev` uses the
+built-in model.
 
 ## Walkthrough: from nothing to a running schedule
 

@@ -41,26 +41,29 @@ GORUN_ADDRESS ?= :8080
 # templ's proxy needs a host, so a bare ":port" proxies to localhost.
 WEB_PROXY := http://$(if $(filter :%,$(GORUN_ADDRESS)),localhost)$(GORUN_ADDRESS)
 
-# The assistant's model: gorun fine-tuned on itself (training/). gorun downloads it on the first
-# question; `make model` pulls it ahead. Override with `make web GORUN_LLM_MODEL=` for the stock one.
-GORUN_LLM_MODEL ?= https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF/resolve/main/gorun-qwen3-4b-q4_k_m.gguf
+# The assistant's model. Empty is gorun's built-in one, Qwen3 4B Instruct, downloaded on the first
+# question. The version fine-tuned on gorun (training/) learned the rules from before tasks had to
+# have a check and a verify, so its tasks are refused until it is retrained; try it with
+# `make web-dev GORUN_LLM_MODEL=$(FINETUNED_MODEL)`, after `make model` pulls it ahead.
+GORUN_LLM_MODEL ?=
+FINETUNED_MODEL := https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF/resolve/main/gorun-qwen3-4b-q4_k_m.gguf
 # where gorun keeps downloaded models, as cmd/websrv's llmDir finds it
 GORUN_CACHE_DIR ?= $(if $(filter Darwin,$(shell uname -s)),$(HOME)/Library/Caches,$(or $(XDG_CACHE_HOME),$(HOME)/.cache))/gorun
-MODEL_FILE := $(GORUN_CACHE_DIR)/llm/models/$(notdir $(GORUN_LLM_MODEL))
+MODEL_FILE := $(GORUN_CACHE_DIR)/llm/models/$(notdir $(FINETUNED_MODEL))
 
 model: $(MODEL_FILE)
 
 # through a .part file, so an interrupted download is never used
 $(MODEL_FILE):
 	mkdir -p $(dir $@)
-	curl -fL --progress-bar -o $@.part $(GORUN_LLM_MODEL)
+	curl -fL --progress-bar -o $@.part $(FINETUNED_MODEL)
 	mv $@.part $@
 
 web:
-	GORUN_ADDRESS=$(GORUN_ADDRESS) GORUN_LLM_MODEL=$(GORUN_LLM_MODEL) go run ./cmd -serve
+	GORUN_ADDRESS=$(GORUN_ADDRESS) $(if $(GORUN_LLM_MODEL),GORUN_LLM_MODEL=$(GORUN_LLM_MODEL)) go run ./cmd -serve
 
 web-dev:
-	GORUN_ADDRESS=$(GORUN_ADDRESS) GORUN_LLM_MODEL=$(GORUN_LLM_MODEL) $(TEMPL) generate -watch -cmd "go run ./cmd -serve" -proxy $(WEB_PROXY) ./cmd/web/...
+	GORUN_ADDRESS=$(GORUN_ADDRESS) $(if $(GORUN_LLM_MODEL),GORUN_LLM_MODEL=$(GORUN_LLM_MODEL)) $(TEMPL) generate -watch -cmd "go run ./cmd -serve" -proxy $(WEB_PROXY) ./cmd/web/...
 
 
 -include ./recipes/Makefile

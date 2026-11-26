@@ -141,3 +141,14 @@ func TestGenerateTasksReportsHTTPErrors(t *testing.T) {
 		t.Errorf("GenerateTasks() = %v, want the server's error", err)
 	}
 }
+
+func TestExtractTasksDropsABooleanCopy(t *testing.T) {
+	reply := "```toml\n[tasks.page]\ncmd = \"mv /tmp/i.html /var/www/\"\ncopy = false\n[[tasks.page.copy]]\ndst = \"/tmp/i.html\"\ncontent = \"<p>hi</p>\"\n```"
+	got, err := ExtractTasks(reply, nil)
+	if err != nil {
+		t.Fatalf("ExtractTasks() error = %v", err)
+	}
+	if strings.Contains(got, "copy = false") || !strings.Contains(got, "[[tasks.page.copy]]") {
+		t.Errorf("ExtractTasks() = %q", got)
+	}
+}

@@ -257,3 +257,47 @@ func TestAssistantStatsPanel(t *testing.T) {
 		t.Errorf("server stats = %q", body)
 	}
 }
+
+// sequenceEngine answers with each of its replies in turn, keeping what it was asked.
+type sequenceEngine struct {
+	replies []string
+	asked   [][]gorun.ChatMessage
+}
+
+func (e *sequenceEngine) Chat(_ context.Context, m []gorun.ChatMessage) (string, error) {
+	e.asked = append(e.asked, m)
+	r := e.replies[0]
+	if len(e.replies) > 1 {
+		e.replies = e.replies[1:]
+	}
+	return r, nil
+}
+
+// Tasks that don't load are sent back to the model with the error, and the fixed ones offered.
+func TestChatRepairsTasksThatDontLoad(t *testing.T) {
+	a, _ := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	broken := "Here they are:\n```toml\n[tasks.page]\ncmd = '''python3 -c \"print('''hi''')\"'''\n```\nRun page first."
+	fixed := "```toml\n[tasks.page]\ncmd = \"echo hi\"\n```"
+	e := &sequenceEngine{replies: []string{broken, fixed}}
+	a.gen = &generator{assistant: gorun.Assistant{Engine: e}}
+
+	out := postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "a page"}}})
+	if out.TaskError != "" || out.TaskNames != "page" {
+		t.Fatalf("reply = %+v, want the fixed task offered", out)
+	}
+	if !strings.Contains(out.Reply, "Here they are:") || !strings.Contains(out.Reply, `cmd = "echo hi"`) || !strings.Contains(out.Reply, "Run page first.") {
+		t.Errorf("the reply should keep its words around the fixed tasks:\n%s", out.Reply)
+	}
+	if len(e.asked) != 2 || !strings.Contains(e.asked[1][len(e.asked[1])-1].Content, "don't load") {
+		t.Errorf("the model wasn't asked to fix the tasks: %d calls", len(e.asked))
+	}
+
+	// a model that never gets it right is asked twice more, then the error is shown
+	e = &sequenceEngine{replies: []string{broken}}
+	a.gen = &generator{assistant: gorun.Assistant{Engine: e}}
+	out = postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "a page"}}})
+	if out.TaskError == "" || len(e.asked) != 1+chatRepairs {
+		t.Errorf("after %d calls, taskError = %q", len(e.asked), out.TaskError)
+	}
+}

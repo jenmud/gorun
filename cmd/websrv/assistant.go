@@ -169,7 +169,14 @@ func (a *app) chatHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	out := chatReply{Reply: reply}
 	if hasTaskBlock(reply) {
-		if tasks, err := gorun.ExtractTaskEdits(reply, cfg); err != nil {
+		tasks, err := gorun.ExtractTaskEdits(reply, cfg)
+		if err != nil {
+			if fixed, ferr := a.repairTasks(ctx, messages, reply, err, cfg, send); ferr == nil {
+				out.Reply = fixed + "\n\n(The tasks didn't load the first time, so gorun asked the model to fix them.)"
+				tasks, err = gorun.ExtractTaskEdits(fixed, cfg)
+			}
+		}
+		if err != nil {
 			out.TaskError = err.Error()
 		} else {
 			names := taskNames(tasks)
@@ -181,6 +188,66 @@ func (a *app) chatHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	finish(http.StatusOK, out)
+}
+
+// chatRepairs is how many times the chat asks the model to fix tasks that don't load.
+const chatRepairs = 2
+
+// repairTasks asks the model to fix the tasks in reply, which don't load with err, and returns
+// reply with its tasks replaced by ones that load. The model's corrections aren't streamed: the
+// page shows what it is doing, then the fixed reply.
+func (a *app) repairTasks(ctx context.Context, messages []gorun.ChatMessage, reply string, err error, cfg *gorun.Config, send func(chatEvent)) (string, error) {
+	trace := gorun.ChatTraceFrom(ctx)
+	quiet := gorun.WithChatTrace(ctx, &gorun.ChatTrace{Status: trace.Status})
+	last := reply
+	for try := 1; try <= chatRepairs; try++ {
+		send(chatEvent{Status: fmt.Sprintf("The tasks don't load (%s). Asking the model to fix them, try %d of %d", shortError(err), try, chatRepairs)})
+		ask := append(slices.Clone(messages),
+			gorun.ChatMessage{Role: "assistant", Content: last},
+			gorun.ChatMessage{Role: "user", Content: "Those tasks don't load: " + err.Error() + ". Write all the tasks again, corrected, in one ```toml block and nothing else. Use only the keys listed above. Put any program, page or config in a [[tasks.<name>.copy]] table's content and run the file from cmd, rather than writing it into cmd with python3 -c or a heredoc."},
+		)
+		a.genMu.Lock()
+		fix, cerr := a.gen.assistant.Chat(quiet, ask)
+		a.genMu.Unlock()
+		if cerr != nil {
+			return "", cerr
+		}
+		if _, err = gorun.ExtractTaskEdits(fix, cfg); err == nil {
+			return replaceTaskBlock(reply, fix), nil
+		}
+		last = fix
+	}
+	return "", err
+}
+
+// replaceTaskBlock puts the task block of fix in place of the one in reply, keeping the rest of
+// reply, such as its explanation.
+func replaceTaskBlock(reply, fix string) string {
+	block := ""
+	for _, m := range codeBlock.FindAllStringSubmatch(fix, -1) {
+		if strings.Contains(m[1], "[tasks.") {
+			block = m[0]
+			break
+		}
+	}
+	if block == "" {
+		block = "```toml\n" + strings.TrimSpace(fix) + "\n```"
+	}
+	for _, loc := range codeBlock.FindAllStringSubmatchIndex(reply, -1) {
+		if strings.Contains(reply[loc[2]:loc[3]], "[tasks.") {
+			return reply[:loc[0]] + block + reply[loc[1]:]
+		}
+	}
+	return block
+}
+
+// shortError is the first line of err, cut short, for a status line.
+func shortError(err error) string {
+	msg, _, _ := strings.Cut(err.Error(), "\n")
+	if len(msg) > 90 {
+		msg = msg[:90] + "…"
+	}
+	return msg
 }
 
 // codeBlock is a fenced code block in a reply, and its text.

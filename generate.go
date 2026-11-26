@@ -108,6 +108,18 @@ const TaskFormat = `Task names are short, lowercase, with dashes. Keys a task ma
   rerun = "safe"                            # or "unsafe" when running it twice does harm
   envvars = { KEY = "value" }
 
+A file the task needs (a script, a web page, a config) goes in a copy table, not in cmd. Copies
+are written before cmd runs, as the login user, so write to /tmp and move it into place in cmd:
+
+  [[tasks.<name>.copy]]
+  dst = "/tmp/index.html"
+  content = """<html>...</html>"""         # the file's text
+  mode = "0644"
+
+Keep each cmd to a few lines. Never write a program into cmd with python3 -c, node -e or a
+heredoc: put it in a copy table's content and run the file. A '''string''' ends at the next '''
+and a """string""" at the next """, so never put the same three quotes inside one.
+
 Every cmd, check and verify is a real shell command, never a description or a placeholder;
 leave check or verify out when you don't know one. Prefer idempotent commands. Example:
 
@@ -188,6 +200,10 @@ func existingTasks(cfg *Config, request string) string {
 	return b.String()
 }
 
+// boolCopy is a "copy = true" or "copy = false" line, which small models write although copy is
+// a table of files. It means nothing, so it is left out rather than failing the tasks.
+var boolCopy = regexp.MustCompile(`(?m)^[ \t]*copy[ \t]*=[ \t]*(true|false)[ \t]*(#.*)?\r?\n?`)
+
 var fence = regexp.MustCompile("(?s)```[a-zA-Z]*\\n(.*?)```")
 
 // stripFences takes the TOML out of a markdown code block, which small models add anyway. A reply
@@ -209,7 +225,7 @@ func stripFences(reply string) string {
 // block holding a [tasks.<name>] table, else the first block, or else the whole reply. It fails
 // when they don't load, aren't valid, redefine a task in cfg or depend on one that doesn't
 // exist. Files the tasks copy or run aren't looked for, as they may not have been written yet.
-// cfg may be nil.
+// A "copy = true" or "copy = false" line, which small models write, is left out. cfg may be nil.
 func ExtractTasks(reply string, cfg *Config) (string, error) {
 	return extractTasks(reply, cfg, false)
 }
@@ -221,7 +237,7 @@ func ExtractTaskEdits(reply string, cfg *Config) (string, error) {
 }
 
 func extractTasks(reply string, cfg *Config, replace bool) (string, error) {
-	text := stripFences(reply)
+	text := boolCopy.ReplaceAllString(stripFences(reply), "")
 	if err := checkTasks(text, cfg, replace); err != nil {
 		return "", err
 	}

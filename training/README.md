@@ -1,15 +1,19 @@
 # Training the assistant's model
 
 This folder fine-tunes the web UI assistant's model, Qwen3 4B Instruct 2507, on gorun: its
-Gorunfile format, its concepts, and diagnosing runs. The result is a GGUF file that
-`GORUN_LLM_MODEL` points at:
+Gorunfile format, its concepts, and diagnosing runs. The result is a GGUF file, published at
+[jenmud/gorun-qwen3-4b-GGUF](https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF), which is gorun's
+built-in model (`DefaultModel` in `internal/llm/download.go`). Try a new build before publishing
+it with `GORUN_LLM_MODEL`:
 
 ```bash
 GORUN_LLM_MODEL=$PWD/training/out/gorun-qwen3-4b-q4_k_m.gguf gorun -serve Gorunfile
 ```
 
 It trains a QLoRA adapter (a small set of extra weights on a 4-bit copy of the model), so it
-fits an 8 GB GPU. On an RTX 2060 SUPER one epoch takes about six hours.
+fits an 8 GB GPU. On an RTX 2060 SUPER one epoch takes about two hours. An RTX 20 has no bf16 or
+flash attention, so `train.py` trains in fp16 and keeps SDPA on its memory-efficient kernel; the
+math kernel it would otherwise fall back to runs out of memory on the longest examples.
 
 ## The data
 
@@ -56,7 +60,7 @@ Then build the data, train, export and compare:
 go test -tags dataset -run TestBuildDataset ./cmd/websrv     # from the repository root
 HF_HOME=$PWD/.hf HF_HUB_OFFLINE=1 .venv/bin/python train.py  # writes out/adapter
 HF_HOME=$PWD/.hf HF_HUB_OFFLINE=1 .venv/bin/python export.py # writes out/gorun-qwen3-4b-q4_k_m.gguf
-GORUN_EVAL_MODEL=base GORUN_EVAL_N=120 go test -tags dataset -run TestEvalModel -v -timeout 3h ./cmd/websrv
+GORUN_EVAL_MODEL=https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf GORUN_EVAL_N=120 go test -tags dataset -run TestEvalModel -v -timeout 3h ./cmd/websrv
 GORUN_EVAL_MODEL=$PWD/training/out/gorun-qwen3-4b-q4_k_m.gguf GORUN_EVAL_N=120 go test -tags dataset -run TestEvalModel -v -timeout 3h ./cmd/websrv
 ```
 
@@ -67,3 +71,17 @@ and a word of the error. It prints a score per kind and writes the replies to
 `out/eval-<model>.jsonl`.
 
 `.venv/`, `.hf/`, `.llama.cpp/`, `data/` and `out/` are ignored by git.
+
+## Publishing
+
+Upload each build under a new file name, such as `gorun-qwen3-4b-v3-q4_k_m.gguf`: gorun keeps a
+downloaded model by its file name and never downloads one it has, so a build uploaded over the old
+name would never reach machines that have the old one. Then point `DefaultModel` at the new URL
+with its SHA-256, and `DEFAULT_MODEL` in the Makefile at the same URL:
+
+```bash
+cp out/gorun-qwen3-4b-q4_k_m.gguf out/hf/gorun-qwen3-4b-v3-q4_k_m.gguf
+sha256sum out/hf/gorun-qwen3-4b-v3-q4_k_m.gguf
+HF_HOME=$PWD/.hf .venv/bin/hf upload jenmud/gorun-qwen3-4b-GGUF out/hf/gorun-qwen3-4b-v3-q4_k_m.gguf
+HF_HOME=$PWD/.hf .venv/bin/hf upload jenmud/gorun-qwen3-4b-GGUF out/hf/README.md
+```

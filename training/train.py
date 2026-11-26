@@ -8,6 +8,7 @@ import argparse
 import json
 import os
 
+os.environ.setdefault("PYTORCH_ALLOC_CONF", "expandable_segments:True")  # torch 2.9's name
 os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 
 import torch
@@ -15,6 +16,7 @@ from datasets import Dataset
 from huggingface_hub import snapshot_download
 from peft import LoraConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers.integrations import sdpa_attention
 from trl import SFTConfig, SFTTrainer
 
 BASE = "Qwen/Qwen3-4B-Instruct-2507"  # Apache 2.0
@@ -38,14 +40,23 @@ def main():
     p.add_argument("--lr", type=float, default=2e-4)
     p.add_argument("--rank", type=int, default=16)
     p.add_argument("--max-len", type=int, default=2560)  # longer ones run an 8 GB GPU out of memory
+    p.add_argument("--data", default="data/train.jsonl")
     p.add_argument("--out", default="out/adapter")
     args = p.parse_args()
 
+    # The math attention kernel holds every head's full score matrix in fp32, 800 MB at 2560
+    # tokens, which an 8 GB GPU can't spare. It is picked whenever SDPA is asked for grouped-query
+    # attention on a GPU without flash attention (an RTX 20), so repeat the KV heads instead and
+    # leave only the memory-efficient kernel.
+    sdpa_attention.use_gqa_in_sdpa = lambda *_, **__: False
+    torch.backends.cuda.enable_math_sdp(False)
+
     base = snapshot_download(BASE)  # a local path, so nothing asks the Hub again
     tok = AutoTokenizer.from_pretrained(base)
-    train = load("data/train.jsonl", tok, args.max_len)
+    train = load(args.data, tok, args.max_len)
 
-    fp16 = not torch.cuda.is_bf16_supported()
+    # torch counts emulated bf16 as supported; an RTX 20 has only fp16 natively
+    fp16 = not torch.cuda.is_bf16_supported(including_emulation=False)
     dtype = torch.float16 if fp16 else torch.bfloat16
     model = AutoModelForCausalLM.from_pretrained(
         base,
@@ -68,6 +79,7 @@ def main():
         per_device_train_batch_size=1,
         gradient_accumulation_steps=8,
         gradient_checkpointing=True,
+        torch_empty_cache_steps=1,  # the longest examples fit only without fragmentation
         use_liger_kernel=True,  # fused loss: the 150k-token vocabulary's logits don't fit otherwise
         max_length=args.max_len,
         completion_only_loss=True,

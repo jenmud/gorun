@@ -52,9 +52,9 @@ func (g *generator) describe() string {
 		return filepath.Base(g.assistant.Model) + ", built in"
 	}
 	if !llm.Downloaded(g.engine.Dir) {
-		return "Qwen3 4B Instruct, built in; the first answer downloads it, 2.5 GB, so it takes a few minutes"
+		return "gorun's Qwen3 4B, built in; the first answer downloads it, 2.5 GB, so it takes a few minutes"
 	}
-	return "Qwen3 4B Instruct, built in"
+	return "gorun's Qwen3 4B, built in"
 }
 
 // close frees the built-in model, if it was loaded.

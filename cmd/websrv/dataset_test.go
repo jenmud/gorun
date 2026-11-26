@@ -302,12 +302,12 @@ func (b *builder) taskExamples(s taskSeed) {
 			if sc.cfg == nil {
 				continue
 			}
-			deps := listedTasks(sc.cfg, local)
+			deps := listedTasks(sc.cfg, local || !hasSSH(sc.cfg))
 			if len(deps) == 0 || b.rng.IntN(3) != 0 {
 				continue
 			}
 			dep := deps[b.rng.IntN(len(deps))]
-			dAnswer, ok := dependOn(answer, dep)
+			dAnswer, ok := dependOn(localIn(sc, answer), dep)
 			if !ok {
 				continue
 			}
@@ -326,6 +326,29 @@ func (b *builder) taskExamples(s taskSeed) {
 	}
 }
 
+var taskHeader = regexp.MustCompile(`(?m)^\[tasks\.[^\]]+\]$`)
+
+// localIn marks every task in answer local = true when sc has no SSH server, as LocalNote tells
+// the model to.
+func localIn(sc *dsScenario, answer string) string {
+	if sc.cfg == nil || hasSSH(sc.cfg) {
+		return answer
+	}
+	blocks := taskHeader.FindAllStringIndex(answer, -1)
+	for i := len(blocks) - 1; i >= 0; i-- {
+		end := len(answer)
+		if i+1 < len(blocks) {
+			end = blocks[i+1][0]
+		}
+		if strings.Contains(answer[blocks[i][0]:end], "\nlocal = true") {
+			continue
+		}
+		at := blocks[i][1]
+		answer = answer[:at] + "\nlocal = true" + answer[at:]
+	}
+	return answer
+}
+
 func chatTasks(note, answer string) string {
 	return note + "\n\n```toml\n" + answer + "\n```"
 }
@@ -334,6 +357,7 @@ func chatTasks(note, answer string) string {
 func (b *builder) genExample(id, q, answer string) {
 	for range 10 {
 		sc := b.pick()
+		answer := localIn(sc, answer)
 		if _, err := gorun.ExtractTasks(answer, sc.cfg); err != nil {
 			continue
 		}
@@ -379,6 +403,7 @@ func breakTasks(answer string, rng *rand.Rand) (string, bool) {
 func (b *builder) chatGenExample(id, q, answer, note string) {
 	for range 10 {
 		sc := b.pick()
+		answer := localIn(sc, answer)
 		if _, err := gorun.ExtractTasks(answer, sc.cfg); err != nil {
 			continue
 		}
@@ -1106,6 +1131,9 @@ func score(ex dsExample, reply string, cfg *gorun.Config) (bool, string) {
 		if why := badCommand(text); why != "" {
 			return false, why
 		}
+		if why := taskShape(text, ex.Messages[len(ex.Messages)-1].Content, cfg); why != "" {
+			return false, why
+		}
 	}
 	low := strings.ToLower(reply)
 	for _, w := range ex.Want {
@@ -1114,6 +1142,38 @@ func score(ex dsExample, reply string, cfg *gorun.Config) (bool, string) {
 		}
 	}
 	return true, ""
+}
+
+// taskShape reports tasks that break TaskFormat's other rules: one task where the example splits
+// the job into small ones, or a task not marked local in a Gorunfile with no SSH server.
+func taskShape(text, want string, cfg *gorun.Config) string {
+	got, wanted := decodeTasks(text), decodeTasks(want)
+	if len(wanted) > 1 && len(got) < 2 {
+		return fmt.Sprintf("one task where %d small ones are wanted", len(wanted))
+	}
+	if cfg == nil || hasSSH(cfg) {
+		return ""
+	}
+	for name, t := range got {
+		if !t.Local {
+			return name + " isn't local = true, and the Gorunfile has no SSH server"
+		}
+	}
+	return ""
+}
+
+var taskBlock = regexp.MustCompile("(?s)```(?:toml)?\\n(.*?\\[tasks\\..*?)```")
+
+// decodeTasks returns the tasks in text, or in its first code block holding them.
+func decodeTasks(text string) map[string]gorun.Task {
+	if m := taskBlock.FindStringSubmatch(text); m != nil {
+		text = m[1]
+	}
+	var doc struct {
+		Tasks map[string]gorun.Task `toml:"tasks"`
+	}
+	_, _ = toml.Decode(text, &doc)
+	return doc.Tasks
 }
 
 // badCommand reports a command that breaks TaskFormat's rules though it loads: sudo written in

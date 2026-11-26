@@ -940,3 +940,325 @@ verify = "ls /var/backups/etc/*.tar.gz >/dev/null"
 sudo = true
 rerun = "safe"
 """
+
+[[task]]
+id = "postgres-backup"
+request = [
+  "Install postgres, create the <<db>> database and back it up every night",
+  "set up postgresql with a <<db>> database and nightly backups",
+  "I need a postgres server with a <<db>> db that gets dumped every night",
+]
+note = "Five small steps, each depending on the one before: install postgres, keep it running, create the <<db>> database, make the backup folder, then a cron rule that dumps <<db>> there at 02:30. Each check skips its step when it is done, and each verify fails the step when it didn't work."
+answer = '''
+[tasks.postgres-install]
+description = "Install PostgreSQL"
+check = "dpkg -s postgresql >/dev/null 2>&1"
+cmd = "apt-get update && apt-get install -y postgresql"
+verify = "dpkg -s postgresql >/dev/null 2>&1"
+sudo = true
+retries = 2
+rerun = "safe"
+
+[tasks.postgres-running]
+description = "Keep PostgreSQL running, and start it at boot"
+depends_on = ["postgres-install"]
+check = "systemctl is-active --quiet postgresql && systemctl is-enabled --quiet postgresql"
+cmd = "systemctl enable --now postgresql"
+verify = "systemctl is-active postgresql"
+sudo = true
+rerun = "safe"
+
+[tasks.postgres-db-<<db>>]
+description = "Create the <<db>> database"
+depends_on = ["postgres-running"]
+check = "runuser -u postgres -- psql -tAc \"SELECT 1 FROM pg_database WHERE datname = '<<db>>'\" | grep -q 1"
+cmd = "runuser -u postgres -- createdb <<db>>"
+verify = "runuser -u postgres -- psql -tAc \"SELECT 1 FROM pg_database WHERE datname = '<<db>>'\" | grep -q 1"
+sudo = true
+rerun = "safe"
+
+[tasks.postgres-backup-dir]
+description = "Make the backup folder"
+depends_on = ["postgres-db-<<db>>"]
+check = "test -d /var/backups/postgres"
+cmd = "install -d -o postgres -g postgres -m 0750 /var/backups/postgres"
+verify = "test -d /var/backups/postgres"
+sudo = true
+rerun = "safe"
+
+[tasks.postgres-backup-<<db>>]
+description = "Dump <<db>> every night at 02:30"
+depends_on = ["postgres-backup-dir"]
+check = "test -f /etc/cron.d/postgres-backup-<<db>>"
+cmd = "mv /tmp/postgres-backup-<<db>> /etc/cron.d/postgres-backup-<<db>> && chmod 644 /etc/cron.d/postgres-backup-<<db>>"
+verify = "grep -q 'pg_dump -Fc <<db>>' /etc/cron.d/postgres-backup-<<db>>"
+sudo = true
+rerun = "safe"
+[[tasks.postgres-backup-<<db>>.copy]]
+dst = "/tmp/postgres-backup-<<db>>"
+content = "30 2 * * * postgres pg_dump -Fc <<db>> > /var/backups/postgres/<<db>>.dump\n"
+'''
+[[task.params]]
+db = "shop"
+[[task.params]]
+db = "app"
+[[task.params]]
+db = "analytics"
+
+[[task]]
+id = "deploy-user"
+request = [
+  "Create a <<user>> user that can sudo, and turn off password logins over SSH",
+  "harden ssh: add a <<user>> admin user and only allow key logins",
+  "set up a <<user>> account with sudo and disable ssh passwords",
+]
+note = "Four small steps in order: create <<user>>, give it sudo through a sudoers file that visudo checks, turn off password logins in sshd_config, then reload sshd once its config passes sshd -t. Add <<user>>'s SSH key before you run it, or you can't log in as <<user>>."
+answer = '''
+[tasks.user-<<user>>]
+description = "Create the <<user>> user"
+check = "id -u <<user>> >/dev/null 2>&1"
+cmd = "useradd -m -s /bin/bash <<user>>"
+verify = "id -u <<user>> >/dev/null 2>&1"
+sudo = true
+rerun = "safe"
+
+[tasks.user-<<user>>-sudo]
+description = "Let <<user>> use sudo"
+depends_on = ["user-<<user>>"]
+check = "test -f /etc/sudoers.d/<<user>>"
+cmd = "visudo -cf /tmp/sudoers-<<user>> && install -m 0440 /tmp/sudoers-<<user>> /etc/sudoers.d/<<user>> && rm /tmp/sudoers-<<user>>"
+verify = "visudo -cf /etc/sudoers.d/<<user>>"
+sudo = true
+rerun = "safe"
+[[tasks.user-<<user>>-sudo.copy]]
+dst = "/tmp/sudoers-<<user>>"
+content = "<<user>> ALL=(ALL) NOPASSWD:ALL\n"
+
+[tasks.sshd-no-passwords]
+description = "Turn off password logins over SSH"
+depends_on = ["user-<<user>>-sudo"]
+check = "grep -q '^PasswordAuthentication no' /etc/ssh/sshd_config"
+cmd = "sed -i 's/^#\\?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config && grep -q '^PasswordAuthentication no' /etc/ssh/sshd_config || echo 'PasswordAuthentication no' >> /etc/ssh/sshd_config"
+verify = "sshd -t && grep -q '^PasswordAuthentication no' /etc/ssh/sshd_config"
+sudo = true
+rerun = "safe"
+
+[tasks.sshd-reload]
+description = "Reload sshd with the new config"
+depends_on = ["sshd-no-passwords"]
+check = "false"
+cmd = "sshd -t && systemctl reload ssh"
+verify = "systemctl is-active ssh"
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+user = "deploy"
+[[task.params]]
+user = "ops"
+
+[[task]]
+id = "docker-container"
+request = [
+  "Run the <<image>> image as a container called <<name>> on port <<port>>",
+  "deploy <<image>> with docker and make sure it answers on port <<port>>",
+  "install docker and run <<name>> from <<image>>, restarting it if it stops",
+]
+note = "Four small steps: install Docker, pull <<image>>, run it as <<name>> with a restart policy, then check it answers on port <<port>>. Each one waits for the step before it."
+answer = '''
+[tasks.docker-engine]
+description = "Install Docker"
+check = "command -v docker >/dev/null && systemctl is-active --quiet docker"
+cmd = "curl -fsSL https://get.docker.com | sh && systemctl enable --now docker"
+verify = "docker info >/dev/null"
+sudo = true
+retries = 2
+rerun = "safe"
+
+[tasks.<<name>>-image]
+description = "Pull <<image>>"
+depends_on = ["docker-engine"]
+check = "docker image inspect <<image>> >/dev/null 2>&1"
+cmd = "docker pull <<image>>"
+verify = "docker image inspect <<image>> >/dev/null 2>&1"
+sudo = true
+retries = 2
+rerun = "safe"
+
+[tasks.<<name>>-container]
+description = "Run <<name>> from <<image>>"
+depends_on = ["<<name>>-image"]
+check = "docker ps -q --filter name=^<<name>>$ --filter status=running | grep -q ."
+cmd = "docker rm -f <<name>> >/dev/null 2>&1; docker run -d --name <<name>> --restart unless-stopped -p <<port>>:<<inner>> <<image>>"
+verify = "docker ps -q --filter name=^<<name>>$ --filter status=running | grep -q ."
+sudo = true
+rerun = "safe"
+
+[tasks.<<name>>-answers]
+description = "Check <<name>> answers on port <<port>>"
+depends_on = ["<<name>>-container"]
+check = "curl -fsS --max-time 5 http://127.0.0.1:<<port>>/ >/dev/null"
+cmd = "sleep 3"
+verify = "curl -fsS --max-time 5 http://127.0.0.1:<<port>>/ >/dev/null"
+retries = 5
+retry_delay = "3s"
+rerun = "safe"
+'''
+[[task.params]]
+image = "nginx:1.27"
+name = "web"
+port = "8080"
+inner = "80"
+[[task.params]]
+image = "grafana/grafana:11.3.0"
+name = "grafana"
+port = "3000"
+inner = "3000"
+
+[[task]]
+id = "node-service"
+request = [
+  "Set up the node app in /srv/<<app>> as a service on port <<port>>",
+  "install node, install <<app>>'s dependencies and run it with systemd",
+  "deploy the <<app>> node.js app so it starts on boot",
+]
+note = "Five small steps, each after the one before: install Node.js, install <<app>>'s dependencies, write its systemd unit, keep it running, and check it answers on port <<port>>. It expects the code in /srv/<<app>> already, for example from a git checkout task."
+answer = '''
+[tasks.nodejs]
+description = "Install Node.js and npm"
+check = "command -v node >/dev/null && command -v npm >/dev/null"
+cmd = "apt-get update && apt-get install -y nodejs npm"
+verify = "node --version"
+sudo = true
+retries = 2
+rerun = "safe"
+
+[tasks.<<app>>-deps]
+description = "Install <<app>>'s dependencies"
+depends_on = ["nodejs"]
+check = "test -d /srv/<<app>>/node_modules && test /srv/<<app>>/node_modules -nt /srv/<<app>>/package-lock.json"
+cmd = "cd /srv/<<app>> && npm ci --omit=dev"
+verify = "test -d /srv/<<app>>/node_modules"
+timeout = "15m"
+rerun = "safe"
+
+[tasks.<<app>>-unit]
+description = "Install <<app>>'s systemd unit"
+depends_on = ["<<app>>-deps"]
+check = "test -f /etc/systemd/system/<<app>>.service"
+cmd = "mv /tmp/<<app>>.service /etc/systemd/system/<<app>>.service && systemctl daemon-reload"
+verify = "systemctl cat <<app>> >/dev/null"
+sudo = true
+rerun = "safe"
+[[tasks.<<app>>-unit.copy]]
+dst = "/tmp/<<app>>.service"
+content = "[Unit]\nDescription=<<app>>\nAfter=network.target\n\n[Service]\nWorkingDirectory=/srv/<<app>>\nExecStart=/usr/bin/node server.js\nEnvironment=PORT=<<port>>\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n"
+
+[tasks.<<app>>-running]
+description = "Keep <<app>> running, and start it at boot"
+depends_on = ["<<app>>-unit"]
+check = "systemctl is-active --quiet <<app>> && systemctl is-enabled --quiet <<app>>"
+cmd = "systemctl enable --now <<app>>"
+verify = "systemctl is-active <<app>>"
+sudo = true
+rerun = "safe"
+
+[tasks.<<app>>-answers]
+description = "Check <<app>> answers on port <<port>>"
+depends_on = ["<<app>>-running"]
+check = "curl -fsS --max-time 5 http://127.0.0.1:<<port>>/ >/dev/null"
+cmd = "sleep 3"
+verify = "curl -fsS --max-time 5 http://127.0.0.1:<<port>>/ >/dev/null"
+retries = 5
+retry_delay = "3s"
+rerun = "safe"
+'''
+[[task.params]]
+app = "api"
+port = "3000"
+[[task.params]]
+app = "dashboard"
+port = "8081"
+
+[[task]]
+id = "local-stats"
+request = [
+  "Write tasks that save this machine's disk usage and memory usage into <<file>>",
+  "save disk and memory stats to <<file>> on my machine",
+  "collect df and free output into <<file>> locally, in small steps",
+]
+note = "Three small steps on this machine (local = true): make the folder, write the disk usage, then add the memory usage. The reports run every time, so their checks never pass, and each verify checks its part of <<file>> is there."
+answer = '''
+[tasks.stats-dir]
+description = "Make the folder for the stats"
+check = "test -d <<dir>>"
+cmd = "mkdir -p <<dir>>"
+verify = "test -d <<dir>>"
+local = true
+
+[tasks.stats-disk]
+description = "Write the disk usage"
+depends_on = ["stats-dir"]
+check = "false"
+cmd = "df -h > <<file>>"
+verify = "grep -q Filesystem <<file>>"
+local = true
+
+[tasks.stats-memory]
+description = "Add the memory usage"
+depends_on = ["stats-disk"]
+check = "false"
+cmd = "free -h >> <<file>>"
+verify = "grep -q Mem: <<file>>"
+local = true
+'''
+[[task.params]]
+dir = "/tmp/stats"
+file = "/tmp/stats/stats.txt"
+[[task.params]]
+dir = "/var/tmp/report"
+file = "/var/tmp/report/usage.txt"
+
+[[task]]
+id = "one-liner"
+request = [
+  "<<ask>>",
+  "a task that <<what>>",
+  "Write a quick task to <<what>>",
+]
+note = "A one-liner still gets a check and a verify: it reports every time, so its check never passes, and verify fails it when the output isn't there."
+answer = '''
+[tasks.<<name>>]
+description = "<<desc>>"
+check = "false"
+cmd = "<<cmd>>"
+verify = "<<verify>>"
+'''
+[[task.params]]
+ask = "Print the kernel version"
+what = "prints the kernel version"
+name = "kernel-version"
+desc = "Print the kernel version"
+cmd = "uname -r"
+verify = "uname -r | grep -q ."
+[[task.params]]
+ask = "Show who is logged in"
+what = "shows who is logged in"
+name = "who-is-on"
+desc = "Show who is logged in"
+cmd = "who"
+verify = "true"
+[[task.params]]
+ask = "List the listening ports"
+what = "lists the ports servers listen on"
+name = "listening-ports"
+desc = "List the listening TCP ports"
+cmd = "ss -ltn"
+verify = "ss -ltn | grep -q LISTEN"
+[[task.params]]
+ask = "Show the free memory"
+what = "shows how much memory is free"
+name = "free-memory"
+desc = "Show the free memory"
+cmd = "free -h"
+verify = "free | grep -q Mem:"

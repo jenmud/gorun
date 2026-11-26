@@ -41,22 +41,21 @@ GORUN_ADDRESS ?= :8080
 # templ's proxy needs a host, so a bare ":port" proxies to localhost.
 WEB_PROXY := http://$(if $(filter :%,$(GORUN_ADDRESS)),localhost)$(GORUN_ADDRESS)
 
-# The assistant's model. Empty is gorun's built-in one, Qwen3 4B Instruct, downloaded on the first
-# question. The version fine-tuned on gorun (training/) learned the rules from before tasks had to
-# have a check and a verify, so its tasks are refused until it is retrained; try it with
-# `make web-dev GORUN_LLM_MODEL=$(FINETUNED_MODEL)`, after `make model` pulls it ahead.
+# The assistant's model. Empty is gorun's built-in one, Qwen3 4B Instruct fine-tuned on gorun
+# (training/), downloaded on the first question; `make model` pulls it ahead. Set it to another
+# GGUF path or URL to try one, such as a fresh training/out build.
 GORUN_LLM_MODEL ?=
-FINETUNED_MODEL := https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF/resolve/main/gorun-qwen3-4b-q4_k_m.gguf
+DEFAULT_MODEL := https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF/resolve/main/gorun-qwen3-4b-v2-q4_k_m.gguf
 # where gorun keeps downloaded models, as cmd/websrv's llmDir finds it
 GORUN_CACHE_DIR ?= $(if $(filter Darwin,$(shell uname -s)),$(HOME)/Library/Caches,$(or $(XDG_CACHE_HOME),$(HOME)/.cache))/gorun
-MODEL_FILE := $(GORUN_CACHE_DIR)/llm/models/$(notdir $(FINETUNED_MODEL))
+MODEL_FILE := $(GORUN_CACHE_DIR)/llm/models/$(notdir $(DEFAULT_MODEL))
 
 model: $(MODEL_FILE)
 
 # through a .part file, so an interrupted download is never used
 $(MODEL_FILE):
 	mkdir -p $(dir $@)
-	curl -fL --progress-bar -o $@.part $(FINETUNED_MODEL)
+	curl -fL --progress-bar -o $@.part $(DEFAULT_MODEL)
 	mv $@.part $@
 
 web:

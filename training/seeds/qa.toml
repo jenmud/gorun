@@ -24,6 +24,7 @@ a = """Give it a check: a command that runs first. If the check exits 0, the tas
 [tasks.nginx]
 check = "dpkg -s nginx >/dev/null 2>&1"
 cmd = "apt-get install -y nginx"
+verify = "dpkg -s nginx >/dev/null 2>&1"
 sudo = true
 ```
 
@@ -56,7 +57,9 @@ a = """depends_on lists tasks that must run first on the same server:
 
 ```toml
 [tasks.restart-app]
+check = "false"
 cmd = "systemctl restart app"
+verify = "systemctl is-active app"
 depends_on = ["migrate"]
 ```
 
@@ -84,7 +87,9 @@ a = """Add a copy table to the task. Copies run before the command, as the login
 
 ```toml
 [tasks.app-config]
+check = "false"
 cmd = "mv /tmp/app.conf /etc/app/app.conf"
+verify = "test -s /etc/app/app.conf"
 sudo = true
 [[tasks.app-config.copy]]
 src = "./files/app.conf"
@@ -105,7 +110,9 @@ a = """Never write it in the Gorunfile. Put it in gorun's own environment, or a 
 
 ```toml
 [tasks.registry-login]
-cmd = 'printf %s "$TOKEN" | docker login -u me --password-stdin'
+check = "grep -q registry.example.com ~/.docker/config.json"
+cmd = 'printf %s "$TOKEN" | docker login registry.example.com -u me --password-stdin'
+verify = "grep -q registry.example.com ~/.docker/config.json"
 envvars = { TOKEN = "${REGISTRY_TOKEN}" }
 ```
 
@@ -339,3 +346,129 @@ want = ["github.com/jenmud/gorun"]
 q = ["Which OS can the servers run?", "Does gorun need an agent on the servers?"]
 a = """No agent: gorun only needs SSH on the server, and runs commands in the login shell (or sh -c with sudo). Any Unix-like system works; check_copies uses md5sum, md5 -r or openssl md5, whichever is there, and copies anyway when none is."""
 want = ["ssh", "agent"]
+
+[[qa]]
+q = ["How do I install gorun?", "how can I get gorun on my machine?", "Is there an install script for gorun?"]
+a = """Run the install script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install.sh | sh
+```
+
+It installs the latest release; VERSION=v0.31.0 picks another, and gorun -version says which you have. You can also download a binary from the GitHub releases at github.com/jenmud/gorun, or build it with go build -o gorun ./cmd. The script installs the instrumented build (with OpenTelemetry, off until you set an OTEL_* endpoint) on Linux x86-64, and the standard build elsewhere."""
+want = ["install.sh", "releases"]
+
+[[qa]]
+q = ["Where can I learn gorun?", "Is there a tutorial for gorun?", "Where are gorun's docs?"]
+a = """The website, go-run.dev, has the docs, a step-by-step tutorial, tutorial videos and a playground that loads a Gorunfile in your browser and shows the plan and a simulated run. The source and the same docs (docs/tutorial.md, docs/gorunfile.md for every option, docs/running.md, docs/web.md, docs/reference.md) are at github.com/jenmud/gorun. gorun -dump prints a starting Gorunfile that documents every key."""
+want = ["go-run.dev", "github.com/jenmud/gorun"]
+
+[[qa]]
+q = ["Can I try a Gorunfile without installing gorun?", "Is there a gorun playground?", "how do I test a Gorunfile in the browser?"]
+a = """Yes: the playground on go-run.dev loads a Gorunfile in your browser, says whether it loads, and shows the plan (which tasks each server runs, in order) and a simulated run. Nothing connects to a server. Keys that read files, such as cmd_file or copy sources, can't be used there."""
+want = ["playground", "go-run.dev"]
+
+[[qa]]
+q = ["How do I start a new Gorunfile?", "Is there a template Gorunfile?", "what does -dump do?"]
+a = """gorun -dump prints a starting Gorunfile that runs as it is and documents every option in comments:
+
+```bash
+gorun -dump > Gorunfile
+```
+
+-dump must come first on the command line. To turn tasks into shell files you can read or run by hand, gorun -dump-tasks DIR Gorunfile writes one per task."""
+want = ["-dump", "gorunfile"]
+
+[[qa]]
+q = ["Where does gorun -serve keep my Gorunfile when I start it without one?", "I started gorun -serve with no Gorunfile, where are my tasks saved?", "Does gorun -serve write files when there is no Gorunfile?"]
+a = """In the history database (GORUN_DB_PATH, ~/.gorun/gorun.db by default), not in files. The first start saves a starter Gorunfile called default, with only a title; add servers, tasks, bundles and schedules on the Config page or with the assistant. Every save is kept as a new version, and an edit is checked to load before it is saved. To use a Gorunfile file as it is, start gorun -serve Gorunfile instead: then the database keeps only runs."""
+want = ["database", "default", "version"]
+
+[[qa]]
+q = ["Can gorun -serve keep more than one Gorunfile?", "How do I make a second Gorunfile in the web UI?", "what is the Gorunfiles page?"]
+a = """Yes, when it runs without a Gorunfile. The Gorunfiles page lists the ones kept in the database: Open one and the Run, Tasks, Bundles, Schedules, Config and Assistant pages show it, Create and open adds a new one, and Delete removes one that isn't open and that no other includes. Every one's schedules run, whichever is open, and gorun starts on the one saved most recently. A Gorunfile can share another's tasks and bundles with include = ["stored::base"]."""
+want = ["gorunfiles", "open", "stored::"]
+
+[[qa]]
+q = ["What does stored:: mean in an include?", "How do two Gorunfiles in gorun -serve share tasks?", "include stored::base"]
+a = """include = ["stored::base"] brings in the tasks and bundles of the Gorunfile called base that gorun -serve keeps in its database. base's servers, groups and schedules stay its own. The include is live: editing a shared task, from either Gorunfile, changes it for every Gorunfile that includes base. stored:: includes only load in gorun -serve, and a Gorunfile kept in the database can include only other stored ones, not local files or git repositories."""
+want = ["stored::", "tasks", "bundles"]
+
+[[qa]]
+q = ["How do I import a Gorunfile into the web UI?", "How do I move my Gorunfile into gorun -serve's database?", "How do I export my Gorunfile from the web UI?"]
+a = """On the Config page. Import, shown when the open Gorunfile is kept in the database, replaces it with an uploaded Gorunfile, or a zip holding one and the files it includes; it is checked to load first, and the one before is kept as an earlier version. Export as zip downloads the saved Gorunfile as a folder that loads anywhere: a Gorunfile with settings, servers, groups and schedules, plus tasks/<name>.toml and bundles/<name>.toml, one each. Unsaved changes, comments and the files tasks copy aren't in the zip."""
+want = ["import", "export", "zip"]
+
+[[qa]]
+q = ["What does gorun -serve -live do?", "How do I only watch runs in the web UI?", "what is -live?"]
+a = """gorun -serve -live only watches: the menu has just Live, History and Assistant, for runs started elsewhere, such as gorun Gorunfile -r in a terminal that reaches the same NATS server. There is no Gorunfile, given or kept in the database, so Run, Tasks, Bundles, Schedules and Config don't exist and the stored Gorunfiles and their schedules are left alone."""
+want = ["live", "history", "nats"]
+
+[[qa]]
+q = ["Why does the Run page say I need to tick a server?", "My local task won't run from the web UI", "How do I run a task on the gorun machine from the web UI?"]
+a = """Only tasks marked local = true run on the machine running gorun without a server ticked; every other task runs over SSH, so it needs a ticked SSH server. Set local = true on the task (the Local box when you edit it), and on the tasks it depends on, or this machine skips them. When the Gorunfile has no SSH server at all, every task needs local = true."""
+want = ["local = true", "ssh"]
+
+[[qa]]
+q = ["Which model does the assistant use?", "Can I use Ollama with gorun's assistant?", "How do I change the assistant's model?"]
+a = """By default it runs a model inside gorun -serve: a version of Qwen3 4B Instruct (Apache 2.0) fine-tuned on gorun, on the GPU when about 4 GB is free and on the CPU otherwise. The first question downloads llama.cpp and the model into GORUN_CACHE_DIR/llm. GORUN_LLM_MODEL points at another GGUF file or https URL. To use Ollama, llama-server, LM Studio or a hosted API, set GORUN_LLM_URL (such as http://localhost:11434/v1), GORUN_LLM_MODEL to the model's name there, and GORUN_LLM_API_KEY if it needs one."""
+want = ["gorun_llm_url", "gorun_llm_model", "gguf"]
+
+[[qa]]
+q = ["What happens when several people use the assistant at once?", "Does the assistant load the model for every user?", "Will many users run the assistant out of memory?"]
+a = """No. gorun loads the model once and answers one question at a time, whoever asks, so more users only means a wait: the chat says how many questions are ahead of yours, and with 8 waiting the next is asked to try again in a minute. Each gorun -serve process loads its own copy, so run one per machine."""
+want = ["once", "one at a time"]
+
+[[qa]]
+q = ["How do I write good tasks?", "What makes a good gorun task?", "Should one task do many things?"]
+a = """Keep each task small: one step, such as installing a package, writing one file or starting one service. Chain the steps with depends_on, so a failure stops at the step that broke and the rest are skipped. Give every task a check, a command that exits 0 when the step is done already, so a second run changes nothing, and a verify, a command that exits non-zero when the step didn't work, even for a one-liner. A complex job becomes several small tasks and a bundle that runs them in order."""
+want = ["small", "depends_on", "check", "verify"]
+
+[[qa]]
+q = ["Does gorun support OpenTelemetry?", "How do I send gorun traces to a collector?", "where do gorun's logs go?"]
+a = """gorun's log goes to ~/.gorun/gorun.log (or GORUN_LOG_FILE). The instrumented build, which the install script installs on Linux x86-64, adds OpenTelemetry traces, metrics and logs, off until you configure an exporter:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 gorun Gorunfile -r
+```
+
+Each run is one trace with a gorun.run span and a server.run span per server, and every log line is also sent as a log record linked to its span."""
+want = ["otel", "trace", "gorun.log"]
+
+[[qa]]
+q = ["How do I use tasks from a git repository?", "Can I include tasks from GitHub?", "what is a git include?"]
+a = """Include them with a git:: source and a ref:
+
+```toml
+include = ["git::https://github.com/you/task-library.git//web/*.toml?ref=v1.2.0"]
+```
+
+After // comes a path or glob in the repository, and ?ref= (a tag, branch or commit) is required. Gorunfile.lock records the commit each include resolved to; commit it, and run gorun Gorunfile -update-includes to move to newer commits. Only tasks and bundles come from a git include, never servers, groups, schedules or global vars, and your own git credentials are used."""
+want = ["git::", "ref", "gorunfile.lock"]
+
+[[qa]]
+q = ["How do I list the tasks in a Gorunfile?", "Can gorun show me my servers and their tasks?", "what do the -list flags do?"]
+a = """gorun Gorunfile -list-tasks prints the tasks as a dependency tree, -list-servers the servers with their groups, tags and task lists, -list-bundles what each bundle expands to, and -list-tags and -list-groups the servers under each tag and group. In a terminal they are collapsible trees; with -plain, or when stdout isn't a terminal, they are printed in full. Nothing runs."""
+want = ["-list-tasks", "-list-servers"]
+
+[[qa]]
+q = ["How do I look at old runs from the terminal?", "what does gorun -history do?", "Can I see past runs without the web UI?"]
+a = """gorun -history browses the runs saved in the history database (GORUN_DB_PATH, ~/.gorun/gorun.db by default): each run, its servers and tasks, and each task's exit code and output. gorun -serve shows the same runs on its History page."""
+want = ["-history", "database"]
+
+[[qa]]
+q = ["Can gorun run in Docker?", "Is there a gorun container image?", "how do I run the web UI in Docker?"]
+a = """Yes: the repository's Dockerfile builds an image that runs gorun -serve on port 8080:
+
+```bash
+docker build -t gorun .
+docker run --rm -p 127.0.0.1:8080:8080 -v gorun-data:/var/lib/gorun gorun
+```
+
+Keep /var/lib/gorun in a volume: it holds the history database, the log and git include checkouts, and without a Gorunfile the one kept in the database. GORUN_FILE names a Gorunfile to load instead, mounted into the container. Tasks over SSH need the keys and known_hosts mounted, with the Gorunfile's [ssh] settings pointing at them. The web UI has no login, so publish the port only on a trusted network."""
+want = ["docker", "/var/lib/gorun"]
+
+[[qa]]
+q = ["Is the web UI safe to expose?", "Does gorun -serve have a login?", "how do I secure gorun -serve?"]
+a = """It has no login: anyone who can reach the port can run tasks, browse folders and edit the Gorunfile, and it listens on all interfaces by default. Keep it on a trusted network, or set GORUN_ADDRESS=127.0.0.1:8080 and reach it over an SSH tunnel: ssh -L 8080:127.0.0.1:8080 you@gorun-host."""
+want = ["login", "127.0.0.1", "ssh -l"]

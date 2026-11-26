@@ -304,7 +304,7 @@ are limited to 10 MB.
 **Generate tasks** (experimental) asks a language model to write tasks from a description, such
 as "install postgres and back it up every night". The tasks it writes are checked so they load,
 then queued as unsaved changes: read and fix each one before you save, because the model gets
-commands wrong. The model is Qwen3 4B Instruct (Apache 2.0), run inside `gorun -serve` on the GPU
+commands wrong. The model is Qwen3 4B Instruct (Apache 2.0) fine-tuned on gorun, run inside `gorun -serve` on the GPU
 when one is found. It needs about 4 GB of GPU memory; when there isn't that much free, such as
 when another program or another `gorun -serve` is using it, the model runs on the CPU instead,
 which is slower, and the chat says so. The first use downloads llama.cpp (about 36 MB) and the model (2.5 GB) into
@@ -366,13 +366,12 @@ The page says whether the chat is private. It is when the model runs inside goru
 question sends the Gorunfile and run output to that host, and the page says so in amber.
 
 The model is small: it reads failures well when the output says what went wrong, but its tasks
-often hold placeholders, such as paths and passwords, to fill in. [`training/`](../training) builds
-a version of it fine-tuned on gorun, published at
-[jenmud/gorun-qwen3-4b-GGUF](https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF); point
-`GORUN_LLM_MODEL` at the GGUF file or its URL. It was trained before tasks had to have a check
-and a verify, so its tasks are refused until it is retrained. `make model` downloads it, and
-`make web-dev GORUN_LLM_MODEL=$(FINETUNED_MODEL)` runs with it; plain `make web-dev` uses the
-built-in model.
+can hold placeholders, such as paths and passwords, to fill in. It is Qwen3 4B Instruct
+fine-tuned on gorun by [`training/`](../training): on Gorunfiles, gorun's docs, writing small
+tasks that each have a check and a verify, and diagnosing runs. It is published at
+[jenmud/gorun-qwen3-4b-GGUF](https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF). To use the stock
+Qwen3 4B Instruct, or any other GGUF file, point `GORUN_LLM_MODEL` at the file or its URL.
+`make model` downloads the built-in model ahead of the first question.
 
 ## Walkthrough: from nothing to a running schedule
 

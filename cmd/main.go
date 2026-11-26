@@ -566,7 +566,7 @@ in the environment):
   GORUN_NATS_CLIENT_TIMEOUT           default: nats default (e.g. 5s)
   GORUN_NATS_SERVER_CONFIG            default: none (NATS server config for the server -serve starts)
   GORUN_LLM_URL                       default: unset (an OpenAI-compatible API for the web UI's assistant, instead of the built-in model)
-  GORUN_LLM_MODEL                     default: Qwen3 4B Instruct (a GGUF path or https URL; a model name with GORUN_LLM_URL)
+  GORUN_LLM_MODEL                     default: gorun's Qwen3 4B (a GGUF path or https URL; a model name with GORUN_LLM_URL)
   GORUN_LLM_API_KEY                   default: unset (sent as a bearer token)
 
 OpenTelemetry SDK variables (OTEL_*) are also honoured by the instrumented build.

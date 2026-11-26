@@ -259,7 +259,7 @@ func TestAssistantStatsPanel(t *testing.T) {
 	a.gen = &generator{engine: &llm.Engine{Dir: t.TempDir()}}
 	a.gen.assistant.Engine = a.gen.engine
 	page := get(t, a, "/assistant").Body.String()
-	for _, want := range []string{`id="assistant-stats"`, "Not downloaded yet", "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"} {
+	for _, want := range []string{`id="assistant-stats"`, "Not downloaded yet", "gorun-qwen3-4b-v2-q4_k_m.gguf"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the Assistant page is missing %q", want)
 		}

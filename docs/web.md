@@ -38,8 +38,9 @@ last across restarts. It can keep several, each with a name:
   such as a copy's `src`, are relative to the folder gorun was started in, so use absolute paths.
 - **Import and export**: the Config page imports a Gorunfile into the open one, and exports it as
   a zip with each task and bundle in a file of its own; see [Config](#config).
-- **Loading a file** on the Config page switches to that file until the service restarts. The
-  stored Gorunfiles' schedules keep running.
+- **The Config page** names the open one, with **Switch or create**, **Export as zip** and
+  **Import**. It has no file browser: to use a Gorunfile file as it is, start
+  `gorun -serve <Gorunfile>`; to bring one into the database, import it.
 
 With **`-live`**, or if the history database doesn't open, the service only watches, and the
 stored Gorunfiles are left alone, schedules included. The menu then has just **Live**,

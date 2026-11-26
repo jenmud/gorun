@@ -226,6 +226,26 @@ func TestImportReplacesTheStoredGorunfile(t *testing.T) {
 	}
 }
 
+// The Config page names the stored Gorunfile and offers import, not a file to load.
+func TestConfigPageShowsTheStoredGorunfile(t *testing.T) {
+	a, _ := newStoredApp(t)
+	page := get(t, a, "/config").Body.String()
+	for _, want := range []string{"history database, not in a file", `href="/gorunfiles"`, `action="/config/import"`, "1 saved version"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the Config page is missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{`id="load"`, ">stored::default<", "Load a Gorunfile"} {
+		if strings.Contains(page, unwanted) {
+			t.Errorf("the Config page shows %q", unwanted)
+		}
+	}
+	msg := redirectFlash(post(t, a, "/config/load", url.Values{"path": {"/etc/hosts"}}))
+	if !strings.Contains(msg, "Import a Gorunfile") || a.currentStored() != store.DefaultGorunfile {
+		t.Errorf("loading a file = %q, open = %q; want it refused", msg, a.currentStored())
+	}
+}
+
 // A Gorunfile given to gorun -serve is used as it is: the database keeps none for it, and saves
 // go to the file.
 func TestAGivenGorunfileSkipsTheDatabase(t *testing.T) {

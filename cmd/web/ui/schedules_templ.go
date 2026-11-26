@@ -478,7 +478,7 @@ func scheduleEditPanel(d SchedulesPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</span></h2><p class=\"mt-1 text-xs text-zinc-500\">The change is written to the file it came from straight away. Pauses and skips on the other schedules are kept.</p><form method=\"post\" action=\"/schedules/edit\" class=\"mt-4 grid gap-3 sm:grid-cols-2\"><input type=\"hidden\" name=\"name\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</span></h2><p class=\"mt-1 text-xs text-zinc-500\">The change is saved straight away, into the Gorunfile it came from. Pauses and skips on the other schedules are kept.</p><form method=\"post\" action=\"/schedules/edit\" class=\"mt-4 grid gap-3 sm:grid-cols-2\"><input type=\"hidden\" name=\"name\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -207,7 +207,11 @@ type ConfigPageData struct {
 	EditingName string // name of entity being edited
 	Edit        EditFields
 	Model       string // the model the task generator asks, as the page names it; empty hides it
-	Stored      bool   // the Gorunfile is the one kept in the history database, so it can be imported into
+	// Stored is set when the Gorunfile is kept in the history database, not as a file: it is
+	// then named StoredName, has StoredVersions saved versions, and is imported into, not loaded
+	Stored         bool
+	StoredName     string
+	StoredVersions int
 }
 
 // GorunfilesPageData is the list of Gorunfiles kept in the history database.

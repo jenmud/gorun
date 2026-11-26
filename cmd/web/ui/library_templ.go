@@ -692,7 +692,7 @@ func taskEditPanel(d TasksPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</span></h2><p class=\"mt-1 text-xs text-zinc-500\">The change is written to the file it came from straight away. Settings not shown here are kept.</p><form method=\"post\" action=\"/tasks/edit\" class=\"mt-4 space-y-3\"><input type=\"hidden\" name=\"name\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</span></h2><p class=\"mt-1 text-xs text-zinc-500\">The change is saved straight away, into the Gorunfile it came from. Settings not shown here are kept.</p><form method=\"post\" action=\"/tasks/edit\" class=\"mt-4 space-y-3\"><input type=\"hidden\" name=\"name\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1807,7 +1807,7 @@ func bundleEditPanel(d BundlesPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, "</span></h2><p class=\"mt-1 text-xs text-zinc-500\">The change is written to the file it came from straight away. Settings not shown here are kept.</p><form method=\"post\" action=\"/bundles/edit\" class=\"mt-4 space-y-3\"><input type=\"hidden\" name=\"name\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 147, "</span></h2><p class=\"mt-1 text-xs text-zinc-500\">The change is saved straight away, into the Gorunfile it came from. Settings not shown here are kept.</p><form method=\"post\" action=\"/bundles/edit\" class=\"mt-4 space-y-3\"><input type=\"hidden\" name=\"name\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

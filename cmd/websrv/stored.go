@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/jenmud/gorun"
+	"github.com/jenmud/gorun/cmd/web/ui"
 	"github.com/jenmud/gorun/internal/store"
 )
 
@@ -105,6 +106,17 @@ func (a *app) storedText(name string) (string, error) {
 		return "", fmt.Errorf("no Gorunfile called %s is kept in the history database", name)
 	}
 	return text, nil
+}
+
+// storedPage fills in the Config page's stored Gorunfile, and reports whether one is open.
+func (a *app) storedPage(ctx context.Context, d *ui.ConfigPageData) bool {
+	name := a.currentStored()
+	if name == "" {
+		return false
+	}
+	d.Stored, d.StoredName = true, name
+	d.StoredVersions, _ = a.store.GorunfileVersions(ctx, name)
+	return true
 }
 
 // newConfig is an empty config that reads stored Gorunfiles from the database when the service

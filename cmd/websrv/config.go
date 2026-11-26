@@ -167,9 +167,10 @@ func (a *app) configPage(w http.ResponseWriter, r *http.Request) {
 	d := configData(cfg, pending)
 	d.NATS = a.natsStatus()
 	d.Flash, d.FlashBad = msg, bad
-	d.Browser = browse(pickerDir(r.URL.Query().Get("dir"), d.Path))
 	d.Model = a.gen.describe()
-	d.Stored = a.usingStored()
+	if !a.storedPage(r.Context(), &d) {
+		d.Browser = browse(pickerDir(r.URL.Query().Get("dir"), d.Path))
+	}
 	a.page(w, "Config", "config", ui.ConfigPage(d))
 }
 
@@ -193,10 +194,11 @@ func (a *app) editPage(w http.ResponseWriter, r *http.Request) {
 
 	d := configData(cfg, pending)
 	d.NATS = a.natsStatus()
-	d.Browser = browse(pickerDir("", d.Path))
 	d.EditingKind, d.EditingName = kind, name
 	d.Model = a.gen.describe()
-	d.Stored = a.usingStored()
+	if !a.storedPage(r.Context(), &d) {
+		d.Browser = browse(pickerDir("", d.Path))
+	}
 	d.Edit = editFields(body)
 	a.page(w, "Config", "config", ui.ConfigPage(d))
 }
@@ -485,8 +487,12 @@ func configData(cfg *gorun.Config, pending []gorun.Change) ui.ConfigPageData {
 	return d
 }
 
-// rel shows path relative to the folder of the root Gorunfile, when it is inside it.
+// rel shows path relative to the folder of the root Gorunfile, when it is inside it, and a stored
+// Gorunfile by its name.
 func rel(root, path string) string {
+	if name, ok := gorun.StoredName(path); ok {
+		return name
+	}
 	if path == "" || root == "" {
 		return path
 	}
@@ -688,7 +694,7 @@ func (a *app) addHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.pending = append(a.pending, change)
-	redirectWith(w, r, "/config", describe(change)+". Save to write it to the file.", false)
+	redirectWith(w, r, "/config", describe(change)+". Press Save to keep it.", false)
 }
 
 // editHandler queues an edit: the entity is removed and written back with the form's changes,
@@ -724,7 +730,7 @@ func (a *app) editHandler(w http.ResponseWriter, r *http.Request) {
 		gorun.Change{Kind: kind, Name: name, File: file, Remove: true},
 		gorun.Change{Kind: kind, Name: name, File: file, Body: body},
 	)
-	redirectWith(w, r, "/config", fmt.Sprintf("Edited %s %s. Save to write it to the file.", kindNames[kind], name), false)
+	redirectWith(w, r, "/config", fmt.Sprintf("Edited %s %s. Press Save to keep it.", kindNames[kind], name), false)
 }
 
 // removeHandler queues the removal of a server, group, task or bundle.
@@ -748,7 +754,7 @@ func (a *app) removeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	change := gorun.Change{Kind: kind, Name: name, File: sourceOf(a.cfg, a.pending, kind, name), Remove: true}
 	a.pending = append(a.pending, change)
-	redirectWith(w, r, "/config", describe(change)+". Save to write it to the file.", false)
+	redirectWith(w, r, "/config", describe(change)+". Press Save to keep it.", false)
 }
 
 // saveHandler writes the unsaved changes into their files, then reloads the file to check it.
@@ -791,6 +797,10 @@ func (a *app) discardHandler(w http.ResponseWriter, r *http.Request) {
 
 // loadHandler loads another Gorunfile into the editor.
 func (a *app) loadHandler(w http.ResponseWriter, r *http.Request) {
+	if a.keepsStored {
+		redirectWith(w, r, "/config", "This gorun keeps its Gorunfiles in the history database. Import a Gorunfile to bring it in, or start gorun -serve with a Gorunfile to use that file.", true)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		redirectWith(w, r, "/config", "Could not read the form.", true)
 		return

@@ -219,6 +219,5 @@ func (a *app) reloadConfig() error {
 	a.cfg = cfg
 	a.mu.Unlock()
 	a.startScheduler(cfg)
-	a.keepStored()
 	return nil
 }

@@ -75,12 +75,12 @@ type app struct {
 	// noFile is set when the service has no Gorunfile, given or stored: it then shows only the
 	// Live and History pages, for runs started elsewhere.
 	noFile bool
-	// storedDir holds the working copies of the Gorunfiles kept in the history database, when
-	// the service started without one; see stored.go. bg runs the schedules of those that aren't
-	// open, so every one's schedules fire.
-	storedDir  string
-	bg         map[string]*gorun.Scheduler
-	openStored atomic.Value // the open stored Gorunfile's name, or ""; read without a.mu
+	// keepsStored is set when the service started without a Gorunfile and keeps its Gorunfiles in
+	// the history database, never as files; see stored.go. bg runs the schedules of those that
+	// aren't open, so every one's schedules fire.
+	keepsStored bool
+	bg          map[string]*gorun.Scheduler
+	openStored  atomic.Value // the open stored Gorunfile's name, or ""; read without a.mu
 }
 
 // Run starts the web server on GORUN_ADDRESS (default :8080). configPath, when set, is the
@@ -119,19 +119,13 @@ func run(configPath, logPath string, live bool) error {
 		}
 	}
 
-	stored, storedNames := "", []string(nil)
-	if configPath == "" && st != nil && !live {
-		dir := storedDir(dbPath)
-		names, err := openStored(context.Background(), st, dir)
-		if err == nil {
-			dir, err = filepath.EvalSymlinks(dir) // as LoadFile resolves the paths it reports
-		}
-		if err != nil {
-			log.Printf("gorun web: %v", err)
-		} else {
-			stored, storedNames = dir, names
-			configPath = filepath.Join(dir, names[0], "Gorunfile")
-		}
+	storedNames, err := pickStored(context.Background(), configPath, st, live)
+	if err != nil {
+		log.Printf("gorun web: %v", err)
+	}
+	stored := len(storedNames) > 0
+	if stored {
+		configPath = gorun.StoredPath(storedNames[0])
 	}
 
 	gorun.StartNATS()
@@ -149,8 +143,8 @@ func run(configPath, logPath string, live bool) error {
 		nats:  natsStartState(emb, nc, err, envvars.Get("GORUN_SKIP_NATS") != ""),
 		gen:   newGenerator(),
 
-		noFile:    configPath == "",
-		storedDir: stored,
+		noFile:      configPath == "",
+		keepsStored: stored,
 	}
 	defer a.gen.close()
 	if nc != nil {
@@ -171,7 +165,7 @@ func run(configPath, logPath string, live bool) error {
 			info.cfgPath, info.schedules, info.schedulerOn = a.cfgPath, len(a.cfg.Schedules), a.sched != nil
 			a.mu.Unlock()
 		}
-		if stored != "" {
+		if stored {
 			info.storedName, info.storedCount = storedNames[0], len(storedNames)
 			info.storedVersions, _ = st.GorunfileVersions(context.Background(), storedNames[0])
 			a.refreshBackground()
@@ -275,7 +269,7 @@ func (a *app) routes() *http.ServeMux {
 	withFile("POST /config/discard", a.discardHandler)
 	withFile("POST /config/generate", a.generateHandler)
 	withFile("POST /config/import", a.importHandler)
-	if a.storedDir != "" {
+	if a.keepsStored {
 		mux.HandleFunc("GET /gorunfiles", a.gorunfilesPage)
 		mux.HandleFunc("POST /gorunfiles/new", a.newGorunfile)
 		mux.HandleFunc("POST /gorunfiles/open", a.openGorunfile)
@@ -289,7 +283,7 @@ func (a *app) renderCtx() context.Context {
 	if a.noFile {
 		return ui.WithoutGorunfile(context.Background())
 	}
-	if a.storedDir != "" {
+	if a.keepsStored {
 		return ui.WithStored(context.Background(), a.currentStored())
 	}
 	return context.Background()

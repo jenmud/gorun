@@ -10,7 +10,8 @@ GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no Gorunfile: the one kept in the
 gorun -serve -live                           # watch only: Live, History and Assistant
 ```
 
-Started **with a Gorunfile**, the service runs and edits that file.
+Started **with a Gorunfile**, the service runs and edits that file, and keeps no Gorunfile in its
+database.
 
 Started **without one**, it keeps Gorunfiles in its history database (`GORUN_DB_PATH`), so they
 last across restarts. It can keep several, each with a name:
@@ -30,10 +31,11 @@ last across restarts. It can keep several, each with a name:
   bundles come along: `base`'s servers, groups and schedules stay its own. It is live, so editing
   a shared task (from either Gorunfile) changes it for every Gorunfile that includes `base`.
   `stored::` includes only load in `gorun -serve`.
-- **Working copies**: runs, the editor and the schedulers use a copy of each at
-  `gorunfiles/<name>/Gorunfile` next to the database, written from the newest version at each
-  start. Don't edit those files: the next start replaces them. Relative paths in them, such as a
-  copy's `src`, are relative to their folder, so use absolute paths.
+- **Only in the database**: runs, the editor, the assistant and the schedulers read them from
+  the database, and no file is written for them. An edit is checked to load before it is saved,
+  so a broken one never becomes a version. A stored Gorunfile can include only other stored ones
+  (`stored::<name>`): local and git includes need a folder, and it has none. Relative paths in it,
+  such as a copy's `src`, are relative to the folder gorun was started in, so use absolute paths.
 - **Import and export**: the Config page imports a Gorunfile into the open one, and exports it as
   a zip with each task and bundle in a file of its own; see [Config](#config).
 - **Loading a file** on the Config page switches to that file until the service restarts. The

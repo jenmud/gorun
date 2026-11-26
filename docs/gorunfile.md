@@ -748,7 +748,9 @@ tasks = ["@baseline", "nginx"]            # baseline is a bundle in base
 As with a git include, only tasks and bundles come along; `base`'s servers, groups and schedules
 stay its own. The include is live: a change to `base`'s tasks reaches every Gorunfile that
 includes it. It only loads in `gorun -serve`; anywhere else it is an error, and the web UI's
-export adds the shared tasks to the zip so it loads anywhere.
+export adds the shared tasks to the zip so it loads anywhere. A stored Gorunfile can include only other stored
+ones: it is kept in the database, not as a file, so it has no folder for a local or git include
+to start from.
 ## Schedules
 
 A `[[schedule]]` table runs a task or bundle on every server, on a cron pattern or once at a

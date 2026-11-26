@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/cmd/web/ui"
 )
 
@@ -75,11 +74,7 @@ func (a *app) newGorunfile(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/gorunfiles", "Could not save it: "+err.Error(), true)
 		return
 	}
-	if err := writeWorkingCopy(a.storedDir, name, content); err != nil {
-		redirectWith(w, r, "/gorunfiles", "Could not write it: "+err.Error(), true)
-		return
-	}
-	if err := a.loadConfig(a.storedFile(name)); err != nil {
+	if err := a.loadConfig(gorun.StoredPath(name)); err != nil {
 		redirectWith(w, r, "/gorunfiles", "Could not open it: "+err.Error(), true)
 		return
 	}
@@ -90,14 +85,13 @@ func (a *app) newGorunfile(w http.ResponseWriter, r *http.Request) {
 // schedules of the one open before keep running.
 func (a *app) openGorunfile(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("name")
-	path, err := a.resolveStored(name)
-	if err != nil {
+	if _, err := a.storedText(name); err != nil {
 		redirectWith(w, r, "/gorunfiles", err.Error(), true)
 		return
 	}
 	a.saveMu.Lock()
 	defer a.saveMu.Unlock()
-	if err := a.loadConfig(path); err != nil {
+	if err := a.loadConfig(gorun.StoredPath(name)); err != nil {
 		redirectWith(w, r, "/gorunfiles", fmt.Sprintf("%s doesn't load: %v", name, err), true)
 		return
 	}
@@ -109,7 +103,7 @@ func (a *app) openGorunfile(w http.ResponseWriter, r *http.Request) {
 // version of it.
 func (a *app) deleteGorunfile(w http.ResponseWriter, r *http.Request) {
 	name := r.FormValue("name")
-	if _, err := a.resolveStored(name); err != nil {
+	if _, err := a.storedText(name); err != nil {
 		redirectWith(w, r, "/gorunfiles", err.Error(), true)
 		return
 	}
@@ -129,7 +123,6 @@ func (a *app) deleteGorunfile(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/gorunfiles", "Could not delete it: "+err.Error(), true)
 		return
 	}
-	_ = os.RemoveAll(filepath.Dir(a.storedFile(name)))
 	a.refreshBackground()
 	redirectWith(w, r, "/gorunfiles", fmt.Sprintf("Deleted %s.", name), false)
 }

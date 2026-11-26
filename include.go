@@ -12,8 +12,27 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// storedPrefix starts an include of a Gorunfile kept by the host; see Config.StoredIncludes.
+// storedPrefix starts the path of a Gorunfile kept by the host, and an include of one; see
+// Config.Stored.
 const storedPrefix = "stored::"
+
+// StoredPath is the path of the Gorunfile called name that the host keeps, as LoadFile takes it
+// and Config.Path, Config.Files and Change.File hold it.
+func StoredPath(name string) string { return storedPrefix + name }
+
+// StoredName returns the name in a path made by StoredPath, and whether it is one.
+func StoredName(path string) (string, bool) {
+	name, ok := strings.CutPrefix(path, storedPrefix)
+	return name, ok && name != ""
+}
+
+// storedText reads the Gorunfile called name through c.Stored.
+func (c *Config) storedText(name string) (string, error) {
+	if c.Stored == nil {
+		return "", fmt.Errorf("%s is a Gorunfile kept by gorun -serve, so it only loads there", StoredPath(name))
+	}
+	return c.Stored(name)
+}
 
 // rootOnlyKeys can only be set in the root Gorunfile, so an included file can't change
 // settings that apply to the whole run.
@@ -55,7 +74,9 @@ func newLoader(c *Config) *loader {
 // path is the root file's absolute path, or empty when r has no file behind it.
 func (l *loader) load(r io.Reader, path string) error {
 	if path != "" {
-		l.dir = filepath.Dir(path)
+		if _, stored := StoredName(path); !stored {
+			l.dir = filepath.Dir(path)
+		}
 		l.loaded[path] = true
 		l.stack = append(l.stack, path)
 		l.cfg.Path = path
@@ -165,20 +186,16 @@ func (l *loader) readIncludes(f configFile, path, checkout string) error {
 // fetched at its pinned commit; a local pattern in a file from a git include must stay inside that
 // repository's checkout.
 func (l *loader) includeFiles(path, checkout, pattern string) ([]string, error) {
-	if name, ok := strings.CutPrefix(pattern, storedPrefix); ok {
-		if l.cfg.StoredIncludes == nil {
+	if _, ok := StoredName(pattern); ok {
+		if l.cfg.Stored == nil {
 			return nil, fmt.Errorf("include %q names a Gorunfile kept by gorun -serve, so it only loads there", pattern)
 		}
-		file, err := l.cfg.StoredIncludes(name)
-		if err != nil {
-			return nil, fmt.Errorf("include %q: %w", pattern, err)
-		}
-		real, err := filepath.EvalSymlinks(file)
-		if err != nil {
-			return nil, fmt.Errorf("include %q: %w", pattern, err)
-		}
-		l.stored[real] = true
-		return []string{real}, nil
+		l.stored[pattern] = true
+		return []string{pattern}, nil
+	}
+	if _, ok := StoredName(path); ok {
+		// it has no folder for a relative path to start from, nor one for a git lock file
+		return nil, fmt.Errorf("include %q: a Gorunfile kept by gorun -serve can include only others kept there, as stored::<name>", pattern)
 	}
 	if isGitInclude(pattern) {
 		if l.git == nil {
@@ -214,8 +231,14 @@ func (l *loader) includeFiles(path, checkout, pattern string) ([]string, error) 
 
 // readFile reads one included file, unless it is already loaded or would make a cycle.
 func (l *loader) readFile(file string) error {
-	real, err := filepath.EvalSymlinks(file)
-	if err != nil {
+	open := func(real string) (io.ReadCloser, error) { return os.Open(real) }
+	real, err := file, error(nil)
+	if name, ok := StoredName(file); ok {
+		open = func(string) (io.ReadCloser, error) {
+			text, err := l.cfg.storedText(name)
+			return io.NopCloser(strings.NewReader(text)), err
+		}
+	} else if real, err = filepath.EvalSymlinks(file); err != nil {
 		return fmt.Errorf("include %s: %w", l.rel(file), err)
 	}
 	if slices.Contains(l.stack, real) {
@@ -230,7 +253,7 @@ func (l *loader) readFile(file string) error {
 	}
 	l.loaded[real] = true
 
-	fh, err := os.Open(real)
+	fh, err := open(real)
 	if err != nil {
 		return fmt.Errorf("include %s: %w", l.rel(file), err)
 	}

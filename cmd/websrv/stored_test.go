@@ -19,13 +19,13 @@ import (
 )
 
 // newStoredApp is an app on the Gorunfiles kept in a new history database, with the default
-// one open.
+// one open, set up as run does.
 func newStoredApp(t *testing.T) (*app, *store.Store) {
 	t.Helper()
 	return newStoredAppAt(t, filepath.Join(t.TempDir(), "gorun.db"))
 }
 
-// newStoredAppAt is newStoredApp with its history database at dbPath, set up as run does.
+// newStoredAppAt is newStoredApp with its history database at dbPath.
 func newStoredAppAt(t *testing.T, dbPath string) (*app, *store.Store) {
 	t.Helper()
 	st, err := store.Open(dbPath)
@@ -33,28 +33,27 @@ func newStoredAppAt(t *testing.T, dbPath string) (*app, *store.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	dir := storedDir(dbPath)
-	names, err := openStored(context.Background(), st, dir)
+	names, err := openStored(context.Background(), st)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if dir, err = filepath.EvalSymlinks(dir); err != nil {
-		t.Fatal(err)
-	}
-	a := &app{store: st, hub: &hub{clients: map[chan string]struct{}{}}, runs: map[string]context.CancelFunc{}, storedDir: dir}
+	a := &app{store: st, hub: &hub{clients: map[chan string]struct{}{}}, runs: map[string]context.CancelFunc{}, keepsStored: true}
 	t.Cleanup(a.stopScheduler)
 	t.Cleanup(a.stopBackground)
-	if err := a.loadConfig(a.storedFile(names[0])); err != nil {
+	if err := a.loadConfig(gorun.StoredPath(names[0])); err != nil {
 		t.Fatal(err)
 	}
 	return a, st
 }
 
-func TestStoredGorunfileKeepsEachSave(t *testing.T) {
-	a, st := newStoredApp(t)
+// A stored Gorunfile lives only in the database: each save is a version there, and no file is
+// written for it.
+func TestStoredGorunfileKeepsEachSaveInTheDatabaseOnly(t *testing.T) {
+	t.Chdir(t.TempDir())
+	a, st := newStoredAppAt(t, "gorun.db") // relative, as GORUN_DB_PATH may be
 	ctx := context.Background()
-	if got := a.currentStored(); got != store.DefaultGorunfile {
-		t.Fatalf("open = %q, want the default one", got)
+	if got := a.currentStored(); got != store.DefaultGorunfile || a.cfgPath != "stored::default" {
+		t.Fatalf("open = %q at %q, want the default one", got, a.cfgPath)
 	}
 
 	add := gorun.Change{Kind: kindTask, Name: "hello", File: a.cfgPath, Body: map[string]any{"cmd": "echo hi", "local": true}}
@@ -68,33 +67,24 @@ func TestStoredGorunfileKeepsEachSave(t *testing.T) {
 	if n, _ := st.GorunfileVersions(ctx, store.DefaultGorunfile); n != 2 {
 		t.Errorf("versions = %d, want 2 (the starter and the save)", n)
 	}
+	if _, ok := a.cfg.Tasks["hello"]; !ok {
+		t.Error("the open config doesn't have the saved task")
+	}
 
-	// a restart writes the working copy again from the database
-	if err := os.WriteFile(a.cfgPath, []byte("broken ["), 0o600); err != nil {
-		t.Fatal(err)
+	// an edit that wouldn't load is refused, and isn't a version
+	bad := gorun.Change{Kind: kindTask, Name: "broken", File: a.cfgPath, Body: map[string]any{"cmd": "true", "depends_on": []any{"nope"}}}
+	if err := a.saveDirect(a.cfgPath, []gorun.Change{bad}); err == nil {
+		t.Error("saved an edit that doesn't load")
 	}
-	if _, err := openStored(ctx, st, a.storedDir); err != nil {
-		t.Fatal(err)
+	if n, _ := st.GorunfileVersions(ctx, store.DefaultGorunfile); n != 2 {
+		t.Errorf("versions after a refused edit = %d, want 2", n)
 	}
-	if data, _ := os.ReadFile(a.cfgPath); string(data) != content {
-		t.Errorf("working copy after a restart = %q, want the stored one", data)
-	}
-}
 
-// A relative GORUN_DB_PATH, such as gorun.db, still keeps the saves: the open Gorunfile's path is
-// absolute, so the folder of working copies must be too.
-func TestStoredGorunfileKeepsSavesWithARelativeDBPath(t *testing.T) {
-	t.Chdir(t.TempDir())
-	a, st := newStoredAppAt(t, "gorun.db")
-	if got := a.currentStored(); got != store.DefaultGorunfile {
-		t.Fatalf("open = %q, want the default one", got)
-	}
-	add := gorun.Change{Kind: kindTask, Name: "hello", File: a.cfgPath, Body: map[string]any{"cmd": "echo hi", "local": true}}
-	if err := a.saveDirect(a.cfgPath, []gorun.Change{add}); err != nil {
-		t.Fatal(err)
-	}
-	if content, _, err := st.Gorunfile(context.Background(), store.DefaultGorunfile); err != nil || !strings.Contains(content, "[tasks.hello]") {
-		t.Fatalf("stored Gorunfile = %q, %v; want the new task", content, err)
+	entries, _ := os.ReadDir(".")
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), "gorun.db") {
+			t.Errorf("the database's folder holds %s; a stored Gorunfile shouldn't write files", e.Name())
+		}
 	}
 }
 
@@ -122,10 +112,10 @@ func TestStoredGorunfilesShareTasksAndAllSchedule(t *testing.T) {
 	}
 	// a shared task edited while web is open is saved into base, where it is defined
 	edit := []gorun.Change{
-		{Kind: kindTask, Name: "update", File: a.storedFile("base"), Remove: true},
-		{Kind: kindTask, Name: "update", File: a.storedFile("base"), Body: map[string]any{"cmd": "apt-get update -q", "local": true}},
+		{Kind: kindTask, Name: "update", File: gorun.StoredPath("base"), Remove: true},
+		{Kind: kindTask, Name: "update", File: gorun.StoredPath("base"), Body: map[string]any{"cmd": "apt-get update -q", "local": true}},
 	}
-	if err := a.saveDirect(a.storedFile("base"), edit); err != nil {
+	if err := a.saveDirect(gorun.StoredPath("base"), edit); err != nil {
 		t.Fatal(err)
 	}
 	if content, _, _ := st.Gorunfile(ctx, "base"); !strings.Contains(content, "apt-get update -q") {
@@ -228,11 +218,46 @@ func TestImportReplacesTheStoredGorunfile(t *testing.T) {
 		t.Errorf("plain import = %q", msg)
 	}
 	before, _ := st.GorunfileVersions(ctx, store.DefaultGorunfile)
-	if msg := upload(t, a, []byte("[tasks.d]\ncommand = \"oops\"\n")); !strings.Contains(msg, "doesn't load") {
+	if msg := upload(t, a, []byte("[tasks.d]\ncommand = \"oops\"\n")); !strings.Contains(msg, "wouldn't load") {
 		t.Errorf("broken import = %q", msg)
 	}
 	if after, _ := st.GorunfileVersions(ctx, store.DefaultGorunfile); after != before || a.cfg.Tasks["c"].Cmd == "" {
 		t.Errorf("a failed import changed the stored Gorunfile: %d -> %d versions", before, after)
+	}
+}
+
+// A Gorunfile given to gorun -serve is used as it is: the database keeps none for it, and saves
+// go to the file.
+func TestAGivenGorunfileSkipsTheDatabase(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "gorun.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	for _, tt := range []struct {
+		path string
+		live bool
+	}{{"Gorunfile", false}, {"", true}} {
+		if names, err := pickStored(ctx, tt.path, st, tt.live); names != nil || err != nil {
+			t.Errorf("pickStored(%q, live=%v) = %v, %v; want the database left alone", tt.path, tt.live, names, err)
+		}
+	}
+	if list, _ := st.Gorunfiles(ctx); len(list) != 0 {
+		t.Errorf("the database keeps %d Gorunfiles, want none", len(list))
+	}
+	if names, _ := pickStored(ctx, "", st, false); len(names) != 1 {
+		t.Errorf("without a Gorunfile: names = %v, want the default one", names)
+	}
+
+	a, path := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	add := gorun.Change{Kind: kindTask, Name: "more", File: path, Body: map[string]any{"cmd": "true"}}
+	if err := a.saveDirect(path, []gorun.Change{add}); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(path); !strings.Contains(string(data), "[tasks.more]") {
+		t.Errorf("the save didn't reach the given Gorunfile:\n%s", data)
 	}
 }
 
@@ -253,7 +278,7 @@ func TestUnpackImportRefusesPathsOutsideTheZip(t *testing.T) {
 	f, _ := zw.Create("../evil/Gorunfile")
 	_, _ = f.Write([]byte("title = \"x\"\n"))
 	_ = zw.Close()
-	if _, err := unpackImport(buf.Bytes(), t.TempDir()); err == nil || !strings.Contains(err.Error(), "outside its folder") {
+	if _, _, err := unpackImport(buf.Bytes()); err == nil || !strings.Contains(err.Error(), "outside its folder") {
 		t.Errorf("unpackImport() = %v, want it refused", err)
 	}
 }

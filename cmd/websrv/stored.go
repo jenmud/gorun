@@ -7,13 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
-	"os"
-	"path/filepath"
+	"path"
 	"regexp"
-	"slices"
 	"strings"
+	"testing/fstest"
 	"time"
 
 	"github.com/jenmud/gorun"
@@ -33,21 +33,20 @@ title = %q
 `, name)
 }
 
-// storedDir holds the working copies of the stored Gorunfiles, next to the history database, one
-// folder each. Runs, the editor and the schedulers read them as they read any Gorunfile; the
-// database is what lasts. It is absolute, as the paths LoadFile reports are, so storedNameOf can
-// tell a working copy when the database path is relative.
-func storedDir(dbPath string) string {
-	dir := filepath.Join(filepath.Dir(dbPath), "gorunfiles")
-	if abs, err := filepath.Abs(dir); err == nil {
-		return abs
+// pickStored returns the names of the Gorunfiles kept in st when the service should use them: it
+// was given no Gorunfile and isn't live-only. A Gorunfile given to it is used as it is, and the
+// database isn't touched for it.
+func pickStored(ctx context.Context, configPath string, st *store.Store, live bool) ([]string, error) {
+	if configPath != "" || st == nil || live {
+		return nil, nil
 	}
-	return dir
+	return openStored(ctx, st)
 }
 
-// openStored writes a working copy of every Gorunfile in st into dir, saving a starter one called
-// default first when there are none. It returns their names, the most recently saved first.
-func openStored(ctx context.Context, st *store.Store, dir string) ([]string, error) {
+// openStored saves a starter Gorunfile called default when the database keeps none, and returns
+// the names of those it keeps, the most recently saved first. They are never written to files:
+// runs, the editor and the schedulers read them from the database through gorun.StoredPath.
+func openStored(ctx context.Context, st *store.Store) ([]string, error) {
 	list, err := st.Gorunfiles(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read the stored Gorunfiles: %w", err)
@@ -60,46 +59,23 @@ func openStored(ctx context.Context, st *store.Store, dir string) ([]string, err
 	}
 	names := make([]string, 0, len(list))
 	for _, g := range list {
-		if !storedNamePattern.MatchString(g.Name) {
-			continue
+		if storedNamePattern.MatchString(g.Name) {
+			names = append(names, g.Name)
 		}
-		content, _, err := st.Gorunfile(ctx, g.Name)
-		if err != nil {
-			return nil, err
-		}
-		if err := writeWorkingCopy(dir, g.Name, content); err != nil {
-			return nil, err
-		}
-		names = append(names, g.Name)
+	}
+	if len(names) == 0 {
+		return nil, errors.New("the history database keeps no Gorunfile with a usable name")
 	}
 	return names, nil
 }
 
-// writeWorkingCopy writes content as the working copy of the stored Gorunfile called name.
-func writeWorkingCopy(dir, name, content string) error {
-	path := filepath.Join(dir, name, "Gorunfile")
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(content), 0o600)
-}
-
-// storedFile is the working copy of the stored Gorunfile called name.
-func (a *app) storedFile(name string) string {
-	return filepath.Join(a.storedDir, name, "Gorunfile")
-}
-
-// storedNameOf is the name of the stored Gorunfile whose working copy is path, or "".
+// storedNameOf is the name of the stored Gorunfile path names, or "".
 func (a *app) storedNameOf(path string) string {
-	if a.storedDir == "" || path == "" {
+	if !a.keepsStored {
 		return ""
 	}
-	rel, err := filepath.Rel(a.storedDir, path)
-	if err != nil || filepath.Base(rel) != "Gorunfile" {
-		return ""
-	}
-	name := filepath.Dir(rel)
-	if !storedNamePattern.MatchString(name) {
+	name, ok := gorun.StoredName(path)
+	if !ok || !storedNamePattern.MatchString(name) {
 		return ""
 	}
 	return name
@@ -116,68 +92,100 @@ func (a *app) currentStored() string {
 // usingStored reports whether the open Gorunfile is one kept in the history database.
 func (a *app) usingStored() bool { return a.currentStored() != "" }
 
-// resolveStored finds a stored::<name> include: the working copy of the Gorunfile called name.
-func (a *app) resolveStored(name string) (string, error) {
+// storedText is the latest version of the stored Gorunfile called name.
+func (a *app) storedText(name string) (string, error) {
 	if !storedNamePattern.MatchString(name) {
 		return "", fmt.Errorf("%q isn't a stored Gorunfile's name", name)
 	}
-	path := a.storedFile(name)
-	if _, err := os.Stat(path); err != nil {
+	text, ok, err := a.store.Gorunfile(context.Background(), name)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
 		return "", fmt.Errorf("no Gorunfile called %s is kept in the history database", name)
 	}
-	return path, nil
+	return text, nil
 }
 
-// newConfig is an empty config that can resolve stored::<name> includes when the service keeps
-// Gorunfiles in its database.
+// newConfig is an empty config that reads stored Gorunfiles from the database when the service
+// keeps them there.
 func (a *app) newConfig() *gorun.Config {
 	cfg := &gorun.Config{}
-	if a.storedDir != "" {
-		cfg.StoredIncludes = a.resolveStored
+	if a.keepsStored {
+		cfg.Stored = a.storedText
 	}
 	return cfg
 }
 
-// keepStored saves into the database the working copies of the stored Gorunfiles the open one
-// reads: itself, and those it includes, whose shared tasks can be edited from it. It runs after
-// every load, so each saved change becomes a version. A change reloads the others' schedulers,
-// as they may share its tasks.
-func (a *app) keepStored() {
-	if a.storedDir == "" || a.store == nil {
-		return
+// saveChanges applies changes to the Gorunfiles they name. Stored ones are edited in the
+// database: the edits are checked to load first, so a bad one never becomes a version, then
+// each edited Gorunfile is saved as a new version.
+func (a *app) saveChanges(changes []gorun.Change) error {
+	if !a.keepsStored {
+		return gorun.SaveChanges(changes)
 	}
-	a.mu.Lock()
-	var files []string
-	if a.cfg != nil {
-		files = slices.Clone(a.cfg.Files)
-	}
-	a.mu.Unlock()
-	changed := false
-	for _, path := range files {
-		name := a.storedNameOf(path)
+	edited := map[string]string{}
+	var order []string
+	for _, ch := range changes {
+		name := a.storedNameOf(ch.File)
 		if name == "" {
-			continue
+			return fmt.Errorf("%s isn't a Gorunfile kept in the history database", ch.File)
 		}
-		data, err := os.ReadFile(path)
-		saved := false
-		if err == nil {
-			saved, err = a.store.SaveGorunfile(context.Background(), name, string(data), time.Now())
+		text, ok := edited[name]
+		if !ok {
+			t, err := a.storedText(name)
+			if err != nil {
+				return err
+			}
+			text = t
+			order = append(order, name)
 		}
+		text, err := gorun.EditText(text, []gorun.Change{ch})
 		if err != nil {
-			slog.Error("keep the stored Gorunfile", "name", name, "error", err)
-			continue
+			return fmt.Errorf("save %s: %w", name, err)
+		}
+		edited[name] = text
+	}
+	return a.saveStored(edited, order)
+}
+
+// saveStored saves the texts in edited, by name, as new versions of those stored Gorunfiles, in
+// order, once the open Gorunfile is checked to load with them. A change reloads the schedulers of
+// the others, as they may share its tasks.
+func (a *app) saveStored(edited map[string]string, order []string) error {
+	a.mu.Lock()
+	path := a.cfgPath
+	a.mu.Unlock()
+	cfg := a.newConfig()
+	cfg.Stored = func(name string) (string, error) {
+		if text, ok := edited[name]; ok {
+			return text, nil
+		}
+		return a.storedText(name)
+	}
+	if path != "" {
+		if err := cfg.LoadFile(path); err != nil {
+			return fmt.Errorf("it wouldn't load: %w", err)
+		}
+	}
+	changed := false
+	for _, name := range order {
+		saved, err := a.store.SaveGorunfile(context.Background(), name, edited[name], time.Now())
+		if err != nil {
+			return fmt.Errorf("save %s: %w", name, err)
 		}
 		changed = changed || saved
 	}
 	if changed {
 		a.refreshBackground()
 	}
+	return nil
 }
 
 // refreshBackground (re)starts the schedulers of the stored Gorunfiles that aren't open, so every
 // one's schedules fire, and with the tasks they share as they are now.
 func (a *app) refreshBackground() {
-	if a.storedDir == "" || a.store == nil {
+	if !a.keepsStored || a.store == nil {
 		return
 	}
 	list, err := a.store.Gorunfiles(context.Background())
@@ -211,7 +219,7 @@ func (a *app) refreshBackground() {
 // startBackground replaces the scheduler of the stored Gorunfile called name, which isn't open.
 func (a *app) startBackground(name string) {
 	cfg := a.newConfig()
-	if err := cfg.LoadFile(a.storedFile(name)); err != nil {
+	if err := cfg.LoadFile(gorun.StoredPath(name)); err != nil {
 		slog.Error("stored Gorunfile doesn't load; its schedules don't fire", "name", name, "error", err)
 		return
 	}
@@ -262,7 +270,6 @@ func (a *app) importHandler(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/config", "Import is for the Gorunfiles kept in the history database: start gorun -serve without a Gorunfile.", true)
 		return
 	}
-	stored := a.storedFile(name)
 	fail := func(msg string) { redirectWith(w, r, "/config", "Could not import: "+msg, true) }
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxImport)
@@ -277,105 +284,71 @@ func (a *app) importHandler(w http.ResponseWriter, r *http.Request) {
 		fail(err.Error())
 		return
 	}
-	dir, err := os.MkdirTemp("", "gorun-import-")
+	files, root, err := unpackImport(data)
 	if err != nil {
 		fail(err.Error())
 		return
 	}
-	defer func() { _ = os.RemoveAll(dir) }()
-	root, err := unpackImport(data, dir)
+	text, err := flatten(files, root)
 	if err != nil {
 		fail(err.Error())
-		return
-	}
-	if err := a.newConfig().LoadFile(root); err != nil {
-		fail("it doesn't load: " + err.Error())
-		return
-	}
-	text, err := flatten(root)
-	if err != nil {
-		fail(err.Error())
-		return
-	}
-	// relative paths resolve from the stored Gorunfile's folder, so check it loads there
-	check := filepath.Join(filepath.Dir(stored), "Gorunfile.import")
-	defer func() { _ = os.Remove(check) }()
-	if err := os.WriteFile(check, text, 0o600); err != nil {
-		fail(err.Error())
-		return
-	}
-	if err := a.newConfig().LoadFile(check); err != nil {
-		fail("it doesn't load as one file next to the database: " + err.Error())
 		return
 	}
 
 	a.saveMu.Lock()
 	defer a.saveMu.Unlock()
-	if _, err := a.store.SaveGorunfile(r.Context(), name, string(text), time.Now()); err != nil {
+	if err := a.saveStored(map[string]string{name: string(text)}, []string{name}); err != nil {
 		fail(err.Error())
 		return
 	}
-	if err := os.WriteFile(stored, text, 0o600); err != nil {
-		fail(err.Error())
-		return
-	}
-	if err := a.loadConfig(stored); err != nil {
+	if err := a.loadConfig(gorun.StoredPath(name)); err != nil {
 		fail(err.Error())
 		return
 	}
 	a.mu.Lock()
 	n := len(a.cfg.Tasks)
 	a.mu.Unlock()
-	a.refreshBackground()
 	redirectWith(w, r, "/config", fmt.Sprintf("Imported a Gorunfile with %d tasks into %s. The one before is kept as an earlier version.", n, name), false)
 }
 
-// unpackImport writes an upload into dir and returns the Gorunfile to load: the upload itself,
-// or the Gorunfile nearest the top of a zip.
-func unpackImport(data []byte, dir string) (string, error) {
+// unpackImport reads an upload into memory and returns its files and the Gorunfile to load: the
+// upload itself, or the Gorunfile nearest the top of a zip.
+func unpackImport(data []byte) (fs.FS, string, error) {
 	if !bytes.HasPrefix(data, []byte("PK\x03\x04")) {
-		path := filepath.Join(dir, "Gorunfile")
-		return path, os.WriteFile(path, data, 0o600)
+		return fstest.MapFS{"Gorunfile": {Data: data, Mode: 0o600}}, "Gorunfile", nil
 	}
 	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return "", fmt.Errorf("read the zip: %w", err)
+		return nil, "", fmt.Errorf("read the zip: %w", err)
 	}
-	root, total := "", int64(0)
+	files, root, total := fstest.MapFS{}, "", 0
 	for _, f := range zr.File {
-		name := filepath.FromSlash(f.Name)
 		if f.FileInfo().IsDir() {
 			continue
 		}
-		if !filepath.IsLocal(name) {
-			return "", fmt.Errorf("the zip holds %s, outside its folder", f.Name)
-		}
-		total += int64(f.UncompressedSize64)
-		if total > maxUnpacked {
-			return "", errors.New("the zip unpacks to more than 50 MB")
-		}
-		path := filepath.Join(dir, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-			return "", err
+		name := path.Clean(f.Name)
+		if !fs.ValidPath(name) {
+			return nil, "", fmt.Errorf("the zip holds %s, outside its folder", f.Name)
 		}
 		rc, err := f.Open()
 		if err != nil {
-			return "", err
+			return nil, "", err
 		}
-		b, err := io.ReadAll(io.LimitReader(rc, maxUnpacked))
+		b, err := io.ReadAll(io.LimitReader(rc, int64(maxUnpacked-total)+1))
 		_ = rc.Close()
 		if err != nil {
-			return "", err
+			return nil, "", err
 		}
-		if err := os.WriteFile(path, b, 0o600); err != nil {
-			return "", err
+		if total += len(b); total > maxUnpacked {
+			return nil, "", errors.New("the zip unpacks to more than 50 MB")
 		}
-		if filepath.Base(name) == "Gorunfile" && (root == "" || strings.Count(name, string(filepath.Separator)) < strings.Count(root, string(filepath.Separator))) {
+		files[name] = &fstest.MapFile{Data: b, Mode: 0o600}
+		if path.Base(name) == "Gorunfile" && (root == "" || strings.Count(name, "/") < strings.Count(root, "/")) {
 			root = name
 		}
 	}
 	if root == "" {
-		return "", errors.New("the zip has no file named Gorunfile")
+		return nil, "", errors.New("the zip has no file named Gorunfile")
 	}
-	return filepath.Join(dir, root), nil
+	return files, root, nil
 }

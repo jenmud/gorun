@@ -69,10 +69,11 @@ type Config struct {
 	// commit in the lock file, and save the new commits (the -update-includes flag).
 	UpdateIncludes bool `toml:"-"`
 
-	// StoredIncludes, when set, resolves an include of "stored::<name>" to the file of the
-	// Gorunfile called name, for a host that keeps several, like gorun -serve. Only that file's
-	// tasks and bundles are used. Without it a stored include is an error.
-	StoredIncludes func(name string) (string, error) `toml:"-"`
+	// Stored, when set, returns the text of the Gorunfile called name, for a host that keeps
+	// Gorunfiles itself rather than as files, like gorun -serve in its database. LoadFile then
+	// loads a path of StoredPath(name) through it, and an include of "stored::<name>" brings in
+	// that Gorunfile's tasks and bundles. Without it both are errors.
+	Stored func(name string) (string, error) `toml:"-"`
 
 	// Includes are the git includes LoadFile read, with the commit each one used.
 	Includes []IncludeSource `toml:"-"`
@@ -132,8 +133,16 @@ func (c *Config) Load(r io.Reader) error {
 	return newLoader(c).load(r, "")
 }
 
-// LoadFile reads the Gorunfile at path, and every file it includes, into the config.
+// LoadFile reads the Gorunfile at path, and every file it includes, into the config. A path made
+// by StoredPath is read through c.Stored.
 func (c *Config) LoadFile(path string) error {
+	if name, ok := StoredName(path); ok {
+		text, err := c.storedText(name)
+		if err != nil {
+			return fmt.Errorf("error with loading config: %w", err)
+		}
+		return newLoader(c).load(strings.NewReader(text), path)
+	}
 	real, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return fmt.Errorf("error with loading config: %w", err)

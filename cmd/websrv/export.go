@@ -5,9 +5,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -15,6 +17,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"github.com/jenmud/gorun"
 )
 
 // exportDir is the folder the zip unpacks into.
@@ -26,7 +29,7 @@ func (a *app) exportHandler(w http.ResponseWriter, r *http.Request) {
 	path := a.cfgPath
 	a.mu.Unlock()
 	var buf bytes.Buffer
-	if err := exportZip(&buf, path, a.newConfig().StoredIncludes, time.Now()); err != nil {
+	if err := exportZip(&buf, path, a.newConfig().Stored, time.Now()); err != nil {
 		redirectWith(w, r, "/config", "Could not export: "+err.Error(), true)
 		return
 	}
@@ -37,11 +40,11 @@ func (a *app) exportHandler(w http.ResponseWriter, r *http.Request) {
 
 // exportZip writes the Gorunfile at path, and the local files it includes, as a zip that loads
 // as it is: a Gorunfile with the settings, servers, groups and schedules, and one file per task
-// and bundle in tasks/ and bundles/, which it includes. The tasks and bundles of stored::
-// includes are added, found with resolve. Git includes are kept, with their lock file. Comments
-// aren't, and files the tasks copy or run aren't added.
+// and bundle in tasks/ and bundles/, which it includes. path may be a stored Gorunfile's, and
+// the tasks and bundles of stored:: includes are added: resolve reads their text. Git includes are
+// kept, with their lock file. Comments aren't, and files the tasks copy or run aren't added.
 func exportZip(w io.Writer, path string, resolve func(string) (string, error), at time.Time) error {
-	ex := newExporter(resolve)
+	ex := newExporter(nil, resolve)
 	if err := ex.read(path); err != nil {
 		return err
 	}
@@ -87,7 +90,7 @@ func exportZip(w io.Writer, path string, resolve func(string) (string, error), a
 			}
 		}
 	}
-	if len(ex.git) > 0 {
+	if _, stored := gorun.StoredName(path); len(ex.git) > 0 && !stored {
 		if lock, err := os.ReadFile(filepath.Join(filepath.Dir(path), "Gorunfile.lock")); err == nil {
 			if err := add("Gorunfile.lock", lock); err != nil {
 				return err
@@ -97,11 +100,11 @@ func exportZip(w io.Writer, path string, resolve func(string) (string, error), a
 	return z.Close()
 }
 
-// flatten returns the Gorunfile at path, and the local files it includes, as one Gorunfile.
-// Git and stored:: includes are kept.
-func flatten(path string) ([]byte, error) {
-	ex := newExporter(nil)
-	if err := ex.read(path); err != nil {
+// flatten returns the Gorunfile at root in files, and the files it includes there, as one
+// Gorunfile. Git and stored:: includes are kept.
+func flatten(files fs.FS, root string) ([]byte, error) {
+	ex := newExporter(files, nil)
+	if err := ex.read(root); err != nil {
 		return nil, err
 	}
 	if len(ex.git) > 0 {
@@ -122,12 +125,48 @@ type exporter struct {
 	top, tasks, bundles map[string]any
 	git                 []string // git and stored:: include patterns, kept as they are
 	seen                map[string]bool
-	// resolve finds a stored:: include, whose tasks and bundles are then added; nil keeps it
+	// files holds the Gorunfiles by slash path, as an upload does; nil reads this machine's
+	files fs.FS
+	// resolve reads a stored Gorunfile's text, whose tasks and bundles are then added; nil keeps
+	// its include
 	resolve func(name string) (string, error)
 }
 
-func newExporter(resolve func(string) (string, error)) *exporter {
-	return &exporter{top: map[string]any{}, tasks: map[string]any{}, bundles: map[string]any{}, seen: map[string]bool{}, resolve: resolve}
+func newExporter(files fs.FS, resolve func(string) (string, error)) *exporter {
+	return &exporter{top: map[string]any{}, tasks: map[string]any{}, bundles: map[string]any{}, seen: map[string]bool{}, files: files, resolve: resolve}
+}
+
+// open reads the Gorunfile at p and returns its text and the folder its relative includes start
+// from, "" for a stored one.
+func (ex *exporter) open(p string) (key, dir string, data []byte, err error) {
+	if name, ok := gorun.StoredName(p); ok {
+		text, err := ex.resolve(name)
+		return p, "", []byte(text), err
+	}
+	if ex.files != nil {
+		data, err := fs.ReadFile(ex.files, p)
+		return p, path.Dir(p), data, err
+	}
+	real, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return "", "", nil, err
+	}
+	data, err = os.ReadFile(real)
+	return real, filepath.Dir(real), data, err
+}
+
+// glob lists the files a local include pattern names, relative to dir.
+func (ex *exporter) glob(dir, pattern string) ([]string, error) {
+	if ex.files != nil {
+		if path.IsAbs(pattern) || filepath.IsAbs(pattern) {
+			return nil, fmt.Errorf("include %q: an imported Gorunfile can include only files beside it", pattern)
+		}
+		return fs.Glob(ex.files, path.Join(dir, filepath.ToSlash(pattern)))
+	}
+	if !filepath.IsAbs(pattern) {
+		pattern = filepath.Join(dir, pattern)
+	}
+	return filepath.Glob(pattern)
 }
 
 // read merges the file at path, then the local files it includes, as gorun loads them.
@@ -135,18 +174,18 @@ func (ex *exporter) read(path string) error { return ex.readFile(path, false) }
 
 // readFile is read; with shared, only the file's tasks and bundles are used, as for a stored::
 // include.
-func (ex *exporter) readFile(path string, shared bool) error {
-	real, err := filepath.EvalSymlinks(path)
+func (ex *exporter) readFile(p string, shared bool) error {
+	key, dir, data, err := ex.open(p)
 	if err != nil {
 		return err
 	}
-	if ex.seen[real] {
+	if ex.seen[key] {
 		return nil
 	}
-	ex.seen[real] = true
+	ex.seen[key] = true
 	doc := map[string]any{}
-	if _, err := toml.DecodeFile(real, &doc); err != nil {
-		return fmt.Errorf("%s: %w", filepath.Base(real), err)
+	if _, err := toml.Decode(string(data), &doc); err != nil {
+		return fmt.Errorf("%s: %w", filepath.Base(key), err)
 	}
 	maps.Copy(ex.tasks, table(doc["tasks"]))
 	maps.Copy(ex.bundles, table(doc["bundles"]))
@@ -160,12 +199,8 @@ func (ex *exporter) readFile(path string, shared bool) error {
 
 	for _, inc := range includes {
 		pattern, _ := inc.(string)
-		if name, ok := strings.CutPrefix(pattern, "stored::"); ok && ex.resolve != nil {
-			file, err := ex.resolve(name)
-			if err != nil {
-				return err
-			}
-			if err := ex.readFile(file, true); err != nil {
+		if _, ok := gorun.StoredName(pattern); ok && ex.resolve != nil {
+			if err := ex.readFile(pattern, true); err != nil {
 				return err
 			}
 			continue
@@ -176,10 +211,7 @@ func (ex *exporter) readFile(path string, shared bool) error {
 			}
 			continue
 		}
-		if !filepath.IsAbs(pattern) {
-			pattern = filepath.Join(filepath.Dir(real), pattern)
-		}
-		files, err := filepath.Glob(pattern)
+		files, err := ex.glob(dir, pattern)
 		if err != nil {
 			return err
 		}

@@ -75,7 +75,6 @@ func (a *app) loadConfig(path string) error {
 		stop.Stop()
 	}
 	a.startScheduler(cfg)
-	a.keepStored()
 	return nil
 }
 
@@ -761,7 +760,7 @@ func (a *app) saveHandler(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/config", "Nothing to save.", true)
 		return
 	}
-	if err := gorun.SaveChanges(pending); err != nil {
+	if err := a.saveChanges(pending); err != nil {
 		redirectWith(w, r, "/config", "Could not save: "+err.Error(), true)
 		return
 	}

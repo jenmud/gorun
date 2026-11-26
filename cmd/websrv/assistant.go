@@ -72,7 +72,7 @@ func (g *generator) host() string {
 
 // assistantPage is the chat. ?run=ID starts it on that run.
 func (a *app) assistantPage(w http.ResponseWriter, r *http.Request) {
-	d := ui.AssistantPageData{Model: a.gen.describe(), Private: a.gen.private()}
+	d := ui.AssistantPageData{Model: a.gen.describe(), Private: a.gen.private(), Stats: a.assistantStats()}
 	if !d.Private {
 		d.Host = a.gen.host()
 	}

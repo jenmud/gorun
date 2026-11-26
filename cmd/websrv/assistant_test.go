@@ -235,3 +235,25 @@ func TestTaskBlockNeedsACodeBlock(t *testing.T) {
 		}
 	}
 }
+
+// The stats panel says where the model stands before the first question, and for a server.
+func TestAssistantStatsPanel(t *testing.T) {
+	a, _ := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	a.gen = &generator{engine: &llm.Engine{Dir: t.TempDir()}}
+	a.gen.assistant.Engine = a.gen.engine
+	page := get(t, a, "/assistant").Body.String()
+	for _, want := range []string{`id="assistant-stats"`, "Not downloaded yet", "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the Assistant page is missing %q", want)
+		}
+	}
+	if body := get(t, a, "/assistant/stats").Body.String(); !strings.Contains(body, "Not downloaded yet") || strings.Contains(body, "<html") {
+		t.Errorf("/assistant/stats = %q, want just the panel", body)
+	}
+
+	a.gen = &generator{assistant: gorun.Assistant{URL: "http://gpu-box:11434/v1", Model: "qwen3:4b"}}
+	if body := get(t, a, "/assistant/stats").Body.String(); !strings.Contains(body, "Answered by a model server") || !strings.Contains(body, "questions are sent there") {
+		t.Errorf("server stats = %q", body)
+	}
+}

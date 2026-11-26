@@ -236,6 +236,19 @@ type AssistantPageData struct {
 	Files    []FileOption
 	RunID    string // the run the chat starts on, if any
 	RunTitle string
+	Stats    AssistantStats
+}
+
+// AssistantStats describes the assistant's model: where it runs and how it is doing.
+type AssistantStats struct {
+	State string // one line: not downloaded, loaded on the GPU, and so on
+	Tone  string // "good", "warn" or "" for the state's colour
+	Rows  []StatRow
+}
+
+// StatRow is one fact in AssistantStats.
+type StatRow struct {
+	Label, Value, Note string
 }
 
 // EditFields are the current values the edit form starts from.

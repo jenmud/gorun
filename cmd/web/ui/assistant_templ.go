@@ -64,52 +64,64 @@ func AssistantPage(d AssistantPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div id=\"assistant-stats\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = AssistantStatsPanel(d.Stats).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
 		if d.RunID != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p class=\"rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400\">About run <a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<p class=\"rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400\">About run <a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var4 templ.SafeURL
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/history/" + d.RunID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 12, Col: 151}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 15, Col: 151}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" class=\"text-accent hover:underline\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" class=\"text-accent hover:underline\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(d.RunTitle)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 12, Col: 202}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 15, Col: 202}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</a> <span class=\"font-mono text-zinc-500\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</a> <span class=\"font-mono text-zinc-500\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(d.RunID)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 12, Col: 256}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 15, Col: 256}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</span>. <a href=\"/assistant\" class=\"text-zinc-300 underline underline-offset-2\">Ask about the newest run instead</a>.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</span>. <a href=\"/assistant\" class=\"text-zinc-300 underline underline-offset-2\">Ask about the newest run instead</a>.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div id=\"chat-log\" class=\"flex min-h-[16rem] flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4\"><div id=\"chat-empty\" class=\"flex flex-wrap gap-2\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div id=\"chat-log\" class=\"flex min-h-[16rem] flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4\"><div id=\"chat-empty\" class=\"flex flex-wrap gap-2\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -142,7 +154,7 @@ func AssistantPage(d AssistantPageData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div></div><form id=\"chat-form\" class=\"flex items-end gap-2\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div></div><form id=\"chat-form\" class=\"flex items-end gap-2\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -151,7 +163,7 @@ func AssistantPage(d AssistantPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<textarea id=\"chat-input\" rows=\"2\" required placeholder=\"Ask something. Enter sends, shift+enter starts a new line.\" class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<textarea id=\"chat-input\" rows=\"2\" required placeholder=\"Ask something. Enter sends, shift+enter starts a new line.\" class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -164,12 +176,12 @@ func AssistantPage(d AssistantPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\"></textarea> <button id=\"chat-send\" class=\"rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-600 disabled:opacity-50\">Send</button> <button id=\"chat-stop\" type=\"button\" hidden class=\"rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:bg-zinc-800\">Stop</button></form><button id=\"chat-clear\" type=\"button\" class=\"self-start text-xs text-zinc-500 hover:text-zinc-300\">Start a new conversation</button> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\"></textarea> <button id=\"chat-send\" class=\"rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-600 disabled:opacity-50\">Send</button> <button id=\"chat-stop\" type=\"button\" hidden class=\"rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:bg-zinc-800\">Stop</button></form><button id=\"chat-clear\" type=\"button\" class=\"self-start text-xs text-zinc-500 hover:text-zinc-300\">Start a new conversation</button> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if d.CanAdd {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<template id=\"chat-add\"><div class=\"mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-2\"><p class=\"w-full text-xs text-emerald-300\" data-names></p><div class=\"min-w-0 flex-1\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<template id=\"chat-add\"><div class=\"mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-2\"><p class=\"w-full text-xs text-emerald-300\" data-names></p><div class=\"min-w-0 flex-1\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -177,7 +189,7 @@ func AssistantPage(d AssistantPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</div><button type=\"button\" class=\"rounded-lg border border-emerald-800 px-3 py-1.5 text-xs text-emerald-200 transition hover:bg-emerald-900/40\" data-add>Add as unsaved changes</button></div></template>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div><button type=\"button\" class=\"rounded-lg border border-emerald-800 px-3 py-1.5 text-xs text-emerald-200 transition hover:bg-emerald-900/40\" data-add>Add as unsaved changes</button></div></template>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -186,7 +198,164 @@ func AssistantPage(d AssistantPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// AssistantStatsPanel shows where the assistant's model runs, its memory, and how its last
+// answer went. The page draws it again after each answer.
+func AssistantStatsPanel(s AssistantStats) templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var9 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var9 == nil {
+			templ_7745c5c3_Var9 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<details class=\"group/stats rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs\" open><summary class=\"flex cursor-pointer list-none items-center gap-2 text-zinc-300\"><span class=\"inline-block text-zinc-500 transition group-open/stats:rotate-90\">▸</span> ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var10 = []any{"h-2 w-2 shrink-0 rounded-full", templ.KV("bg-emerald-400", s.Tone == "good"), templ.KV("bg-amber-400", s.Tone == "warn"), templ.KV("bg-zinc-500", s.Tone == "")}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var10...)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<span class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var11 string
+		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var10).String())
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 1, Col: 0}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\"></span> <span class=\"font-semibold text-zinc-200\">Model</span> ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var12 = []any{templ.KV("text-amber-300", s.Tone == "warn")}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var12...)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<span class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var13 string
+		templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.CSSClasses(templ_7745c5c3_Var12).String())
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 1, Col: 0}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var14 string
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(s.State)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 61, Col: 73}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "</span></summary> ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if len(s.Rows) > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "<dl class=\"mt-2 grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, r := range s.Rows {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<dt class=\"text-zinc-500\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var15 string
+				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(r.Label)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 66, Col: 40}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</dt><dd class=\"min-w-0 break-words text-zinc-200\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var16 string
+				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(r.Value)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 68, Col: 15}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, " ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if r.Note != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<span class=\"text-zinc-500\">· ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var17 string
+					templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(r.Note)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 70, Col: 46}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</dd>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</dl>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</details>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -210,31 +379,31 @@ func privacyNote(d AssistantPageData) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var9 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var9 == nil {
-			templ_7745c5c3_Var9 = templ.NopComponent
+		templ_7745c5c3_Var18 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var18 == nil {
+			templ_7745c5c3_Var18 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if d.Private {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<p class=\"flex items-center gap-2 rounded-lg border border-emerald-900/60 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-300\"><span class=\"h-2 w-2 rounded-full bg-emerald-400\"></span> Private: the model runs on this machine. Your Gorunfile and run history don't leave it.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<p class=\"flex items-center gap-2 rounded-lg border border-emerald-900/60 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-300\"><span class=\"h-2 w-2 rounded-full bg-emerald-400\"></span> Private: the model runs on this machine. Your Gorunfile and run history don't leave it.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<p class=\"flex items-center gap-2 rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-300\"><span class=\"h-2 w-2 rounded-full bg-amber-400\"></span> Not private: each question sends your Gorunfile's tasks and servers, and recent run output, to ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<p class=\"flex items-center gap-2 rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-300\"><span class=\"h-2 w-2 rounded-full bg-amber-400\"></span> Not private: each question sends your Gorunfile's tasks and servers, and recent run output, to ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var10 string
-			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(d.Host)
+			var templ_7745c5c3_Var19 string
+			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(d.Host)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 59, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 88, Col: 106}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, ".</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, ".</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -259,25 +428,25 @@ func suggestion(text string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var11 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var11 == nil {
-			templ_7745c5c3_Var11 = templ.NopComponent
+		templ_7745c5c3_Var20 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var20 == nil {
+			templ_7745c5c3_Var20 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<button type=\"button\" data-suggest class=\"rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 transition hover:bg-zinc-800\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<button type=\"button\" data-suggest class=\"rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 transition hover:bg-zinc-800\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var12 string
-		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(text)
+		var templ_7745c5c3_Var21 string
+		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 65, Col: 147}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `cmd/web/ui/assistant.templ`, Line: 94, Col: 147}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</button>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "</button>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -301,12 +470,12 @@ func assistantScript() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var13 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var13 == nil {
-			templ_7745c5c3_Var13 = templ.NopComponent
+		templ_7745c5c3_Var22 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var22 == nil {
+			templ_7745c5c3_Var22 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<script>\n(function () {\n\tvar root = document.getElementById('assistant');\n\tvar log = document.getElementById('chat-log');\n\tvar empty = document.getElementById('chat-empty');\n\tvar form = document.getElementById('chat-form');\n\tvar input = document.getElementById('chat-input');\n\tvar send = document.getElementById('chat-send');\n\tvar addTmpl = document.getElementById('chat-add');\n\tvar run = root.dataset.run || '';\n\tvar key = 'gorunChat:' + run;\n\tvar messages = [];\n\ttry { messages = JSON.parse(sessionStorage.getItem(key) || '[]'); } catch (e) {}\n\tfunction save() { try { sessionStorage.setItem(key, JSON.stringify(messages)); } catch (e) {} }\n\n\t// text, with ``` blocks drawn as code; nothing is parsed as HTML\n\tfunction body(el, text) {\n\t\tvar re = /```[a-zA-Z]*\\n?([\\s\\S]*?)(```|$)/g, last = 0, m;\n\t\twhile ((m = re.exec(text)) !== null) {\n\t\t\tif (m.index > last) { para(el, text.slice(last, m.index)); }\n\t\t\tvar pre = document.createElement('pre');\n\t\t\tpre.className = 'my-2 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs text-zinc-200';\n\t\t\tpre.textContent = m[1];\n\t\t\tel.appendChild(pre);\n\t\t\tlast = re.lastIndex;\n\t\t\tif (m[0].length === 0) { break; }\n\t\t}\n\t\tif (last < text.length) { para(el, text.slice(last)); }\n\t}\n\t// prose, with the markdown models write: # headings, **bold** and `code`, drawn as DOM nodes\n\tfunction para(el, text) {\n\t\tif (!text.trim()) { return; }\n\t\tvar p = document.createElement('div');\n\t\tp.className = 'whitespace-pre-wrap';\n\t\ttext.trim().split('\\n').forEach(function (line, i) {\n\t\t\tif (i) { p.appendChild(document.createTextNode('\\n')); }\n\t\t\tvar h = /^#{1,6}\\s+(.*)$/.exec(line);\n\t\t\tvar target = p;\n\t\t\tif (h) {\n\t\t\t\ttarget = document.createElement('strong');\n\t\t\t\ttarget.className = 'text-zinc-100';\n\t\t\t\tp.appendChild(target);\n\t\t\t\tline = h[1];\n\t\t\t}\n\t\t\tinline(target, line);\n\t\t});\n\t\tel.appendChild(p);\n\t}\n\tfunction inline(el, line) {\n\t\tvar re = /\\*\\*(.+?)\\*\\*|`([^`]+)`/g, last = 0, m;\n\t\twhile ((m = re.exec(line)) !== null) {\n\t\t\tel.appendChild(document.createTextNode(line.slice(last, m.index)));\n\t\t\tvar n = document.createElement(m[1] !== undefined ? 'strong' : 'code');\n\t\t\tn.className = m[1] !== undefined ? 'text-zinc-100' : 'rounded bg-zinc-950 px-1 font-mono text-xs';\n\t\t\tn.textContent = m[1] !== undefined ? m[1] : m[2];\n\t\t\tel.appendChild(n);\n\t\t\tlast = re.lastIndex;\n\t\t}\n\t\tel.appendChild(document.createTextNode(line.slice(last)));\n\t}\n\tfunction bubble(role, text) {\n\t\tempty.style.display = 'none';\n\t\tvar b = document.createElement('div');\n\t\tb.className = role === 'user'\n\t\t\t? 'self-end max-w-[85%] rounded-2xl bg-accent/20 px-3 py-2 text-sm text-zinc-100'\n\t\t\t: 'self-start max-w-full rounded-2xl bg-zinc-800/60 px-3 py-2 text-sm text-zinc-200';\n\t\tif (role === 'error') { b.className = 'self-start rounded-2xl border border-red-900/60 bg-red-950/30 px-3 py-2 text-sm text-red-300'; }\n\t\tbody(b, text);\n\t\tlog.appendChild(b);\n\t\tb.scrollIntoView({ block: 'end' });\n\t\treturn b;\n\t}\n\tfunction offerTasks(b, reply) {\n\t\tif (reply.taskError) {\n\t\t\tvar n = document.createElement('p');\n\t\t\tn.className = 'mt-2 text-xs text-amber-300';\n\t\t\tn.textContent = \"These tasks don't load, so they can't be added: \" + reply.taskError + '. Ask it to fix them.';\n\t\t\tb.appendChild(n);\n\t\t}\n\t\tif (!reply.tasks || !addTmpl) { return; }\n\t\tvar box = addTmpl.content.firstElementChild.cloneNode(true);\n\t\tbox.querySelector('[data-names]').textContent = 'Tasks that load: ' + reply.taskNames +\n\t\t\t(reply.replaces ? '. These replace the tasks the Gorunfile has: ' + reply.replaces : '');\n\t\tvar btn = box.querySelector('[data-add]');\n\t\tbtn.addEventListener('click', function () {\n\t\t\tbtn.disabled = true;\n\t\t\tfetch('/assistant/add', {\n\t\t\t\tmethod: 'POST', headers: { 'Content-Type': 'application/json' },\n\t\t\t\tbody: JSON.stringify({ tasks: reply.tasks, file: box.querySelector('select[name=file]').value }),\n\t\t\t}).then(function (r) { return r.json(); }).then(function (out) {\n\t\t\t\tbox.innerHTML = '';\n\t\t\t\tvar p = document.createElement('p');\n\t\t\t\tp.className = out.error ? 'text-xs text-red-300' : 'text-xs text-emerald-300';\n\t\t\t\tp.textContent = out.error || out.reply;\n\t\t\t\tbox.appendChild(p);\n\t\t\t\tif (!out.error) {\n\t\t\t\t\tvar a = document.createElement('a');\n\t\t\t\t\ta.href = '/config'; a.className = 'text-xs text-accent underline'; a.textContent = 'Open Config';\n\t\t\t\t\tbox.appendChild(a);\n\t\t\t\t}\n\t\t\t}).catch(function (e) { btn.disabled = false; alert(e); });\n\t\t});\n\t\tb.appendChild(box);\n\t}\n\tmessages.forEach(function (m) { bubble(m.role, m.content); });\n\n\tvar stop = document.getElementById('chat-stop');\n\tvar running = null; // the AbortController of the answer being written\n\n\t// progress is the waiting bubble: what the assistant is doing, and for how long\n\tfunction progress() {\n\t\tempty.style.display = 'none';\n\t\tvar b = document.createElement('div');\n\t\tb.className = 'self-start max-w-full rounded-2xl bg-zinc-800/60 px-3 py-2 text-sm text-zinc-200';\n\t\tvar status = document.createElement('div');\n\t\tstatus.className = 'flex items-center gap-2 text-xs text-zinc-400';\n\t\tvar dot = document.createElement('span');\n\t\tdot.className = 'h-2 w-2 shrink-0 animate-pulse rounded-full bg-violet-400';\n\t\tvar label = document.createElement('span');\n\t\tlabel.textContent = 'Starting';\n\t\tvar clock = document.createElement('span');\n\t\tclock.className = 'tabular-nums text-zinc-500';\n\t\tstatus.append(dot, label, clock);\n\t\tvar text = document.createElement('div');\n\t\ttext.className = 'mt-1';\n\t\ttext.hidden = true;\n\t\tb.append(status, text);\n\t\tlog.appendChild(b);\n\t\tb.scrollIntoView({ block: 'end' });\n\t\tvar started = Date.now(), written = '';\n\t\tvar tick = setInterval(function () { clock.textContent = Math.round((Date.now() - started) / 1000) + 's'; }, 1000);\n\t\treturn {\n\t\t\tstatus: function (s) { label.textContent = s; },\n\t\t\ttoken: function (t) {\n\t\t\t\twritten += t;\n\t\t\t\ttext.hidden = false;\n\t\t\t\ttext.replaceChildren();\n\t\t\t\tbody(text, written);\n\t\t\t\tb.scrollIntoView({ block: 'end' });\n\t\t\t},\n\t\t\tremove: function () { clearInterval(tick); b.remove(); },\n\t\t};\n\t}\n\n\t// readEvents calls each for every JSON line of a streamed reply\n\tfunction readEvents(body, each) {\n\t\tvar reader = body.getReader(), dec = new TextDecoder(), buf = '';\n\t\tfunction pump() {\n\t\t\treturn reader.read().then(function (r) {\n\t\t\t\tbuf += dec.decode(r.value || new Uint8Array(), { stream: !r.done });\n\t\t\t\tvar lines = buf.split('\\n');\n\t\t\t\tbuf = lines.pop();\n\t\t\t\tlines.forEach(function (l) { if (l.trim()) { each(JSON.parse(l)); } });\n\t\t\t\tif (r.done) {\n\t\t\t\t\tif (buf.trim()) { each(JSON.parse(buf)); }\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\treturn pump();\n\t\t\t});\n\t\t}\n\t\treturn pump();\n\t}\n\n\tfunction ask(text) {\n\t\ttext = text.trim();\n\t\tif (!text || running) { return; }\n\t\tmessages.push({ role: 'user', content: text });\n\t\tsave();\n\t\tbubble('user', text);\n\t\tinput.value = '';\n\t\tsend.hidden = true;\n\t\tstop.hidden = false;\n\t\trunning = new AbortController();\n\t\tvar wait = progress(), done = null;\n\t\tfetch('/assistant/chat', {\n\t\t\tmethod: 'POST', headers: { 'Content-Type': 'application/json' },\n\t\t\tbody: JSON.stringify({ messages: messages, run: run, stream: true }),\n\t\t\tsignal: running.signal,\n\t\t}).then(function (r) {\n\t\t\treturn readEvents(r.body, function (ev) {\n\t\t\t\tif (ev.status) { wait.status(ev.status); }\n\t\t\t\tif (ev.token) { wait.token(ev.token); }\n\t\t\t\tif (ev.done) { done = ev.done; }\n\t\t\t});\n\t\t}).then(function () {\n\t\t\twait.remove();\n\t\t\tif (!done) { bubble('error', 'The answer stopped before it finished.'); return; }\n\t\t\tif (done.error) { bubble('error', done.error); return; }\n\t\t\tmessages.push({ role: 'assistant', content: done.reply });\n\t\t\tsave();\n\t\t\tofferTasks(bubble('assistant', done.reply), done);\n\t\t}).catch(function (e) {\n\t\t\twait.remove();\n\t\t\tbubble('error', e.name === 'AbortError' ? 'Stopped.' : String(e));\n\t\t}).finally(function () {\n\t\t\trunning = null;\n\t\t\tsend.hidden = false;\n\t\t\tstop.hidden = true;\n\t\t\tinput.focus();\n\t\t});\n\t}\n\tstop.addEventListener('click', function () { if (running) { running.abort(); } });\n\tform.addEventListener('submit', function (e) { e.preventDefault(); ask(input.value); });\n\tinput.addEventListener('keydown', function (e) {\n\t\tif (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input.value); }\n\t});\n\tdocument.querySelectorAll('[data-suggest]').forEach(function (s) {\n\t\ts.addEventListener('click', function () { ask(s.textContent); });\n\t});\n\tdocument.getElementById('chat-clear').addEventListener('click', function () {\n\t\tmessages = []; save();\n\t\tlog.querySelectorAll(':scope > :not(#chat-empty)').forEach(function (n) { n.remove(); });\n\t\tempty.style.display = '';\n\t});\n})();\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<script>\n(function () {\n\tvar root = document.getElementById('assistant');\n\tvar log = document.getElementById('chat-log');\n\tvar empty = document.getElementById('chat-empty');\n\tvar form = document.getElementById('chat-form');\n\tvar input = document.getElementById('chat-input');\n\tvar send = document.getElementById('chat-send');\n\tvar addTmpl = document.getElementById('chat-add');\n\tvar run = root.dataset.run || '';\n\tvar key = 'gorunChat:' + run;\n\tvar messages = [];\n\ttry { messages = JSON.parse(sessionStorage.getItem(key) || '[]'); } catch (e) {}\n\tfunction save() { try { sessionStorage.setItem(key, JSON.stringify(messages)); } catch (e) {} }\n\n\t// text, with ``` blocks drawn as code; nothing is parsed as HTML\n\tfunction body(el, text) {\n\t\tvar re = /```[a-zA-Z]*\\n?([\\s\\S]*?)(```|$)/g, last = 0, m;\n\t\twhile ((m = re.exec(text)) !== null) {\n\t\t\tif (m.index > last) { para(el, text.slice(last, m.index)); }\n\t\t\tvar pre = document.createElement('pre');\n\t\t\tpre.className = 'my-2 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs text-zinc-200';\n\t\t\tpre.textContent = m[1];\n\t\t\tel.appendChild(pre);\n\t\t\tlast = re.lastIndex;\n\t\t\tif (m[0].length === 0) { break; }\n\t\t}\n\t\tif (last < text.length) { para(el, text.slice(last)); }\n\t}\n\t// prose, with the markdown models write: # headings, **bold** and `code`, drawn as DOM nodes\n\tfunction para(el, text) {\n\t\tif (!text.trim()) { return; }\n\t\tvar p = document.createElement('div');\n\t\tp.className = 'whitespace-pre-wrap';\n\t\ttext.trim().split('\\n').forEach(function (line, i) {\n\t\t\tif (i) { p.appendChild(document.createTextNode('\\n')); }\n\t\t\tvar h = /^#{1,6}\\s+(.*)$/.exec(line);\n\t\t\tvar target = p;\n\t\t\tif (h) {\n\t\t\t\ttarget = document.createElement('strong');\n\t\t\t\ttarget.className = 'text-zinc-100';\n\t\t\t\tp.appendChild(target);\n\t\t\t\tline = h[1];\n\t\t\t}\n\t\t\tinline(target, line);\n\t\t});\n\t\tel.appendChild(p);\n\t}\n\tfunction inline(el, line) {\n\t\tvar re = /\\*\\*(.+?)\\*\\*|`([^`]+)`/g, last = 0, m;\n\t\twhile ((m = re.exec(line)) !== null) {\n\t\t\tel.appendChild(document.createTextNode(line.slice(last, m.index)));\n\t\t\tvar n = document.createElement(m[1] !== undefined ? 'strong' : 'code');\n\t\t\tn.className = m[1] !== undefined ? 'text-zinc-100' : 'rounded bg-zinc-950 px-1 font-mono text-xs';\n\t\t\tn.textContent = m[1] !== undefined ? m[1] : m[2];\n\t\t\tel.appendChild(n);\n\t\t\tlast = re.lastIndex;\n\t\t}\n\t\tel.appendChild(document.createTextNode(line.slice(last)));\n\t}\n\tfunction bubble(role, text) {\n\t\tempty.style.display = 'none';\n\t\tvar b = document.createElement('div');\n\t\tb.className = role === 'user'\n\t\t\t? 'self-end max-w-[85%] rounded-2xl bg-accent/20 px-3 py-2 text-sm text-zinc-100'\n\t\t\t: 'self-start max-w-full rounded-2xl bg-zinc-800/60 px-3 py-2 text-sm text-zinc-200';\n\t\tif (role === 'error') { b.className = 'self-start rounded-2xl border border-red-900/60 bg-red-950/30 px-3 py-2 text-sm text-red-300'; }\n\t\tbody(b, text);\n\t\tlog.appendChild(b);\n\t\tb.scrollIntoView({ block: 'end' });\n\t\treturn b;\n\t}\n\tfunction offerTasks(b, reply) {\n\t\tif (reply.taskError) {\n\t\t\tvar n = document.createElement('p');\n\t\t\tn.className = 'mt-2 text-xs text-amber-300';\n\t\t\tn.textContent = \"These tasks don't load, so they can't be added: \" + reply.taskError + '. Ask it to fix them.';\n\t\t\tb.appendChild(n);\n\t\t}\n\t\tif (!reply.tasks || !addTmpl) { return; }\n\t\tvar box = addTmpl.content.firstElementChild.cloneNode(true);\n\t\tbox.querySelector('[data-names]').textContent = 'Tasks that load: ' + reply.taskNames +\n\t\t\t(reply.replaces ? '. These replace the tasks the Gorunfile has: ' + reply.replaces : '');\n\t\tvar btn = box.querySelector('[data-add]');\n\t\tbtn.addEventListener('click', function () {\n\t\t\tbtn.disabled = true;\n\t\t\tfetch('/assistant/add', {\n\t\t\t\tmethod: 'POST', headers: { 'Content-Type': 'application/json' },\n\t\t\t\tbody: JSON.stringify({ tasks: reply.tasks, file: box.querySelector('select[name=file]').value }),\n\t\t\t}).then(function (r) { return r.json(); }).then(function (out) {\n\t\t\t\tbox.innerHTML = '';\n\t\t\t\tvar p = document.createElement('p');\n\t\t\t\tp.className = out.error ? 'text-xs text-red-300' : 'text-xs text-emerald-300';\n\t\t\t\tp.textContent = out.error || out.reply;\n\t\t\t\tbox.appendChild(p);\n\t\t\t\tif (!out.error) {\n\t\t\t\t\tvar a = document.createElement('a');\n\t\t\t\t\ta.href = '/config'; a.className = 'text-xs text-accent underline'; a.textContent = 'Open Config';\n\t\t\t\t\tbox.appendChild(a);\n\t\t\t\t}\n\t\t\t}).catch(function (e) { btn.disabled = false; alert(e); });\n\t\t});\n\t\tb.appendChild(box);\n\t}\n\tmessages.forEach(function (m) { bubble(m.role, m.content); });\n\n\tvar stop = document.getElementById('chat-stop');\n\tvar running = null; // the AbortController of the answer being written\n\n\t// progress is the waiting bubble: what the assistant is doing, and for how long\n\tfunction progress() {\n\t\tempty.style.display = 'none';\n\t\tvar b = document.createElement('div');\n\t\tb.className = 'self-start max-w-full rounded-2xl bg-zinc-800/60 px-3 py-2 text-sm text-zinc-200';\n\t\tvar status = document.createElement('div');\n\t\tstatus.className = 'flex items-center gap-2 text-xs text-zinc-400';\n\t\tvar dot = document.createElement('span');\n\t\tdot.className = 'h-2 w-2 shrink-0 animate-pulse rounded-full bg-violet-400';\n\t\tvar label = document.createElement('span');\n\t\tlabel.textContent = 'Starting';\n\t\tvar clock = document.createElement('span');\n\t\tclock.className = 'tabular-nums text-zinc-500';\n\t\tstatus.append(dot, label, clock);\n\t\tvar text = document.createElement('div');\n\t\ttext.className = 'mt-1';\n\t\ttext.hidden = true;\n\t\tb.append(status, text);\n\t\tlog.appendChild(b);\n\t\tb.scrollIntoView({ block: 'end' });\n\t\tvar started = Date.now(), written = '';\n\t\tvar tick = setInterval(function () { clock.textContent = Math.round((Date.now() - started) / 1000) + 's'; }, 1000);\n\t\treturn {\n\t\t\tstatus: function (s) { label.textContent = s; },\n\t\t\ttoken: function (t) {\n\t\t\t\twritten += t;\n\t\t\t\ttext.hidden = false;\n\t\t\t\ttext.replaceChildren();\n\t\t\t\tbody(text, written);\n\t\t\t\tb.scrollIntoView({ block: 'end' });\n\t\t\t},\n\t\t\tremove: function () { clearInterval(tick); b.remove(); },\n\t\t};\n\t}\n\n\t// readEvents calls each for every JSON line of a streamed reply\n\tfunction readEvents(body, each) {\n\t\tvar reader = body.getReader(), dec = new TextDecoder(), buf = '';\n\t\tfunction pump() {\n\t\t\treturn reader.read().then(function (r) {\n\t\t\t\tbuf += dec.decode(r.value || new Uint8Array(), { stream: !r.done });\n\t\t\t\tvar lines = buf.split('\\n');\n\t\t\t\tbuf = lines.pop();\n\t\t\t\tlines.forEach(function (l) { if (l.trim()) { each(JSON.parse(l)); } });\n\t\t\t\tif (r.done) {\n\t\t\t\t\tif (buf.trim()) { each(JSON.parse(buf)); }\n\t\t\t\t\treturn;\n\t\t\t\t}\n\t\t\t\treturn pump();\n\t\t\t});\n\t\t}\n\t\treturn pump();\n\t}\n\n\tfunction ask(text) {\n\t\ttext = text.trim();\n\t\tif (!text || running) { return; }\n\t\tmessages.push({ role: 'user', content: text });\n\t\tsave();\n\t\tbubble('user', text);\n\t\tinput.value = '';\n\t\tsend.hidden = true;\n\t\tstop.hidden = false;\n\t\trunning = new AbortController();\n\t\tvar wait = progress(), done = null;\n\t\tfetch('/assistant/chat', {\n\t\t\tmethod: 'POST', headers: { 'Content-Type': 'application/json' },\n\t\t\tbody: JSON.stringify({ messages: messages, run: run, stream: true }),\n\t\t\tsignal: running.signal,\n\t\t}).then(function (r) {\n\t\t\treturn readEvents(r.body, function (ev) {\n\t\t\t\tif (ev.status) { wait.status(ev.status); }\n\t\t\t\tif (ev.token) { wait.token(ev.token); }\n\t\t\t\tif (ev.done) { done = ev.done; }\n\t\t\t});\n\t\t}).then(function () {\n\t\t\twait.remove();\n\t\t\tif (!done) { bubble('error', 'The answer stopped before it finished.'); return; }\n\t\t\tif (done.error) { bubble('error', done.error); return; }\n\t\t\tmessages.push({ role: 'assistant', content: done.reply });\n\t\t\tsave();\n\t\t\tofferTasks(bubble('assistant', done.reply), done);\n\t\t}).catch(function (e) {\n\t\t\twait.remove();\n\t\t\tbubble('error', e.name === 'AbortError' ? 'Stopped.' : String(e));\n\t\t}).finally(function () {\n\t\t\trefreshStats();\n\t\t\trunning = null;\n\t\t\tsend.hidden = false;\n\t\t\tstop.hidden = true;\n\t\t\tinput.focus();\n\t\t});\n\t}\n\tstop.addEventListener('click', function () { if (running) { running.abort(); } });\n\n\t// refreshStats draws the model's stats again, keeping the panel open or closed\n\tfunction refreshStats() {\n\t\tvar box = document.getElementById('assistant-stats');\n\t\tvar open = box.querySelector('details') ? box.querySelector('details').open : true;\n\t\tfetch('/assistant/stats').then(function (r) { return r.text(); }).then(function (html) {\n\t\t\tbox.innerHTML = html;\n\t\t\tvar d = box.querySelector('details');\n\t\t\tif (d) { d.open = open; }\n\t\t}).catch(function () {});\n\t}\n\tform.addEventListener('submit', function (e) { e.preventDefault(); ask(input.value); });\n\tinput.addEventListener('keydown', function (e) {\n\t\tif (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input.value); }\n\t});\n\tdocument.querySelectorAll('[data-suggest]').forEach(function (s) {\n\t\ts.addEventListener('click', function () { ask(s.textContent); });\n\t});\n\tdocument.getElementById('chat-clear').addEventListener('click', function () {\n\t\tmessages = []; save();\n\t\tlog.querySelectorAll(':scope > :not(#chat-empty)').forEach(function (n) { n.remove(); });\n\t\tempty.style.display = '';\n\t});\n})();\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

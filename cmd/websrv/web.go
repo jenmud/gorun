@@ -240,6 +240,7 @@ func (a *app) routes() *http.ServeMux {
 	mux.HandleFunc("POST /runs/truncate", a.truncateRuns)
 	mux.HandleFunc("GET /assistant", a.assistantPage)
 	mux.HandleFunc("POST /assistant/chat", a.chatHandler)
+	mux.HandleFunc("GET /assistant/stats", a.assistantStatsHandler)
 	withFile := func(pattern string, h http.HandlerFunc) {
 		if !a.noFile {
 			mux.HandleFunc(pattern, h)

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/hybridgroup/yzma/pkg/llama"
@@ -25,6 +26,9 @@ type Engine struct {
 	mu      sync.Mutex
 	started bool // llama.cpp is loaded and started
 	loaded  bool // the model is loaded
+
+	statsMu sync.Mutex // guards stats, which Stats reads without waiting for e.mu
+	stats   Stats
 	model   llama.Model
 	lctx    llama.Context
 	vocab   llama.Vocab
@@ -39,6 +43,7 @@ const (
 	maxReply    = 1500 // tokens; a few tasks rarely need more
 	batchSize   = 2048 // the most tokens llama.cpp decodes at once
 	promptChunk = 512  // prompt tokens decoded between checks for a cancelled request
+	gpuAll      = 999  // GPU layers to ask for: every one
 )
 
 func (e *Engine) load(ctx context.Context) error {
@@ -69,14 +74,21 @@ func (e *Engine) load(ctx context.Context) error {
 
 	trace := gorun.ChatTraceFrom(ctx)
 	trace.Statusf("Loading the model; it stays loaded for the next question")
-	if err := e.open(file, true); err != nil {
+	start := time.Now()
+	gpuLayers, cpuReason := int32(gpuAll), ""
+	if !llama.SupportsGpuOffload() {
+		gpuLayers, cpuReason = 0, "llama.cpp found no GPU it can use"
+	}
+	if err := e.open(file, gpuLayers > 0); err != nil {
 		// another program, or another gorun, may hold the GPU's memory; the CPU is slower but has room
 		slog.WarnContext(ctx, "the model doesn't fit on the GPU; using the CPU", "error", err)
 		trace.Statusf("Not enough GPU memory free, perhaps another program is using it. Loading the model on the CPU instead, which is slower")
 		if cerr := e.open(file, false); cerr != nil {
 			return fmt.Errorf("%w; on the CPU too: %v", err, cerr)
 		}
+		gpuLayers, cpuReason = 0, "the GPU didn't have enough memory free when it loaded"
 	}
+	took := time.Since(start)
 	e.vocab = llama.ModelGetVocab(e.model)
 	e.tmpl = llama.ModelChatTemplate(e.model, "")
 	if e.tmpl == "" {
@@ -86,6 +98,7 @@ func (e *Engine) load(ctx context.Context) error {
 	sp.Temp = 0.2
 	e.sampler = llama.NewSampler(e.model, []llama.SamplerType{llama.SamplerTypeTopK, llama.SamplerTypeTopP, llama.SamplerTypeTemperature}, sp)
 	e.loaded = true
+	e.noteLoaded(gpuLayers, cpuReason, took)
 	return nil
 }
 
@@ -96,7 +109,7 @@ func (e *Engine) open(file string, gpu bool) error {
 	params := llama.ModelDefaultParams()
 	params.NGpuLayers = 0
 	if gpu {
-		params.NGpuLayers = 999 // as many as fit; with no GPU this is a no-op
+		params.NGpuLayers = gpuAll
 	}
 	m, err := llama.ModelLoadFromFile(file, params)
 	if err != nil || m == 0 {
@@ -148,6 +161,8 @@ func (e *Engine) Chat(ctx context.Context, messages []gorun.ChatMessage) (string
 	}
 	trace := gorun.ChatTraceFrom(ctx)
 	trace.Statusf("Reading the question, with your Gorunfile and runs (%d tokens)", len(tokens))
+	answer := AnswerStats{PromptTokens: len(tokens)}
+	readStart := time.Now()
 	// the prompt goes in batch-sized pieces: llama.cpp aborts the process on a bigger one
 	for start := 0; start < len(tokens); start += promptChunk {
 		if err := ctx.Err(); err != nil {
@@ -157,7 +172,13 @@ func (e *Engine) Chat(ctx context.Context, messages []gorun.ChatMessage) (string
 			return "", fmt.Errorf("decode: %w", err)
 		}
 	}
+	answer.Reading = time.Since(readStart)
 	trace.Statusf("Writing the reply")
+	writeStart := time.Now()
+	defer func() {
+		answer.Writing = time.Since(writeStart)
+		e.noteAnswer(answer)
+	}()
 	var reply []byte
 	sent := 0 // bytes of reply already given to the trace
 	buf := make([]byte, 256)
@@ -175,6 +196,7 @@ func (e *Engine) Chat(ctx context.Context, messages []gorun.ChatMessage) (string
 			n = llama.TokenToPiece(e.vocab, token, buf, 0, false)
 		}
 		reply = append(reply, buf[:max(n, 0)]...)
+		answer.ReplyTokens++
 		if end := wholeRunes(reply); end > sent {
 			trace.Piece(string(reply[sent:end]))
 			sent = end
@@ -211,7 +233,10 @@ func (e *Engine) Close() {
 	_ = llama.Free(e.lctx)
 	_ = llama.ModelFree(e.model)
 	llama.Close()
-	e.loaded = false
+	e.loaded, e.started = false, false
+	e.statsMu.Lock()
+	e.stats = Stats{}
+	e.statsMu.Unlock()
 }
 
 // wholeRunes is the length of b without a UTF-8 character it ends partway through, which a token

@@ -8,6 +8,9 @@ templ AssistantPage(d AssistantPageData) {
 			<p class="mt-1 text-sm text-zinc-400">Ask about your tasks and servers, have it summarise runs and explain failures, or have it write tasks. It reads the loaded Gorunfile and the run history. The model is { d.Model }. It is small, so check what it says.</p>
 		</div>
 		@privacyNote(d)
+		<div id="assistant-stats">
+			@AssistantStatsPanel(d.Stats)
+		</div>
 		if d.RunID != "" {
 			<p class="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">About run <a href={ templ.SafeURL("/history/" + d.RunID) } class="text-accent hover:underline">{ d.RunTitle }</a> <span class="font-mono text-zinc-500">{ d.RunID }</span>. <a href="/assistant" class="text-zinc-300 underline underline-offset-2">Ask about the newest run instead</a>.</p>
 		}
@@ -45,6 +48,32 @@ templ AssistantPage(d AssistantPageData) {
 		}
 		@assistantScript()
 	</div>
+}
+
+// AssistantStatsPanel shows where the assistant's model runs, its memory, and how its last
+// answer went. The page draws it again after each answer.
+templ AssistantStatsPanel(s AssistantStats) {
+	<details class="group/stats rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs" open>
+		<summary class="flex cursor-pointer list-none items-center gap-2 text-zinc-300">
+			<span class="inline-block text-zinc-500 transition group-open/stats:rotate-90">▸</span>
+			<span class={ "h-2 w-2 shrink-0 rounded-full", templ.KV("bg-emerald-400", s.Tone == "good"), templ.KV("bg-amber-400", s.Tone == "warn"), templ.KV("bg-zinc-500", s.Tone == "") }></span>
+			<span class="font-semibold text-zinc-200">Model</span>
+			<span class={ templ.KV("text-amber-300", s.Tone == "warn") }>{ s.State }</span>
+		</summary>
+		if len(s.Rows) > 0 {
+			<dl class="mt-2 grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1">
+				for _, r := range s.Rows {
+					<dt class="text-zinc-500">{ r.Label }</dt>
+					<dd class="min-w-0 break-words text-zinc-200">
+						{ r.Value }
+						if r.Note != "" {
+							<span class="text-zinc-500">· { r.Note }</span>
+						}
+					</dd>
+				}
+			</dl>
+		}
+	</details>
 }
 
 templ privacyNote(d AssistantPageData) {
@@ -261,6 +290,7 @@ templ assistantScript() {
 			wait.remove();
 			bubble('error', e.name === 'AbortError' ? 'Stopped.' : String(e));
 		}).finally(function () {
+			refreshStats();
 			running = null;
 			send.hidden = false;
 			stop.hidden = true;
@@ -268,6 +298,17 @@ templ assistantScript() {
 		});
 	}
 	stop.addEventListener('click', function () { if (running) { running.abort(); } });
+
+	// refreshStats draws the model's stats again, keeping the panel open or closed
+	function refreshStats() {
+		var box = document.getElementById('assistant-stats');
+		var open = box.querySelector('details') ? box.querySelector('details').open : true;
+		fetch('/assistant/stats').then(function (r) { return r.text(); }).then(function (html) {
+			box.innerHTML = html;
+			var d = box.querySelector('details');
+			if (d) { d.open = open; }
+		}).catch(function () {});
+	}
 	form.addEventListener('submit', function (e) { e.preventDefault(); ask(input.value); });
 	input.addEventListener('keydown', function (e) {
 		if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input.value); }

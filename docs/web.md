@@ -316,6 +316,12 @@ question sends it:
   of each failed task. A run of more than 40 tasks is counted per server instead, and only its
   tasks that didn't pass are listed.
 
+The **Model** panel above the chat says where the model stands: not downloaded yet, downloaded
+but not loaded, or loaded on the GPU or the CPU, and why it is on the CPU. Once loaded it shows
+the model and its size, the GPU and its free memory, the context size, how long loading took,
+and how fast the last answer was read and written. It is drawn again after each answer. With
+`GORUN_LLM_URL`, it names the server instead, as gorun can't see that server's memory.
+
 While it answers, the chat shows what it is doing and for how long: downloading the model on first
 use (with how far along), loading it, reading the question, then the reply as it is written.
 **Stop** ends an answer early.

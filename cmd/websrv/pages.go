@@ -264,8 +264,15 @@ func addLocal(cfg *gorun.Config, servers []gorun.Server, selected []string) ([]g
 			remote = append(remote, n)
 		}
 	}
-	if len(remote) > 0 && !slices.ContainsFunc(servers, func(s gorun.Server) bool { return !s.IsLocal() }) {
+	sshServer := func(s gorun.Server) bool { return !s.IsLocal() }
+	if len(remote) > 0 && !slices.ContainsFunc(cfg.Servers, sshServer) {
+		return nil, fmt.Errorf("This Gorunfile has no server that runs over SSH, and these tasks aren't marked Local: %s. To run them on this machine, edit them on the Tasks page and tick Local.", strings.Join(remote, ", "))
+	}
+	if len(remote) > 0 && !slices.ContainsFunc(servers, sshServer) {
 		return nil, fmt.Errorf("Tick a server to run %s on. Only tasks marked local = true run without one.", strings.Join(remote, ", "))
+	}
+	if skipped := remoteDeps(cfg, local); len(skipped) > 0 {
+		return nil, fmt.Errorf("These tasks would be skipped on this machine, as they aren't marked Local: %s (%s depends on them). Edit them on the Tasks page and tick Local.", strings.Join(skipped, ", "), strings.Join(local, ", "))
 	}
 	if len(local) == 0 || slices.ContainsFunc(servers, gorun.Server.IsLocal) {
 		return servers, nil
@@ -277,6 +284,31 @@ func addLocal(cfg *gorun.Config, servers []gorun.Server, selected []string) ([]g
 		return nil, err
 	}
 	return append(servers, s), nil
+}
+
+// remoteDeps lists the tasks the local tasks in names depend on, directly or not, that aren't
+// local themselves: a local server skips them, so the local tasks would run without them.
+func remoteDeps(cfg *gorun.Config, names []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	queue := slices.Clone(names)
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+		deps, _ := cfg.ExpandTaskRefs(cfg.Tasks[name].DependsOn...)
+		for _, d := range deps {
+			if seen[d] {
+				continue
+			}
+			seen[d] = true
+			queue = append(queue, d)
+			if !cfg.Tasks[d].Local {
+				out = append(out, d)
+			}
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // clearFinished removes the finished runs from the dashboard.

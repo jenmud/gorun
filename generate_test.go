@@ -152,3 +152,14 @@ func TestExtractTasksDropsABooleanCopy(t *testing.T) {
 		t.Errorf("ExtractTasks() = %q", got)
 	}
 }
+
+func TestLocalNote(t *testing.T) {
+	local := &Config{Servers: []Server{{Name: "localhost"}}}
+	if !strings.Contains(LocalNote(local), "local = true") {
+		t.Errorf("LocalNote() with no SSH server = %q", LocalNote(local))
+	}
+	ssh := &Config{Servers: []Server{{Name: "web", Hostname: "web.example", SSH: SSH{User: "deploy"}}}}
+	if LocalNote(ssh) != "" {
+		t.Errorf("LocalNote() with an SSH server = %q", LocalNote(ssh))
+	}
+}

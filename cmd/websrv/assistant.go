@@ -544,6 +544,7 @@ func writeGorunfile(b *strings.Builder, cfg *gorun.Config) {
 		}
 		b.WriteString("\n")
 	}
+	b.WriteString(gorun.LocalNote(cfg))
 }
 
 func writeRunLine(b *strings.Builder, r store.RunSummary) {

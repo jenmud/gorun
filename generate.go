@@ -107,6 +107,11 @@ const TaskFormat = `Task names are short, lowercase, with dashes. Keys a task ma
   retries = 2
   rerun = "safe"                            # or "unsafe" when running it twice does harm
   envvars = { KEY = "value" }
+  local = true                              # runs on the machine gorun runs on; see below
+
+A task runs over SSH on the Gorunfile's servers unless it sets local = true, which runs it on
+the machine gorun runs on instead. A local task's dependencies must be local too, or they are
+skipped there. When the Gorunfile has no servers that run over SSH, set local = true on every task.
 
 A file the task needs (a script, a web page, a config) goes in a copy table, not in cmd. Copies
 are written before cmd runs, as the login user, so write to /tmp and move it into place in cmd:
@@ -140,7 +145,7 @@ func (a Assistant) GenerateTasks(ctx context.Context, request string, cfg *Confi
 	span.SetAttributes(attribute.String("gorun.assistant.model", a.model()))
 
 	messages := []ChatMessage{
-		{Role: "system", Content: assistantPrompt + existingTasks(cfg, request)},
+		{Role: "system", Content: assistantPrompt + existingTasks(cfg, request) + LocalNote(cfg)},
 		// small models follow the last message best, so the format is repeated here
 		{Role: "user", Content: request + "\n\nReply with gorun [tasks.<name>] TOML only."},
 	}
@@ -170,6 +175,15 @@ func (a Assistant) model() string { return cmp.Or(a.Model, DefaultAssistantModel
 // maxExistingTasks caps the tasks listed in the prompt: a small model's context is a few
 // thousand tokens, and a long list pushes the instructions out of it.
 const maxExistingTasks = 30
+
+// LocalNote tells a model that cfg has no servers that run over SSH, so the tasks it writes must
+// set local = true to run at all. It is empty when cfg has one.
+func LocalNote(cfg *Config) string {
+	if cfg == nil || slices.ContainsFunc(cfg.Servers, func(s Server) bool { return !s.IsLocal() }) {
+		return ""
+	}
+	return "\nThis Gorunfile has no servers that run over SSH: set local = true on every task you write.\n"
+}
 
 // existingTasks lists the cfg tasks most like request, so the model can depend on them.
 func existingTasks(cfg *Config, request string) string {

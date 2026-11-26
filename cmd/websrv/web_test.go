@@ -367,6 +367,31 @@ ssh.username = "deploy"
 	}
 }
 
+// With no SSH server, the Run page says which tasks need local = true: the ticked ones, and the
+// ones a local task depends on, which a local server would skip.
+func TestPlanRunNamesTheTasksThatNeedLocal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "Gorunfile")
+	src := `[tasks.install-caddy]
+cmd = "true"
+
+[tasks.serve-stats]
+local = true
+cmd = "true"
+depends_on = ["install-caddy"]
+
+[servers.hosts.localhost]
+`
+	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := planRun(&gorun.Config{}, path, nil, []string{"install-caddy"}, nil); err == nil || !strings.Contains(err.Error(), "no server that runs over SSH, and these tasks aren't marked Local: install-caddy") {
+		t.Errorf("an SSH task with no SSH server = %v", err)
+	}
+	if _, _, err := planRun(&gorun.Config{}, path, []string{"localhost"}, []string{"serve-stats"}, nil); err == nil || !strings.Contains(err.Error(), "aren't marked Local: install-caddy (serve-stats depends on them)") {
+		t.Errorf("a local task with an SSH dependency = %v", err)
+	}
+}
+
 func TestLiveAndRunPagesAreSeparate(t *testing.T) {
 	a, _ := newTestApp(t)
 

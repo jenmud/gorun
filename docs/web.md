@@ -181,8 +181,9 @@ The front page (`/`) shows what is running now: runs started from the Run page, 
 terminal, or by a schedule. Stats and **Recent runs** bars sit above it, and each bar links to
 the run. Each run, server and task starts collapsed. A task that is uploading a file shows a bar
 with the size and rate, and a closed server shows the upload on its line
-([screenshot](screenshot-web-upload.png)). **Stop** cancels a run started from the web UI, and
-**Clear finished** drops the runs that are over. **Start a run** opens the Run page.
+([screenshot](screenshot-web-upload.png)). **Stop** cancels a run started from the web UI,
+**Ask the assistant** opens the [assistant](#assistant) on that run, to summarise it or explain a
+failure, and **Clear finished** drops the runs that are over. **Start a run** opens the Run page.
 
 ### Run
 
@@ -190,8 +191,13 @@ The picker (`/run`): tick servers, then tasks or bundles (not both), and press *
 The run starts and the page moves to **Live** to watch it. **Force** runs every task even when its
 [check](gorunfile.md#checks-run-only-when-needed) says there is nothing to do, and **Check only**
 is a dry run that only runs the checks: its tasks end *unchanged* or *would run*, and the run is
-marked *check only*. Runs read the Gorunfile on disk, so save first. A run that can't start stays
+marked *check only*. Runs read the saved Gorunfile, so save first. A run that can't start stays
 on the Run page and says why.
+
+Ticked tasks marked **Local** (`local = true`) run on this machine without a server ticked. Every
+other task runs only over SSH, so it needs a ticked SSH server. The page names the tasks that need
+**Local** ticked: ticked ones when the Gorunfile has no SSH server, and the ones a local task
+depends on, which this machine would otherwise skip.
 
 ### Tasks
 
@@ -329,8 +335,11 @@ While it answers, the chat shows what it is doing and for how long: downloading 
 use (with how far along), loading it, reading the question, then the reply as it is written.
 **Stop** ends an answer early.
 
-Env vars and template variables are never sent. **Ask the assistant** on a run's History page
-starts the chat on that run instead.
+Env vars and template variables are never sent. **Ask the assistant** on a run's History page,
+or on its card on the Live page, starts the chat on that run instead.
+
+The assistant writes `local = true` on tasks meant for this machine, and on every task when the
+Gorunfile has no server that runs over SSH.
 
 When a reply holds tasks that load, the chat offers **Save these tasks**, which saves them into
 the Gorunfile straight away, as an edit on the Tasks page does; there is nothing more to save on

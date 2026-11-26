@@ -1,5 +1,7 @@
 package ui
 
+import "net/url"
+
 templ Dashboard(s DashboardState) {
 	if len(s.ProcessOrder) == 0 {
 		<div class="rounded-2xl border border-dashed border-zinc-800 p-10 text-center text-sm">
@@ -49,6 +51,7 @@ templ processCard(p *ProcessState) {
 					<span>{ processDuration(p) }</span>
 				}
 			</div>
+			<a href={ templ.SafeURL("/assistant?run=" + url.QueryEscape(p.UUID)) } title="Ask the assistant about this run: what it did, or why a task failed" class="rounded-lg border border-violet-900/60 px-3 py-1.5 text-xs text-violet-300 transition hover:bg-violet-950/40">Ask the assistant</a>
 			if !p.Finished {
 				<form method="post" action={ runCancelPath(p.UUID) }>
 					<button class="rounded-lg border border-red-900/60 px-3 py-1.5 text-xs text-red-300 transition hover:bg-red-950/40">Stop</button>

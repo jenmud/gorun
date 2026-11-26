@@ -47,6 +47,8 @@ func (q *modelQueue) acquire(ctx context.Context, status func(string)) (func(), 
 	case status == nil:
 	case ahead == 1:
 		status("Waiting for the model to finish another answer; yours is next")
+	case ahead == 2:
+		status("Waiting for the model: it is answering another question, and 1 more is ahead of yours")
 	default:
 		status(fmt.Sprintf("Waiting for the model: it is answering another question, and %d more are ahead of yours", ahead-1))
 	}

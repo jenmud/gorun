@@ -14,7 +14,8 @@ templ AssistantPage(d AssistantPageData) {
 		if d.RunID != "" {
 			<p class="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">About run <a href={ templ.SafeURL("/history/" + d.RunID) } class="text-accent hover:underline">{ d.RunTitle }</a> <span class="font-mono text-zinc-500">{ d.RunID }</span>. <a href="/assistant" class="text-zinc-300 underline underline-offset-2">Ask about the newest run instead</a>.</p>
 		}
-		<div id="chat-log" class="flex min-h-[16rem] flex-col gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+		<div class="relative">
+		<div id="chat-log" class="flex min-h-[16rem] max-h-[65vh] flex-col gap-3 overflow-y-auto overscroll-contain rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
 			<div id="chat-empty" class="flex flex-wrap gap-2">
 				if d.RunID != "" {
 					@suggestion("Summarise this run")
@@ -28,6 +29,8 @@ templ AssistantPage(d AssistantPageData) {
 					@suggestion("Write a task that installs nginx and keeps it running")
 				}
 			</div>
+		</div>
+		<button id="chat-newest" type="button" hidden class="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-zinc-700 bg-zinc-900/95 px-3 py-1 text-xs text-zinc-200 shadow-lg transition hover:bg-zinc-800">↓ Newest</button>
 		</div>
 		<form id="chat-form" class="flex items-end gap-2">
 			<textarea id="chat-input" rows="2" required placeholder="Ask something. Enter sends, shift+enter starts a new line." class={ inputClass() + " flex-1 resize-y" }></textarea>
@@ -99,6 +102,20 @@ templ assistantScript() {
 (function () {
 	var root = document.getElementById('assistant');
 	var log = document.getElementById('chat-log');
+	var newest = document.getElementById('chat-newest');
+	// stick is set while the chat is scrolled to the bottom: new text is then followed, and
+	// scrolling up to read stops that until the bottom is reached again
+	var stick = true;
+	function atBottom() { return log.scrollTop + log.clientHeight >= log.scrollHeight - 24; }
+	function follow() {
+		if (stick) { log.scrollTop = log.scrollHeight; }
+		newest.hidden = stick;
+	}
+	log.addEventListener('scroll', function () {
+		stick = atBottom();
+		if (stick) { newest.hidden = true; }
+	});
+	newest.addEventListener('click', function () { stick = true; follow(); });
 	var empty = document.getElementById('chat-empty');
 	var form = document.getElementById('chat-form');
 	var input = document.getElementById('chat-input');
@@ -164,7 +181,7 @@ templ assistantScript() {
 		if (role === 'error') { b.className = 'self-start rounded-2xl border border-red-900/60 bg-red-950/30 px-3 py-2 text-sm text-red-300'; }
 		body(b, text);
 		log.appendChild(b);
-		b.scrollIntoView({ block: 'end' });
+		follow();
 		return b;
 	}
 	function offerTasks(b, reply) {
@@ -223,7 +240,7 @@ templ assistantScript() {
 		text.hidden = true;
 		b.append(status, text);
 		log.appendChild(b);
-		b.scrollIntoView({ block: 'end' });
+		follow();
 		var started = Date.now(), written = '';
 		var tick = setInterval(function () { clock.textContent = Math.round((Date.now() - started) / 1000) + 's'; }, 1000);
 		return {
@@ -233,7 +250,7 @@ templ assistantScript() {
 				text.hidden = false;
 				text.replaceChildren();
 				body(text, written);
-				b.scrollIntoView({ block: 'end' });
+				follow();
 			},
 			remove: function () { clearInterval(tick); b.remove(); },
 		};
@@ -263,6 +280,7 @@ templ assistantScript() {
 		if (!text || running) { return; }
 		messages.push({ role: 'user', content: text });
 		save();
+		stick = true;
 		bubble('user', text);
 		input.value = '';
 		send.hidden = true;

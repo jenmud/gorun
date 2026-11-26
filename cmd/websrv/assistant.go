@@ -154,12 +154,13 @@ func (a *app) chatHandler(w http.ResponseWriter, r *http.Request) {
 	system := a.chatContext(ctx, cfg, req.Run) + mentionedTasks(cfg, conv)
 	messages := append([]gorun.ChatMessage{{Role: "system", Content: system}}, conv...)
 
-	if !a.genMu.TryLock() {
-		send(chatEvent{Status: "Waiting for the model to finish another answer"})
-		a.genMu.Lock()
+	release, err := a.genQ.acquire(ctx, func(s string) { send(chatEvent{Status: s}) })
+	if err != nil {
+		finish(http.StatusServiceUnavailable, chatReply{Error: err.Error()})
+		return
 	}
 	reply, err := a.gen.assistant.Chat(ctx, messages)
-	a.genMu.Unlock()
+	release()
 	if err != nil {
 		if ctx.Err() == nil {
 			slog.ErrorContext(ctx, "assistant chat", "error", err)
@@ -206,9 +207,12 @@ func (a *app) repairTasks(ctx context.Context, messages []gorun.ChatMessage, rep
 			gorun.ChatMessage{Role: "assistant", Content: last},
 			gorun.ChatMessage{Role: "user", Content: "Those tasks don't load: " + err.Error() + ". Write all the tasks again, corrected, in one ```toml block and nothing else. Use only the keys listed above. Put any program, page or config in a [[tasks.<name>.copy]] table's content and run the file from cmd, rather than writing it into cmd with python3 -c or a heredoc."},
 		)
-		a.genMu.Lock()
+		release, cerr := a.genQ.acquire(ctx, func(s string) { send(chatEvent{Status: s}) })
+		if cerr != nil {
+			return "", cerr
+		}
 		fix, cerr := a.gen.assistant.Chat(quiet, ask)
-		a.genMu.Unlock()
+		release()
 		if cerr != nil {
 			return "", cerr
 		}

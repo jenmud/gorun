@@ -118,9 +118,13 @@ func (a *app) generateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// the model is slow and its state global, so requests wait their turn
-	a.genMu.Lock()
+	release, err := a.genQ.acquire(r.Context(), nil)
+	if err != nil {
+		redirectWith(w, r, "/config", "Could not generate tasks: "+err.Error(), true)
+		return
+	}
 	text, err := a.gen.assistant.GenerateTasks(r.Context(), request, cfg)
-	a.genMu.Unlock()
+	release()
 	if err != nil {
 		slog.ErrorContext(r.Context(), "generate tasks", "error", err)
 		redirectWith(w, r, "/config", "Could not generate tasks: "+err.Error(), true)

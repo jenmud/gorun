@@ -333,7 +333,10 @@ and how fast the last answer was read and written. It is drawn again after each 
 
 While it answers, the chat shows what it is doing and for how long: downloading the model on first
 use (with how far along), loading it, reading the question, then the reply as it is written.
-**Stop** ends an answer early.
+**Stop** ends an answer early. gorun loads the model once and answers one question at a time, whoever asks, so
+more people using it never costs more memory, only a wait: the chat says how many questions are
+ahead of yours, and with 8 waiting the next is asked to try again in a minute. Each `gorun -serve`
+process loads its own copy, so run one per machine.
 
 Env vars and template variables are never sent. **Ask the assistant** on a run's History page,
 or on its card on the Live page, starts the chat on that run instead.

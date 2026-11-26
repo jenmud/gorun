@@ -52,7 +52,7 @@ var Version string
 // app holds the state the handlers share. Each piece is guarded by mu.
 type app struct {
 	saveMu sync.Mutex // one direct save from a page at a time, so edits can't overwrite each other
-	genMu  sync.Mutex // one task generation at a time
+	genQ   modelQueue // one use of the model at a time, in order
 	gen    *generator
 	store  *store.Store
 	nc     *inats.Client

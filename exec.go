@@ -371,21 +371,21 @@ func (t *TaskExec) runRemote(ctx context.Context, command string, copies bool) (
 	default:
 	}
 
-	// Ask the remote command to stop. Closing the client also unblocks a
-	// stuck copy or command, so this returns promptly.
+	// Stop only this task's session: the server's other tasks share the connection.
 	sessionMu.Lock()
 	if session != nil {
 		_ = session.Signal(ssh.SIGTERM)
+		_ = session.Close()
 	}
 	sessionMu.Unlock()
-	_ = t.server.Close()
 
 	select {
 	case res := <-done:
 		return res.stdout, res.stderr, ctx.Err()
 	case <-time.After(taskKillGrace):
-		// The connection didn't close in time; don't hold up the whole run.
 	}
+	// The session didn't end, so the connection is likely dead: close it so nothing waits on it.
+	_ = t.server.Close()
 	return nil, nil, ctx.Err()
 }
 

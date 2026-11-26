@@ -33,7 +33,7 @@ func fakeModel(t *testing.T, replies ...string) (*httptest.Server, *[][]ChatMess
 
 func TestGenerateTasksRetriesUntilValid(t *testing.T) {
 	bad := "[tasks.redis]\ndescription = \"Install redis\"\nsudo = true\n"
-	good := "```toml\n[tasks.redis]\ndescription = \"Install redis\"\ncmd = \"apt-get install -y redis\"\ndepends_on = [\"update\"]\nsudo = true\n```"
+	good := "```toml\n[tasks.redis]\ndescription = \"Install redis\"\ncmd = \"apt-get install -y redis\"\ncheck = \"false\"\nverify = \"true\"\ndepends_on = [\"update\"]\nsudo = true\n```"
 	srv, got := fakeModel(t, bad, good)
 
 	cfg := &Config{Tasks: map[string]Task{"update": {Description: "Update packages", Cmd: "apt-get update"}}}
@@ -86,15 +86,17 @@ func TestCheckTasks(t *testing.T) {
 	tests := []struct {
 		name, text, wantErr string
 	}{
-		{"valid", "[tasks.a]\ncmd = \"true\"\ndepends_on = [\"update\"]", ""},
-		{"depends on a new task", "[tasks.a]\ncmd = \"true\"\n[tasks.b]\ncmd = \"true\"\ndepends_on = [\"a\"]", ""},
+		{"valid", "[tasks.a]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\ndepends_on = [\"update\"]", ""},
+		{"depends on a new task", "[tasks.a]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\n[tasks.b]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\ndepends_on = [\"a\"]", ""},
 		{"not toml", "sure, here you go", "invalid TOML"},
 		{"no tasks", "name = \"x\"", "unknown key"},
 		{"empty", "", "no [tasks.<name>]"},
-		{"unknown key", "[tasks.a]\ncmd = \"true\"\ncommand = \"x\"", "unknown key tasks.a.command"},
-		{"missing dependency", "[tasks.a]\ncmd = \"true\"\ndepends_on = [\"nope\"]", "nope, which doesn't exist"},
-		{"redefines a task", "[tasks.update]\ncmd = \"true\"", "already exists"},
-		{"bad rerun", "[tasks.a]\ncmd = \"true\"\nrerun = \"maybe\"", "rerun must be"},
+		{"unknown key", "[tasks.a]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\ncommand = \"x\"", "unknown key tasks.a.command"},
+		{"missing dependency", "[tasks.a]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\ndepends_on = [\"nope\"]", "nope, which doesn't exist"},
+		{"redefines a task", "[tasks.update]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"", "already exists"},
+		{"no check", "[tasks.a]\ncmd = \"true\"\nverify = \"true\"", "task a has no check"},
+		{"no verify", "[tasks.a]\ncmd = \"true\"\ncheck = \"false\"", "task a has no verify"},
+		{"bad rerun", "[tasks.a]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\nrerun = \"maybe\"", "rerun must be"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -111,7 +113,7 @@ func TestCheckTasks(t *testing.T) {
 
 func TestExtractTaskEditsReplacesExistingTasks(t *testing.T) {
 	cfg := &Config{Tasks: map[string]Task{"update": {Cmd: "apt-get update"}}}
-	reply := "```toml\n[tasks.update]\ncmd = \"apt-get update\"\ntimeout = \"10m\"\n```"
+	reply := "```toml\n[tasks.update]\ncmd = \"apt-get update\"\ncheck = \"false\"\nverify = \"true\"\ntimeout = \"10m\"\n```"
 	if _, err := ExtractTasks(reply, cfg); err == nil {
 		t.Error("ExtractTasks() accepted a task that exists")
 	}
@@ -121,12 +123,12 @@ func TestExtractTaskEditsReplacesExistingTasks(t *testing.T) {
 }
 
 func TestExtractTasksSkipsShellBlocks(t *testing.T) {
-	reply := "Stop it first:\n```bash\nsudo systemctl stop nginx\n```\nThen add:\n```toml\n[tasks.a]\ncmd = \"true\"\n```\n"
+	reply := "Stop it first:\n```bash\nsudo systemctl stop nginx\n```\nThen add:\n```toml\n[tasks.a]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\n```\n"
 	got, err := ExtractTasks(reply, nil)
 	if err != nil {
 		t.Fatalf("ExtractTasks() error = %v", err)
 	}
-	if got != "[tasks.a]\ncmd = \"true\"\n" {
+	if got != "[tasks.a]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\n" {
 		t.Errorf("ExtractTasks() = %q", got)
 	}
 }
@@ -143,7 +145,7 @@ func TestGenerateTasksReportsHTTPErrors(t *testing.T) {
 }
 
 func TestExtractTasksDropsABooleanCopy(t *testing.T) {
-	reply := "```toml\n[tasks.page]\ncmd = \"mv /tmp/i.html /var/www/\"\ncopy = false\n[[tasks.page.copy]]\ndst = \"/tmp/i.html\"\ncontent = \"<p>hi</p>\"\n```"
+	reply := "```toml\n[tasks.page]\ncmd = \"mv /tmp/i.html /var/www/\"\ncheck = \"false\"\nverify = \"true\"\ncopy = false\n[[tasks.page.copy]]\ndst = \"/tmp/i.html\"\ncontent = \"<p>hi</p>\"\n```"
 	got, err := ExtractTasks(reply, nil)
 	if err != nil {
 		t.Fatalf("ExtractTasks() error = %v", err)

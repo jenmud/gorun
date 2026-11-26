@@ -15,6 +15,7 @@ answer = '''
 description = "Install <<pkg>>"
 check = "dpkg -s <<pkg>> >/dev/null 2>&1"
 cmd = "apt-get update && apt-get install -y <<pkg>>"
+verify = "dpkg -s <<pkg>> >/dev/null 2>&1"
 sudo = true
 retries = 2
 rerun = "safe"
@@ -52,12 +53,22 @@ request = [
   "Make sure <<svc>> is installed, enabled and running",
   "a task to install <<pkg>> and start it",
 ]
-note = "This installs <<pkg>>, enables the <<svc>> service so it starts on boot, and checks it is running afterwards."
+note = "These are two small steps: <<name>>-install installs <<pkg>>, then <<name>> enables the <<svc>> service so it starts on boot and checks it is running."
 answer = '''
+[tasks.<<name>>-install]
+description = "Install <<pkg>>"
+check = "dpkg -s <<pkg>> >/dev/null 2>&1"
+cmd = "apt-get update && apt-get install -y <<pkg>>"
+verify = "dpkg -s <<pkg>> >/dev/null 2>&1"
+sudo = true
+retries = 2
+rerun = "safe"
+
 [tasks.<<name>>]
-description = "Install <<pkg>> and keep it running"
-check = "dpkg -s <<pkg>> >/dev/null 2>&1 && systemctl is-active --quiet <<svc>>"
-cmd = "apt-get update && apt-get install -y <<pkg>> && systemctl enable --now <<svc>>"
+description = "Keep <<svc>> running, and start it at boot"
+depends_on = ["<<name>>-install"]
+check = "systemctl is-active --quiet <<svc>> && systemctl is-enabled --quiet <<svc>>"
+cmd = "systemctl enable --now <<svc>>"
 verify = "systemctl is-active <<svc>>"
 sudo = true
 rerun = "safe"
@@ -108,6 +119,7 @@ answer = '''
 description = "Install <<pkg>> with dnf"
 check = "rpm -q <<pkg>> >/dev/null 2>&1"
 cmd = "dnf install -y <<pkg>>"
+verify = "rpm -q <<pkg>> >/dev/null 2>&1"
 sudo = true
 retries = 2
 rerun = "safe"
@@ -138,6 +150,7 @@ answer = '''
 description = "Set the time zone to <<tz>>"
 check = "test \"$(timedatectl show -p Timezone --value)\" = <<tz>>"
 cmd = "timedatectl set-timezone <<tz>>"
+verify = "test \"$(timedatectl show -p Timezone --value)\" = <<tz>>"
 sudo = true
 rerun = "safe"
 '''
@@ -187,6 +200,7 @@ note = "This copies the key from ./keys/<<user>>.pub to the server and adds it t
 answer = '''
 [tasks.ssh-key-<<user>>]
 description = "Authorise the <<user>> SSH key"
+check = "grep -qxF \"$(cat /tmp/<<user>>.pub)\" /home/<<user>>/.ssh/authorized_keys"
 cmd = """
 install -d -m 700 -o <<user>> -g <<user>> /home/<<user>>/.ssh
 touch /home/<<user>>/.ssh/authorized_keys
@@ -194,6 +208,7 @@ grep -qxF "$(cat /tmp/<<user>>.pub)" /home/<<user>>/.ssh/authorized_keys || cat 
 chown <<user>>:<<user>> /home/<<user>>/.ssh/authorized_keys
 chmod 600 /home/<<user>>/.ssh/authorized_keys
 """
+verify = "grep -qxF \"$(cat /tmp/<<user>>.pub)\" /home/<<user>>/.ssh/authorized_keys"
 sudo = true
 rerun = "safe"
 [[tasks.ssh-key-<<user>>.copy]]
@@ -218,6 +233,7 @@ answer = '''
 description = "Allow port <<port>>/tcp through ufw"
 check = "ufw status | grep -qE '^<<port>>/tcp +ALLOW'"
 cmd = "ufw allow <<port>>/tcp"
+verify = "ufw status | grep -qE '^<<port>>/tcp +ALLOW'"
 sudo = true
 rerun = "safe"
 '''
@@ -273,10 +289,11 @@ request = [
   "a task that restarts the <<svc>> service",
   "bounce <<svc>> and make sure it comes back",
 ]
-note = "This restarts <<svc>> and fails the task if it isn't running afterwards. It has no check, so it runs every time."
+note = "This restarts <<svc>> and fails the task if it isn't running afterwards. A restart is wanted every time, so its check never passes."
 answer = '''
 [tasks.restart-<<svc>>]
 description = "Restart <<svc>>"
+check = "false"
 cmd = "systemctl restart <<svc>>"
 verify = "systemctl is-active <<svc>>"
 sudo = true
@@ -299,10 +316,11 @@ request = [
   "Reload nginx after checking its config",
   "test the nginx config and reload it",
 ]
-note = "nginx -t stops the task before the reload when the config is broken, so a typo never takes the site down."
+note = "nginx -t stops the task before the reload when the config is broken, so a typo never takes the site down. A reload is wanted every time, so its check never passes."
 answer = '''
 [tasks.reload-nginx]
 description = "Test the nginx config and reload nginx"
+check = "false"
 cmd = "nginx -t && systemctl reload nginx"
 verify = "systemctl is-active nginx"
 sudo = true
@@ -320,7 +338,9 @@ note = "The copy fills the template in for each server and puts it in /tmp, beca
 answer = '''
 [tasks.site-<<site>>]
 description = "Install the <<site>> nginx site"
+check = "test -f /etc/nginx/conf.d/<<site>>.conf"
 cmd = "mv /tmp/<<site>>.conf /etc/nginx/conf.d/<<site>>.conf && nginx -t && systemctl reload nginx"
+verify = "nginx -t && systemctl is-active nginx"
 check_copies = true
 sudo = true
 rerun = "safe"
@@ -343,15 +363,26 @@ request = [
   "make <<bin>> a service that restarts when it crashes",
   "write a systemd unit for <<bin>> and start it",
 ]
-note = "The unit file is written with an inline copy to /tmp, moved into place, and the service is enabled and started. Change ExecStart and User to suit."
+note = "Two small steps: <<bin>>-unit writes the unit file with an inline copy to /tmp and moves it into place, then <<bin>>-service enables and starts it. Change ExecStart and User to suit."
 answer = '''
 [tasks.<<bin>>-service]
 description = "Run <<bin>> as a systemd service"
-cmd = "mv /tmp/<<bin>>.service /etc/systemd/system/<<bin>>.service && systemctl daemon-reload && systemctl enable --now <<bin>>"
+depends_on = ["<<bin>>-unit"]
+check = "systemctl is-active --quiet <<bin>> && systemctl is-enabled --quiet <<bin>>"
+cmd = "systemctl enable --now <<bin>>"
 verify = "systemctl is-active <<bin>>"
 sudo = true
 rerun = "safe"
-[[tasks.<<bin>>-service.copy]]
+
+[tasks.<<bin>>-unit]
+description = "Install the <<bin>> systemd unit"
+check = "test -f /etc/systemd/system/<<bin>>.service"
+cmd = "mv /tmp/<<bin>>.service /etc/systemd/system/<<bin>>.service && systemctl daemon-reload"
+verify = "systemctl cat <<bin>> >/dev/null"
+check_copies = true
+sudo = true
+rerun = "safe"
+[[tasks.<<bin>>-unit.copy]]
 dst = "/tmp/<<bin>>.service"
 content = """
 [Unit]
@@ -384,7 +415,9 @@ note = "This writes a file to /etc/cron.d, which cron picks up by itself. If you
 answer = '''
 [tasks.cron-<<name>>]
 description = "Run <<script>> nightly from cron"
+check = "test -f /etc/cron.d/<<name>>"
 cmd = "mv /tmp/cron-<<name>> /etc/cron.d/<<name>> && chmod 644 /etc/cron.d/<<name>>"
+verify = "grep -q '<<script>>' /etc/cron.d/<<name>>"
 check_copies = true
 sudo = true
 rerun = "safe"
@@ -408,11 +441,13 @@ request = [
   "a task that checks disk space on /",
   "warn me when / is over <<pct>> percent used",
 ]
-note = "This fails the task, with the usage in its output, when / is more than <<pct>>% full, so the run shows which servers are short of space."
+note = "The check skips the task while / is at most <<pct>>% full; otherwise the task fails with the usage in its output, so the run shows which servers are short of space."
 answer = '''
 [tasks.disk-space]
 description = "Fail when / is more than <<pct>>% full"
-cmd = "used=$(df --output=pcent / | tail -1 | tr -dc 0-9); echo \"/ is ${used}% full\"; test \"$used\" -le <<pct>>"
+check = "test \"$(df --output=pcent / | tail -1 | tr -dc 0-9)\" -le <<pct>>"
+cmd = "df -h /; echo '/ is more than <<pct>>% full'; exit 1"
+verify = "test \"$(df --output=pcent / | tail -1 | tr -dc 0-9)\" -le <<pct>>"
 rerun = "safe"
 '''
 [[task.params]]
@@ -427,11 +462,13 @@ request = [
   "a quick task that prints uptime",
   "Print each server's hostname, kernel and uptime",
 ]
-note = "This only reads, so it is safe to run any time."
+note = "This only reads, so it is safe to run any time, and its check never passes so it always shows them."
 answer = '''
 [tasks.server-info]
 description = "Show the hostname, kernel and uptime"
+check = "false"
 cmd = "hostname; uname -r; uptime"
+verify = "test -n \"$(hostname)\""
 rerun = "safe"
 '''
 
@@ -446,7 +483,9 @@ note = "This upgrades every package without prompts. It has a long timeout, and 
 answer = '''
 [tasks.upgrade]
 description = "Upgrade every package"
-cmd = "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold upgrade"
+check = "apt-get update -qq && test \"$(apt-get -s upgrade | grep -c '^Inst ')\" -eq 0"
+cmd = "DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::=--force-confold upgrade"
+verify = "test \"$(apt-get -s upgrade | grep -c '^Inst ')\" -eq 0"
 sudo = true
 timeout = "45m"
 retries = 2
@@ -457,6 +496,7 @@ rerun = "safe"
 description = "Reboot when an upgrade asks for it"
 check = "test ! -f /var/run/reboot-required"
 cmd = "systemctl reboot"
+verify = "true"
 depends_on = ["upgrade"]
 sudo = true
 rerun = "unsafe"
@@ -488,10 +528,11 @@ request = [
   "docker compose up for <<stack>>",
   "pull and start the <<stack>> containers",
 ]
-note = "This pulls the images and starts the stack in the background; verify fails the task when no container is running."
+note = "This pulls the images and starts the stack in the background, every run, so new images are picked up; verify fails the task when no container is running."
 answer = '''
 [tasks.<<stack>>-up]
 description = "Pull and start the <<stack>> stack"
+check = "false"
 cmd = "cd /opt/<<stack>> && docker compose pull && docker compose up -d --remove-orphans"
 verify = "cd /opt/<<stack>> && docker compose ps --status running --quiet | grep -q ."
 sudo = true
@@ -517,7 +558,9 @@ note = "The token comes from REGISTRY_TOKEN in gorun's environment (or a .env fi
 answer = '''
 [tasks.registry-login]
 description = "Log in to <<reg>>"
+check = "grep -q '\"<<reg>>\"' /root/.docker/config.json 2>/dev/null"
 cmd = 'printf %s "$TOKEN" | docker login <<reg>> -u "$REGISTRY_USER" --password-stdin'
+verify = "grep -q '\"<<reg>>\"' /root/.docker/config.json"
 envvars = { TOKEN = "${REGISTRY_TOKEN}", REGISTRY_USER = "${REGISTRY_USER}" }
 sudo = true
 rerun = "safe"
@@ -539,6 +582,7 @@ answer = '''
 description = "Create the app database user"
 check = "runuser -u postgres -- psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname = 'app'\" | grep -q 1"
 cmd = "runuser -u postgres -- psql -v ON_ERROR_STOP=1 -c \"CREATE ROLE app LOGIN PASSWORD '$APP_DB_PASSWORD'\""
+verify = "runuser -u postgres -- psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname = 'app'\" | grep -q 1"
 envvars = { APP_DB_PASSWORD = "${APP_DB_PASSWORD}" }
 sudo = true
 rerun = "safe"
@@ -558,6 +602,8 @@ note = "The first run clones the repository; later runs fetch and reset it to or
 answer = '''
 [tasks.checkout-<<name>>]
 description = "Clone or update <<name>> in /srv/<<name>>"
+check = "test -d /srv/<<name>>/.git && git -C /srv/<<name>> fetch --quiet origin && test \"$(git -C /srv/<<name>> rev-parse HEAD)\" = \"$(git -C /srv/<<name>> rev-parse origin/main)\""
+verify = "git -C /srv/<<name>> rev-parse --verify HEAD"
 cmd = "if [ -d /srv/<<name>>/.git ]; then git -C /srv/<<name>> fetch --quiet origin && git -C /srv/<<name>> reset --hard origin/main; else git clone <<repo>> /srv/<<name>>; fi"
 rerun = "safe"
 '''
@@ -578,7 +624,9 @@ note = "The archive is copied to /tmp first, as copies run as the login user, th
 answer = '''
 [tasks.deploy-<<app>>]
 description = "Upload and unpack the <<app>> release"
-cmd = "mkdir -p /opt/<<app>> && tar -xzf /tmp/<<app>>.tar.gz -C /opt/<<app>> && rm /tmp/<<app>>.tar.gz"
+check = "test -d /opt/<<app>> && cmp -s /tmp/<<app>>.tar.gz /opt/<<app>>/.release.tar.gz"
+cmd = "mkdir -p /opt/<<app>> && tar -xzf /tmp/<<app>>.tar.gz -C /opt/<<app>> && mv /tmp/<<app>>.tar.gz /opt/<<app>>/.release.tar.gz"
+verify = "test -n \"$(ls -A /opt/<<app>>)\""
 sudo = true
 timeout = "15m"
 rerun = "safe"
@@ -601,7 +649,9 @@ note = "The content is a template, so {{.Name}} and {{.Hostname}} are filled in 
 answer = '''
 [tasks.<<app>>-config]
 description = "Write the <<app>> config for this server"
+check = "test -f /etc/<<app>>/<<app>>.conf"
 cmd = "install -d /etc/<<app>> && install -m 644 /tmp/<<app>>.conf /etc/<<app>>/<<app>>.conf"
+verify = "grep -q '^node_name = ' /etc/<<app>>/<<app>>.conf"
 check_copies = true
 sudo = true
 rerun = "safe"
@@ -620,12 +670,31 @@ request = [
   "Add a <<size>> swap file",
   "create swap space of <<size>>",
 ]
-note = "This creates /swapfile once, turns it on and adds it to /etc/fstab, and the check skips it when swap is already on."
+note = "Three small steps: swapfile-create makes /swapfile once, swapfile-on turns it on, and swapfile keeps it on after a reboot through /etc/fstab. Each check skips its step when it is done."
 answer = '''
-[tasks.swapfile]
-description = "Add a <<size>> swap file"
+[tasks.swapfile-create]
+description = "Create a <<size>> swap file"
+check = "test -f /swapfile"
+cmd = "fallocate -l <<size>> /swapfile && chmod 600 /swapfile && mkswap /swapfile"
+verify = "test -f /swapfile"
+sudo = true
+rerun = "safe"
+
+[tasks.swapfile-on]
+description = "Turn the swap file on"
+depends_on = ["swapfile-create"]
 check = "swapon --show=NAME --noheadings | grep -qx /swapfile"
-cmd = "fallocate -l <<size>> /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile && (grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab)"
+cmd = "swapon /swapfile"
+verify = "swapon --show=NAME --noheadings | grep -qx /swapfile"
+sudo = true
+rerun = "safe"
+
+[tasks.swapfile]
+description = "Keep the swap file on after a reboot"
+depends_on = ["swapfile-on"]
+check = "grep -q '^/swapfile ' /etc/fstab"
+cmd = "echo '/swapfile none swap sw 0 0' >> /etc/fstab"
+verify = "grep -q '^/swapfile ' /etc/fstab"
 sudo = true
 rerun = "safe"
 '''
@@ -646,6 +715,7 @@ answer = '''
 description = "Set the hostname to the server's name"
 check = "test \"$(hostname)\" = \"{{.Name}}\""
 cmd = "hostnamectl set-hostname {{.Name}}"
+verify = "test \"$(hostname)\" = \"{{.Name}}\""
 sudo = true
 rerun = "safe"
 '''
@@ -657,11 +727,13 @@ request = [
   "a local task that runs go build",
   "compile the project locally",
 ]
-note = "local = true runs it on a local server, one with no ssh settings, so add one such as [servers.hosts.localhost] if the Gorunfile has none."
+note = "local = true runs it on a local server, one with no ssh settings, so add one such as [servers.hosts.localhost] if the Gorunfile has none. It builds every run, so its check never passes."
 answer = '''
 [tasks.build]
 description = "Build the binary on this machine"
+check = "false"
 cmd = "CGO_ENABLED=0 go build -o dist/app ./cmd/app"
+verify = "test -x dist/app"
 local = true
 '''
 
@@ -671,11 +743,13 @@ request = [
   "Run the tests locally",
   "a task that runs <<cmd>> on my laptop",
 ]
-note = "local = true makes it run on this machine rather than over SSH."
+note = "local = true makes it run on this machine rather than over SSH. The tests run every time, so its check never passes, and cmd failing fails the task."
 answer = '''
 [tasks.tests]
 description = "Run the tests"
+check = "false"
 cmd = "<<cmd>>"
+verify = "true"
 timeout = "20m"
 local = true
 '''
@@ -693,11 +767,13 @@ request = [
   "check the app is healthy at <<url>>",
   "fail the run if <<url>> doesn't respond",
 ]
-note = "curl -f fails on an error status, and the retries give the service a little time to come up."
+note = "The check skips the task when <<url>> answers already; otherwise it waits and verify asks again, with curl -f failing on an error status, and the retries give the service a little time to come up."
 answer = '''
 [tasks.healthcheck]
 description = "Check <<url>> answers"
-cmd = "curl -fsS --max-time 5 <<url>>"
+check = "curl -fsS --max-time 5 <<url>> >/dev/null"
+cmd = "sleep 3"
+verify = "curl -fsS --max-time 5 <<url>>"
 retries = 5
 retry_delay = "3s"
 rerun = "safe"
@@ -717,7 +793,9 @@ note = "These run in order through depends_on: each one waits for the one before
 answer = '''
 [tasks.upload-release]
 description = "Upload the release"
-cmd = "mkdir -p /opt/app && tar -xzf /tmp/app.tar.gz -C /opt/app"
+check = "cmp -s /tmp/app.tar.gz /opt/app/.release.tar.gz"
+cmd = "mkdir -p /opt/app && tar -xzf /tmp/app.tar.gz -C /opt/app && cp /tmp/app.tar.gz /opt/app/.release.tar.gz"
+verify = "test -x /opt/app/bin/app"
 sudo = true
 rerun = "safe"
 [[tasks.upload-release.copy]]
@@ -726,13 +804,16 @@ dst = "/tmp/app.tar.gz"
 
 [tasks.migrate-db]
 description = "Apply database migrations"
+check = "/opt/app/bin/app migrate --status | grep -q 'up to date'"
 cmd = "/opt/app/bin/app migrate"
+verify = "/opt/app/bin/app migrate --status | grep -q 'up to date'"
 depends_on = ["upload-release"]
 timeout = "20m"
 rerun = "unsafe"
 
 [tasks.restart-app-service]
 description = "Restart the app"
+check = "false"
 cmd = "systemctl restart app"
 verify = "systemctl is-active app"
 depends_on = ["migrate-db"]
@@ -750,7 +831,9 @@ note = "This installs a logrotate rule; logrotate runs it daily on its own."
 answer = '''
 [tasks.logrotate-<<app>>]
 description = "Rotate <<app>>'s logs daily"
+check = "test -f /etc/logrotate.d/<<app>>"
 cmd = "mv /tmp/logrotate-<<app>> /etc/logrotate.d/<<app>> && chmod 644 /etc/logrotate.d/<<app>>"
+verify = "logrotate -d /etc/logrotate.d/<<app>> >/dev/null 2>&1"
 check_copies = true
 sudo = true
 rerun = "safe"
@@ -773,7 +856,9 @@ note = "find only removes files older than <<days>> days, so it is safe to run a
 answer = '''
 [tasks.clean-tmp]
 description = "Delete files in /tmp older than <<days>> days"
+check = "test -z \"$(find /tmp -xdev -type f -mtime +<<days>> -print -quit)\""
 cmd = "find /tmp -xdev -type f -mtime +<<days>> -delete"
+verify = "test -z \"$(find /tmp -xdev -type f -mtime +<<days>> -print -quit)\""
 sudo = true
 rerun = "safe"
 '''
@@ -788,12 +873,22 @@ request = [
   "Get a Let's Encrypt certificate for <<domain>>",
   "set up TLS for <<domain>> with certbot",
 ]
-note = "certbot's nginx plugin gets the certificate and sets up renewal; the check skips it once the certificate exists. Change the email."
+note = "Two small steps: certbot installs certbot's nginx plugin, then tls-<<name>> gets the certificate and sets up renewal; the check skips it once the certificate exists. Change the email."
 answer = '''
+[tasks.certbot]
+description = "Install certbot with its nginx plugin"
+check = "dpkg -s python3-certbot-nginx >/dev/null 2>&1"
+cmd = "apt-get update && apt-get install -y certbot python3-certbot-nginx"
+verify = "certbot --version"
+sudo = true
+rerun = "safe"
+
 [tasks.tls-<<name>>]
 description = "Get a Let's Encrypt certificate for <<domain>>"
+depends_on = ["certbot"]
 check = "test -f /etc/letsencrypt/live/<<domain>>/fullchain.pem"
-cmd = "apt-get install -y certbot python3-certbot-nginx && certbot --nginx -d <<domain>> --non-interactive --agree-tos -m admin@<<domain>>"
+cmd = "certbot --nginx -d <<domain>> --non-interactive --agree-tos -m admin@<<domain>>"
+verify = "test -f /etc/letsencrypt/live/<<domain>>/fullchain.pem"
 sudo = true
 timeout = "10m"
 rerun = "safe"
@@ -810,11 +905,13 @@ id = "check-only-report"
 request = [
   "Report the kernel version and fail if it's older than <<ver>>",
 ]
-note = "sort -V compares versions, so the task fails on servers running a kernel older than <<ver>>."
+note = "sort -V compares versions: the check skips the task on servers running <<ver>> or newer, and on the others the task fails and prints the kernel."
 answer = '''
 [tasks.kernel-version]
 description = "Fail when the kernel is older than <<ver>>"
-cmd = "k=$(uname -r | cut -d- -f1); echo \"kernel $k\"; test \"$(printf '%s\\n' <<ver>> \"$k\" | sort -V | head -1)\" = <<ver>>"
+check = "test \"$(printf '%s\\n' <<ver>> \"$(uname -r | cut -d- -f1)\" | sort -V | head -1)\" = <<ver>>"
+cmd = "echo \"kernel $(uname -r) is older than <<ver>>\"; exit 1"
+verify = "test \"$(printf '%s\\n' <<ver>> \"$(uname -r | cut -d- -f1)\" | sort -V | head -1)\" = <<ver>>"
 rerun = "safe"
 '''
 [[task.params]]
@@ -828,7 +925,7 @@ request = [
   "Write a task with a multi-line script that backs up /etc to /var/backups",
   "archive /etc each run, keeping the last 5 archives",
 ]
-note = "A multi-line script goes in a ''' string; set -e stops it at the first failing line."
+note = "A multi-line script goes in a ''' string; set -e stops it at the first failing line. It archives every run, so its check never passes."
 answer = """
 [tasks.backup-etc]
 description = "Archive /etc, keeping the newest 5"
@@ -838,6 +935,8 @@ mkdir -p /var/backups/etc
 tar -czf /var/backups/etc/etc-$(date +%Y%m%d-%H%M%S).tar.gz -C / etc
 ls -1t /var/backups/etc/*.tar.gz | tail -n +6 | xargs -r rm --
 '''
+check = "false"
+verify = "ls /var/backups/etc/*.tar.gz >/dev/null"
 sudo = true
 rerun = "safe"
 """

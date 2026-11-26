@@ -341,6 +341,11 @@ or on its card on the Live page, starts the chat on that run instead.
 The assistant writes `local = true` on tasks meant for this machine, and on every task when the
 Gorunfile has no server that runs over SSH.
 
+It writes small tasks, one step each, chained with `depends_on`, and every one has a `check`
+(exits 0 when the step is done, so it is skipped) and a `verify` (fails the task when the step
+didn't work). A reply with a task missing either is sent back to the model to fix before it is
+offered.
+
 When a reply holds tasks that load, the chat offers **Save these tasks**, which saves them into
 the Gorunfile straight away, as an edit on the Tasks page does; there is nothing more to save on
 the Config page. A task with unsaved changes on the Config page is left alone until you save or

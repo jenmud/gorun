@@ -65,7 +65,7 @@ func TestChatSendsContextAndAddsTasks(t *testing.T) {
 	a, path := newTestApp(t)
 	t.Cleanup(a.stopScheduler)
 	saveFailedRun(t, a.store)
-	e := &recordingEngine{reply: "Here you go:\n```toml\n[tasks.nginx]\ncmd = \"apt-get install -y nginx\"\ndepends_on = [\"hello\"]\n```"}
+	e := &recordingEngine{reply: "Here you go:\n```toml\n[tasks.nginx]\ncmd = \"apt-get install -y nginx\"\ncheck = \"false\"\nverify = \"true\"\ndepends_on = [\"hello\"]\n```"}
 	a.gen = &generator{assistant: gorun.Assistant{Engine: e}}
 
 	out := postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "why did it fail?"}}})
@@ -112,7 +112,7 @@ func TestChatSendsContextAndAddsTasks(t *testing.T) {
 func TestChatChangesExistingTasks(t *testing.T) {
 	a, path := newTestApp(t)
 	t.Cleanup(a.stopScheduler)
-	e := &recordingEngine{reply: "```toml\n[tasks.hello]\ncmd = \"echo hello\"\ntimeout = \"1m\"\n```"}
+	e := &recordingEngine{reply: "```toml\n[tasks.hello]\ncmd = \"echo hello\"\ncheck = \"false\"\nverify = \"true\"\ntimeout = \"1m\"\n```"}
 	a.gen = &generator{assistant: gorun.Assistant{Engine: e}}
 
 	out := postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "Add a timeout to the hello task"}}})
@@ -294,7 +294,7 @@ func TestChatRepairsTasksThatDontLoad(t *testing.T) {
 	a, _ := newTestApp(t)
 	t.Cleanup(a.stopScheduler)
 	broken := "Here they are:\n```toml\n[tasks.page]\ncmd = '''python3 -c \"print('''hi''')\"'''\n```\nRun page first."
-	fixed := "```toml\n[tasks.page]\ncmd = \"echo hi\"\n```"
+	fixed := "```toml\n[tasks.page]\ncmd = \"echo hi\"\ncheck = \"false\"\nverify = \"true\"\n```"
 	e := &sequenceEngine{replies: []string{broken, fixed}}
 	a.gen = &generator{assistant: gorun.Assistant{Engine: e}}
 

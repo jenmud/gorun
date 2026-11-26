@@ -100,8 +100,8 @@ const TaskFormat = `Task names are short, lowercase, with dashes. Keys a task ma
   description = "one line summary"         # always set this
   cmd = "shell command"                     # required; use '''multi-line''' strings for scripts
   sudo = true                               # runs cmd, check and verify as root; never write sudo in them
-  check = "command"                         # exit 0 means already done, so the task is skipped
-  verify = "command"                        # runs after cmd; non-zero fails the task
+  check = "command"                         # required: exit 0 means already done, so the task is skipped
+  verify = "command"                        # required: runs after cmd; non-zero fails the task
   depends_on = ["other-task"]               # only names of tasks that exist
   timeout = "5m"
   retries = 2
@@ -125,13 +125,27 @@ Keep each cmd to a few lines. Never write a program into cmd with python3 -c, no
 heredoc: put it in a copy table's content and run the file. A '''string''' ends at the next '''
 and a """string""" at the next """, so never put the same three quotes inside one.
 
-Every cmd, check and verify is a real shell command, never a description or a placeholder;
-leave check or verify out when you don't know one. Prefer idempotent commands. Example:
+Keep tasks small: each does one step, such as installing one package, writing one config file
+or starting one service. Split a bigger job into several small tasks, each depending on the step
+before it with depends_on; the last one is the task to run.
 
-[tasks.nginx]
-description = "Install nginx and keep it running"
-check = "dpkg -s nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx"
-cmd = "apt-get install -y nginx && systemctl enable --now nginx"
+Every task has a check and a verify. check exits 0 when the step is done already, so the task is
+skipped; verify exits non-zero when cmd didn't work. Every cmd, check and verify is a real shell
+command, never a description or a placeholder. Prefer idempotent commands. Example:
+
+[tasks.nginx-install]
+description = "Install nginx"
+check = "dpkg -s nginx >/dev/null 2>&1"
+cmd = "apt-get install -y nginx"
+verify = "nginx -v"
+sudo = true
+rerun = "safe"
+
+[tasks.nginx-running]
+description = "Start nginx and start it at boot"
+depends_on = ["nginx-install"]
+check = "systemctl is-active --quiet nginx && systemctl is-enabled --quiet nginx"
+cmd = "systemctl enable --now nginx"
 verify = "systemctl is-active nginx"
 sudo = true
 rerun = "safe"`
@@ -237,8 +251,8 @@ func stripFences(reply string) string {
 
 // ExtractTasks returns the tasks in a model's reply as Gorunfile TOML: the first markdown code
 // block holding a [tasks.<name>] table, else the first block, or else the whole reply. It fails
-// when they don't load, aren't valid, redefine a task in cfg or depend on one that doesn't
-// exist. Files the tasks copy or run aren't looked for, as they may not have been written yet.
+// when they don't load, aren't valid, redefine a task in cfg, depend on one that doesn't
+// exist or lack a check or a verify. Files the tasks copy or run aren't looked for, as they may not have been written yet.
 // A "copy = true" or "copy = false" line, which small models write, is left out. cfg may be nil.
 func ExtractTasks(reply string, cfg *Config) (string, error) {
 	return extractTasks(reply, cfg, false)
@@ -292,6 +306,13 @@ func checkTasks(text string, cfg *Config, replace bool) error {
 			if _, ok := existing[dep]; !ok && !isNew {
 				return fmt.Errorf("task %s depends on %s, which doesn't exist", name, dep)
 			}
+		}
+		// a model's task must say how to tell it is done and that it worked
+		if strings.TrimSpace(task.Check) == "" {
+			return fmt.Errorf("task %s has no check: add check, a command that exits 0 when the step is done already", name)
+		}
+		if strings.TrimSpace(task.Verify) == "" {
+			return fmt.Errorf("task %s has no verify: add verify, a command that exits non-zero when cmd didn't work", name)
 		}
 	}
 	return nil

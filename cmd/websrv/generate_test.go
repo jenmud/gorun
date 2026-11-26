@@ -28,7 +28,7 @@ func TestGenerateQueuesTasks(t *testing.T) {
 		t.Error("the generate form shows without a model")
 	}
 
-	withModel(a, "[tasks.nginx]\ndescription = \"Install nginx\"\ncmd = \"apt-get install -y nginx\"\nsudo = true\ndepends_on = [\"hello\"]\n")
+	withModel(a, "[tasks.nginx]\ndescription = \"Install nginx\"\ncmd = \"apt-get install -y nginx\"\ncheck = \"false\"\nverify = \"true\"\nsudo = true\ndepends_on = [\"hello\"]\n")
 	if !strings.Contains(get(t, a, "/config").Body.String(), "/config/generate") {
 		t.Fatal("the generate form is missing")
 	}

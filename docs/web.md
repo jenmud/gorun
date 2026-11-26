@@ -345,7 +345,10 @@ question sends the Gorunfile and run output to that host, and the page says so i
 
 The model is small: it reads failures well when the output says what went wrong, but its tasks
 often hold placeholders, such as paths and passwords, to fill in. [`training/`](../training) builds
-a version of it fine-tuned on gorun; point `GORUN_LLM_MODEL` at the GGUF file it writes.
+a version of it fine-tuned on gorun, published at
+[jenmud/gorun-qwen3-4b-GGUF](https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF); point
+`GORUN_LLM_MODEL` at the GGUF file or its URL. `make web` and `make web-dev` use it, and
+`make model` downloads it ahead of the first question.
 
 ## Walkthrough: from nothing to a running schedule
 

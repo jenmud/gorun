@@ -35,9 +35,14 @@ title = %q
 
 // storedDir holds the working copies of the stored Gorunfiles, next to the history database, one
 // folder each. Runs, the editor and the schedulers read them as they read any Gorunfile; the
-// database is what lasts.
+// database is what lasts. It is absolute, as the paths LoadFile reports are, so storedNameOf can
+// tell a working copy when the database path is relative.
 func storedDir(dbPath string) string {
-	return filepath.Join(filepath.Dir(dbPath), "gorunfiles")
+	dir := filepath.Join(filepath.Dir(dbPath), "gorunfiles")
+	if abs, err := filepath.Abs(dir); err == nil {
+		return abs
+	}
+	return dir
 }
 
 // openStored writes a working copy of every Gorunfile in st into dir, saving a starter one called

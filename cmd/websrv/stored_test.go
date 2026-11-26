@@ -22,7 +22,12 @@ import (
 // one open.
 func newStoredApp(t *testing.T) (*app, *store.Store) {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "gorun.db")
+	return newStoredAppAt(t, filepath.Join(t.TempDir(), "gorun.db"))
+}
+
+// newStoredAppAt is newStoredApp with its history database at dbPath, set up as run does.
+func newStoredAppAt(t *testing.T, dbPath string) (*app, *store.Store) {
+	t.Helper()
 	st, err := store.Open(dbPath)
 	if err != nil {
 		t.Fatal(err)
@@ -73,6 +78,23 @@ func TestStoredGorunfileKeepsEachSave(t *testing.T) {
 	}
 	if data, _ := os.ReadFile(a.cfgPath); string(data) != content {
 		t.Errorf("working copy after a restart = %q, want the stored one", data)
+	}
+}
+
+// A relative GORUN_DB_PATH, such as gorun.db, still keeps the saves: the open Gorunfile's path is
+// absolute, so the folder of working copies must be too.
+func TestStoredGorunfileKeepsSavesWithARelativeDBPath(t *testing.T) {
+	t.Chdir(t.TempDir())
+	a, st := newStoredAppAt(t, "gorun.db")
+	if got := a.currentStored(); got != store.DefaultGorunfile {
+		t.Fatalf("open = %q, want the default one", got)
+	}
+	add := gorun.Change{Kind: kindTask, Name: "hello", File: a.cfgPath, Body: map[string]any{"cmd": "echo hi", "local": true}}
+	if err := a.saveDirect(a.cfgPath, []gorun.Change{add}); err != nil {
+		t.Fatal(err)
+	}
+	if content, _, err := st.Gorunfile(context.Background(), store.DefaultGorunfile); err != nil || !strings.Contains(content, "[tasks.hello]") {
+		t.Fatalf("stored Gorunfile = %q, %v; want the new task", content, err)
 	}
 }
 

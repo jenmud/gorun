@@ -71,9 +71,18 @@ GORUN_EVAL_MODEL=$PWD/training/out/gorun-qwen3-4b-q4_k_m.gguf GORUN_EVAL_N=120 g
 
 The evaluation asks the model each held-out example through gorun's own engine, the way
 `gorun -serve` does, and scores the reply. Where the example wants tasks, they must load
-(`ExtractTasks`). Every word listed for the example must also appear, such as the failed task
+(`ExtractTasks`, or `ExtractTaskEdits` where the example changes a task). Every word listed for the example must also appear, such as the failed task
 and a word of the error. It prints a score per kind and writes the replies to
 `out/eval-<model>.jsonl`.
+
+To build on the last model rather than start from the base, keep its adapter and continue it at
+a lower learning rate; v4 was v3's adapter trained one more epoch at 1e-4. Score the old model on
+the new held-out set too, so the two are compared on the same questions:
+
+```bash
+HF_HOME=$PWD/.hf HF_HUB_OFFLINE=1 .venv/bin/python train.py --from-adapter out/v3-adapter --out out/adapter-v4 --lr 1e-4
+HF_HOME=$PWD/.hf HF_HUB_OFFLINE=1 .venv/bin/python export.py --adapter out/adapter-v4 --name gorun-qwen3-4b-v4
+```
 
 `.venv/`, `.hf/`, `.llama.cpp/`, `data/` and `out/` are ignored by git.
 
@@ -100,14 +109,14 @@ A 👎 answer, or one whose tasks failed, is worth more as a new seed: write the
 
 ## Publishing
 
-Upload each build under a new file name, such as `gorun-qwen3-4b-v3-q4_k_m.gguf`: gorun keeps a
+Upload each build under a new file name, such as `gorun-qwen3-4b-v5-q4_k_m.gguf`: gorun keeps a
 downloaded model by its file name and never downloads one it has, so a build uploaded over the old
 name would never reach machines that have the old one. Then point `DefaultModel` at the new URL
 with its SHA-256, and `DEFAULT_MODEL` in the Makefile at the same URL:
 
 ```bash
-cp out/gorun-qwen3-4b-q4_k_m.gguf out/hf/gorun-qwen3-4b-v3-q4_k_m.gguf
-sha256sum out/hf/gorun-qwen3-4b-v3-q4_k_m.gguf
-HF_HOME=$PWD/.hf .venv/bin/hf upload jenmud/gorun-qwen3-4b-GGUF out/hf/gorun-qwen3-4b-v3-q4_k_m.gguf
+cp out/gorun-qwen3-4b-q4_k_m.gguf out/hf/gorun-qwen3-4b-v5-q4_k_m.gguf
+sha256sum out/hf/gorun-qwen3-4b-v5-q4_k_m.gguf
+HF_HOME=$PWD/.hf .venv/bin/hf upload jenmud/gorun-qwen3-4b-GGUF out/hf/gorun-qwen3-4b-v5-q4_k_m.gguf
 HF_HOME=$PWD/.hf .venv/bin/hf upload jenmud/gorun-qwen3-4b-GGUF out/hf/README.md
 ```

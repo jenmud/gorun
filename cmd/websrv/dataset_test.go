@@ -152,6 +152,7 @@ func TestBuildDataset(t *testing.T) {
 		if sc.cfg != nil {
 			b.gorunfileExamples(sc)
 			b.scheduleExamples(sc)
+			b.taskEditExamples(sc)
 		}
 	}
 	for _, sc := range b.scenarios {
@@ -578,6 +579,27 @@ func (b *builder) gorunfileExamples(sc *dsScenario) {
 			a = fmt.Sprintf("%s depend%s on %s, so if %s fails they are skipped.", list(users), map[bool]string{true: "s", false: ""}[len(users) == 1], name, name)
 		}
 		ask("users/"+name, one(b.rng, []string{"What depends on " + name + "?", "Which tasks need " + name + "?"}), a, append([]string{name}, users...))
+	}
+
+	// which servers run a task: each server's own list counts, not only its groups'
+	for _, name := range names[:min(len(names), 8)] {
+		var on []string
+		for _, s := range servers {
+			if slices.Contains(taskNamesOf(s), name) {
+				on = append(on, s.Name)
+			}
+		}
+		a := fmt.Sprintf("No server runs %s: it isn't in any server's task list, nor pulled in by one. Run it with gorun Gorunfile -r -task %s, or add it to a server's tasks.", name, name)
+		want := []string{name}
+		switch {
+		case len(on) == len(servers) && len(on) > 1:
+			a = fmt.Sprintf("Every server runs %s: %s.", name, list(on))
+			want = append(want, on[0])
+		case len(on) > 0:
+			a = fmt.Sprintf("%s runs on %s.", name, list(on))
+			want = append(want, on...)
+		}
+		ask("on/"+name, one(b.rng, []string{"Which servers run " + name + "?", "Where does " + name + " run?", "what servers is " + name + " on?"}), a, want[:min(len(want), 4)])
 	}
 
 	for _, g := range slices.Sorted(maps.Keys(cfg.Groups)) {
@@ -1134,7 +1156,12 @@ func score(ex dsExample, reply string, cfg *gorun.Config) (bool, string) {
 		if ex.Kind == "chat-gen" && !strings.Contains(reply, "```") {
 			return false, "no code block"
 		}
-		text, err := gorun.ExtractTasks(reply, cfg)
+		extract := gorun.ExtractTasks
+		if ex.Kind == "chat-edit" {
+			// an edit replaces a task, as the chat's Save does
+			extract = gorun.ExtractTaskEdits
+		}
+		text, err := extract(reply, cfg)
 		if err != nil {
 			return false, err.Error()
 		}
@@ -1149,6 +1176,19 @@ func score(ex dsExample, reply string, cfg *gorun.Config) (bool, string) {
 		}
 	}
 	low := strings.ToLower(reply)
+	if ex.Kind == "chat-edit" {
+		// the wanted keys are as Marshal writes them, so "5m" counts as "5m0s"
+		got := decodeTasks(reply)
+		for name, t := range got {
+			t.Name = name
+			got[name] = t
+		}
+		data, err := (&gorun.Config{Tasks: got}).Marshal()
+		if err != nil {
+			return false, err.Error()
+		}
+		low = strings.ToLower(string(data))
+	}
 	for _, w := range ex.Want {
 		if !strings.Contains(low, strings.ToLower(w)) {
 			return false, "missing " + w
@@ -1394,3 +1434,95 @@ func stripBlock(s string) string {
 	}
 	return s
 }
+
+// taskEditExamples ask for a change to a task the Gorunfile has: a timeout, retries, a
+// dependency or sudo. The answer is the whole task again, as the chat shows it to the model, with
+// only that changed.
+func (b *builder) taskEditExamples(sc *dsScenario) {
+	cfg := sc.cfg
+	b.clearRuns(sc)
+	names := slices.Sorted(maps.Keys(cfg.Tasks))
+	b.rng.Shuffle(len(names), func(i, j int) { names[i], names[j] = names[j], names[i] })
+	for i, name := range append(names[:min(len(names), 16)], names[:min(len(names), 16)]...) {
+		t := cfg.Tasks[name]
+		var q, note string
+		var want []string
+		switch (i + b.rng.IntN(4)) % 4 {
+		case 0:
+			mins := one(b.rng, []int{5, 10, 20, 30, 45, 60, 90})
+			if t.Timeout == time.Duration(mins)*time.Minute {
+				continue
+			}
+			t.Timeout = time.Duration(mins) * time.Minute
+			q = fmt.Sprintf(one(b.rng, []string{"Add a timeout of %d minutes to %s", "Give %[2]s a %[1]d minute timeout", "%[2]s should give up after %[1]d minutes", "set the timeout on %[2]s to %[1]d minutes"}), mins, name)
+			note = fmt.Sprintf("This sets timeout = \"%dm\" on %s; the rest stays as it was.", mins, name)
+			want = []string{fmt.Sprintf("timeout = \"%s", durationText(t.Timeout))}
+		case 1:
+			n := one(b.rng, []int{2, 3, 5})
+			delay := one(b.rng, []time.Duration{10 * time.Second, 30 * time.Second, time.Minute})
+			if t.Retries == n {
+				continue
+			}
+			t.Retries, t.RetryDelay = n, &delay
+			q = fmt.Sprintf(one(b.rng, []string{"Retry %s %d times, %s apart", "make %[1]s retry %[2]d times with %[3]s between tries", "%[1]s fails now and then; let it try %[2]d more times, waiting %[3]s"}), name, n, durationText(delay))
+			note = fmt.Sprintf("This gives %s retries = %d with retry_delay = \"%s\"; the rest stays as it was.", name, n, durationText(delay))
+			want = []string{fmt.Sprintf("retries = %d", n)}
+		case 2:
+			var cands []string
+			for _, other := range slices.Sorted(maps.Keys(cfg.Tasks)) {
+				if other != name && !slices.Contains(t.DependsOn, other) && !dependsOn(cfg, other, name) {
+					cands = append(cands, other)
+				}
+			}
+			if len(cands) == 0 {
+				continue
+			}
+			dep := one(b.rng, cands)
+			t.DependsOn = append(slices.Clone(t.DependsOn), dep)
+			q = fmt.Sprintf(one(b.rng, []string{"Make %s run after %s", "%[1]s should wait for %[2]s", "%[1]s needs %[2]s to have run first"}), name, dep)
+			note = fmt.Sprintf("This adds %s to %s's depends_on, so it runs after it and is skipped when it fails; the rest stays as it was.", dep, name)
+			want = []string{dep}
+		default:
+			if t.Sudo {
+				continue
+			}
+			t.Sudo = true
+			q = fmt.Sprintf(one(b.rng, []string{"%s needs root", "run %s with sudo", "%[1]s fails with permission denied, make it run as root"}), name)
+			note = fmt.Sprintf("This sets sudo = true on %s, so gorun runs it as root with sudo -n; the rest stays as it was.", name)
+			want = []string{"sudo = true"}
+		}
+		data, err := (&gorun.Config{Tasks: map[string]gorun.Task{name: t}}).Marshal()
+		if err != nil {
+			b.t.Fatalf("edit %s: %v", name, err)
+		}
+		answer := strings.TrimSpace(string(data))
+		if _, err := gorun.ExtractTaskEdits(answer, cfg); err != nil {
+			continue
+		}
+		id := fmt.Sprintf("edit/%s/%s", sc.name, name)
+		b.add(dsExample{ID: id, Kind: "chat-edit", Scenario: sc.name, Tasks: true, Want: append([]string{name}, want...),
+			Messages: b.chat(sc, b.withPrefix(q), "", chatTasks(note, answer))}, id+q)
+	}
+}
+
+// dependsOn reports whether task a depends on b, directly or through others.
+func dependsOn(cfg *gorun.Config, a, b string) bool {
+	seen := map[string]bool{}
+	var walk func(string) bool
+	walk = func(n string) bool {
+		if seen[n] {
+			return false
+		}
+		seen[n] = true
+		for _, d := range cfg.Tasks[n].DependsOn {
+			if d == b || walk(d) {
+				return true
+			}
+		}
+		return false
+	}
+	return walk(a)
+}
+
+// durationText is a duration as Marshal writes it, such as 30m0s.
+func durationText(d time.Duration) string { return d.String() }

@@ -56,7 +56,7 @@ def first_use():
         "gorun is serving on http://localhost:8080 (listening on :8080, all interfaces)",
         "Press ctrl+c to stop.",
         "downloading llama-b12359-bin-ubuntu-vulkan-x64.tar.gz  36 MB",
-        "downloading gorun-qwen3-4b-v3-q4_k_m.gguf  2.5 GB",
+        "downloading gorun-qwen3-4b-v4-q4_k_m.gguf  2.5 GB",
         "  kept in ~/.cache/gorun/llm",
     ]
     return shell([("cmd", "gorun -serve Gorunfile")] + [("out", ln) for ln in lines], "bash")

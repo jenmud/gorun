@@ -1262,3 +1262,620 @@ name = "free-memory"
 desc = "Show the free memory"
 cmd = "free -h"
 verify = "free | grep -q Mem:"
+
+# --- Production servers and dev machines (training round 4: a production fleet, and
+# github.com/jenmud/mud-setup)
+
+[[task]]
+id = "docker-apt-repo"
+request = [
+  "Install Docker from Docker's apt repository",
+  "set up docker-ce from the official Docker apt repo, not get.docker.com",
+  "Install Docker Engine with the compose plugin from download.docker.com",
+]
+note = "These are two small steps: docker-repo adds Docker's signed apt repository, then docker-engine installs Docker Engine with the buildx and compose plugins and starts it."
+answer = '''
+[tasks.docker-repo]
+description = "Add Docker's apt repository"
+check = "test -f /etc/apt/sources.list.d/docker.list && test -f /etc/apt/keyrings/docker.asc"
+cmd = """
+set -e
+. /etc/os-release
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${UBUNTU_CODENAME:-$VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list
+"""
+verify = "test -s /etc/apt/sources.list.d/docker.list"
+sudo = true
+rerun = "safe"
+
+[tasks.docker-engine]
+description = "Install Docker Engine and start it"
+depends_on = ["docker-repo"]
+check = "dpkg -s docker-ce docker-compose-plugin >/dev/null 2>&1 && systemctl is-active --quiet docker"
+cmd = "apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && systemctl enable --now docker"
+verify = "systemctl is-active docker && docker compose version >/dev/null"
+envvars = { DEBIAN_FRONTEND = "noninteractive" }
+sudo = true
+retries = 2
+timeout = "15m"
+rerun = "safe"
+'''
+
+[[task]]
+id = "dir-backup-retention"
+request = [
+  "Back up <<dir>> to /var/backups/<<name>>-DATE.tar.gz and keep <<days>> days",
+  "write a task that archives <<dir>> into /var/backups with the date in the name, deleting ones older than <<days>> days",
+  "nightly tarball of <<dir>>, keep the last <<days>> days",
+]
+note = "This archives <<dir>> into /var/backups with today's date, then deletes archives older than <<days>> days. Its check skips it when today's archive is there; its verify makes sure the archive isn't empty."
+answer = '''
+[tasks.backup-<<name>>]
+description = "Archive <<dir>> into /var/backups, keep <<days>> days"
+check = "test -s /var/backups/<<name>>-$(date +%F).tar.gz"
+cmd = "install -d -m 700 /var/backups && tar -czf /var/backups/<<name>>-$(date +%F).tar.gz <<dir>> && find /var/backups -name '<<name>>-*.tar.gz' -mtime +<<days>> -delete"
+verify = "tar -tzf /var/backups/<<name>>-$(date +%F).tar.gz >/dev/null"
+sudo = true
+timeout = "30m"
+rerun = "safe"
+'''
+[[task.params]]
+dir = "/etc"
+name = "etc"
+days = "7"
+[[task.params]]
+dir = "/srv/app/uploads"
+name = "uploads"
+days = "14"
+[[task.params]]
+dir = "/var/lib/grafana"
+name = "grafana"
+days = "30"
+
+[[task]]
+id = "go-tarball"
+request = [
+  "Install Go <<ver>> into /usr/local/go",
+  "write a task that installs go <<ver>> from the go.dev tarball",
+  "upgrade Go to <<ver>> on the build servers",
+]
+note = "This downloads the Go <<ver>> tarball from go.dev and replaces /usr/local/go with it. Its check skips it when that version is already there."
+answer = '''
+[tasks.golang]
+description = "Install Go <<ver>> into /usr/local/go"
+check = "/usr/local/go/bin/go version 2>/dev/null | grep -q 'go<<ver>> '"
+cmd = "curl -fsSL https://go.dev/dl/go<<ver>>.linux-amd64.tar.gz -o /tmp/go.tar.gz && rm -rf /usr/local/go && tar -C /usr/local -xzf /tmp/go.tar.gz && rm /tmp/go.tar.gz"
+verify = "/usr/local/go/bin/go version | grep -q 'go<<ver>> '"
+sudo = true
+retries = 2
+timeout = "10m"
+rerun = "safe"
+'''
+[[task.params]]
+ver = "1.23.4"
+[[task.params]]
+ver = "1.24.1"
+[[task.params]]
+ver = "1.25.3"
+
+[[task]]
+id = "uv-for-user"
+request = [
+  "Install the uv Python manager for the <<user>> user",
+  "set up uv in <<user>>'s home directory",
+]
+note = "This runs Astral's installer as <<user>>, so uv lands in /home/<<user>>/.local/bin. Its check skips it when uv is there already."
+answer = '''
+[tasks.uv-<<user>>]
+description = "Install uv for <<user>>"
+check = "test -x /home/<<user>>/.local/bin/uv"
+cmd = "sudo -u <<user>> -H sh -c 'curl -LsSf https://astral.sh/uv/install.sh | UV_NO_MODIFY_PATH=1 sh'"
+verify = "sudo -u <<user>> -H /home/<<user>>/.local/bin/uv --version"
+sudo = true
+retries = 2
+rerun = "safe"
+'''
+[[task.params]]
+user = "deploy"
+[[task.params]]
+user = "app"
+
+[[task]]
+id = "sshd-dropin"
+request = [
+  "Write a task that <<what>>",
+  "<<what>> on every server",
+  "harden ssh: <<what>>",
+]
+note = "This installs a drop-in in /etc/ssh/sshd_config.d, checks the config with sshd -t before reloading, and verifies sshd now reports <<setting>>."
+answer = '''
+[tasks.sshd-<<name>>]
+description = "SSH: <<what>>"
+check = "sshd -T | grep -qix '<<setting>>'"
+cmd = "install -m 644 /tmp/60-<<name>>.conf /etc/ssh/sshd_config.d/60-<<name>>.conf && sshd -t && systemctl reload ssh"
+verify = "sshd -T | grep -qix '<<setting>>'"
+check_copies = true
+sudo = true
+rerun = "safe"
+[[tasks.sshd-<<name>>.copy]]
+content = "<<line>>\n"
+dst = "/tmp/60-<<name>>.conf"
+'''
+[[task.params]]
+what = "disables root login over SSH"
+name = "no-root"
+line = "PermitRootLogin no"
+setting = "permitrootlogin no"
+[[task.params]]
+what = "turns off password logins over SSH"
+name = "no-passwords"
+line = "PasswordAuthentication no"
+setting = "passwordauthentication no"
+[[task.params]]
+what = "limits SSH to 3 auth tries"
+name = "max-tries"
+line = "MaxAuthTries 3"
+setting = "maxauthtries 3"
+
+[[task]]
+id = "github-release-exporter"
+request = [
+  "Install <<name>> <<ver>> from its GitHub release and run it with systemd",
+  "write tasks that download <<name>> v<<ver>> and run it as a service",
+]
+note = "These are three small steps: <<name>>-install downloads the release binary, <<name>>-unit installs a systemd unit, and <<name>> starts it and checks it answers on port <<port>>."
+answer = '''
+[tasks.<<name>>-install]
+description = "Install <<name>> <<ver>>"
+check = "/usr/local/bin/<<name>> --version 2>&1 | grep -q '<<ver>>'"
+cmd = "cd /tmp && curl -fsSLO https://github.com/prometheus/<<name>>/releases/download/v<<ver>>/<<name>>-<<ver>>.linux-amd64.tar.gz && tar -xzf <<name>>-<<ver>>.linux-amd64.tar.gz && install -m 755 <<name>>-<<ver>>.linux-amd64/<<name>> /usr/local/bin/<<name>>"
+verify = "/usr/local/bin/<<name>> --version 2>&1 | grep -q '<<ver>>'"
+sudo = true
+retries = 2
+rerun = "safe"
+
+[tasks.<<name>>-unit]
+description = "Install the <<name>> systemd unit"
+depends_on = ["<<name>>-install"]
+check = "systemctl cat <<name>> >/dev/null 2>&1"
+cmd = "id <<name>> >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin <<name>>; install -m 644 /tmp/<<name>>.service /etc/systemd/system/<<name>>.service && systemctl daemon-reload"
+verify = "systemctl cat <<name>> >/dev/null"
+check_copies = true
+sudo = true
+rerun = "safe"
+[[tasks.<<name>>-unit.copy]]
+content = "[Unit]\nDescription=<<name>>\nAfter=network-online.target\n\n[Service]\nUser=<<name>>\nExecStart=/usr/local/bin/<<name>>\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n"
+dst = "/tmp/<<name>>.service"
+
+[tasks.<<name>>]
+description = "Run <<name>> and keep it running"
+depends_on = ["<<name>>-unit"]
+check = "systemctl is-active --quiet <<name>> && systemctl is-enabled --quiet <<name>>"
+cmd = "systemctl enable --now <<name>> && systemctl restart <<name>>"
+verify = "curl -fsS http://127.0.0.1:<<port>>/metrics >/dev/null"
+sudo = true
+retries = 2
+retry_delay = "5s"
+rerun = "safe"
+'''
+[[task.params]]
+name = "node_exporter"
+ver = "1.8.2"
+port = "9100"
+[[task.params]]
+name = "blackbox_exporter"
+ver = "0.25.0"
+port = "9115"
+
+[[task]]
+id = "restart-on-crash"
+request = [
+  "Make sure the <<svc>> service restarts if it crashes",
+  "<<svc>> keeps dying; have systemd restart it automatically",
+  "set Restart=always on <<svc>>",
+]
+note = "This adds a systemd drop-in that sets Restart=always for <<svc>>, reloads systemd, and verifies systemd now reports it."
+answer = '''
+[tasks.<<svc>>-restart-policy]
+description = "Restart <<svc>> when it crashes"
+check = "systemctl show -p Restart --value <<svc>> | grep -qx always"
+cmd = "install -d /etc/systemd/system/<<svc>>.service.d && install -m 644 /tmp/<<svc>>-restart.conf /etc/systemd/system/<<svc>>.service.d/restart.conf && systemctl daemon-reload"
+verify = "systemctl show -p Restart --value <<svc>> | grep -qx always"
+check_copies = true
+sudo = true
+rerun = "safe"
+[[tasks.<<svc>>-restart-policy.copy]]
+content = "[Service]\nRestart=always\nRestartSec=5\n"
+dst = "/tmp/<<svc>>-restart.conf"
+'''
+[[task.params]]
+svc = "payments"
+[[task.params]]
+svc = "worker"
+[[task.params]]
+svc = "nginx"
+
+[[task]]
+id = "github-release-binary"
+request = [
+  "Install <<bin>> from its latest GitHub release",
+  "download the newest <<bin>> release from github into /usr/local/bin",
+]
+note = "This asks the GitHub API for the latest <<repo>> release, downloads the asset matching <<asset>>, and installs <<bin>> into /usr/local/bin. Its check skips it when <<bin>> is installed."
+answer = '''
+[tasks.<<bin>>]
+description = "Install <<bin>> from its latest GitHub release"
+check = "command -v <<bin>> >/dev/null"
+cmd = """
+set -e
+url=$(curl -fsSL https://api.github.com/repos/<<repo>>/releases/latest | jq -r '[.assets[] | select(.name | test("<<asset>>"))][0].browser_download_url')
+tmp=$(mktemp -d)
+curl -fsSL "$url" -o "$tmp/asset"
+case "$url" in *.tar.gz) tar -C "$tmp" -xzf "$tmp/asset" ;; *) mv "$tmp/asset" "$tmp/<<bin>>" ;; esac
+install -m 755 "$(find "$tmp" -type f -name <<bin>> | head -n1)" /usr/local/bin/<<bin>>
+rm -rf "$tmp"
+"""
+verify = "<<bin>> --version"
+sudo = true
+retries = 2
+rerun = "safe"
+'''
+[[task.params]]
+bin = "jj"
+repo = "jj-vcs/jj"
+asset = "x86_64-unknown-linux-musl.tar.gz$"
+[[task.params]]
+bin = "yq"
+repo = "mikefarah/yq"
+asset = "yq_linux_amd64$"
+[[task.params]]
+bin = "lazygit"
+repo = "jesseduffield/lazygit"
+asset = "Linux_x86_64.tar.gz$"
+
+[[task]]
+id = "go-install-tools"
+request = [
+  "go install gopls, dlv and staticcheck on this machine",
+  "install the Go dev tools with go install",
+]
+note = "This go installs each module in GO_TOOLS into ~/go/bin on this machine; its check skips it when every binary in GO_BINS is there."
+answer = '''
+[tasks.go-tools]
+description = "go install the Go dev tools"
+local = true
+envvars = { GO_TOOLS = "golang.org/x/tools/gopls@latest github.com/go-delve/delve/cmd/dlv@latest honnef.co/go/tools/cmd/staticcheck@latest", GO_BINS = "gopls dlv staticcheck" }
+check = 'for b in $GO_BINS; do [ -x ~/go/bin/$b ] || exit 1; done'
+cmd = 'for mod in $GO_TOOLS; do go install "$mod"; done'
+verify = 'for b in $GO_BINS; do [ -x ~/go/bin/$b ] || exit 1; done'
+timeout = "30m"
+rerun = "safe"
+'''
+
+[[task]]
+id = "git-identity"
+request = [
+  "Configure git with my name and email on this machine",
+  "set git user.name and user.email from GIT_NAME and GIT_EMAIL",
+]
+note = "This sets git's global name and email from GIT_NAME and GIT_EMAIL in gorun's environment, so they stay out of the Gorunfile. Its check skips it when the email already matches."
+answer = '''
+[tasks.git-identity]
+description = "Set git's name and email"
+local = true
+envvars = { GIT_NAME = "${GIT_NAME}", GIT_EMAIL = "${GIT_EMAIL}" }
+check = '[ "$(git config --global user.email)" = "$GIT_EMAIL" ]'
+cmd = 'git config --global user.name "$GIT_NAME" && git config --global user.email "$GIT_EMAIL"'
+verify = '[ "$(git config --global user.email)" = "$GIT_EMAIL" ]'
+rerun = "safe"
+'''
+
+[[task]]
+id = "docker-group"
+request = [
+  "Add <<user>> to the docker group",
+  "let <<user>> run docker without sudo",
+]
+note = "This adds <<user>> to the docker group. It takes effect at <<user>>'s next login. It runs after Docker is installed, since that creates the group."
+answer = '''
+[tasks.docker-group-<<user>>]
+description = "Let <<user>> use docker without sudo"
+depends_on = ["docker"]
+check = "id -nG <<user>> | grep -qw docker"
+cmd = "usermod -aG docker <<user>>"
+verify = "id -nG <<user>> | grep -qw docker"
+sudo = true
+rerun = "safe"
+
+[tasks.docker]
+description = "Install Docker Engine"
+check = "command -v docker >/dev/null && systemctl is-active --quiet docker"
+cmd = "curl -fsSL https://get.docker.com | sh && systemctl enable --now docker"
+verify = "docker info >/dev/null"
+sudo = true
+timeout = "10m"
+rerun = "safe"
+'''
+[[task.params]]
+user = "deploy"
+[[task.params]]
+user = "ci"
+
+[[task]]
+id = "s3-upload"
+request = [
+  "Upload the dumps in <<dir>> to s3://<<bucket>> with the aws cli",
+  "copy <<dir>> to S3 bucket <<bucket>> every night",
+]
+note = "This syncs <<dir>> to s3://<<bucket>> with the AWS CLI; its check, a dry run, skips it when there is nothing new to upload. The keys come from AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY in gorun's environment, so they never go in the Gorunfile."
+answer = '''
+[tasks.s3-sync-<<name>>]
+description = "Upload <<dir>> to s3://<<bucket>>"
+depends_on = ["awscli"]
+check = "test -z \"$(aws s3 sync <<dir>> s3://<<bucket>>/$(hostname)/ --dryrun)\""
+cmd = "aws s3 sync <<dir>> s3://<<bucket>>/$(hostname)/ --only-show-errors"
+verify = "aws s3 ls s3://<<bucket>>/$(hostname)/ | grep -q ."
+envvars = { AWS_ACCESS_KEY_ID = "${AWS_ACCESS_KEY_ID}", AWS_SECRET_ACCESS_KEY = "${AWS_SECRET_ACCESS_KEY}", AWS_DEFAULT_REGION = "${AWS_DEFAULT_REGION}" }
+sudo = true
+retries = 2
+retry_delay = "1m"
+timeout = "1h"
+rerun = "safe"
+
+[tasks.awscli]
+description = "Install the AWS CLI"
+check = "command -v aws >/dev/null"
+cmd = "apt-get update && apt-get install -y awscli"
+verify = "aws --version"
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+dir = "/var/backups/postgres"
+bucket = "acme-db-backups"
+name = "postgres"
+[[task.params]]
+dir = "/var/backups"
+bucket = "acme-backups"
+name = "backups"
+
+[[task]]
+id = "nginx-reverse-proxy"
+request = [
+  "Install nginx as a reverse proxy on port 80 to 127.0.0.1:<<port>>",
+  "put nginx in front of the app on <<port>>",
+  "proxy port 80 to localhost:<<port>> with nginx",
+]
+note = "These are two small steps: nginx installs and starts nginx, then nginx-proxy installs a site that forwards port 80 to 127.0.0.1:<<port>>, checks it with nginx -t, reloads nginx, and verifies the proxy answers."
+answer = '''
+[tasks.nginx]
+description = "Install nginx and keep it running"
+check = "dpkg -s nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx"
+cmd = "apt-get update && apt-get install -y nginx && systemctl enable --now nginx"
+verify = "systemctl is-active nginx"
+sudo = true
+retries = 2
+rerun = "safe"
+
+[tasks.nginx-proxy]
+description = "Proxy port 80 to 127.0.0.1:<<port>>"
+depends_on = ["nginx"]
+check = "grep -qs 'proxy_pass http://127.0.0.1:<<port>>;' /etc/nginx/sites-enabled/proxy.conf"
+cmd = "install -m 644 /tmp/proxy.conf /etc/nginx/sites-available/proxy.conf && ln -sf /etc/nginx/sites-available/proxy.conf /etc/nginx/sites-enabled/proxy.conf && rm -f /etc/nginx/sites-enabled/default && nginx -t && systemctl reload nginx"
+verify = "curl -fsS -o /dev/null http://127.0.0.1/"
+check_copies = true
+sudo = true
+rerun = "safe"
+[[tasks.nginx-proxy.copy]]
+content = "server {\n    listen 80 default_server;\n    location / {\n        proxy_pass http://127.0.0.1:<<port>>;\n        proxy_set_header Host $host;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n    }\n}\n"
+dst = "/tmp/proxy.conf"
+'''
+[[task.params]]
+port = "8080"
+[[task.params]]
+port = "3000"
+
+[[task]]
+id = "unattended-upgrades"
+request = [
+  "Turn on automatic security updates",
+  "enable unattended-upgrades on the servers",
+]
+note = "This installs unattended-upgrades and turns on its daily run, and verifies apt's config now has it on."
+answer = '''
+[tasks.unattended-upgrades]
+description = "Apply security updates automatically"
+check = "dpkg -s unattended-upgrades >/dev/null 2>&1 && apt-config dump | grep -q 'APT::Periodic::Unattended-Upgrade \"1\"'"
+cmd = "apt-get update && apt-get install -y unattended-upgrades && install -m 644 /tmp/20auto-upgrades /etc/apt/apt.conf.d/20auto-upgrades"
+verify = "apt-config dump | grep -q 'APT::Periodic::Unattended-Upgrade \"1\"'"
+envvars = { DEBIAN_FRONTEND = "noninteractive" }
+sudo = true
+rerun = "safe"
+[[tasks.unattended-upgrades.copy]]
+content = "APT::Periodic::Update-Package-Lists \"1\";\nAPT::Periodic::Unattended-Upgrade \"1\";\n"
+dst = "/tmp/20auto-upgrades"
+'''
+
+[[task]]
+id = "fail2ban-jail"
+request = [
+  "Install fail2ban and ban IPs after <<n>> failed SSH logins",
+  "set up fail2ban for sshd with maxretry <<n>>",
+]
+note = "This installs fail2ban with an sshd jail that bans an address for an hour after <<n>> failed logins, and verifies the jail is running."
+answer = '''
+[tasks.fail2ban]
+description = "Ban IPs after <<n>> failed SSH logins"
+check = "systemctl is-active --quiet fail2ban && fail2ban-client get sshd maxretry 2>/dev/null | grep -qx <<n>>"
+cmd = "apt-get update && apt-get install -y fail2ban && install -m 644 /tmp/sshd.local /etc/fail2ban/jail.d/sshd.local && systemctl enable fail2ban && systemctl restart fail2ban"
+verify = "fail2ban-client status sshd"
+sudo = true
+rerun = "safe"
+[[tasks.fail2ban.copy]]
+content = "[sshd]\nenabled = true\nmaxretry = <<n>>\nbantime = 1h\n"
+dst = "/tmp/sshd.local"
+'''
+[[task.params]]
+n = "5"
+[[task.params]]
+n = "3"
+
+[[task]]
+id = "redis-password"
+request = [
+  "Install Redis with a password from REDIS_PASSWORD",
+  "set up redis that needs a password, without putting it in the Gorunfile",
+]
+note = "This installs Redis and sets requirepass from REDIS_PASSWORD in gorun's environment, so the password stays out of the Gorunfile, then verifies Redis answers PONG with it."
+answer = '''
+[tasks.redis]
+description = "Install Redis with a password"
+check = "systemctl is-active --quiet redis-server && redis-cli -a \"$REDIS_PASSWORD\" --no-auth-warning ping | grep -qx PONG"
+cmd = """
+apt-get update && apt-get install -y redis-server
+sed -i '/^requirepass /d' /etc/redis/redis.conf
+echo "requirepass $REDIS_PASSWORD" >> /etc/redis/redis.conf
+systemctl enable redis-server && systemctl restart redis-server
+"""
+verify = "redis-cli -a \"$REDIS_PASSWORD\" --no-auth-warning ping | grep -qx PONG"
+envvars = { REDIS_PASSWORD = "${REDIS_PASSWORD}" }
+sudo = true
+rerun = "safe"
+'''
+
+[[task]]
+id = "cert-expiry"
+request = [
+  "Fail when the certificate for <<domain>> expires within <<days>> days",
+  "check the TLS cert of <<domain>> has more than <<days>> days left",
+]
+note = "This fails when the certificate served for <<domain>> expires within <<days>> days, so a scheduled run shows it in History. Its check passes while the certificate has longer, so the task is unchanged; otherwise its command reports the dates and fails."
+answer = '''
+[tasks.cert-<<name>>]
+description = "Fail when <<domain>>'s certificate expires within <<days>> days"
+check = "echo | openssl s_client -connect <<domain>>:443 -servername <<domain>> 2>/dev/null | openssl x509 -noout -checkend $((<<days>> * 86400))"
+cmd = "echo | openssl s_client -connect <<domain>>:443 -servername <<domain>> 2>/dev/null | openssl x509 -noout -dates; echo 'the certificate expires within <<days>> days'; exit 1"
+verify = "echo | openssl s_client -connect <<domain>>:443 -servername <<domain>> 2>/dev/null | openssl x509 -noout -checkend $((<<days>> * 86400))"
+rerun = "safe"
+'''
+[[task.params]]
+domain = "api.example.com"
+name = "api"
+days = "14"
+[[task.params]]
+domain = "shop.example.com"
+name = "shop"
+days = "30"
+
+[[task]]
+id = "pg-replica-lag"
+request = [
+  "Check the postgres replica is less than <<secs>> seconds behind",
+  "fail when replication lag is over <<secs>>s",
+]
+note = "This asks PostgreSQL how far behind the replica is. Its check passes while the lag is under <<secs>> seconds, so the task is unchanged; otherwise its command prints the lag and fails."
+answer = '''
+[tasks.pg-replica-lag]
+description = "Fail when the replica is <<secs>>s or more behind"
+check = "runuser -u postgres -- psql -tAc \"select coalesce(extract(epoch from now() - pg_last_xact_replay_timestamp()), 0) < <<secs>>\" | grep -qx t"
+cmd = "runuser -u postgres -- psql -tAc \"select now() - pg_last_xact_replay_timestamp()\"; echo 'the replica is <<secs>>s or more behind'; exit 1"
+verify = "runuser -u postgres -- psql -tAc \"select coalesce(extract(epoch from now() - pg_last_xact_replay_timestamp()), 0) < <<secs>>\" | grep -qx t"
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+secs = "60"
+[[task.params]]
+secs = "30"
+
+[[task]]
+id = "chrony"
+request = [
+  "Keep the clock in sync with chrony",
+  "install chrony for time sync",
+]
+note = "This installs chrony, starts it at boot, and verifies it is tracking a time source."
+answer = '''
+[tasks.chrony]
+description = "Keep the clock in sync with chrony"
+check = "dpkg -s chrony >/dev/null 2>&1 && systemctl is-active --quiet chrony"
+cmd = "apt-get update && apt-get install -y chrony && systemctl enable --now chrony"
+verify = "chronyc tracking >/dev/null"
+sudo = true
+rerun = "safe"
+'''
+
+[[task]]
+id = "release-symlink"
+request = [
+  "Deploy version <<ver>> of <<app>>: unpack it into a releases folder and switch a current symlink",
+  "write release tasks for <<app>> <<ver>> with a current symlink and a health check",
+]
+note = "These are three small steps: <<app>>-release unpacks the tarball into /srv/<<app>>/releases/<<ver>>, <<app>>-switch points current at it and restarts the service, and <<app>>-health waits for /healthz. Rolling back is switching current to the previous release."
+answer = '''
+[tasks.<<app>>-release]
+description = "Unpack <<app>> <<ver>> into /srv/<<app>>/releases"
+check = "test -d /srv/<<app>>/releases/<<ver>>"
+cmd = "install -d /srv/<<app>>/releases/<<ver>> && tar -xzf /tmp/<<app>>.tar.gz -C /srv/<<app>>/releases/<<ver>>"
+verify = "test -n \"$(ls -A /srv/<<app>>/releases/<<ver>>)\""
+sudo = true
+timeout = "10m"
+rerun = "safe"
+[[tasks.<<app>>-release.copy]]
+src = "./dist/<<app>>-<<ver>>.tar.gz"
+dst = "/tmp/<<app>>.tar.gz"
+
+[tasks.<<app>>-switch]
+description = "Point current at <<ver>> and restart <<app>>"
+depends_on = ["<<app>>-release"]
+check = "test \"$(readlink /srv/<<app>>/current)\" = /srv/<<app>>/releases/<<ver>>"
+cmd = "ln -sfn /srv/<<app>>/releases/<<ver>> /srv/<<app>>/current && systemctl restart <<app>>"
+verify = "systemctl is-active <<app>>"
+sudo = true
+rerun = "safe"
+
+[tasks.<<app>>-health]
+description = "Wait for <<app>> to answer on /healthz"
+depends_on = ["<<app>>-switch"]
+check = "curl -fsS --max-time 5 http://127.0.0.1:<<port>>/healthz >/dev/null"
+cmd = "sleep 3"
+verify = "curl -fsS --max-time 5 http://127.0.0.1:<<port>>/healthz"
+retries = 6
+retry_delay = "5s"
+rerun = "safe"
+'''
+[[task.params]]
+app = "payments"
+ver = "2.15.0"
+port = "8080"
+[[task.params]]
+app = "shop"
+ver = "1.4.2"
+port = "3000"
+
+[[task]]
+id = "ufw-from-ip"
+request = [
+  "Open port <<port>> in ufw only from <<ip>>",
+  "allow <<ip>> to reach port <<port>>/tcp",
+]
+note = "This adds a ufw rule allowing <<ip>> to reach port <<port>>/tcp, and nothing else. Its check skips it when the rule exists."
+answer = '''
+[tasks.allow-<<port>>-<<name>>]
+description = "Allow <<ip>> to port <<port>>/tcp"
+check = "ufw status | grep -E '^<<port>>/tcp +ALLOW +<<ip>>' >/dev/null"
+cmd = "ufw allow from <<ip>> to any port <<port>> proto tcp"
+verify = "ufw status | grep -E '^<<port>>/tcp +ALLOW +<<ip>>' >/dev/null"
+sudo = true
+rerun = "safe"
+'''
+[[task.params]]
+port = "9090"
+ip = "10.0.9.10"
+name = "monitoring"
+[[task.params]]
+port = "5432"
+ip = "10.0.1.21"
+name = "app-1"

@@ -487,3 +487,93 @@ want = ["Pause", "Schedules page"]
 q = ["What cron format do schedules use?", "how do I write the cron for a schedule?", "what does cron = \"0 2 * * *\" mean?"]
 a = """Five fields: minute, hour, day of the month, month and day of the week. "0 2 * * *" is every day at 02:00, "*/15 * * * *" every 15 minutes, "0 9 * * 1" Mondays at 09:00 and "0 19 * * 1-5" weekdays at 19:00. The times are in the schedule's timezone, UTC unless it sets one such as timezone = "Australia/Sydney". To run once, set at = "2027-01-15T10:00" instead of cron."""
 want = ["minute", "timezone"]
+
+# --- training round 4: questions the model got wrong about a production Gorunfile, and newer features
+
+[[qa]]
+q = ["How do I run only one bundle on one server from the command line?", "run just the release bundle on app-2", "How do I run a single task on one server?"]
+a = """Pick the server with -server and the work with -task, then -r to run without the picker:
+
+```bash
+gorun Gorunfile -r -server app-2 -task @release   # a bundle: @ and its name
+gorun Gorunfile -r -server app-2 -task app-health # one task, with the tasks it depends on
+```
+
+-server takes globs (-server 'app-*') and can repeat; -tag and -group pick servers by tag or group. Add -check first for a dry run that only runs the checks."""
+want = ["-server", "-task", "@"]
+
+[[qa]]
+q = ["How do I keep a secret like an API key out of the Gorunfile?", "where do passwords go in gorun?", "How do I pass a Stripe key to a task without writing it in the Gorunfile?"]
+a = """Put it in gorun's environment and reference it from the task's envvars:
+
+```toml
+[tasks.app-env]
+envvars = { STRIPE_KEY = "${STRIPE_SECRET_KEY}" }
+cmd = "printf 'STRIPE_KEY=%s\\n' \"$STRIPE_KEY\" > /etc/app/env"
+```
+
+gorun expands ${STRIPE_SECRET_KEY} from its own environment (or a .env file next to where it runs, which you keep out of git) when the task runs, and passes the value over stdin, so it survives sudo and stays out of the Gorunfile, logs, run history and the process list. Env vars are never sent to the assistant either."""
+want = ["envvars", "${", "environment"]
+
+[[qa]]
+q = ["Can a schedule run only on some servers?", "run a schedule on the app servers only", "Does a schedule have a group or server setting?"]
+a = """No. A [[schedule]] has name, description, target, cron or at, timezone and missed, and its target runs on every server, as gorun -task <target> does. A server whose task list can't run the target shows as a failed run in History.
+
+To limit it, make the target a task that only does its work where it should, for example by checking a server variable or tag in its command, or keep those servers in their own Gorunfile with its own schedule."""
+want = ["every server", "target"]
+
+[[qa]]
+q = ["How do I deploy a new version of the app with this Gorunfile?", "How do I release version 2.15.0?", "what's the way to ship a new release?"]
+a = """Change the version where the Gorunfile keeps it, put the release where its copy expects it, then run the release tasks on the app servers. In a Gorunfile like the payments one:
+
+1. Set the version in [server_groups.prod]: vars = { app_version = "2.15.0" } (read by the copy's {{ .Server.Vars.app_version }}) and envvars = { APP_VERSION = "2.15.0" } (read by the commands).
+2. Put the tarball at ./dist/payments-2.15.0.tar.gz.
+3. Dry run, then run, on the app servers:
+
+```bash
+gorun Gorunfile -r -check -group app -task @release
+gorun Gorunfile -r -group app -task @release
+```
+
+Run app-migrate once, from the server that has it in its list, before switching: -server app-1 -task app-migrate. A failed health check stops that server's run; the others carry on."""
+want = ["@release", "-task", "version"]
+
+[[qa]]
+q = ["Why would a task depend on another one?", "what does depends_on do?", "Why does app-switch depend on app-unit?"]
+a = """depends_on puts tasks in order and says one needs another's result: a task runs after every task it depends on has finished, and is skipped when one of them failed or was skipped. For example, app-switch restarts the service, which needs the systemd unit that app-unit installs, so app-switch depends on app-unit: if the unit can't be installed, restarting would fail anyway, so it is skipped. -task app-switch runs its dependencies first too."""
+want = ["depends_on", "skipped", "after"]
+
+[[qa]]
+q = ["Who can run tasks from the web UI?", "Why can't I press Run in the web UI?", "Do I need to sign in to run tasks?"]
+a = """Running tasks from the web UI always needs a signed-in user, so every run records who started it, as its web user. With no login set up yet, open the Users page and add the first user: they are an admin, and your browser is signed in as them. Anyone may still look at every page and ask the assistant; a user may also run tasks and edit the Gorunfile; an admin may also manage users and the assistant's models. GORUN_ADMIN_PASSWORD signs in as admin, and behind an auth proxy GORUN_ADMINS and GORUN_PROXY_USERS say which of its users are admins and plain users."""
+want = ["signed-in", "users"]
+
+[[qa]]
+q = ["Who does a scheduled run run as?", "what user do schedules run as?"]
+a = """A scheduled run has no web user, since nobody started it: History shows its trigger, schedule, with the schedule's name, and its user is the account gorun -serve runs as. On each server, its tasks run as the SSH user the Gorunfile gives that server, and as root with sudo = true, exactly as a run started by hand. Each scheduled run loads the Gorunfile as it is then, so edits since gorun -serve started are used."""
+want = ["schedule", "ssh"]
+
+[[qa]]
+q = ["How do I add users to the web UI?", "where are web UI passwords kept?", "How does login work in gorun -serve?"]
+a = """Open the Users page in gorun -serve. The first user added is an admin and turns the login on; after that an admin adds users, each a plain user or an admin, sets their passwords and deletes them. Users are kept in the history database (SQLite, Postgres or MySQL) with their passwords as bcrypt hashes, so every gorun on that database shares them. A session lasts 7 days and ends when the password changes. To get back in when a password is forgotten, restart with GORUN_ADMIN_PASSWORD set and sign in as admin."""
+want = ["users", "bcrypt", "admin"]
+
+[[qa]]
+q = ["Can I use another model for the assistant?", "how do I switch the assistant's model?", "Can I download models from Hugging Face in gorun?"]
+a = """Yes. The Assistant page's Models panel lists gorun's own model and the GGUF models you downloaded: Open loads one, Close frees its memory, and Search finds GGUF models on Hugging Face and downloads one, checked against its SHA-256. Only an admin can change it once there is a login, and switching waits until nobody is chatting, unless the admin goes ahead anyway. GORUN_LLM_MODEL points at a GGUF file or URL, and GORUN_LLM_URL at a model server such as Ollama. gorun's prompts are tuned for its own model, so others usually answer worse."""
+want = ["models", "gguf"]
+
+[[qa]]
+q = ["How can I help train the assistant?", "Does gorun keep my assistant chats?", "what is the Training data page?"]
+a = """Only if an admin turns it on. On the Assistant page's Training data page, or with GORUN_ASSISTANT_CAPTURE=1, every answer is kept in the history database: the prompt as the model got it, the reply, whether its tasks loaded and were saved, how they ran, and the 👍 or 👎 it got. The Assistant page tells everyone while it is on. Export JSONL downloads them, with addresses and keys replaced, for gorun's training data. Nothing is sent anywhere by gorun."""
+want = ["admin", "training data", "export"]
+
+[[qa]]
+q = ["Where should I keep my Gorunfile?", "Should I use a file or the database for my Gorunfile?"]
+a = """In gorun -serve's database is the main way: start gorun -serve without a Gorunfile and it keeps them in its history database, every save a version, shared by every gorun on the same database; edit them in the web UI or have the assistant write tasks. Keep one as a file when you run it from a terminal, a script or CI (gorun Gorunfile -r), or want it in git next to the scripts it copies; gorun -serve Gorunfile serves a file too. The Config page imports a file into the database and exports a zip."""
+want = ["database", "file", "-serve"]
+
+[[qa]]
+q = ["What does check_copies do?", "how does check_copies decide whether to copy?"]
+a = """check_copies = true compares each copy's file with the one already at its destination on the server, by MD5 hashes the server works out itself, so nothing is sent to compare. When every file matches, nothing is copied and the task is unchanged, as if a check passed. When one differs or is missing, the files are copied and the command runs. With a check as well, the task is unchanged only when both say there is nothing to do."""
+want = ["md5", "unchanged", "copy"]

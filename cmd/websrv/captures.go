@@ -123,7 +123,7 @@ func (a *app) captureRow(ctx context.Context, c store.Capture) ui.CaptureRow {
 		Repaired: c.Repaired, Saved: !c.SavedAt.IsZero(), Feedback: c.Feedback,
 	}
 	if row.Saved {
-		o, err := a.store.TaskOutcome(ctx, taskNamesOf(c.TaskNames), c.SavedAt)
+		o, err := a.store.TaskOutcome(ctx, savedTaskNames(c.TaskNames), c.SavedAt)
 		if err == nil {
 			row.Passed, row.Failed = o.Passed, o.Failed
 		}
@@ -143,8 +143,8 @@ func lastQuestion(messages string) string {
 	return ""
 }
 
-// taskNamesOf is the task names in a reply's names, without its schedules.
-func taskNamesOf(names string) []string {
+// savedTaskNames is the task names in a reply's names, without its schedules.
+func savedTaskNames(names string) []string {
 	var out []string
 	for _, n := range strings.Split(names, ", ") {
 		if n != "" && !strings.HasPrefix(n, "schedule ") {

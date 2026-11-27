@@ -14,7 +14,7 @@ os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
 import torch
 from datasets import Dataset
 from huggingface_hub import snapshot_download
-from peft import LoraConfig
+from peft import LoraConfig, PeftModel, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from transformers.integrations import sdpa_attention
 from trl import SFTConfig, SFTTrainer
@@ -42,6 +42,8 @@ def main():
     p.add_argument("--max-len", type=int, default=3072)  # about 5.2 GB on an 8 GB GPU; docs in the prompt need the room
     p.add_argument("--data", default="data/train.jsonl")
     p.add_argument("--out", default="out/adapter")
+    # a released model's adapter, to train it further instead of starting from the base model
+    p.add_argument("--from-adapter")
     args = p.parse_args()
 
     # The math attention kernel holds every head's full score matrix in fp32, 800 MB at 2560
@@ -100,6 +102,12 @@ def main():
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
         task_type="CAUSAL_LM",
     )
+    if args.from_adapter:
+        # keep training the given adapter's weights; the trainer only prepares a model it wraps itself
+        model = prepare_model_for_kbit_training(model, use_gradient_checkpointing=True)
+        model = PeftModel.from_pretrained(model, args.from_adapter, is_trainable=True)
+        model.print_trainable_parameters()
+        lora = None
     trainer = SFTTrainer(model=model, args=cfg, train_dataset=train, processing_class=tok, peft_config=lora)
     trainer.train()
     trainer.save_model(args.out)

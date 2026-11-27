@@ -1,0 +1,455 @@
+title = "Payments API production"
+
+# Every box: patched, hardened, timed and watched.
+
+[tasks.apt-base]
+description = "Install the base packages"
+details = "curl, jq, rsync and the tools every other task uses."
+check = "dpkg -s curl jq rsync ca-certificates gnupg unattended-upgrades >/dev/null 2>&1"
+cmd = "apt-get update && apt-get install -y curl jq rsync ca-certificates gnupg unattended-upgrades"
+verify = "dpkg -s curl jq rsync >/dev/null 2>&1"
+envvars = { DEBIAN_FRONTEND = "noninteractive" }
+sudo = true
+retries = 3
+retry_delay = "30s"
+timeout = "20m"
+rerun = "safe"
+
+[tasks.security-upgrades]
+description = "Apply pending security updates"
+check = "test \"$(apt-get -s upgrade | grep -c '^Inst.*security')\" = 0"
+cmd = "apt-get update && unattended-upgrade -v"
+verify = "test \"$(apt-get -s upgrade | grep -c '^Inst.*security')\" = 0"
+depends_on = ["apt-base"]
+sudo = true
+retries = 2
+retry_delay = "1m"
+timeout = "45m"
+rerun = "safe"
+
+[tasks.deploy-user]
+description = "Create the deploy user with our CI key"
+check = "id deploy >/dev/null 2>&1 && grep -qF \"$DEPLOY_PUBKEY\" /home/deploy/.ssh/authorized_keys"
+cmd = """
+id deploy >/dev/null 2>&1 || useradd -m -s /bin/bash -G sudo deploy
+install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
+grep -qF "$DEPLOY_PUBKEY" /home/deploy/.ssh/authorized_keys 2>/dev/null || echo "$DEPLOY_PUBKEY" >> /home/deploy/.ssh/authorized_keys
+chown deploy:deploy /home/deploy/.ssh/authorized_keys && chmod 600 /home/deploy/.ssh/authorized_keys
+"""
+verify = "grep -qF \"$DEPLOY_PUBKEY\" /home/deploy/.ssh/authorized_keys"
+envvars = { DEPLOY_PUBKEY = "${DEPLOY_PUBKEY}" }
+sudo = true
+rerun = "safe"
+
+[tasks.sshd-hardening]
+description = "Turn off root and password logins over SSH"
+cmd = "install -m 644 /tmp/50-hardening.conf /etc/ssh/sshd_config.d/50-hardening.conf && sshd -t && systemctl reload ssh"
+verify = "sshd -T | grep -qx 'passwordauthentication no'"
+check_copies = true
+depends_on = ["deploy-user"]
+sudo = true
+rerun = "safe"
+[[tasks.sshd-hardening.copy]]
+content = "PermitRootLogin no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nMaxAuthTries 3\n"
+dst = "/tmp/50-hardening.conf"
+
+[tasks.ufw-base]
+description = "Firewall: deny incoming except SSH"
+check = "ufw status | grep -q 'Status: active' && ufw status | grep -q '22/tcp'"
+cmd = "apt-get install -y ufw && ufw default deny incoming && ufw default allow outgoing && ufw allow 22/tcp && ufw --force enable"
+verify = "ufw status | grep -q 'Status: active'"
+depends_on = ["apt-base"]
+sudo = true
+rerun = "safe"
+
+[tasks.fail2ban]
+description = "Ban IPs that keep failing SSH logins"
+check = "systemctl is-active --quiet fail2ban && fail2ban-client status sshd >/dev/null 2>&1"
+cmd = "apt-get install -y fail2ban && install -m 644 /tmp/sshd.local /etc/fail2ban/jail.d/sshd.local && systemctl enable --now fail2ban && systemctl restart fail2ban"
+verify = "fail2ban-client status sshd"
+check_copies = true
+depends_on = ["apt-base"]
+sudo = true
+rerun = "safe"
+[[tasks.fail2ban.copy]]
+content = "[sshd]\nenabled = true\nmaxretry = 5\nbantime = 1h\n"
+dst = "/tmp/sshd.local"
+
+[tasks.node-exporter]
+description = "Run Prometheus node_exporter on port 9100"
+details = "Downloads the release, installs a systemd unit and opens 9100 to the monitoring host only."
+check = "systemctl is-active --quiet node_exporter && /usr/local/bin/node_exporter --version 2>&1 | grep -q \"$NODE_EXPORTER_VERSION\""
+cmd = """
+set -e
+cd /tmp
+curl -fsSLO "https://github.com/prometheus/node_exporter/releases/download/v${NODE_EXPORTER_VERSION}/node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+tar -xzf "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64.tar.gz"
+install -m 755 "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/node_exporter
+id node_exporter >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin node_exporter
+install -m 644 /tmp/node_exporter.service /etc/systemd/system/node_exporter.service
+systemctl daemon-reload && systemctl enable --now node_exporter && systemctl restart node_exporter
+ufw allow from 10.0.9.10 to any port 9100 proto tcp
+"""
+verify = "curl -fsS http://127.0.0.1:9100/metrics | grep -q node_uname_info"
+envvars = { NODE_EXPORTER_VERSION = "1.8.2" }
+depends_on = ["apt-base", "ufw-base"]
+sudo = true
+retries = 2
+timeout = "10m"
+rerun = "safe"
+[[tasks.node-exporter.copy]]
+content = "[Unit]\nDescription=Prometheus node exporter\nAfter=network-online.target\n\n[Service]\nUser=node_exporter\nExecStart=/usr/local/bin/node_exporter\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n"
+dst = "/tmp/node_exporter.service"
+
+# Load balancers: HAProxy in front of the app servers, TLS from Let's Encrypt.
+
+[tasks.haproxy]
+description = "Install HAProxy and keep it running"
+check = "dpkg -s haproxy >/dev/null 2>&1 && systemctl is-active --quiet haproxy"
+cmd = "apt-get install -y haproxy && systemctl enable --now haproxy"
+verify = "systemctl is-active haproxy"
+depends_on = ["apt-base"]
+sudo = true
+rerun = "safe"
+
+[tasks.haproxy-config]
+description = "Install the HAProxy config and reload it"
+cmd = "install -m 644 /tmp/haproxy.cfg /etc/haproxy/haproxy.cfg && haproxy -c -f /etc/haproxy/haproxy.cfg && systemctl reload haproxy"
+verify = "systemctl is-active haproxy && curl -fsS -o /dev/null http://127.0.0.1:8404/stats"
+check_copies = true
+depends_on = ["haproxy"]
+sudo = true
+rerun = "safe"
+[[tasks.haproxy-config.copy]]
+content = """global
+    log /dev/log local0
+    maxconn 20000
+defaults
+    mode http
+    timeout connect 5s
+    timeout client 30s
+    timeout server 30s
+frontend https
+    bind :443 ssl crt /etc/haproxy/certs/api.pem
+    default_backend api
+backend api
+    option httpchk GET /healthz
+    server app-1 10.0.1.21:8080 check
+    server app-2 10.0.1.22:8080 check
+    server app-3 10.0.1.23:8080 check
+    server app-4 10.0.1.24:8080 check
+listen stats
+    bind 127.0.0.1:8404
+    stats enable
+    stats uri /stats
+"""
+dst = "/tmp/haproxy.cfg"
+
+[tasks.lb-firewall]
+description = "Open HTTP and HTTPS on the load balancers"
+check = "ufw status | grep -q '443/tcp' && ufw status | grep -q '80/tcp'"
+cmd = "ufw allow 80/tcp && ufw allow 443/tcp"
+verify = "ufw status | grep -q '443/tcp'"
+depends_on = ["ufw-base"]
+sudo = true
+rerun = "safe"
+
+[tasks.certbot]
+description = "Get the TLS certificate for api.example.com"
+check = "test -f /etc/letsencrypt/live/api.example.com/fullchain.pem"
+cmd = "apt-get install -y certbot && certbot certonly --standalone --non-interactive --agree-tos -m ops@example.com -d api.example.com --pre-hook 'systemctl stop haproxy' --post-hook 'systemctl start haproxy'"
+verify = "openssl x509 -in /etc/letsencrypt/live/api.example.com/fullchain.pem -noout -checkend 604800"
+depends_on = ["haproxy", "lb-firewall"]
+sudo = true
+retries = 2
+retry_delay = "1m"
+rerun = "safe"
+
+[tasks.haproxy-cert]
+description = "Bundle the certificate for HAProxy"
+check = "test /etc/haproxy/certs/api.pem -nt /etc/letsencrypt/live/api.example.com/fullchain.pem"
+cmd = "install -d -m 700 /etc/haproxy/certs && cat /etc/letsencrypt/live/api.example.com/fullchain.pem /etc/letsencrypt/live/api.example.com/privkey.pem > /etc/haproxy/certs/api.pem && chmod 600 /etc/haproxy/certs/api.pem"
+verify = "test -s /etc/haproxy/certs/api.pem"
+depends_on = ["certbot"]
+sudo = true
+rerun = "safe"
+
+# App servers: the payments API, released as a versioned directory with a current symlink.
+
+[tasks.app-user]
+description = "Create the payments service user"
+check = "id payments >/dev/null 2>&1"
+cmd = "useradd --system --home /srv/payments --shell /usr/sbin/nologin payments"
+verify = "id payments"
+sudo = true
+rerun = "safe"
+
+[tasks.app-firewall]
+description = "Let the load balancers reach the API on 8080"
+check = "ufw status | grep -q '8080/tcp.*10.0.0.11' && ufw status | grep -q '8080/tcp.*10.0.0.12'"
+cmd = "ufw allow from 10.0.0.11 to any port 8080 proto tcp && ufw allow from 10.0.0.12 to any port 8080 proto tcp"
+verify = "ufw status | grep -q '8080/tcp'"
+depends_on = ["ufw-base"]
+sudo = true
+rerun = "safe"
+
+[tasks.app-unit]
+description = "Install the payments systemd unit"
+cmd = "install -m 644 /tmp/payments.service /etc/systemd/system/payments.service && systemctl daemon-reload && systemctl enable payments"
+verify = "systemctl is-enabled payments"
+check_copies = true
+depends_on = ["app-user"]
+sudo = true
+rerun = "safe"
+[[tasks.app-unit.copy]]
+content = "[Unit]\nDescription=Payments API\nAfter=network-online.target\n\n[Service]\nUser=payments\nWorkingDirectory=/srv/payments/current\nEnvironmentFile=/etc/payments/env\nExecStart=/srv/payments/current/payments serve\nRestart=always\nLimitNOFILE=65536\n\n[Install]\nWantedBy=multi-user.target\n"
+dst = "/tmp/payments.service"
+
+[tasks.app-env]
+description = "Write the API's settings, secrets from the environment"
+check = "test -f /etc/payments/env && grep -q \"^APP_VERSION=$APP_VERSION$\" /etc/payments/env"
+cmd = """
+install -d -m 750 -o root -g payments /etc/payments
+umask 027
+printf 'APP_VERSION=%s\\nDATABASE_URL=%s\\nREDIS_URL=%s\\nSTRIPE_KEY=%s\\n' "$APP_VERSION" "$DATABASE_URL" "$REDIS_URL" "$STRIPE_KEY" > /etc/payments/env
+chgrp payments /etc/payments/env
+"""
+verify = "test -s /etc/payments/env"
+envvars = { DATABASE_URL = "${PAYMENTS_DATABASE_URL}", REDIS_URL = "${PAYMENTS_REDIS_URL}", STRIPE_KEY = "${STRIPE_SECRET_KEY}" }
+depends_on = ["app-user"]
+sudo = true
+rerun = "safe"
+
+[tasks.app-release]
+description = "Unpack the release into /srv/payments/releases"
+check = "test -x /srv/payments/releases/$APP_VERSION/payments"
+cmd = "install -d -o payments -g payments /srv/payments/releases/$APP_VERSION && tar -xzf /tmp/payments.tar.gz -C /srv/payments/releases/$APP_VERSION && chown -R payments:payments /srv/payments/releases/$APP_VERSION"
+verify = "/srv/payments/releases/$APP_VERSION/payments version | grep -q \"$APP_VERSION\""
+depends_on = ["app-user"]
+sudo = true
+timeout = "10m"
+rerun = "safe"
+[[tasks.app-release.copy]]
+src = "./dist/payments-{{ .Server.Vars.app_version }}.tar.gz"
+dst = "/tmp/payments.tar.gz"
+
+[tasks.app-migrate]
+description = "Run the database migrations, once, from app-1"
+cmd = "sudo -u payments env $(cat /etc/payments/env | xargs) /srv/payments/releases/$APP_VERSION/payments migrate up"
+depends_on = ["app-release", "app-env"]
+sudo = true
+timeout = "20m"
+rerun = "unsafe"
+
+[tasks.app-switch]
+description = "Point current at the new release and restart"
+check = "test \"$(readlink /srv/payments/current)\" = /srv/payments/releases/$APP_VERSION && systemctl is-active --quiet payments"
+cmd = "ln -sfn /srv/payments/releases/$APP_VERSION /srv/payments/current && systemctl restart payments"
+verify = "systemctl is-active payments"
+depends_on = ["app-release", "app-env", "app-unit"]
+sudo = true
+rerun = "safe"
+
+[tasks.app-health]
+description = "Wait for the API to answer on /healthz"
+cmd = "curl -fsS --max-time 5 http://127.0.0.1:8080/healthz"
+depends_on = ["app-switch"]
+retries = 6
+retry_delay = "5s"
+rerun = "safe"
+
+[tasks.app-logrotate]
+description = "Rotate the API logs daily, keep 14"
+cmd = "install -m 644 /tmp/payments.logrotate /etc/logrotate.d/payments && logrotate -d /etc/logrotate.d/payments"
+check_copies = true
+sudo = true
+rerun = "safe"
+[[tasks.app-logrotate.copy]]
+content = "/var/log/payments/*.log {\n    daily\n    rotate 14\n    compress\n    delaycompress\n    missingok\n    notifempty\n    copytruncate\n}\n"
+dst = "/tmp/payments.logrotate"
+
+# Database: PostgreSQL 16 primary and a streaming replica, with nightly backups.
+
+[tasks.pg-install]
+description = "Install PostgreSQL 16"
+check = "dpkg -s postgresql-16 >/dev/null 2>&1 && systemctl is-active --quiet postgresql"
+cmd = "apt-get install -y postgresql-16 && systemctl enable --now postgresql"
+verify = "sudo -u postgres psql -tAc 'select 1' | grep -qx 1"
+depends_on = ["apt-base"]
+sudo = true
+timeout = "15m"
+rerun = "safe"
+
+[tasks.pg-tuning]
+description = "Tune PostgreSQL for this box and reload"
+cmd = "install -m 644 -o postgres /tmp/10-payments.conf /etc/postgresql/16/main/conf.d/10-payments.conf && systemctl reload postgresql"
+verify = "sudo -u postgres psql -tAc 'show shared_buffers' | grep -qx 4GB"
+check_copies = true
+depends_on = ["pg-install"]
+sudo = true
+rerun = "safe"
+[[tasks.pg-tuning.copy]]
+content = "shared_buffers = 4GB\neffective_cache_size = 12GB\nmax_connections = 300\nwal_level = replica\nmax_wal_senders = 5\n"
+dst = "/tmp/10-payments.conf"
+
+[tasks.pg-firewall]
+description = "Let the app servers and the replica reach PostgreSQL"
+check = "ufw status | grep -q '5432/tcp.*10.0.1.0/24'"
+cmd = "ufw allow from 10.0.1.0/24 to any port 5432 proto tcp && ufw allow from 10.0.2.22 to any port 5432 proto tcp"
+verify = "ufw status | grep -q '5432/tcp'"
+depends_on = ["ufw-base"]
+sudo = true
+rerun = "safe"
+
+[tasks.pg-backup]
+description = "Dump the payments database and send it off-site"
+cmd = """
+set -e
+f=/var/backups/postgres/payments-$(date +%F-%H%M).dump
+install -d -m 700 -o postgres /var/backups/postgres
+sudo -u postgres pg_dump -Fc payments > "$f"
+rsync -a "$f" "backup@10.0.9.20:/backups/postgres/"
+find /var/backups/postgres -name 'payments-*.dump' -mtime +7 -delete
+"""
+verify = "find /var/backups/postgres -name 'payments-*.dump' -mmin -60 -size +1k | grep -q ."
+depends_on = ["pg-install"]
+sudo = true
+timeout = "1h"
+retries = 1
+rerun = "safe"
+
+[tasks.pg-replica-check]
+description = "Check the replica is streaming and not far behind"
+cmd = "sudo -u postgres psql -tAc \"select now() - pg_last_xact_replay_timestamp() < interval '60 seconds'\" | grep -qx t"
+depends_on = ["pg-install"]
+sudo = true
+rerun = "safe"
+
+# Cache: Redis with a password, reachable from the app servers only.
+
+[tasks.redis]
+description = "Install Redis with a password and keep it running"
+check = "systemctl is-active --quiet redis-server && redis-cli -a \"$REDIS_PASSWORD\" --no-auth-warning ping | grep -qx PONG"
+cmd = """
+apt-get install -y redis-server
+sed -i 's/^bind .*/bind 0.0.0.0/' /etc/redis/redis.conf
+grep -q '^requirepass' /etc/redis/redis.conf && sed -i "s/^requirepass .*/requirepass $REDIS_PASSWORD/" /etc/redis/redis.conf || echo "requirepass $REDIS_PASSWORD" >> /etc/redis/redis.conf
+systemctl enable redis-server && systemctl restart redis-server
+ufw allow from 10.0.1.0/24 to any port 6379 proto tcp
+"""
+verify = "redis-cli -a \"$REDIS_PASSWORD\" --no-auth-warning ping | grep -qx PONG"
+envvars = { REDIS_PASSWORD = "${PAYMENTS_REDIS_PASSWORD}" }
+depends_on = ["apt-base", "ufw-base"]
+sudo = true
+rerun = "safe"
+
+# Checks anyone can run any time.
+
+[tasks.disk-space]
+description = "Fail when / is more than 85% full"
+cmd = "test \"$(df --output=pcent / | tail -1 | tr -dc 0-9)\" -lt 85"
+rerun = "safe"
+
+[bundles.baseline]
+description = "Every server: packages, deploy user, SSH and firewall"
+tasks = ["apt-base", "deploy-user", "sshd-hardening", "ufw-base", "fail2ban"]
+
+[bundles.monitoring]
+description = "Metrics for Prometheus"
+tasks = ["node-exporter"]
+
+[bundles.lb]
+description = "HAProxy with TLS"
+tasks = ["haproxy", "lb-firewall", "certbot", "haproxy-cert", "haproxy-config"]
+
+[bundles.app]
+description = "The payments API service"
+tasks = ["app-user", "app-firewall", "app-unit", "app-env", "app-logrotate"]
+
+[bundles.release]
+description = "Ship APP_VERSION to the app servers"
+tasks = ["app-release", "app-switch", "app-health"]
+
+[bundles.db]
+description = "PostgreSQL primary"
+tasks = ["pg-install", "pg-tuning", "pg-firewall"]
+
+[bundles.health]
+description = "Quick checks: disk and certificate"
+tasks = ["disk-space"]
+
+[server_groups.prod]
+tags = ["prod", "syd"]
+vars = { app_version = "2.14.0" }
+envvars = { APP_VERSION = "2.14.0" }
+    [server_groups.prod.ssh]
+    username = "deploy"
+    identityfile = "~/.ssh/payments_deploy"
+    port = 22
+
+[server_groups.lb]
+tags = ["lb"]
+tasks = ["@baseline", "@monitoring", "@lb", "@health"]
+
+[server_groups.app]
+tags = ["app"]
+tasks = ["@baseline", "@monitoring", "@app", "@release", "@health"]
+
+[server_groups.db]
+tags = ["db"]
+tasks = ["@baseline", "@monitoring", "@db", "pg-backup", "@health"]
+
+[server_groups.cache]
+tags = ["cache"]
+tasks = ["@baseline", "@monitoring", "redis", "@health"]
+
+[servers]
+tasks = ["@baseline"]
+
+[servers.hosts.lb-1]
+hostname = "10.0.0.11"
+groups = ["prod", "lb"]
+
+[servers.hosts.app-1]
+hostname = "10.0.1.21"
+groups = ["prod", "app"]
+tasks = ["@baseline", "@monitoring", "@app", "app-release", "app-migrate", "app-switch", "app-health", "@health"]
+
+[servers.hosts.app-2]
+hostname = "10.0.1.22"
+groups = ["prod", "app"]
+
+[servers.hosts.db-1]
+hostname = "10.0.2.21"
+groups = ["prod", "db"]
+
+[servers.hosts.db-2]
+hostname = "10.0.2.22"
+groups = ["prod", "db"]
+tasks = ["@baseline", "@monitoring", "pg-install", "pg-replica-check", "@health"]
+
+[servers.hosts.cache-1]
+hostname = "10.0.3.21"
+groups = ["prod", "cache"]
+
+[[schedule]]
+name = "nightly-db-backup"
+description = "Back up the payments database every night"
+target = "pg-backup"
+cron = "30 1 * * *"
+timezone = "Australia/Sydney"
+missed = "run"
+
+[[schedule]]
+name = "weekly-security-updates"
+description = "Security updates, Sunday morning"
+target = "security-upgrades"
+cron = "0 4 * * 0"
+timezone = "Australia/Sydney"
+
+[[schedule]]
+name = "hourly-health"
+description = "Disk space everywhere, every hour"
+target = "@health"
+cron = "0 * * * *"
+timezone = "UTC"

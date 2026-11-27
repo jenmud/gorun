@@ -1,0 +1,211 @@
+# A Go and Python developer workstation on Ubuntu, set up on this machine. Based on
+# github.com/jenmud/mud-setup, with its scripts written inline.
+title = "Dev workstation setup"
+
+envvars = { PATH = "${HOME}/.local/bin:${HOME}/.local/go/bin:${HOME}/go/bin:${PATH}", ME = "${USER}", GIT_NAME = "${GIT_NAME}", GIT_EMAIL = "${GIT_EMAIL}", GITHUB_TOKEN = "${GITHUB_TOKEN}", SSH_KEY_PASSPHRASE = "${SSH_KEY_PASSPHRASE}" }
+
+[tasks.packages]
+description = "Install system and dev packages with apt"
+local = true
+sudo = true
+rerun = "safe"
+timeout = "45m"
+envvars = { DEBIAN_FRONTEND = "noninteractive", PKGS = "git git-delta gh fzf ripgrep fd-find bat eza zoxide direnv tmux jq sqlite3 curl wget rsync ca-certificates gnupg btop htop build-essential make shellcheck python3 python3-venv nodejs npm unzip xz-utils fontconfig tree" }
+check = "dpkg -s $PKGS >/dev/null 2>&1"
+cmd = "apt-get update && apt-get install -y $PKGS"
+verify = "dpkg -s $PKGS >/dev/null"
+
+[tasks.docker]
+description = "Install Docker Engine from Docker's apt repo and start it"
+depends_on = ["packages"]
+local = true
+sudo = true
+rerun = "safe"
+check = "dpkg -s docker-ce docker-compose-plugin >/dev/null 2>&1 && systemctl is-active -q docker"
+cmd = """
+set -eu
+. /etc/os-release
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+chmod a+r /etc/apt/keyrings/docker.asc
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${UBUNTU_CODENAME:-$VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list
+apt-get update
+DEBIAN_FRONTEND=noninteractive apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+systemctl enable --now docker
+"""
+verify = "systemctl is-active -q docker && docker compose version >/dev/null"
+
+[tasks.docker-group]
+description = "Add your user to the docker group"
+depends_on = ["docker"]
+local = true
+sudo = true
+rerun = "safe"
+check = 'id -nG "$ME" | grep -qw docker'
+cmd = 'usermod -aG docker "$ME"'
+verify = 'id -nG "$ME" | grep -qw docker'
+
+[tasks.sshd]
+description = "Enable and start the SSH server"
+depends_on = ["packages"]
+local = true
+sudo = true
+rerun = "safe"
+check = "systemctl is-enabled -q ssh && systemctl is-active -q ssh"
+cmd = "systemctl enable --now ssh"
+verify = "systemctl is-active -q ssh"
+
+[tasks.code-dir]
+description = "Create ~/code for all source code"
+local = true
+rerun = "safe"
+check = "test -d ~/code"
+cmd = "mkdir -p ~/code"
+verify = "test -d ~/code"
+
+[tasks.ssh-key]
+description = "Create an ed25519 SSH key if you have none"
+depends_on = ["packages"]
+local = true
+rerun = "safe"
+check = "test -f ~/.ssh/id_ed25519"
+cmd = """
+set -eu
+mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
+ssh-keygen -t ed25519 -C "${GIT_EMAIL:-$ME@$(hostname)}" -N "${SSH_KEY_PASSPHRASE:-}" -f "$HOME/.ssh/id_ed25519"
+cat "$HOME/.ssh/id_ed25519.pub"
+"""
+verify = "ssh-keygen -l -f ~/.ssh/id_ed25519.pub"
+
+[tasks.git-config]
+description = "Configure git: identity, delta pager, pull and push defaults"
+depends_on = ["packages"]
+local = true
+rerun = "safe"
+check = '[ -n "$GIT_EMAIL" ] && [ "$(git config --global user.email)" = "$GIT_EMAIL" ] && [ "$(git config --global core.pager)" = delta ]'
+cmd = """
+set -eu
+: "${GIT_NAME:?set GIT_NAME}"
+: "${GIT_EMAIL:?set GIT_EMAIL}"
+git config --global user.name "$GIT_NAME"
+git config --global user.email "$GIT_EMAIL"
+git config --global init.defaultBranch main
+git config --global pull.rebase true
+git config --global push.autoSetupRemote true
+git config --global core.pager delta
+"""
+verify = '[ "$(git config --global user.email)" = "$GIT_EMAIL" ]'
+
+[tasks.jj]
+description = "Install jj (Jujutsu) from its latest GitHub release"
+depends_on = ["packages"]
+local = true
+rerun = "safe"
+envvars = { REPO = "jj-vcs/jj", ASSET = "x86_64-unknown-linux-musl\\\\.tar\\\\.gz$", BIN = "jj" }
+check = "command -v jj >/dev/null"
+cmd = """
+set -eu
+api="https://api.github.com/repos/$REPO/releases/latest"
+if [ -n "${GITHUB_TOKEN:-}" ]; then json=$(curl -fsSL -H "Authorization: Bearer $GITHUB_TOKEN" "$api"); else json=$(curl -fsSL "$api"); fi
+url=$(printf '%s' "$json" | jq -r --arg re "$ASSET" '[.assets[] | select(.name | test($re))][0].browser_download_url')
+tmp=$(mktemp -d) && trap 'rm -rf "$tmp"' EXIT
+curl -fsSL "$url" -o "$tmp/asset" && tar -C "$tmp" -xzf "$tmp/asset"
+install -Dm755 "$(find "$tmp" -type f -name "$BIN" | head -n1)" "$HOME/.local/bin/$BIN"
+"""
+verify = "jj --version"
+
+[tasks.golang]
+description = "Install the latest Go into ~/.local/go"
+depends_on = ["packages"]
+local = true
+rerun = "safe"
+check = '[ "$(~/.local/go/bin/go env GOVERSION 2>/dev/null)" = "$(curl -fsSL "https://go.dev/VERSION?m=text" | head -n1)" ]'
+cmd = """
+set -eu
+version=$(curl -fsSL 'https://go.dev/VERSION?m=text' | head -n1)
+tmp=$(mktemp -d) && trap 'rm -rf "$tmp"' EXIT
+curl -fsSL "https://go.dev/dl/$version.linux-amd64.tar.gz" -o "$tmp/go.tar.gz"
+mkdir -p "$HOME/.local" && rm -rf "$HOME/.local/go"
+tar -C "$HOME/.local" -xzf "$tmp/go.tar.gz"
+"""
+verify = "~/.local/go/bin/go version"
+
+[tasks.go-tools]
+description = "go install the Go dev tools"
+depends_on = ["golang"]
+local = true
+rerun = "safe"
+timeout = "30m"
+envvars = { GO_TOOLS = "golang.org/x/tools/gopls@latest github.com/go-delve/delve/cmd/dlv@latest golang.org/x/tools/cmd/goimports@latest honnef.co/go/tools/cmd/staticcheck@latest golang.org/x/vuln/cmd/govulncheck@latest github.com/jesseduffield/lazygit@latest", GO_BINS = "gopls dlv goimports staticcheck govulncheck lazygit" }
+check = 'for b in $GO_BINS; do [ -x ~/go/bin/$b ] || exit 1; done'
+cmd = 'for mod in $GO_TOOLS; do go install "$mod"; done'
+verify = 'for b in $GO_BINS; do [ -x ~/go/bin/$b ] || exit 1; done'
+
+[tasks.uv]
+description = "Install uv, the Python package and project manager"
+depends_on = ["packages"]
+local = true
+rerun = "safe"
+envvars = { UV_NO_MODIFY_PATH = "1" }
+check = "command -v uv >/dev/null"
+cmd = "curl -LsSf https://astral.sh/uv/install.sh | sh"
+verify = "uv --version"
+
+[tasks.python]
+description = "Install a uv-managed Python and Python CLI tools"
+depends_on = ["uv"]
+local = true
+rerun = "safe"
+envvars = { PY_TOOLS = "ruff mypy pre-commit ipython" }
+check = 'for t in $PY_TOOLS; do command -v $t >/dev/null || exit 1; done'
+cmd = 'uv python install && for tool in $PY_TOOLS; do uv tool install --upgrade "$tool"; done'
+verify = 'for t in $PY_TOOLS; do command -v $t >/dev/null || exit 1; done'
+
+[tasks.nerd-font]
+description = "Install the JetBrainsMono Nerd Font"
+depends_on = ["packages"]
+local = true
+rerun = "safe"
+check = "fc-list | grep -qi 'JetBrainsMono Nerd'"
+cmd = """
+set -eu
+tmp=$(mktemp -d) && trap 'rm -rf "$tmp"' EXIT
+curl -fsSL https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz -o "$tmp/font.tar.xz"
+mkdir -p ~/.local/share/fonts/JetBrainsMono && tar -C ~/.local/share/fonts/JetBrainsMono -xJf "$tmp/font.tar.xz"
+fc-cache -f
+"""
+verify = "fc-list | grep -qi 'JetBrainsMono Nerd'"
+
+[tasks.tmux-config]
+description = "Install the tmux config"
+depends_on = ["packages"]
+local = true
+rerun = "safe"
+check_copies = true
+cmd = "tmux source-file ~/.config/tmux/tmux.conf 2>/dev/null || true"
+verify = "test -f ~/.config/tmux/tmux.conf"
+[[tasks.tmux-config.copy]]
+content = "set -g mouse on\nset -g base-index 1\nsetw -g mode-keys vi\nbind -n M-h select-pane -L\nbind -n M-l select-pane -R\n"
+dst = "~/.config/tmux/tmux.conf"
+
+[bundles.ubuntu]
+description = "Ubuntu dev machine: Go and Python, jj, docker and CLI tools"
+tasks = ["packages", "docker", "docker-group", "sshd", "code-dir", "ssh-key", "git-config", "jj", "golang", "go-tools", "uv", "python", "nerd-font", "tmux-config"]
+
+[bundles.go]
+description = "Only the Go toolchain and its tools"
+tasks = ["golang", "go-tools"]
+
+[servers]
+tasks = []
+
+[servers.hosts.localhost]
+tags = ["workstation"]
+tasks = ["@ubuntu"]
+
+[[schedule]]
+name = "monday-go-update"
+description = "Upgrade Go on Monday mornings"
+target = "@go"
+cron = "0 9 * * 1"
+timezone = "Australia/Sydney"

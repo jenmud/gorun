@@ -4,6 +4,18 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.40.2 (since v0.40.1)
+
+### The assistant's model is v4
+- The default model is now `gorun-qwen3-4b-v4-q4_k_m.gguf`, v3 trained further on a production
+  Gorunfile (load balancers, app servers, Postgres, Redis, schedules), a developer workstation,
+  more task requests, changing a task's timeout, retries, dependencies or sudo in chat, and
+  corrected answers about users, signed-in runs, schedules and models. It scores 83.1% on the
+  held-out set, against v3's 78.0%; `gorun -serve` downloads it on the assistant's next question.
+  Pin v3 with `GORUN_LLM_MODEL` if you need it.
+- The evaluation scores a changed task as the chat's Save takes it, and `train.py` can continue
+  from an earlier adapter with `--from-adapter`.
+
 ## v0.40.1 (since v0.40.0)
 
 ### Running tasks from the web UI needs a signed-in user

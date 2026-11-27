@@ -4,6 +4,18 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.40.0 (since v0.39.2)
+
+### Keep the assistant's answers to train its model
+- An admin can turn on capture on the Assistant page's new **Training data** page, or with
+  `GORUN_ASSISTANT_CAPTURE=1`. Each answer, from the chat and Generate tasks, is kept in the
+  history database (SQLite, Postgres or MySQL, through a new migration) with its prompt as sent,
+  whether its tasks loaded or needed fixing, whether they were saved and how they ran after.
+- Answers get 👍 and 👎. While capture is on, the Assistant page says so to everyone.
+- **Export JSONL** downloads them in the training data's shape, with IP and e-mail addresses,
+  keys and tokens replaced. Nothing leaves the machine otherwise. `training/README.md` shows how
+  to pick the good ones for training.
+
 ## v0.39.2 (since v0.39.1)
 
 ### Scheduled runs use the latest Gorunfile

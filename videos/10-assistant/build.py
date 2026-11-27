@@ -116,6 +116,15 @@ SCENES = [
         ("", "One model for everyone", "questions wait in a queue: no extra memory"),
     ])),
     ]),
+    ("training", None, [
+        (6, shot("training-chat", "With capture on, rate each answer")),
+        (8, shot("training-page", "Training data: what was kept, and how it went")),
+        (6, slide("Help train it", [
+            ("", "Off until an admin turns it on", "and the page tells everyone it's on"),
+            ("", "Kept in your history database", "the prompt, the reply, saved or not, how it ran"),
+            ("", "Export JSONL", "addresses and keys replaced; nothing is sent anywhere"),
+        ])),
+    ]),
     ("outro", None, [(1, slide("Recap", [
         ("", "Explain and summarise", "failures, runs and your Gorunfile"),
         ("", "Write small tasks", "each with a check and a verify, chained with depends_on"),
@@ -134,6 +143,7 @@ CHAPTERS = {
     "generate": "Generate tasks",
     "experimental": "How good is it?",
     "models": "Other models",
+    "training": "Help train it",
     "outro": "Wrap up",
 }
 

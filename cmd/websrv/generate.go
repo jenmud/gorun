@@ -15,6 +15,7 @@ import (
 	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/internal/envvars"
 	"github.com/jenmud/gorun/internal/llm"
+	"github.com/jenmud/gorun/internal/store"
 )
 
 // generator writes tasks for the Config page. Only the web service has one, so the CLI and
@@ -116,6 +117,9 @@ func (a *app) generateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	text, err := a.gen.assistant.GenerateTasks(r.Context(), request, cfg)
 	release()
+	if err == nil {
+		a.capture(r, store.Capture{Kind: "generate", Messages: messagesJSON([]gorun.ChatMessage{{Role: "user", Content: request}}), Reply: text, Tasks: text})
+	}
 	if err != nil {
 		slog.ErrorContext(r.Context(), "generate tasks", "error", err)
 		redirectWith(w, r, "/config", "Could not generate tasks: "+err.Error(), true)

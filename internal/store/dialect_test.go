@@ -200,7 +200,7 @@ func dropTables(t *testing.T, location string) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	for _, table := range []string{"tasks", "servers", "runs", "gorunfiles", "users", "settings", "schema_migrations"} {
+	for _, table := range []string{"tasks", "servers", "runs", "gorunfiles", "users", "settings", "assistant_captures", "schema_migrations"} {
 		if _, err := db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
 			t.Fatalf("drop %s: %v", table, err)
 		}
@@ -316,6 +316,41 @@ func exerciseStore(t *testing.T, location string) {
 	must(err)
 	if len(k1) != 32 || string(k1) != string(k2) {
 		t.Errorf("session keys %x and %x, want one 32-byte key kept", k1, k2)
+	}
+
+	// assistant captures, settings, and how the tasks a capture wrote went
+	if _, ok, err := st.Setting(ctx, "assistant_capture"); ok || err != nil {
+		t.Errorf("an unset setting: %v, %v", ok, err)
+	}
+	must(st.SetSetting(ctx, "assistant_capture", "on"))
+	must(st.SetSetting(ctx, "assistant_capture", "off"))
+	if v, ok, err := st.Setting(ctx, "assistant_capture"); v != "off" || !ok || err != nil {
+		t.Errorf("setting = %q, %v, %v", v, ok, err)
+	}
+	c1 := Capture{ID: "c1", Kind: "chat", CreatedAt: start, Model: "m", Messages: `[{"role":"user","content":"hi"}]`, Reply: "hello", Tasks: "[tasks.t]", TaskNames: "t", Repaired: true}
+	c2 := Capture{ID: "c2", Kind: "generate", CreatedAt: start.Add(time.Minute), Messages: "[]", Reply: strings.Repeat("é", 70000)}
+	must(st.SaveCapture(ctx, c1))
+	must(st.SaveCapture(ctx, c2))
+	must(st.MarkCaptureSaved(ctx, "c1", start))
+	must(st.SetCaptureFeedback(ctx, "c1", -1))
+	caps, err := st.Captures(ctx, 0)
+	must(err)
+	if len(caps) != 2 || caps[0].ID != "c2" || caps[1].Feedback != -1 || !caps[1].Repaired || !caps[1].SavedAt.Equal(start) || len(caps[0].Reply) != 140000 {
+		t.Errorf("captures = %+v", caps)
+	}
+	if caps, _ := st.Captures(ctx, 1); len(caps) != 1 {
+		t.Errorf("Captures(1) = %d", len(caps))
+	}
+	if o, err := st.TaskOutcome(ctx, []string{"nginx", "nope"}, time.Time{}); err != nil || o.Failed != 1 {
+		t.Errorf("TaskOutcome = %+v, %v", o, err)
+	}
+	if o, err := st.TaskOutcome(ctx, []string{"nginx"}, start.Add(24*time.Hour)); err != nil || o != (Outcome{}) {
+		t.Errorf("TaskOutcome before any run = %+v, %v", o, err)
+	}
+	must(st.DeleteCapture(ctx, "c2"))
+	must(st.DeleteCapture(ctx, ""))
+	if n, err := st.CountCaptures(ctx); n != 0 || err != nil {
+		t.Errorf("CountCaptures after deleting = %d, %v", n, err)
 	}
 
 	must(st.TruncateRuns(ctx, 1))

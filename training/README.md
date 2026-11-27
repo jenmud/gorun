@@ -77,6 +77,27 @@ and a word of the error. It prints a score per kind and writes the replies to
 
 `.venv/`, `.hf/`, `.llama.cpp/`, `data/` and `out/` are ignored by git.
 
+## Real questions from gorun -serve
+
+The seeds are written by hand. Real questions, from people using the assistant, show what they
+actually ask and where the model goes wrong. Turn on capture on the Assistant page's **Training
+data** page (see [the web UI](../docs/web.md#training-data)), use the assistant for a while, then
+**Export JSONL**. Each line has `messages`, as `train.jsonl` does, and a `meta` saying what became
+of the answer: `loaded` and `task_error`, `repaired`, `saved`, `feedback` (1 for 👍, -1 for 👎)
+and `runs_passed` and `runs_failed`, how the tasks it wrote ran once saved.
+
+Read the export first: it holds your Gorunfile's hostnames and task output. Then keep the answers
+that were right, and add them after building the data, since the build writes `data/train.jsonl`
+afresh:
+
+```bash
+jq -c 'select(.meta.feedback >= 0 and (.meta.task_error // "") == "" and .meta.runs_failed == 0)
+       | {id, kind, messages}' gorun-assistant-*.jsonl >> data/train.jsonl
+```
+
+A 👎 answer, or one whose tasks failed, is worth more as a new seed: write the right answer into
+`seeds/` by hand, so every build learns it.
+
 ## Publishing
 
 Upload each build under a new file name, such as `gorun-qwen3-4b-v3-q4_k_m.gguf`: gorun keeps a

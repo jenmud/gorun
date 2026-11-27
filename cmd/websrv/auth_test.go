@@ -86,6 +86,9 @@ func TestGuardLetsAnyoneLookButOnlyUsersChange(t *testing.T) {
 		{"POST", "/assistant/hub/download", 403, 403, 200},
 		{"GET", "/assistant/hub/search", 403, 403, 200}, // asks Hugging Face for this machine
 		{"GET", "/users", 403, 403, 200},
+		{"GET", "/assistant/captures", 403, 403, 200},
+		{"GET", "/assistant/captures/export", 403, 403, 200},
+		{"POST", "/assistant/feedback", 200, 200, 200}, // anyone who may ask may rate
 		{"POST", "/users/add", 403, 403, 200},
 	} {
 		for _, who := range []struct {

@@ -489,6 +489,31 @@ The page says whether the chat is private. It is when the model runs inside goru
 `GORUN_LLM_URL` on this machine (`localhost` or a loopback address). With any other URL, each
 question sends the Gorunfile and run output to that host, and the page says so in amber.
 
+#### Training data
+
+To help train gorun's model on real questions, an admin can keep the assistant's answers: the
+**Training data** link on the Assistant page, **Turn on**, or `GORUN_ASSISTANT_CAPTURE=1` in
+gorun's environment. It is off until then, and needs the history database. While it is on, the
+Assistant page says so to everyone who uses it, and each answer has 👍 and 👎 to rate it.
+
+For every answer, from the chat and from **Generate tasks**, it keeps, in the history database:
+
+- the prompt exactly as the model got it: the question, the conversation, and the context (the
+  Gorunfile's tasks and servers, recent runs, doc sections). Env vars and template variables are
+  never in it;
+- the reply, whether its tasks loaded or had to be sent back to fix, and why not;
+- whether someone saved its tasks, and how those tasks ran after: the page counts the runs of
+  them that passed and failed since they were saved;
+- the rating, and who asked, when there is a [login](#signing-in).
+
+The Training data page lists the newest 100, deletes one or all of them, and **Export JSONL**
+downloads them all, one per line, in the shape of `training/data/train.jsonl` (`messages`, the
+reply last) with a `meta` object saying what became of it. The export replaces IP addresses,
+e-mail addresses, private keys and tokens that look like AWS, GitHub, Slack or OpenAI ones, and
+leaves out who asked; hostnames and names in your Gorunfile stay, so read it before you share
+it. `?redact=0` exports it as kept. Nothing is sent anywhere by gorun. See
+[training](../training/README.md#real-questions-from-gorun--serve) for using it.
+
 The model is small: it reads failures well when the output says what went wrong, but its tasks
 can hold placeholders, such as paths and passwords, to fill in. It is Qwen3 4B Instruct
 fine-tuned on gorun by [`training/`](../training): on Gorunfiles, gorun's docs, writing small

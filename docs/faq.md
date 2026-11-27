@@ -106,3 +106,11 @@ writes tasks and schedules. It is experimental. By default it runs gorun's own f
 points at another GGUF file or URL, and `GORUN_LLM_URL` at a server such as Ollama. The Assistant
 page's Models panel also downloads GGUF models from Hugging Face and switches between them. See
 [the assistant](web.md#assistant).
+
+## Can I help train the assistant?
+
+Yes. An admin turns on capture on the Assistant page's **Training data** page, or sets
+`GORUN_ASSISTANT_CAPTURE=1`: every answer is then kept in the history database with its prompt,
+whether its tasks loaded, were saved and ran, and the 👍 or 👎 it got. **Export JSONL** downloads
+them, with addresses and keys replaced, for `training/`. Nothing is sent anywhere by gorun. See
+[training data](web.md#training-data).

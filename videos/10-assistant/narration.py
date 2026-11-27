@@ -78,6 +78,13 @@ NARRATION = {
         "If that server isn't on your machine, the page warns you, in amber, that your Gorunfile and run output are sent there.\n"
         "And one model serves everyone. Questions wait in a queue, so more people never costs more memory, just a short wait."
     ),
+    "training": (
+        "And here's how you can help it get better. On the Assistant page, an admin can open Training data, and turn on capture. "
+        "It's off until you do, and while it's on, the page tells everyone who uses it.\n"
+        "Every answer is then kept in your history database: the prompt exactly as the model saw it, the reply, "
+        "whether its tasks loaded, whether you saved them, and how they ran afterwards. Each answer gets a thumbs up and a thumbs down, so you can say whether it was right.\n"
+        "Export J S O N L downloads it all, ready for training, with addresses and keys replaced. Nothing is sent anywhere unless you send it."
+    ),
     "outro": (
         "So that's the assistant. It explains failures, summarises runs, writes small tasks with a check and a verify, and sets up schedules, "
         "all on your own machine.\n"

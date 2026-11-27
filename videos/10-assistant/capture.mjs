@@ -86,5 +86,13 @@ await p.click("#hub-results [data-hub-repo] >> nth=0");
 await p.waitForSelector("#hub-results [data-hub-download], #hub-results [data-hub-back]", { timeout: 30000 }); await p.waitForTimeout(500);
 await p.locator("#hub-results").scrollIntoViewIfNeeded(); await shot("models-files");
 
+// training data: capture on, one answer rated, then the page that lists what was kept
+await go("/assistant/captures"); await p.click("button:has-text('Turn on')"); await p.waitForTimeout(800);
+await go("/assistant");
+await ask("training-ask", "Write a task that installs htop", false);
+await p.locator("#chat-log > div").last().locator("button:has-text('👍')").click(); await p.waitForTimeout(500);
+await shot("training-chat");
+await go("/assistant/captures", 1000); await p.locator("main li details").first().evaluate(d => d.open = true); await shot("training-page");
+
 writeFileSync(`${out}/replies.json`, JSON.stringify(replies, null, 2));
 await b.close();

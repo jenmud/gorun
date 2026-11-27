@@ -268,6 +268,8 @@ type AssistantPageData struct {
 	RunTitle string
 	Stats    AssistantStats
 	Models   *ModelsData // the built-in model's models; nil with a model server
+	// Capturing is set when answers are kept for training, which the page says
+	Capturing bool
 }
 
 // ModelsData is the Assistant page's list of downloaded models and the one in use.

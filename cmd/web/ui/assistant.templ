@@ -94,6 +94,19 @@ templ privacyNote(d AssistantPageData) {
 			Not private: each question sends your Gorunfile's tasks and servers, and recent run output, to { d.Host }.
 		</p>
 	}
+	if d.Capturing {
+		<p class="mt-2 flex items-center gap-2 rounded-lg border border-sky-900/60 bg-sky-950/20 px-3 py-2 text-xs text-sky-300">
+			<span class="h-2 w-2 rounded-full bg-sky-400"></span>
+			<span>
+				Kept for training: an admin turned on capture, so questions and answers here are kept in the history database to train gorun's model. Rate answers with 👍 or 👎 to help.
+				if canAdmin(ctx) {
+					<a href="/assistant/captures" class="underline underline-offset-2">Training data</a>
+				}
+			</span>
+		</p>
+	} else if canAdmin(ctx) {
+		<p class="mt-2 text-xs text-zinc-500"><a href="/assistant/captures" class="hover:text-zinc-300 hover:underline">Training data</a>: keep the assistant's answers to train gorun's model on real questions.</p>
+	}
 }
 
 templ suggestion(text string) {
@@ -211,7 +224,7 @@ templ assistantScript() {
 			btn.disabled = true;
 			fetch('/assistant/add', {
 				method: 'POST', headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ tasks: reply.tasks, file: box.querySelector('select[name=file]').value }),
+				body: JSON.stringify({ tasks: reply.tasks, file: box.querySelector('select[name=file]').value, capture: reply.capture || '' }),
 			}).then(function (r) { return r.json(); }).then(function (out) {
 				box.innerHTML = '';
 				var p = document.createElement('p');
@@ -315,7 +328,9 @@ templ assistantScript() {
 			if (done.error) { bubble('error', done.error); return; }
 			messages.push({ role: 'assistant', content: done.reply });
 			save();
-			offerTasks(bubble('assistant', done.reply), done);
+			var answer = bubble('assistant', done.reply);
+			offerTasks(answer, done);
+			if (done.capture) { rate(answer, done.capture); }
 		}).catch(function (e) {
 			wait.remove();
 			bubble('error', e.name === 'AbortError' ? 'Stopped.' : String(e));
@@ -328,6 +343,37 @@ templ assistantScript() {
 		});
 	}
 	stop.addEventListener('click', function () { if (running) { running.abort(); } });
+
+	// rate adds 👍 and 👎 to a kept answer; pressing the chosen one again takes the rating back
+	function rate(b, id) {
+		var row = document.createElement('div');
+		row.className = 'mt-2 flex items-center gap-1 text-xs text-zinc-500';
+		row.append('Was this right?');
+		var value = 0;
+		[[1, '👍', 'Good answer'], [-1, '👎', 'Bad answer']].forEach(function (o) {
+			var btn = document.createElement('button');
+			btn.type = 'button';
+			btn.textContent = o[1];
+			btn.title = o[2];
+			btn.setAttribute('aria-label', o[2]);
+			btn.dataset.value = o[0];
+			btn.className = 'rounded px-1.5 py-0.5 opacity-60 hover:bg-zinc-700 hover:opacity-100';
+			btn.addEventListener('click', function () {
+				value = value === o[0] ? 0 : o[0];
+				fetch('/assistant/feedback', {
+					method: 'POST', headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ capture: id, value: value }),
+				}).catch(function () {});
+				row.querySelectorAll('button').forEach(function (x) {
+					var on = Number(x.dataset.value) === value;
+					x.classList.toggle('opacity-60', !on);
+					x.classList.toggle('bg-zinc-700', on);
+				});
+			});
+			row.appendChild(btn);
+		});
+		b.appendChild(row);
+	}
 
 	// refreshStats draws the model's stats again, keeping the panel open or closed
 	function refreshStats() {

@@ -1,0 +1,116 @@
+package ui
+
+import "fmt"
+
+// CapturesPageData is the Training data page: assistant answers kept to train gorun's model.
+type CapturesPageData struct {
+	On       bool
+	ByEnv    bool // GORUN_ASSISTANT_CAPTURE turned it on, so the page can't turn it off
+	Total    int
+	Rows     []CaptureRow
+	Flash    string
+	FlashBad bool
+	NoStore  bool
+}
+
+// CaptureRow is one kept answer.
+type CaptureRow struct {
+	ID, Kind, When, User, Model string
+	Question, Reply             string
+	TaskNames, TaskError        string
+	Repaired, Saved             bool
+	Feedback                    int
+	Passed, Failed              int // how its saved tasks have run since
+}
+
+// CapturesPage lets an admin turn capture on or off, look through what was kept, delete it, and
+// export it for training.
+templ CapturesPage(d CapturesPageData) {
+	if d.Flash != "" {
+		@flash(d.Flash, d.FlashBad)
+	}
+	<div class="mb-6 max-w-3xl">
+		<p class="text-sm"><a href="/assistant" class="text-accent hover:underline">← Assistant</a></p>
+		<h1 class="mt-1 text-xl font-semibold text-zinc-100">Training data</h1>
+		<p class="mt-1 text-sm text-zinc-400">With capture on, every assistant answer is kept in the history database: the prompt exactly as the model got it (your Gorunfile and recent runs included, never env vars or template variables), the reply, whether its tasks loaded or needed fixing, whether someone saved them, how they ran after, and the 👍 or 👎 the asker gave. Nothing leaves this machine until you export it.</p>
+	</div>
+	if d.NoStore {
+		<p class="text-sm text-zinc-400">The history database isn't open, so nothing can be kept.</p>
+	} else {
+		<section class="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 text-sm">
+			if d.On {
+				<span class="rounded bg-emerald-950/60 px-2 py-0.5 text-emerald-300">Capture is on</span>
+			} else {
+				<span class="rounded bg-zinc-800 px-2 py-0.5 text-zinc-300">Capture is off</span>
+			}
+			if d.ByEnv {
+				<span class="text-zinc-500">GORUN_ASSISTANT_CAPTURE turned it on; unset it to turn it off.</span>
+			} else {
+				<form method="post" action="/assistant/captures/toggle">
+					if d.On {
+						<button class="rounded-lg border border-zinc-700 px-3 py-1 text-zinc-200 hover:bg-zinc-800">Turn off</button>
+					} else {
+						<input type="hidden" name="on" value="on"/>
+						<button class="rounded-lg bg-accent px-3 py-1 font-medium text-white hover:bg-violet-600">Turn on</button>
+					}
+				</form>
+			}
+			<span class="ml-auto text-zinc-400">{ plural(d.Total, "answer") } kept</span>
+			if d.Total > 0 {
+				<a href="/assistant/captures/export" class="rounded-lg border border-zinc-700 px-3 py-1 text-zinc-200 hover:bg-zinc-800">Export JSONL</a>
+				<form method="post" action="/assistant/captures/delete" onsubmit="return confirm('Delete every kept answer? This can\'t be undone.')">
+					<input type="hidden" name="all" value="yes"/>
+					<button class="rounded-lg px-3 py-1 text-red-300 hover:bg-red-950/40">Delete all</button>
+				</form>
+			}
+		</section>
+		<p class="mb-4 max-w-3xl text-xs text-zinc-500">The export replaces IP addresses, e-mail addresses and things that look like keys or tokens, and leaves out who asked. Hostnames and names in your Gorunfile stay, so read it before you share it. Each line has the prompt and reply as <code>messages</code>, like <code>training/data/train.jsonl</code>, and a <code>meta</code> saying what became of the answer.</p>
+		if d.Total > len(d.Rows) {
+			<p class="mb-2 text-xs text-zinc-500">The newest { fmt.Sprint(len(d.Rows)) } are shown; the export has them all.</p>
+		}
+		<ul class="space-y-2">
+			for _, c := range d.Rows {
+				<li class="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-sm">
+					<div class="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+						<span>{ c.When }</span>
+						<span class="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-300">{ c.Kind }</span>
+						if c.User != "" {
+							<span>{ c.User }</span>
+						}
+						<span class="font-mono">{ c.Model }</span>
+						switch {
+							case c.TaskError != "":
+								<span class="rounded bg-red-950/60 px-1.5 py-0.5 text-red-300" title={ c.TaskError }>tasks didn't load</span>
+							case c.TaskNames != "":
+								<span class="rounded bg-emerald-950/60 px-1.5 py-0.5 text-emerald-300">tasks loaded</span>
+						}
+						if c.Repaired {
+							<span class="rounded bg-amber-950/60 px-1.5 py-0.5 text-amber-300">needed fixing</span>
+						}
+						if c.Saved {
+							<span class="rounded bg-sky-950/60 px-1.5 py-0.5 text-sky-300">saved</span>
+							if c.Passed+c.Failed > 0 {
+								<span>{ fmt.Sprintf("ran %d ok, %d failed", c.Passed, c.Failed) }</span>
+							}
+						}
+						switch c.Feedback {
+							case 1:
+								<span>👍</span>
+							case -1:
+								<span>👎</span>
+						}
+						<form method="post" action="/assistant/captures/delete" class="ml-auto">
+							<input type="hidden" name="id" value={ c.ID }/>
+							<button class="text-red-300 hover:underline">Delete</button>
+						</form>
+					</div>
+					<p class="mt-1 whitespace-pre-wrap text-zinc-100">{ c.Question }</p>
+					<details class="mt-1">
+						<summary class="cursor-pointer text-xs text-zinc-400">Reply</summary>
+						<pre class="mt-1 max-h-80 overflow-auto whitespace-pre-wrap rounded bg-zinc-950 p-2 font-mono text-xs text-zinc-300">{ c.Reply }</pre>
+					</details>
+				</li>
+			}
+		</ul>
+	}
+}

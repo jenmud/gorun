@@ -80,6 +80,7 @@ func (a *app) assistantPage(w http.ResponseWriter, r *http.Request) {
 		m := a.modelsData("")
 		d.Models = &m
 	}
+	d.Capturing, _ = a.capturing(r.Context())
 	if !d.Private {
 		d.Host = a.gen.host()
 	}
@@ -122,6 +123,7 @@ type chatReply struct {
 	Replaces  string `json:"replaces,omitempty"`  // the ones in Tasks the Gorunfile has already
 	TaskError string `json:"taskError,omitempty"`
 	Error     string `json:"error,omitempty"`
+	Capture   string `json:"capture,omitempty"` // the kept answer's id, to rate it and mark it saved
 }
 
 // chatHandler answers the conversation, with the Gorunfile and history as context.
@@ -179,9 +181,11 @@ func (a *app) chatHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := chatReply{Reply: reply}
+	repaired := false
 	if hasTaskBlock(reply) {
 		tasks, err := gorun.ExtractTaskEdits(reply, cfg)
 		if err != nil {
+			repaired = true
 			if fixed, ferr := a.repairTasks(ctx, messages, reply, err, cfg, send); ferr == nil {
 				out.Reply = fixed + "\n\n(The tasks didn't load the first time, so gorun asked the model to fix them.)"
 				tasks, err = gorun.ExtractTaskEdits(fixed, cfg)
@@ -200,6 +204,10 @@ func (a *app) chatHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	out.Capture = a.capture(r, store.Capture{
+		Kind: "chat", Messages: messagesJSON(messages), Reply: out.Reply, Tasks: out.Tasks,
+		TaskNames: out.TaskNames, TaskError: out.TaskError, Repaired: repaired,
+	})
 	finish(http.StatusOK, out)
 }
 
@@ -301,7 +309,7 @@ func streamEvents(w http.ResponseWriter) func(chatEvent) {
 // as the Tasks page's edits are: there is nothing left to review on the Config page. One with
 // unsaved changes there is left alone.
 func (a *app) addTasksHandler(w http.ResponseWriter, r *http.Request) {
-	var req struct{ Tasks, File string }
+	var req struct{ Tasks, File, Capture string }
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, chatReply{Error: "send the tasks as JSON"})
 		return
@@ -335,6 +343,11 @@ func (a *app) addTasksHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusUnprocessableEntity, chatReply{Error: "saved them, but " + err.Error()})
 		return
+	}
+	if req.Capture != "" && a.store != nil {
+		if err := a.store.MarkCaptureSaved(r.Context(), req.Capture, time.Now()); err != nil {
+			slog.ErrorContext(r.Context(), "mark a kept answer saved", "error", err)
+		}
 	}
 	writeJSON(w, http.StatusOK, chatReply{Reply: fmt.Sprintf("Saved %s into %s.", strings.Join(names, ", "), rel(cfg.Path, req.File)) + note})
 }

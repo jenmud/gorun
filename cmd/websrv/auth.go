@@ -253,12 +253,12 @@ func signedIn(r *http.Request) string {
 }
 
 // openPosts are the posts anyone may make: asking the assistant is looking, not changing.
-var openPosts = []string{"/assistant/chat", "/login", "/logout"}
+var openPosts = []string{"/assistant/chat", "/assistant/feedback", "/login", "/logout"}
 
 // adminOnly is whether path is for admins alone: managing users, and the assistant's models,
 // which includes asking Hugging Face for this machine.
 func adminOnly(path string) bool {
-	for _, p := range []string{"/users", "/assistant/models/", "/assistant/hub/"} {
+	for _, p := range []string{"/users", "/assistant/models/", "/assistant/hub/", "/assistant/captures"} {
 		if path == p || strings.HasPrefix(path, strings.TrimSuffix(p, "/")+"/") {
 			return true
 		}

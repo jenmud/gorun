@@ -253,6 +253,9 @@ func exerciseStore(t *testing.T, location string) {
 		!r.CheckOnly || r.Origin == nil || r.Origin.User != "jenda" || !r.StartedAt.Equal(start.Add(2*time.Hour)) {
 		t.Errorf("GetRun summary = %+v", r.RunSummary)
 	}
+	if !slices.Equal(r.Servers, []string{"web-1", "db-1"}) {
+		t.Errorf("GetRun servers = %v, want them in the order they were added", r.Servers)
+	}
 	if r.ServerAddress["web-1"] != "10.0.0.9" || r.ServerErrors["db-1"] == "" || r.ServerEnvVars["web-1"]["REGION"] != "eu" ||
 		len(r.Includes) != 1 || r.RunVars["v"] != "x" || len(r.Tasks) != 2 {
 		t.Errorf("GetRun detail = %+v", r)

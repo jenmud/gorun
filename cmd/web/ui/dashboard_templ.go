@@ -62,7 +62,7 @@ func Dashboard(s DashboardState) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		for _, uuid := range s.ProcessOrder {
+		for _, uuid := range s.Newest() {
 			templ_7745c5c3_Err = processCard(s.Processes[uuid]).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

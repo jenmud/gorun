@@ -188,7 +188,10 @@ task to the bundles that include it.
 
 The front page (`/`) shows what is running now: runs started from the Run page, from the
 terminal, or by a schedule. Stats and **Recent runs** bars sit above it, and each bar links to
-the run. Each run, server and task starts collapsed. A task that is uploading a file shows a bar
+the run. Runs are listed as on the [History](#history) page: newest first, each run's servers in
+the order it planned them, and, once a run is over, each server's tasks slowest first. While a run
+is going its tasks stay in the order they run, so rows don't jump as they finish. Each run, server
+and task starts collapsed. A task that is uploading a file shows a bar
 with the size and rate, and a closed server shows the upload on its line
 ([screenshot](screenshot-web-upload.png)). **Stop** cancels a run started from the web UI,
 **Ask the assistant** opens the [assistant](#assistant) on that run, to summarise it or explain a

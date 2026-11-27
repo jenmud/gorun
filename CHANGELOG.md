@@ -20,6 +20,11 @@ the release notes when a version is cut.
   is upgraded in place.
 - `history.Open` takes the same URLs, for programs built on the library.
 
+### Live lists runs as History does
+- The Live page lists runs newest first, as History does; it listed them oldest first. History
+  now always lists a run's servers in the order the run planned them, which Postgres and MySQL
+  didn't promise.
+
 ### Picking a bundle's tasks
 - The web UI's bundle forms, and the Config page's server group forms, list the Gorunfile's tasks
   and bundles to pick from, and show the picked ones as labels, in run order, each with a ×. Before,

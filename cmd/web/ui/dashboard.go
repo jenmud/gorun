@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/jenmud/gorun/internal/store"
 )
@@ -69,10 +70,24 @@ type ProcessState struct {
 	Origin      *store.Origin // who started the run, where, and with what
 }
 
-// DashboardState is every run the live dashboard shows, in the order they started. Apply keeps it up to date from run events.
+// DashboardState is every run the live dashboard shows, in the order it first heard of them.
+// Apply keeps it up to date from run events; Newest gives the order they are shown in.
 type DashboardState struct {
 	Processes    map[string]*ProcessState
 	ProcessOrder []string
+}
+
+// Newest lists the runs newest first, as History does: by start time, and in the order they
+// were heard of, latest first, for runs whose start the dashboard missed.
+func (s DashboardState) Newest() []string {
+	out := slices.Clone(s.ProcessOrder)
+	slices.Reverse(out)
+	started := func(uuid string) time.Time {
+		t, _ := time.Parse(time.RFC3339Nano, s.Processes[uuid].StartedAt)
+		return t
+	}
+	slices.SortStableFunc(out, func(a, b string) int { return started(b).Compare(started(a)) })
+	return out
 }
 
 // process returns the run with the given id, adding it when it is new.

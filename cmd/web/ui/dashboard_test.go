@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -211,5 +212,29 @@ func TestDashboardShowsCopies(t *testing.T) {
 	}
 	if html := buf.String(); !strings.Contains(html, "scripts/stack-ok.sh → /home/ubuntu/stack-ok.sh") || !strings.Contains(html, ">Copies<") {
 		t.Errorf("copies missing from the live task:\n%s", html)
+	}
+}
+
+// TestDashboardShowsTheNewestRunFirst makes sure Live orders runs as History does: newest first,
+// by start time, whatever order their events arrived in.
+func TestDashboardShowsTheNewestRunFirst(t *testing.T) {
+	var state DashboardState
+	state.Apply(store.Event{Type: "process_started", GorunUUID: "late", Title: "Started second", StartedAt: "2026-11-27T10:00:05Z"})
+	state.Apply(store.Event{Type: "process_started", GorunUUID: "early", Title: "Started first", StartedAt: "2026-11-27T10:00:01Z"})
+	state.Apply(store.Event{Type: "task", GorunUUID: "missed-a", Server: "web-1", Task: "a"}) // its start was missed
+	state.Apply(store.Event{Type: "task", GorunUUID: "missed-b", Server: "web-1", Task: "b"})
+
+	want := []string{"late", "early", "missed-b", "missed-a"}
+	if got := state.Newest(); !slices.Equal(got, want) {
+		t.Errorf("Newest() = %v, want %v", got, want)
+	}
+
+	var buf bytes.Buffer
+	if err := Dashboard(state).Render(context.Background(), &buf); err != nil {
+		t.Fatal(err)
+	}
+	html := buf.String()
+	if strings.Index(html, "Started second") > strings.Index(html, "Started first") {
+		t.Error("the dashboard shows the older run first")
 	}
 }

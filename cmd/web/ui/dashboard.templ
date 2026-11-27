@@ -19,7 +19,7 @@ templ Dashboard(s DashboardState) {
 		</div>
 	}
 	<div class="space-y-3">
-		for _, uuid := range s.ProcessOrder {
+		for _, uuid := range s.Newest() {
 			@processCard(s.Processes[uuid])
 		}
 	</div>

@@ -323,7 +323,7 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	fromJSON(vars, &r.RunVars)
 	fromJSON(includes, &r.Includes)
 
-	servers, err := s.query(ctx, `SELECT name,address,error,envvars,vars FROM servers WHERE run_id=?`, id)
+	servers, err := s.query(ctx, `SELECT name,address,error,envvars,vars FROM servers WHERE run_id=? ORDER BY id`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -354,7 +354,7 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 
 	// each task's check and verify come with the list, so a view can show them straight away;
 	// the command's own output waits for GetTask
-	tasks, err := s.query(ctx, `SELECT server,name,state,exit_code,duration_ns,steps FROM tasks WHERE run_id=?`, id)
+	tasks, err := s.query(ctx, `SELECT server,name,state,exit_code,duration_ns,steps FROM tasks WHERE run_id=? ORDER BY id`, id)
 	if err != nil {
 		return nil, err
 	}

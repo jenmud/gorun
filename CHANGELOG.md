@@ -4,7 +4,7 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
-## Next
+## v0.38.0 (since v0.37.2)
 
 ### A Docker image with the assistant's model built in
 - `make docker` builds the web service image with llama.cpp and gorun's model inside (Debian,

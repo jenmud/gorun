@@ -55,7 +55,7 @@ already set.
 | Variable | Default | Description |
 |---|---|---|
 | `GORUN_NAME` | `gorun` | name for OpenTelemetry and NATS |
-| `GORUN_DB_PATH` | `~/.gorun/gorun.db` | history database (see [History](running.md#history) for how it is found) |
+| `GORUN_DB_PATH` | `~/.gorun/gorun.db` | history database: an SQLite file, or a `postgres://` or `mysql://` URL (see [History](running.md#history) for how it is found) |
 | `GORUN_CACHE_DIR` | `~/.cache/gorun` | where git includes are fetched and kept |
 | `GORUN_LOG_FILE` | `~/.gorun/gorun.log` | log file |
 | `GORUN_ADDRESS` | `:8080` | web UI listen address |

@@ -292,13 +292,15 @@ func (a *app) renderCtx() context.Context {
 // openStore opens the history database at path. On error it returns a nil store, so the UI
 // still works without history.
 func openStore(path string) (*store.Store, error) {
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	if !store.IsURL(path) {
+		_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	}
 	st, err := store.Open(path)
 	if err != nil {
 		log.Printf("gorun web: history disabled: %v", err)
 		return nil, err
 	}
-	log.Printf("gorun web: history at %s", path)
+	log.Printf("gorun web: history at %s", store.Redact(path))
 	return st, nil
 }
 

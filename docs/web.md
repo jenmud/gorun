@@ -67,7 +67,7 @@ If the address is taken, it prints `gorun: listen <addr>: <err>` and exits with 
 | Setting | Default | What it does |
 |---|---|---|
 | `GORUN_ADDRESS` | `:8080` | address to listen on |
-| `GORUN_DB_PATH` | `~/.gorun/gorun.db` | history database |
+| `GORUN_DB_PATH` | `~/.gorun/gorun.db` | history database: an SQLite file, or a `postgres://` or `mysql://` URL |
 | `GORUN_NATS_CLIENT_URL` | none | a NATS server to use; when set, none is started |
 | `GORUN_NATS_SERVER_CONFIG` | none | a NATS server config file for the server the web service starts |
 | `GORUN_EVENT_TOPIC` | `gorun.events` | the NATS subject run events go to |
@@ -242,8 +242,13 @@ Each bundle, its tasks in order, and what it expands to, with **Run this bundle*
 **Filter bundles** searches each bundle's name, description, source file, the tasks it expands to,
 and the bundles that use it, with the same word matching and count as the Tasks page.
 
-- **Add a bundle**: name, tasks (comma separated, `@bundles` allowed), description, file.
+- **Add a bundle**: name, tasks, description, file.
 - **Edit** on a bundle: change its tasks and description.
+
+Tasks are picked from a list of the Gorunfile's tasks and `@bundles`, and shown as labels in the
+order picked, which is the order they run. **×** on a label removes it; the filter box above the
+list narrows it, and enter picks the first match. The Config page's bundle and server group forms
+pick tasks the same way. Without JavaScript the field is a comma separated list.
 
 ### Schedules
 

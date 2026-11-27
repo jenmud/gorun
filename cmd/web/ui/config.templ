@@ -58,8 +58,8 @@ templ ConfigPage(d ConfigPageData) {
 				if d.Model != "" {
 					@generateTasksForm(d.Files, d.Model)
 				}
-				@addGroupForm(d.Files)
-				@addBundleForm(d.Files)
+				@addGroupForm(d.Files, d.Targets)
+				@addBundleForm(d.Files, d.Targets)
 				@addScheduleForm("/config/add", d.Files, d.Targets)
 			}
 		</aside>
@@ -326,7 +326,7 @@ templ generateTasksForm(files []FileOption, model string) {
 	</details>
 }
 
-templ addGroupForm(files []FileOption) {
+templ addGroupForm(files []FileOption, targets []string) {
 	<details class="group/add rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
 		<summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-zinc-100"><span class="inline-block text-zinc-500 transition group-open/add:rotate-90">▸</span>Add a server group</summary>
 		<p class="mt-1 text-xs text-zinc-500">Settings servers share by joining the group.</p>
@@ -334,7 +334,7 @@ templ addGroupForm(files []FileOption) {
 			<input type="hidden" name="kind" value="group"/>
 			<input name="name" required placeholder="name, e.g. web" class={ inputClass() }/>
 			<input name="tags" placeholder="tags, comma separated" class={ inputClass() }/>
-			<input name="tasks" placeholder="tasks or @bundles, comma separated" class={ inputClass() }/>
+			@taskPicker("Tasks", "tasks", "", targets, false)
 			<input name="ssh_user" placeholder="SSH user" class={ inputClass() }/>
 			<input name="identityfile" placeholder="identity file" class={ inputClass() }/>
 			@fileSelect(files)
@@ -343,14 +343,14 @@ templ addGroupForm(files []FileOption) {
 	</details>
 }
 
-templ addBundleForm(files []FileOption) {
+templ addBundleForm(files []FileOption, targets []string) {
 	<details class="group/add rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
 		<summary class="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-zinc-100"><span class="inline-block text-zinc-500 transition group-open/add:rotate-90">▸</span>Add a bundle</summary>
 		<p class="mt-1 text-xs text-zinc-500">A named list of tasks. Use it as <span class="font-mono">{ "@name" }</span> anywhere a task list goes.</p>
 		<form method="post" action="/config/add" class="mt-3 space-y-2">
 			<input type="hidden" name="kind" value="bundle"/>
 			<input name="name" required placeholder="name, e.g. baseline" class={ inputClass() }/>
-			<input name="tasks" required placeholder="tasks, comma separated" class={ inputClass() }/>
+			@taskPicker("Tasks", "tasks", "", targets, true)
 			<input name="description" placeholder="description" class={ inputClass() }/>
 			@fileSelect(files)
 			<button class={ addButtonClass() }>Add bundle</button>
@@ -447,11 +447,11 @@ templ editModal(d ConfigPageData) {
 						<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" checked?={ d.Edit.Local } class="accent-violet-600"/> run only on local servers</label>
 					case "group":
 						@editField("Tags", "tags", d.Edit.Tags, "comma separated")
-						@editField("Tasks", "tasks", d.Edit.Tasks, "tasks or @bundles, comma separated")
+						@taskPicker("Tasks", "tasks", d.Edit.Tasks, d.Targets, false)
 						@editField("SSH user", "ssh_user", d.Edit.SSHUser, "")
 						@editField("Identity file", "identityfile", d.Edit.IdentityFile, "")
 					case "bundle":
-						@editField("Tasks", "tasks", d.Edit.Tasks, "tasks or @bundles, comma separated")
+						@taskPicker("Tasks", "tasks", d.Edit.Tasks, d.Targets, true)
 						@editField("Description", "description", d.Edit.Description, "")
 					case "schedule":
 						@editField("Target", "target", d.Edit.Target, "a task, or @bundle")

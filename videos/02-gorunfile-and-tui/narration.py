@@ -4,7 +4,8 @@ NARRATION = {
     "intro": (
         "Welcome back! In the first video, we looked at what gorun is, and why it exists. "
         "In this one, we're going to learn how to actually use it.\n"
-        "We'll write a Gorunfile from scratch, one small step at a time. "
+        "We'll write a Gorunfile from scratch, one small step at a time. We'll keep it as a file and run it from the terminal, "
+        "the quickest way to see each step. Everything works the same in the web dashboard, which keeps Gorunfiles in its database. "
         "Then we'll take the terminal interface for a proper spin: the picker, the live view, and the history.\n"
         "And just so you know, this is the same synthetic voice as last time. "
         "It lets us keep these tutorials up to date as gorun changes."

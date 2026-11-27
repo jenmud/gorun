@@ -4,6 +4,14 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.39.1 (since v0.39.0)
+
+### The database comes first in the docs
+- The README, the web UI docs, the tutorial and the FAQ lead with `gorun -serve` keeping
+  Gorunfiles in its database, every save a version; a Gorunfile kept as a file is for the
+  terminal, scripts, CI and git. Nothing about how gorun runs has changed.
+- The tutorial videos say "live" as in a live concert.
+
 ## v0.39.0 (since v0.38.0)
 
 ### Users and sign in for the web UI

@@ -19,7 +19,9 @@ NARRATION = {
     "what": (
         "So, what is gorun? It's a single Go program that runs plain shell commands on a whole pile of servers, "
         "all at the same time, over SSH. And you get to watch it happen, live.\n"
-        "You describe the work in one small TOML file, called a Gorunfile. That's pretty much it. "
+        "You describe the work in a small TOML file, called a Gorunfile. Most people keep theirs in gorun's web dashboard, "
+        "which stores every version in its database, and runs and schedules them from the browser. "
+        "You can also keep one as a plain file, for the terminal and C I, which is what we'll do today. "
         "There's nothing to install on your servers. No agents, no daemons, no Python. "
         "If you can SSH into a machine, gorun can work on it."
     ),
@@ -120,7 +122,8 @@ NARRATION = {
         "So that's gorun, in a nutshell. If you like plain commands, quick feedback, and not a lot of ceremony, "
         "I think you'll enjoy it.\n"
         "You'll find the install command and the full tutorial linked below. "
-        "In the next video, we'll write a Gorunfile from scratch, one small step at a time, and take the terminal interface for a spin.\n"
+        "In the next video, we'll write a Gorunfile from scratch, one small step at a time, and take the terminal interface for a spin. "
+        "And video five shows the web dashboard, where your Gorunfiles live in its database.\n"
         "Thanks so much for watching, and I'll see you there!"
     ),
 }

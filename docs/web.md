@@ -1,20 +1,19 @@
 # The web UI
 
-`gorun -serve` runs a web service for a Gorunfile. It shows the tasks, bundles, schedules and run
-history, runs tasks on servers, adds and edits them, and fires the schedules while it runs. It is
-the long-running host for [schedules](schedules.md).
+`gorun -serve` is the main way to use gorun. It keeps your Gorunfiles in its history database,
+shows the tasks, bundles, schedules and run history, runs tasks on servers, adds and edits them,
+and fires the schedules while it runs. It is the long-running host for [schedules](schedules.md).
 
 ```bash
-gorun -serve Gorunfile                       # open http://localhost:8080
-GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no Gorunfile: the one kept in the history database
+gorun -serve                                 # open http://localhost:8080; Gorunfiles in the database
+gorun -serve Gorunfile                       # or run and edit a Gorunfile kept as a file
 gorun -serve -live                           # watch only: Live, History and Assistant
 ```
 
-Started **with a Gorunfile**, the service runs and edits that file, and keeps no Gorunfile in its
-database.
-
-Started **without one**, it keeps Gorunfiles in its history database (`GORUN_DB_PATH`), so they
-last across restarts. It can keep several, each with a name:
+Started **without a Gorunfile**, as it is meant to be, it keeps Gorunfiles in its history
+database (`GORUN_DB_PATH`: SQLite, Postgres or MySQL, see [storage](storage.md)), so they last
+across restarts, every save is a version, and every gorun on a shared database sees them. It can
+keep several, each with a name:
 
 - **The first start** saves a starter Gorunfile called `default`, with only a title. Add servers,
   tasks, bundles and schedules on the Config page, or have the [assistant](#assistant) write and
@@ -41,6 +40,9 @@ last across restarts. It can keep several, each with a name:
 - **The Config page** names the open one, with **Switch or create**, **Export as zip** and
   **Import**. It has no file browser: to use a Gorunfile file as it is, start
   `gorun -serve <Gorunfile>`; to bring one into the database, import it.
+
+Started **with a Gorunfile**, the service runs and edits that file instead, and keeps no
+Gorunfile in its database: useful when the file lives in git, next to the scripts it copies.
 
 With **`-live`**, or if the history database doesn't open, the service only watches, and the
 stored Gorunfiles are left alone, schedules included. The menu then has just **Live**,

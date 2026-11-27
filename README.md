@@ -7,12 +7,14 @@
 
 **Run plain shell commands on a pile of servers, in parallel, and watch it happen.**
 
-One Go binary, one TOML file and SSH. Nothing to install on the servers.
+One Go binary and SSH. Nothing to install on the servers. Start `gorun -serve` and it keeps your
+Gorunfiles in its database, with every version, and runs, schedules and records them from the
+browser. The same Gorunfile also runs from a file, in a terminal or CI.
 
 ![gorun provisioning ten servers in parallel](docs/screenshot.png)
 
 - **[Install](#install)**
-- **[Quick start](#quick-start)**: running in two minutes
+- **[Quick start](#quick-start)**: running in two minutes, in the browser or a terminal
 - **[Tutorial](docs/tutorial.md)**: from one task to a full server deployment, step by step
 - **[Documentation](#documentation)**
 - **[Website](https://go-run.dev)**: an overview, the docs and a playground to try a Gorunfile in your browser
@@ -47,8 +49,10 @@ hostname = "web-1.example.com"
     username = "ubuntu"
 ```
 
-Then `gorun Gorunfile` lets you pick the servers, runs the tasks on all of them at once, and shows
-each server's progress live. Run it again and `nginx` shows as *unchanged* on every server that
+Keep it in `gorun -serve`'s database: paste it on the Config page, or have the assistant write it,
+then tick the servers on Run and watch every one on Live, at once. Or keep it as a file in git, and
+`gorun Gorunfile` lets you pick the servers in a terminal and shows each server's progress live.
+Run it again and `nginx` shows as *unchanged* on every server that
 already has it; `gorun Gorunfile --check` tells you which servers would change, without touching
 any of them.
 
@@ -95,9 +99,10 @@ any of them.
 - **Schedules.** A `[[schedule]]` runs a task or bundle on a cron pattern or once at a set time,
   in any time zone. `gorun -serve` fires them and keeps a history of every run, skipped run and
   failed run. Pause, resume or skip them from the web UI.
-- **Web UI.** `gorun -serve` shows the tasks, bundles, schedules and history, and lets you add and
-  edit them, with names linked to where they're defined. It starts its own NATS server when none
-  is running.
+- **Web UI.** `gorun -serve` keeps your Gorunfiles in its database (SQLite, Postgres or MySQL),
+  every save a version, and shows the tasks, bundles, schedules and history, and lets you add and
+  edit them, with names linked to where they're defined. Users sign in to change things. It
+  starts its own NATS server when none is running.
 
 **When to use something else:** gorun runs commands. Checks let a task skip itself and `--check`
 shows what would change, but the checks are yours to write: there are no modules that know how
@@ -138,6 +143,22 @@ Only when there is no prebuilt binary for the machine does it build from source,
 </details>
 
 ## Quick start
+
+### In the browser
+
+```bash
+gorun -serve                 # open http://localhost:8080
+```
+
+With no Gorunfile named, it keeps them in its history database: the first start saves an empty one
+called `default`. Add servers and tasks on the **Config** page, import a Gorunfile you have, or ask
+the **Assistant** to write tasks; every save is a version. Then tick servers on **Run** and watch
+them on **Live**. Open **Users** and add yourself first, so only signed-in users can change things.
+See [the web UI](docs/web.md).
+
+### From a terminal or CI
+
+The same Gorunfile works as a file, for the terminal picker, scripts, CI and git:
 
 ```bash
 gorun -dump > Gorunfile      # write a starting Gorunfile; it runs as-is on this machine

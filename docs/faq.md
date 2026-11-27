@@ -75,6 +75,15 @@ local one: only tasks marked `local = true` run there, on the machine gorun runs
 Set `raw = true` on the task. Its command, check, verify and copies are then used exactly as
 written, so `docker ps --format '{{.Names}}'` isn't read as a template.
 
+## Where should I keep my Gorunfile?
+
+In `gorun -serve`'s database, the main way: start `gorun -serve` without a Gorunfile and it keeps
+them in its history database (SQLite, Postgres or MySQL), every save a version, shared by every
+gorun on the same database. Keep one as a file when you run it from a terminal, a script or CI
+(`gorun Gorunfile -r`), or want it in git next to its scripts; `gorun -serve Gorunfile` serves a
+file too. Import a file on the Config page to move it into the database; export a zip to take one
+out. See [the web UI](web.md).
+
 ## Can gorun keep more than one Gorunfile?
 
 Yes, `gorun -serve` started without a Gorunfile keeps several in its database, and the Gorunfiles

@@ -157,8 +157,13 @@ def code(text, start, end, title, lang="toml", window_lines=17, font=33):
 # --- pipeline ---------------------------------------------------------------------------------
 
 
+# "live" as in a live concert, not "to live"; the verb ("examples live in") keeps its sound
+LIVE = re.compile(r"\b([Ll])ive\b(?! in\b)")
+
+
 def spoken(text):
     # respell for the voice: "gorun" -> "go run"; keep SSH/TOML letter-by-letter
+    text = LIVE.sub(lambda m: m.group(1) + "yve", text)
     text = text.replace("Gorunfile", "Go run file").replace("gorun", "go run")
     text = text.replace("TOML", "tomel").replace("SSH", "S S H").replace("SUDO_USER", "sudo user")
     return text.replace("TUI", "T U I").replace("CI", "C I").replace("MD5", "M D 5")
@@ -227,7 +232,9 @@ def build(scenes, narration, chapter_titles, name):
     video_list, audio_list, srt, t = [], [], [], 0.0
     chapters = []
     for n, (sid, _, shots) in enumerate(scenes):
-        wav = OUT / f"voice-{ENGINE}-deep" / f"{sid}-{hashlib.sha1((narration[sid] + TEMPO_KEY).encode()).hexdigest()[:8]}.wav"
+        # a scene that says "live" is voiced again since its respelling; the others keep their voice
+        key = narration[sid] + TEMPO_KEY + ("|lyve" if LIVE.search(narration[sid]) else "")
+        wav = OUT / f"voice-{ENGINE}-deep" / f"{sid}-{hashlib.sha1(key.encode()).hexdigest()[:8]}.wav"
         text = narration[sid]
         if not wav.exists():
             speak(text, wav)

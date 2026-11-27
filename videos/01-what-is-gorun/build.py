@@ -148,7 +148,8 @@ SCENES = [
 
     ("what", None,
      [(1, slide("One binary. One file. <span class=acc>SSH.</span>", [
-         ("", "A single Go program", "runs on your laptop or CI"),
+         ("", "A single Go program", "a web dashboard, a terminal UI and CI"),
+         ("", "Gorunfiles kept in its database", "every version, or as plain files"),
          ("", "Plain shell commands, in parallel", "every server at the same time"),
          ("", "Nothing to install on the servers", "no agents, no daemons, no Python"),
      ]))]),

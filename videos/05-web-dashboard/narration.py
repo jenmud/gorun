@@ -9,9 +9,9 @@ NARRATION = {
         "but the dashboard is the real thing."
     ),
     "start": (
-        "To start it, run gorun dash serve. That's the whole setup. "
-        "Give it the name of a Gorunfile, and it runs and edits that file. Leave the name off, as we do here, "
-        "and it keeps your Gorunfiles in its history database instead, starting with an empty one called default. "
+        "To start it, run gorun dash serve. That's the whole setup, and it's the main way to use gorun. "
+        "It keeps your Gorunfiles in its history database, starting with an empty one called default, and every save is a version. "
+        "Already have a Gorunfile in git? Give it the name, and it runs and edits that file instead. "
         "Open localhost, port eight thousand and eighty.\n"
         "It also starts a small NATS server of its own, which is how runs send their events to the dashboard. "
         "So live updates and history just work, with nothing else to install.\n"

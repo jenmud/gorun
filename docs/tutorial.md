@@ -24,6 +24,11 @@ The finished file is in [`tutorial/`](tutorial/Gorunfile), with its scripts and 
 13. [Upload big files (optional)](#13-upload-big-files-optional)
 14. [Everyday use](#14-everyday-use)
 
+The tutorial keeps the Gorunfile as a file and runs it from a terminal, the quickest way to see each
+step. Everything in it works the same in `gorun -serve`, which keeps Gorunfiles in its database:
+paste a step's file on the Config page, or import it there, and run it from the Run page (see
+[the web UI](web.md)).
+
 You only need gorun [installed](../README.md#install). Steps 1 and 2 run on your own machine;
 from step 3 on you need a server you can `ssh` into.
 

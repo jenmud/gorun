@@ -57,7 +57,10 @@ func (c *Config) origin() *Origin {
 	wd, _ := os.Getwd()
 	o.WorkDir = cmpOr(o.WorkDir, wd)
 	if o.Gorunfile == "" && c.Path != "" {
-		o.Gorunfile, _ = filepath.Abs(c.Path)
+		o.Gorunfile = c.Path
+		if _, stored := StoredName(c.Path); !stored {
+			o.Gorunfile, _ = filepath.Abs(c.Path)
+		}
 	}
 	if o.Command == nil {
 		o.Command = os.Args

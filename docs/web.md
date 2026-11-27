@@ -6,15 +6,47 @@ the long-running host for [schedules](schedules.md).
 
 ```bash
 gorun -serve Gorunfile                       # open http://localhost:8080
-GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no Gorunfile: only Live and History
+GORUN_ADDRESS=127.0.0.1:9000 gorun -serve    # no Gorunfile: the one kept in the history database
+gorun -serve -live                           # watch only: Live, History and Assistant
 ```
 
-Started **without a Gorunfile**, the service only watches: the menu has just **Live** and
-**History**, for runs started elsewhere, such as `gorun Gorunfile -r` in a terminal that reaches
-the same NATS server. The pages that need a Gorunfile (Run, Tasks, Bundles, Schedules and Config)
-don't exist: they aren't in the menu, and their addresses answer 404. Task and schedule names in
-History are plain text rather than links. Start it with a Gorunfile to run, edit and schedule
-tasks.
+Started **with a Gorunfile**, the service runs and edits that file, and keeps no Gorunfile in its
+database.
+
+Started **without one**, it keeps Gorunfiles in its history database (`GORUN_DB_PATH`), so they
+last across restarts. It can keep several, each with a name:
+
+- **The first start** saves a starter Gorunfile called `default`, with only a title. Add servers,
+  tasks, bundles and schedules on the Config page, or have the [assistant](#assistant) write and
+  change tasks.
+- **The Gorunfiles page** lists them. **Open** one, and the Run, Tasks, Bundles, Schedules,
+  Config and Assistant pages show it; the menu names the open one. **Create and open** adds a new
+  one, and **Delete** removes one that isn't open and no other includes. Gorun starts on the one
+  saved most recently.
+- **Every one's schedules run**, whichever is open.
+- **Every save** is kept as a new version. The startup message names the open one:
+  `Gorunfile  web, kept in the history database (version 3), and 2 more whose schedules also run`.
+- **Sharing tasks**: a Gorunfile can use the tasks and bundles of another kept here by including
+  it, `include = ["stored::base"]`. Like a [git include](gorunfile.md#tasks-from-a-git-repository), only tasks and
+  bundles come along: `base`'s servers, groups and schedules stay its own. It is live, so editing
+  a shared task (from either Gorunfile) changes it for every Gorunfile that includes `base`.
+  `stored::` includes only load in `gorun -serve`.
+- **Only in the database**: runs, the editor, the assistant and the schedulers read them from
+  the database, and no file is written for them. An edit is checked to load before it is saved,
+  so a broken one never becomes a version. A stored Gorunfile can include only other stored ones
+  (`stored::<name>`): local and git includes need a folder, and it has none. Relative paths in it,
+  such as a copy's `src`, are relative to the folder gorun was started in, so use absolute paths.
+- **Import and export**: the Config page imports a Gorunfile into the open one, and exports it as
+  a zip with each task and bundle in a file of its own; see [Config](#config).
+- **The Config page** names the open one, with **Switch or create**, **Export as zip** and
+  **Import**. It has no file browser: to use a Gorunfile file as it is, start
+  `gorun -serve <Gorunfile>`; to bring one into the database, import it.
+
+With **`-live`**, or if the history database doesn't open, the service only watches, and the
+stored Gorunfiles are left alone, schedules included. The menu then has just **Live**,
+**History** and **Assistant**, for runs started elsewhere, such as `gorun Gorunfile -r` in a
+terminal that reaches the same NATS server. The pages that need a Gorunfile (Run, Tasks, Bundles,
+Schedules and Config) don't exist: they aren't in the menu, and their addresses answer 404.
 
 `-web` is an alias for `-serve`. Once it is listening, gorun prints where to find it and what it
 started:
@@ -72,13 +104,17 @@ The embedded server stops when `gorun -serve` exits.
 ## Running in Docker
 
 The image runs `gorun -serve` on port 8080. Configure it with the variables above, plus `GORUN_FILE`,
-the Gorunfile to load. Without one the service starts with only the Live and History pages.
+the Gorunfile to load. Without one the service uses the Gorunfile kept in its history database, so
+keep `/var/lib/gorun` in a volume.
 
 ```bash
 docker build -t gorun .
 
-# no Gorunfile: live and history only
-docker run --rm -p 8080:8080 gorun
+# no Gorunfile: the one kept in the history database, in a named volume
+docker run --rm -p 8080:8080 -v gorun-data:/var/lib/gorun gorun
+
+# watch only: live and history
+docker run --rm -p 8080:8080 gorun -live
 
 # with a Gorunfile, kept in ./Gorunfile on the host, and history kept in a named volume
 docker run --rm -p 8080:8080 \
@@ -154,8 +190,9 @@ The front page (`/`) shows what is running now: runs started from the Run page, 
 terminal, or by a schedule. Stats and **Recent runs** bars sit above it, and each bar links to
 the run. Each run, server and task starts collapsed. A task that is uploading a file shows a bar
 with the size and rate, and a closed server shows the upload on its line
-([screenshot](screenshot-web-upload.png)). **Stop** cancels a run started from the web UI, and
-**Clear finished** drops the runs that are over. **Start a run** opens the Run page.
+([screenshot](screenshot-web-upload.png)). **Stop** cancels a run started from the web UI,
+**Ask the assistant** opens the [assistant](#assistant) on that run, to summarise it or explain a
+failure, and **Clear finished** drops the runs that are over. **Start a run** opens the Run page.
 
 ### Run
 
@@ -163,8 +200,13 @@ The picker (`/run`): tick servers, then tasks or bundles (not both), and press *
 The run starts and the page moves to **Live** to watch it. **Force** runs every task even when its
 [check](gorunfile.md#checks-run-only-when-needed) says there is nothing to do, and **Check only**
 is a dry run that only runs the checks: its tasks end *unchanged* or *would run*, and the run is
-marked *check only*. Runs read the Gorunfile on disk, so save first. A run that can't start stays
+marked *check only*. Runs read the saved Gorunfile, so save first. A run that can't start stays
 on the Run page and says why.
+
+Ticked tasks marked **Local** (`local = true`) run on this machine without a server ticked. Every
+other task runs only over SSH, so it needs a ticked SSH server. The page names the tasks that need
+**Local** ticked: ticked ones when the Gorunfile has no SSH server, and the ones a local task
+depends on, which this machine would otherwise skip.
 
 ### Tasks
 
@@ -247,6 +289,109 @@ Add, edit and remove servers, groups, tasks, bundles and schedules in the loaded
 Gorunfile by browsing folders on the machine running gorun, or by typing its path. Changes queue
 until **Save**, which writes each one into the file it came from and reloads the file. Comments and
 layout elsewhere in the file are kept.
+
+**Export as zip**, next to the list of files, downloads the saved Gorunfile, such as the one kept
+in the history database, as a folder that loads as it is:
+
+```
+gorunfile/
+  Gorunfile            settings, servers, groups and schedules; includes the files below
+  tasks/<name>.toml    one task each
+  bundles/<name>.toml  one bundle each
+```
+
+Local included files are folded in, and so are the tasks and bundles of `stored::` includes, so
+the zip loads anywhere. Git includes are kept, with `Gorunfile.lock`. Unsaved changes,
+comments, and the files tasks copy or run (`copy` sources, `cmd_file`) aren't in the zip.
+
+**Import**, shown when the open Gorunfile is one kept in the history database, replaces it with an
+uploaded Gorunfile, or a zip holding one and the files it includes, such as an export. Local
+includes are folded into one file. It is checked to load before anything changes. The Gorunfile
+before it is kept in the database as an earlier version, and unsaved changes are dropped. Uploads
+are limited to 10 MB.
+
+**Generate tasks** (experimental) asks a language model to write tasks from a description, such
+as "install postgres and back it up every night". The tasks it writes are checked so they load,
+then queued as unsaved changes: read and fix each one before you save, because the model gets
+commands wrong. The model is Qwen3 4B Instruct (Apache 2.0) fine-tuned on gorun, run inside `gorun -serve` on the GPU
+when one is found. It needs about 4 GB of GPU memory; when there isn't that much free, such as
+when another program or another `gorun -serve` is using it, the model runs on the CPU instead,
+which is slower, and the chat says so. The first use downloads llama.cpp (about 36 MB) and the model (2.5 GB) into
+`GORUN_CACHE_DIR/llm`. Only the web service does this; the command line and the TUI never load a
+model. To use Ollama or another OpenAI-compatible server instead, set `GORUN_LLM_URL` (and
+`GORUN_LLM_MODEL` to its model name).
+
+### Assistant
+
+A chat (experimental) with the same language model. Ask it about the loaded Gorunfile's tasks and
+servers, have it summarise runs or explain why a task failed, or have it write tasks and
+schedules. Each
+question sends it:
+
+- the Gorunfile's tasks, bundles, schedules and servers, with each server's tasks in run order;
+- the tasks and schedules the question names, as TOML, so it can change them;
+- for a question about gorun, the two sections of these docs that match it best (from `docs/`,
+  built into gorun), so it answers from them rather than from memory; requests, such as for
+  tasks, and questions about runs aren't sent any;
+- the ten newest runs;
+- the newest run in detail: every task's state, and the command, exit code and end of the output
+  of each failed task. A run of more than 40 tasks is counted per server instead, and only its
+  tasks that didn't pass are listed.
+
+The **Model** panel above the chat says where the model stands: not downloaded yet, downloaded
+but not loaded, or loaded on the GPU or the CPU, and why it is on the CPU. Once loaded it shows
+the model and its size, the GPU and its free memory, the context size, how long loading took,
+and how fast the last answer was read and written. It is drawn again after each answer. With
+`GORUN_LLM_URL`, it names the server instead, as gorun can't see that server's memory.
+
+While it answers, the chat shows what it is doing and for how long: downloading the model on first
+use (with how far along), loading it, reading the question, then the reply as it is written.
+**Stop** ends an answer early. gorun loads the model once and answers one question at a time, whoever asks, so
+more people using it never costs more memory, only a wait: the chat says how many questions are
+ahead of yours, and with 8 waiting the next is asked to try again in a minute. Each `gorun -serve`
+process loads its own copy, so run one per machine.
+
+Env vars and template variables are never sent. **Ask the assistant** on a run's History page,
+or on its card on the Live page, starts the chat on that run instead.
+
+The assistant writes `local = true` on tasks meant for this machine, and on every task when the
+Gorunfile has no server that runs over SSH.
+
+It writes small tasks, one step each, chained with `depends_on`, and every one has a `check`
+(exits 0 when the step is done, so it is skipped) and a `verify` (fails the task when the step
+didn't work). A reply with a task missing either is sent back to the model to fix before it is
+offered.
+
+When a reply holds tasks that load, the chat offers **Save these tasks**, which saves them into
+the Gorunfile straight away, as an edit on the Tasks page does; there is nothing more to save on
+the Config page. A task with unsaved changes on the Config page is left alone until you save or
+discard them. Tasks that don't load are reported, so you can ask it to fix them.
+
+It writes schedules too: ask "run backup every night at 2am, Sydney time", or "and run it every
+Monday" after a request for tasks, and the reply holds a `[[schedule]]` entry. It is checked as
+the loader checks one (its target exists, exactly one of `cron` or `at`, a real time zone) and
+saved by the same button. Ask it to change a schedule by name, such as "move nightly-backup to
+4am", and the reply replaces that schedule in place. Pausing and skipping stay on the
+[Schedules](#schedules) page.
+
+It can change tasks too: ask, for example, "add a timeout to the migrate task". When a question
+names a task or schedule, the model is sent it as it is now. A task or schedule in the reply with
+the name of one the Gorunfile has replaces it, in the file it's defined in, and the chat says
+which ones it replaces. Generate tasks only writes new ones. A
+task may copy or run a file that isn't there yet; create it before you save, as the Gorunfile
+doesn't load without it.
+
+The page says whether the chat is private. It is when the model runs inside gorun, or behind a
+`GORUN_LLM_URL` on this machine (`localhost` or a loopback address). With any other URL, each
+question sends the Gorunfile and run output to that host, and the page says so in amber.
+
+The model is small: it reads failures well when the output says what went wrong, but its tasks
+can hold placeholders, such as paths and passwords, to fill in. It is Qwen3 4B Instruct
+fine-tuned on gorun by [`training/`](../training): on Gorunfiles, gorun's docs, writing small
+tasks that each have a check and a verify, and diagnosing runs. It is published at
+[jenmud/gorun-qwen3-4b-GGUF](https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF). To use the stock
+Qwen3 4B Instruct, or any other GGUF file, point `GORUN_LLM_MODEL` at the file or its URL.
+`make model` downloads the built-in model ahead of the first question.
 
 ## Walkthrough: from nothing to a running schedule
 

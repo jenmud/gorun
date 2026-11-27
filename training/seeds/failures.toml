@@ -1,0 +1,206 @@
+# Ways a task fails, for diagnosis examples. A failure applies to tasks whose command contains
+# one of match (any task when match is empty). <<bin>> is the command's first word, <<task>> and
+# <<server>> the task and server. quote is the line of stderr a good answer quotes.
+
+[[failure]]
+id = "apt-lock"
+match = ["apt-get", "apt "]
+exit = 100
+stderr = """Reading package lists...
+E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 2481 (unattended-upgr)
+E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), is another process using it?"""
+quote = "E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 2481 (unattended-upgr)"
+cause = "another apt process, unattended-upgrades, was holding the dpkg lock"
+fix = "run it again once unattended-upgrades finishes, or give the task retries = 3 and retry_delay = \"30s\" so it waits for the lock"
+
+[[failure]]
+id = "apt-unknown-package"
+match = ["apt-get install", "apt install"]
+exit = 100
+stderr = """Reading package lists...
+Building dependency tree...
+E: Unable to locate package <<pkg>>"""
+quote = "E: Unable to locate package <<pkg>>"
+cause = "apt doesn't know the package <<pkg>>: the package lists are stale, or the name is wrong for this distribution"
+fix = "run apt-get update before the install (apt-get update && apt-get install -y ...), and check the package name with apt-cache search on the server"
+
+[[failure]]
+id = "sudo-password"
+match = []
+needs_sudo = true
+exit = 1
+stderr = "sudo: a password is required"
+quote = "sudo: a password is required"
+cause = "the task has sudo = true, and gorun runs it with sudo -n, but the login user on <<server>> can't use sudo without a password"
+fix = "give the login user passwordless sudo on <<server>> (a NOPASSWD rule in /etc/sudoers.d), or log in as a user that has it"
+
+[[failure]]
+id = "permission-denied"
+match = []
+no_sudo = true
+exit = 1
+stderr = "<<bin>>: cannot open '/etc/<<task>>.conf': Permission denied"
+quote = "Permission denied"
+cause = "the command needs root, but the task doesn't set sudo = true, so it ran as the login user"
+fix = "add sudo = true to the task"
+
+[[failure]]
+id = "not-found"
+match = []
+exit = 127
+stderr = "sh: 1: <<bin>>: not found"
+quote = "sh: 1: <<bin>>: not found"
+cause = "<<bin>> isn't installed on <<server>>, or isn't on the PATH of the login shell"
+fix = "install <<bin>> in a task that <<task>> depends on (depends_on), or use its full path"
+
+[[failure]]
+id = "disk-full"
+match = []
+exit = 1
+stderr = "<<bin>>: write error: No space left on device"
+quote = "No space left on device"
+cause = "the disk on <<server>> is full"
+fix = "free space on <<server>> (check with df -h and du -sh /var/*), then run it again"
+
+[[failure]]
+id = "dns"
+match = ["curl", "wget", "apt-get", "docker", "git", "aws", "pull"]
+exit = 6
+stderr = "curl: (6) Could not resolve host: <<host>>"
+quote = "Could not resolve host: <<host>>"
+cause = "<<server>> can't resolve <<host>>: its DNS settings are wrong or it has no network"
+fix = "check /etc/resolv.conf and the network on <<server>> (try getent hosts <<host>> there), then run it again"
+
+[[failure]]
+id = "connection-refused"
+match = ["curl", "healthz", "health", "psql", "migrate"]
+exit = 7
+stderr = "curl: (7) Failed to connect to 127.0.0.1 port 8080 after 0 ms: Couldn't connect to server"
+quote = "Failed to connect to 127.0.0.1 port 8080 after 0 ms: Couldn't connect to server"
+cause = "nothing was listening on port 8080: the service isn't running, or it hadn't started yet"
+fix = "look at the service's logs on <<server>> (journalctl -u <service> -n 50); if it just needs time to start, give the task retries and a retry_delay"
+
+[[failure]]
+id = "timeout"
+match = []
+exit = 124
+stderr = "task \"<<task>>\" timed out after 30m0s"
+quote = "task \"<<task>>\" timed out after 30m0s"
+cause = "the task ran past its timeout, 30 minutes by default, so gorun stopped it"
+fix = "find out whether the command hung (run it by hand on <<server>>) or just needs longer, and if so set timeout = \"1h\" on the task"
+
+[[failure]]
+id = "systemd-failed"
+match = ["systemctl"]
+exit = 1
+stderr = """Job for <<svc>>.service failed because the control process exited with error code.
+See "systemctl status <<svc>>.service" and "journalctl -xeu <<svc>>.service" for details."""
+quote = "Job for <<svc>>.service failed because the control process exited with error code."
+cause = "the <<svc>> service failed to start; systemd only says that it failed, and the reason is in its journal"
+fix = "run journalctl -xeu <<svc>>.service on <<server>> to see why, often a bad config file or a port already in use"
+
+[[failure]]
+id = "nginx-config"
+match = ["nginx"]
+exit = 1
+stderr = """nginx: [emerg] unknown directive "proxy_passs" in /etc/nginx/conf.d/site.conf:4
+nginx: configuration file /etc/nginx/nginx.conf test failed"""
+quote = "nginx: [emerg] unknown directive \"proxy_passs\" in /etc/nginx/conf.d/site.conf:4"
+cause = "the nginx config has a typo, proxy_passs on line 4 of /etc/nginx/conf.d/site.conf, so nginx -t failed"
+fix = "fix the directive to proxy_pass in the site config template and run the task again"
+
+[[failure]]
+id = "port-in-use"
+match = ["systemctl", "docker", "compose", "up"]
+exit = 1
+stderr = "Error starting userland proxy: listen tcp4 0.0.0.0:80: bind: address already in use"
+quote = "listen tcp4 0.0.0.0:80: bind: address already in use"
+cause = "something else on <<server>> is already listening on port 80"
+fix = "find it with ss -ltnp 'sport = :80' on <<server>> and stop it, or move one of them to another port"
+
+[[failure]]
+id = "docker-auth"
+match = ["docker", "compose", "pull"]
+exit = 1
+stderr = "Error response from daemon: pull access denied for registry.example.com/shop, repository does not exist or may require 'docker login': denied: requested access to the resource is denied"
+quote = "pull access denied for registry.example.com/shop"
+cause = "Docker on <<server>> isn't logged in to the registry, or the login has no access to that image"
+fix = "check that REGISTRY_TOKEN is set in gorun's environment or .env file, and run a docker login task before this one"
+
+[[failure]]
+id = "docker-daemon"
+match = ["docker"]
+exit = 1
+stderr = "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"
+quote = "Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?"
+cause = "the Docker daemon isn't running on <<server>>, or the login user can't reach its socket"
+fix = "start it with systemctl start docker, make the task depend on the task that installs Docker, and set sudo = true if the user isn't in the docker group"
+
+[[failure]]
+id = "migration-exists"
+match = ["migrate", "psql"]
+exit = 3
+stderr = """ERROR:  relation "orders" already exists
+STATEMENT:  CREATE TABLE orders (id bigserial PRIMARY KEY, created_at timestamptz NOT NULL)"""
+quote = "ERROR:  relation \"orders\" already exists"
+cause = "the migration creates the orders table, which is already there: it was applied before, or created by hand"
+fix = "check which migrations the database has recorded; make the migration use CREATE TABLE IF NOT EXISTS, or mark it applied, then run it again"
+
+[[failure]]
+id = "db-auth"
+match = ["migrate", "psql", "pg_dump"]
+exit = 2
+stderr = "psql: error: connection to server at \"10.0.2.21\", port 5432 failed: FATAL:  password authentication failed for user \"shop\""
+quote = "FATAL:  password authentication failed for user \"shop\""
+cause = "the database rejected the password for user shop: the secret gorun passed is wrong or empty"
+fix = "check the variable the task's envvars reads (for example ${SHOP_DATABASE_URL}) is set in gorun's environment or .env file; an unset variable becomes an empty string"
+
+[[failure]]
+id = "s3-denied"
+match = ["aws", "s3"]
+exit = 1
+stderr = "upload failed: /var/backups/pg/all-2026-11-24.sql.gz to s3://acme-backups/db-primary/all-2026-11-24.sql.gz An error occurred (AccessDenied) when calling the PutObject operation: Access Denied"
+quote = "An error occurred (AccessDenied) when calling the PutObject operation: Access Denied"
+cause = "the AWS credentials can't write to the bucket"
+fix = "check the keys the task's envvars read (BACKUP_AWS_KEY and BACKUP_AWS_SECRET) and that their policy allows s3:PutObject on the bucket"
+
+[[failure]]
+id = "file-missing"
+match = ["tar", "mv", "install", "cp"]
+exit = 2
+stderr = "<<bin>>: cannot stat '/tmp/<<task>>.tmp': No such file or directory"
+quote = "No such file or directory"
+cause = "the file the command expects isn't there; the copy that should put it there has a different dst, or another task didn't create it"
+fix = "make the copy's dst match the path in the command, or make <<task>> depend on the task that creates the file"
+
+[[failure]]
+id = "go-test"
+match = ["go test"]
+exit = 1
+stderr = """--- FAIL: TestParseConfig (0.00s)
+    config_test.go:42: got port 0, want 8080
+FAIL
+FAIL	example.com/tool/config	0.012s"""
+quote = "config_test.go:42: got port 0, want 8080"
+cause = "a test failed: TestParseConfig got port 0 where it wanted 8080"
+fix = "fix the code or the test in config_test.go, then run it again; the tasks that depend on the tests were skipped until they pass"
+
+[[failure]]
+id = "go-vet"
+match = ["go vet"]
+exit = 1
+stderr = """# example.com/tool/cmd/tool
+cmd/tool/main.go:31:2: fmt.Printf format %d has arg name of wrong type string"""
+quote = "cmd/tool/main.go:31:2: fmt.Printf format %d has arg name of wrong type string"
+cause = "go vet found a Printf call with a %d verb given a string"
+fix = "use %s for name on line 31 of cmd/tool/main.go"
+
+[[failure]]
+id = "verify-failed"
+match = []
+has_verify = true
+exit = 3
+stderr = "inactive\nverify failed: exit status 3"
+quote = "verify failed: exit status 3"
+cause = "the command ran, but its verify (<<verify>>) failed afterwards, so the change didn't take"
+fix = "run the verify by hand on <<server>> to see what it finds; for a service, its journal usually says why it isn't running"

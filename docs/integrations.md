@@ -12,7 +12,8 @@
 ## Web UI
 
 `gorun -serve Gorunfile` runs a web service with pages for the Run picker, tasks, bundles, schedules,
-history and config. It starts its own NATS server when none is running, and it fires the
+history, config and an assistant: a chat with a language model, run inside gorun, that explains
+runs and writes tasks. It starts its own NATS server when none is running, and it fires the
 [schedules](schedules.md) while it runs. The full guide, with examples and walkthroughs, is in
 [The web UI](web.md).
 

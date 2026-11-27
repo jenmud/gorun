@@ -114,7 +114,7 @@ templ taskCheckFields(e EditFields) {
 templ taskEditPanel(d TasksPageData) {
 	<section class="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
 		<h2 class="text-lg font-semibold text-zinc-100">Edit task <span class="font-mono">{ d.EditingName }</span></h2>
-		<p class="mt-1 text-xs text-zinc-500">The change is written to the file it came from straight away. Settings not shown here are kept.</p>
+		<p class="mt-1 text-xs text-zinc-500">The change is saved straight away, into the Gorunfile it came from. Settings not shown here are kept.</p>
 		<form method="post" action="/tasks/edit" class="mt-4 space-y-3">
 			<input type="hidden" name="name" value={ d.EditingName }/>
 			<label class="block text-xs text-zinc-400">
@@ -333,7 +333,7 @@ templ bundleAddForm(files []FileOption, targets []string) {
 templ bundleEditPanel(d BundlesPageData) {
 	<section class="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
 		<h2 class="text-lg font-semibold text-zinc-100">Edit bundle <span class="font-mono">{ "@" + d.EditingName }</span></h2>
-		<p class="mt-1 text-xs text-zinc-500">The change is written to the file it came from straight away. Settings not shown here are kept.</p>
+		<p class="mt-1 text-xs text-zinc-500">The change is saved straight away, into the Gorunfile it came from. Settings not shown here are kept.</p>
 		<form method="post" action="/bundles/edit" class="mt-4 space-y-3">
 			<input type="hidden" name="name" value={ d.EditingName }/>
 			@editField("Tasks", "tasks", d.Edit.Tasks, "tasks or @bundles, comma separated")

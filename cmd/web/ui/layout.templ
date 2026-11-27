@@ -110,6 +110,13 @@ function gorunSelect(formId, on) {
 						if !noGorunfile(ctx) {
 							@navLink("/config", "Config", active == "config")
 						}
+						@navLink("/assistant", "Assistant", active == "assistant")
+						if name, ok := storedName(ctx); ok {
+							@navLink("/gorunfiles", "Gorunfiles", active == "gorunfiles")
+							if name != "" {
+								<a href="/gorunfiles" title="The open Gorunfile, kept in the history database" class="self-center rounded bg-zinc-800 px-2 py-0.5 font-mono text-xs text-zinc-300 hover:bg-zinc-700">{ name }</a>
+							}
+						}
 					</nav>
 					if nats.Mode != "off" {
 						<span class="ml-auto flex items-center gap-2 text-xs text-emerald-400" title={ "NATS is " + natsModeLabel(nats.Mode) }>

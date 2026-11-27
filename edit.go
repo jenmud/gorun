@@ -66,21 +66,32 @@ func SaveChanges(changes []Change) error {
 		if err != nil {
 			return fmt.Errorf("save %s: %w", file, err)
 		}
-		lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
-		for _, ch := range byFile[file] {
-			if ch.Remove {
-				lines = removeEntity(lines, ch)
-				continue
-			}
-			if lines, err = addEntity(lines, ch); err != nil {
-				return fmt.Errorf("save %s: %w", file, err)
-			}
+		text, err := EditText(string(data), byFile[file])
+		if err != nil {
+			return fmt.Errorf("save %s: %w", file, err)
 		}
-		if err := writeFileAtomic(file, []byte(strings.Join(lines, "\n")+"\n")); err != nil {
+		if err := writeFileAtomic(file, []byte(text)); err != nil {
 			return fmt.Errorf("save %s: %w", file, err)
 		}
 	}
 	return nil
+}
+
+// EditText applies changes to the text of one Gorunfile, as SaveChanges does to a file, for a
+// Gorunfile that isn't kept as a file. The changes' File isn't used.
+func EditText(text string, changes []Change) (string, error) {
+	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	var err error
+	for _, ch := range changes {
+		if ch.Remove {
+			lines = removeEntity(lines, ch)
+			continue
+		}
+		if lines, err = addEntity(lines, ch); err != nil {
+			return "", err
+		}
+	}
+	return strings.Join(lines, "\n") + "\n", nil
 }
 
 // writeFileAtomic replaces path with data, so a failed write never leaves a half file.

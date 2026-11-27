@@ -126,6 +126,12 @@ func (a *app) editEntity(kind, back string) http.HandlerFunc {
 // the file is put back as it was, so a bad edit never leaves the Gorunfile broken. The caller
 // holds a.saveMu.
 func (a *app) saveDirect(file string, changes []gorun.Change) error {
+	if a.keepsStored { // checked before it is saved, so nothing needs putting back
+		if err := a.saveChanges(changes); err != nil {
+			return err
+		}
+		return a.reloadConfig()
+	}
 	orig, err := os.ReadFile(file)
 	if err != nil {
 		return err

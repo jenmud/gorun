@@ -62,7 +62,9 @@ func TestStartupMessageGorunfile(t *testing.T) {
 		{"schedules", startupInfo{cfgPath: "/abs/Gorunfile", schedules: 2, schedulerOn: true},
 			[]string{"/abs/Gorunfile", "2 schedules", "scheduler running"}},
 		{"no schedules", startupInfo{cfgPath: "/abs/Gorunfile"}, []string{"/abs/Gorunfile", "no schedules"}},
-		{"no file", startupInfo{noFile: true}, []string{"none: only the Live and History pages"}},
+		{"no file", startupInfo{noFile: true}, []string{"none: only the Live, History and Assistant pages"}},
+		{"stored", startupInfo{cfgPath: "/home/u/.gorun/gorunfiles/web/Gorunfile", storedName: "web", storedVersions: 3, storedCount: 2},
+			[]string{"web, kept in the history database (version 3), and 1 more whose schedules also run", "no schedules"}},
 		{"load error", startupInfo{cfgErr: errors.New("bad toml")}, []string{"not loaded: bad toml"}},
 	} {
 		line := lineFor(message(tc.info), "Gorunfile")

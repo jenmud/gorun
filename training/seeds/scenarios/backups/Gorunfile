@@ -1,0 +1,62 @@
+title = "Database backups"
+
+[tasks.backup-dir]
+description = "Create the backup folder"
+check = "test -d /var/backups/pg"
+cmd = "mkdir -p /var/backups/pg && chown postgres:postgres /var/backups/pg"
+sudo = true
+rerun = "safe"
+
+[tasks.pg-dump]
+description = "Dump every database"
+cmd = "runuser -u postgres -- pg_dumpall | gzip > /var/backups/pg/all-$(date +%F).sql.gz"
+depends_on = ["backup-dir"]
+sudo = true
+timeout = "2h"
+rerun = "safe"
+
+[tasks.upload-s3]
+description = "Upload today's dump to S3"
+cmd = "aws s3 cp /var/backups/pg/all-$(date +%F).sql.gz s3://acme-backups/{{.Name}}/"
+envvars = { AWS_ACCESS_KEY_ID = "${BACKUP_AWS_KEY}", AWS_SECRET_ACCESS_KEY = "${BACKUP_AWS_SECRET}" }
+depends_on = ["pg-dump"]
+retries = 3
+retry_delay = "1m"
+rerun = "safe"
+
+[tasks.prune-old]
+description = "Delete local dumps older than a week"
+cmd = "find /var/backups/pg -name '*.sql.gz' -mtime +7 -delete"
+depends_on = ["upload-s3"]
+sudo = true
+rerun = "safe"
+
+[tasks.disk-report]
+description = "Show disk use"
+cmd = "df -h / /var"
+rerun = "safe"
+
+[bundles.backup]
+description = "Dump, upload and prune"
+tasks = ["pg-dump", "upload-s3", "prune-old"]
+
+[[schedule]]
+name = "nightly-backup"
+target = "@backup"
+cron = "30 1 * * *"
+timezone = "Europe/Prague"
+
+[servers]
+tasks = ["@backup", "disk-report"]
+
+[servers.hosts.db-primary]
+hostname = "db-primary.example.net"
+tags = ["primary"]
+    [servers.hosts.db-primary.ssh]
+    username = "backup"
+
+[servers.hosts.db-replica]
+hostname = "db-replica.example.net"
+tags = ["replica"]
+    [servers.hosts.db-replica.ssh]
+    username = "backup"

@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -154,6 +155,13 @@ var schema = []string{
 		duration_ns INTEGER,
 		UNIQUE(run_id, server, name)
 	)`,
+	// each save of the Gorunfiles kept here, by name, for gorun -serve started without one
+	`CREATE TABLE IF NOT EXISTS gorunfiles (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT,
+		content TEXT NOT NULL,
+		saved_at TEXT NOT NULL
+	)`,
 }
 
 // addedColumns are TEXT columns added after the first release, as {table, column}. To store
@@ -172,6 +180,7 @@ var addedColumns = [][2]string{
 	{"tasks", "steps"},
 	{"runs", "check_only"},
 	{"runs", "origin"},
+	{"gorunfiles", "name"},
 }
 
 // migrate creates the tables and adds the columns newer versions need.
@@ -466,4 +475,75 @@ func (s *Store) TruncateRuns(ctx context.Context, keep int) error {
 		}
 	}
 	return nil
+}
+
+// DefaultGorunfile names the Gorunfile kept before there could be more than one.
+const DefaultGorunfile = "default"
+
+// gorunfileName is a row's name; rows saved before names existed have none.
+const gorunfileName = `COALESCE(name, '` + DefaultGorunfile + `')`
+
+// Gorunfile returns the newest saved version of the Gorunfile called name, and false when there
+// is none.
+func (s *Store) Gorunfile(ctx context.Context, name string) (string, bool, error) {
+	var content string
+	err := s.db.QueryRowContext(ctx, `SELECT content FROM gorunfiles WHERE `+gorunfileName+` = ? ORDER BY id DESC LIMIT 1`, name).Scan(&content)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return content, true, nil
+}
+
+// SaveGorunfile keeps content as the newest version of the Gorunfile called name. It reports
+// false, and saves nothing, when content is the same as the newest version.
+func (s *Store) SaveGorunfile(ctx context.Context, name, content string, at time.Time) (bool, error) {
+	newest, ok, err := s.Gorunfile(ctx, name)
+	if err != nil || (ok && newest == content) {
+		return false, err
+	}
+	err = s.exec(ctx, `INSERT INTO gorunfiles (name, content, saved_at) VALUES (?, ?, ?)`, name, content, at.UTC().Format(time.RFC3339Nano))
+	return err == nil, err
+}
+
+// GorunfileVersions counts the saved versions of the Gorunfile called name.
+func (s *Store) GorunfileVersions(ctx context.Context, name string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM gorunfiles WHERE `+gorunfileName+` = ?`, name).Scan(&n)
+	return n, err
+}
+
+// StoredGorunfile is one Gorunfile kept in the database.
+type StoredGorunfile struct {
+	Name     string
+	Versions int
+	SavedAt  time.Time // when its newest version was saved
+}
+
+// Gorunfiles lists the Gorunfiles kept in the database, the most recently saved first.
+func (s *Store) Gorunfiles(ctx context.Context) ([]StoredGorunfile, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+gorunfileName+` AS n, COUNT(*), MAX(saved_at), MAX(id) AS last FROM gorunfiles GROUP BY n ORDER BY last DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []StoredGorunfile
+	for rows.Next() {
+		var g StoredGorunfile
+		var saved string
+		var last int64
+		if err := rows.Scan(&g.Name, &g.Versions, &saved, &last); err != nil {
+			return nil, err
+		}
+		g.SavedAt, _ = time.Parse(time.RFC3339Nano, saved)
+		out = append(out, g)
+	}
+	return out, rows.Err()
+}
+
+// DeleteGorunfile removes the Gorunfile called name, with every version of it.
+func (s *Store) DeleteGorunfile(ctx context.Context, name string) error {
+	return s.exec(ctx, `DELETE FROM gorunfiles WHERE `+gorunfileName+` = ?`, name)
 }

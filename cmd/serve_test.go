@@ -32,6 +32,15 @@ func TestServeFlagStartsWebService(t *testing.T) {
 	}
 }
 
+func TestLiveFlagGoesWithServe(t *testing.T) {
+	fs := flag.NewFlagSet("gorun", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	o := parseArgs(fs, []string{"-serve", "-live"})
+	if !o.serve || !o.live || o.filename != "" {
+		t.Errorf("parseArgs(-serve -live) = serve %v, live %v, file %q", o.serve, o.live, o.filename)
+	}
+}
+
 func TestUsageDocumentsServeAndWebAlias(t *testing.T) {
 	var b strings.Builder
 	writeUsage(&b)

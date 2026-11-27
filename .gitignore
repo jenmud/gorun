@@ -63,6 +63,8 @@ gorun_bin
 /CLAUDE.local.md
 __pycache__/
 
-# vendor/ is committed whole: the patterns above must not drop any of it (they once dropped
-# libffi's .dylib/.dll and x/text's coverage.go, breaking builds that the local tree passed)
+# vendor/ and third_party/ are committed whole: the patterns above must not drop any of them
+# (they once dropped libffi's .dylib/.dll and x/text's coverage.go, breaking builds that the
+# local tree passed)
 !vendor/**
+!third_party/**

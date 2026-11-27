@@ -57,6 +57,10 @@ tests execute tasks locally.
 ## Gotchas
 
 - `vendor/` is committed. After any dependency change run `make vendor` and commit the result.
+- `third_party/ffi` is a patched copy of `github.com/jupiterrider/ffi` (see its `GORUN.md`), used
+  through a `replace` in `go.mod`, so gorun starts without libffi. Upgrading ffi means copying the
+  new release there and reapplying the patch. The `replace` also means `go install …@version`
+  can't build gorun; build from a clone.
 - `*_templ.go` files are generated and committed — edit the `.templ` file, then `make templ-gen`.
   `templ` must be installed at `$(go env GOPATH)/bin/templ`; it is not a `go.mod` tool.
 - `make build-otel` runs `go tool otelc go build ./cmd` (~30s). It builds in the gitignored

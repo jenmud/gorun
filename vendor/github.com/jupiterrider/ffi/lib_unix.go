@@ -26,6 +26,14 @@ import (
 //
 //	raylib, err := ffi.Load(filename)
 func Load(name string) (l Lib, err error) {
+	if err := Ready(); err != nil {
+		return l, err
+	}
+	return load(name)
+}
+
+// load opens the library at name, without readying libffi.
+func load(name string) (l Lib, err error) {
 	l.Addr, err = purego.Dlopen(name, purego.RTLD_LAZY)
 	return
 }

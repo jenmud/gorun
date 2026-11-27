@@ -13,7 +13,11 @@ const libffiVersion = "3.8.0"
 //go:embed assets/libffi/LICENSE
 var embeddedLicense []byte
 
-func init() {
+func init() { prepare = prepareEmbedded }
+
+// prepareEmbedded writes the embedded libffi to the user's cache folder and points filename at it.
+// gorun patch: upstream does this in init(), so every start wrote to the cache folder.
+func prepareEmbedded() {
 	if os.Getenv("FFI_NO_EMBED") == "1" {
 		return
 	}

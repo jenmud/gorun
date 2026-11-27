@@ -4,6 +4,14 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## Next
+
+- gorun starts on Linux without libffi again. Since v0.36.0 it loaded `libffi.so.8` at start, for
+  the assistant's llama.cpp bindings, and stopped when it was missing (Debian 11, minimal
+  containers). gorun now uses a patched copy of `github.com/jupiterrider/ffi` in `third_party/ffi`
+  that loads libffi the first time the built-in model is used, and the assistant says how to install
+  it, before anything is downloaded.
+
 ## v0.37.1 (since v0.37.0)
 
 - The Docker image builds again. `.dockerignore` left out `docs/`, which is also the Go package

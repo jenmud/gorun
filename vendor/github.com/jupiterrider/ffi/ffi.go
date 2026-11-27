@@ -151,6 +151,7 @@ func NewCallback(fn Callback) uintptr {
 //		panic(status)
 //	}
 func PrepCif(cif *Cif, abi Abi, nArgs uint32, rType *Type, aTypes ...*Type) Status {
+	mustReady()
 	if len(aTypes) > 0 {
 		ret, _, _ := purego.SyscallN(prepCif, uintptr(unsafe.Pointer(cif)), uintptr(abi), uintptr(nArgs), uintptr(unsafe.Pointer(rType)), uintptr(unsafe.Pointer(&aTypes[0])))
 		keepMu.Lock()
@@ -193,6 +194,7 @@ func PrepCif(cif *Cif, abi Abi, nArgs uint32, rType *Type, aTypes ...*Type) Stat
 //
 // [issue 608]: https://github.com/libffi/libffi/issues/608
 func PrepCifVar(cif *Cif, abi Abi, nFixedArgs, nTotalArgs uint32, rType *Type, aTypes ...*Type) Status {
+	mustReady()
 	const intSize = 4
 
 	// This check has been rebuild according to the original: https://github.com/libffi/libffi/blob/v3.4.6/src/prep_cif.c#L244
@@ -233,6 +235,7 @@ func PrepCifVar(cif *Cif, abi Abi, nFixedArgs, nTotalArgs uint32, rType *Type, a
 //	ffi.Call(&cif, ilogb, unsafe.Pointer(&result), unsafe.Pointer(&x))
 //	fmt.Printf("%d\n", int32(result))
 func Call(cif *Cif, fn uintptr, rValue unsafe.Pointer, aValues ...unsafe.Pointer) {
+	mustReady()
 	if len(aValues) > 0 {
 		purego.SyscallN(call, uintptr(unsafe.Pointer(cif)), fn, uintptr(rValue), uintptr(unsafe.Pointer(&aValues[0])))
 		return
@@ -252,12 +255,14 @@ func Call(cif *Cif, fn uintptr, rValue unsafe.Pointer, aValues ...unsafe.Pointer
 //	closure := ffi.ClosureAlloc(unsafe.Sizeof(ffi.Closure{}), &code)
 //	defer ffi.ClosureFree(closure)
 func ClosureAlloc(size uintptr, code *unsafe.Pointer) *Closure {
+	mustReady()
 	ret, _, _ := purego.SyscallN(closureAlloc, size, uintptr(unsafe.Pointer(code)))
 	return *(**Closure)(unsafe.Pointer(&ret))
 }
 
 // ClosureFree is used to free memory allocated by [ClosureAlloc].
 func ClosureFree(writable *Closure) {
+	mustReady()
 	purego.SyscallN(closureFree, uintptr(unsafe.Pointer(writable)))
 }
 
@@ -268,6 +273,7 @@ func ClosureFree(writable *Closure) {
 //   - userData is arbitrary and optional (can be nil) data passed to your closure function fun.
 //   - codeLoc is the executable address allocated by [ClosureAlloc].
 func PrepClosureLoc(closure *Closure, cif *Cif, fun uintptr, userData, codeLoc unsafe.Pointer) Status {
+	mustReady()
 	ret, _, _ := purego.SyscallN(prepClosureLoc, uintptr(unsafe.Pointer(closure)), uintptr(unsafe.Pointer(cif)), fun, uintptr(userData), uintptr(codeLoc))
 	return Status(ret)
 }
@@ -277,6 +283,7 @@ func PrepClosureLoc(closure *Closure, cif *Cif, fun uintptr, userData, codeLoc u
 // offsets is an optional out parameter (pointer to the first element of an array).
 // The array's length should be equal to the number of struct fields.
 func GetStructOffsets(abi Abi, structType *Type, offsets *uint64) Status {
+	mustReady()
 	ret, _, _ := purego.SyscallN(getStructOffsets, uintptr(abi), uintptr(unsafe.Pointer(structType)), uintptr(unsafe.Pointer(offsets)))
 	return Status(ret)
 }
@@ -285,6 +292,7 @@ func GetStructOffsets(abi Abi, structType *Type, offsets *uint64) Status {
 //
 // This function requires libffi 3.5.0 or newer.
 func GetVersion() string {
+	mustReady()
 	if getVersion == 0 {
 		return ""
 	}
@@ -315,6 +323,7 @@ func GetVersion() string {
 //	patch := version % 100
 //	fmt.Printf("%d.%d.%d\n", major, minor, patch)
 func GetVersionNumber() uint64 {
+	mustReady()
 	if getVersionNumber == 0 {
 		return 0
 	}

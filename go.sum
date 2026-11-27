@@ -76,8 +76,6 @@ github.com/jackc/puddle/v2 v2.2.3 h1:f8HoREISb3l5eO9coPgK7U3hKLhWGokOFVcThl5jrao
 github.com/jackc/puddle/v2 v2.2.3/go.mod h1:vriiEXHvEE654aYKXXjOvZM39qJ0q+azkZFrfEOc3H4=
 github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
 github.com/joho/godotenv v1.5.1/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
-github.com/jupiterrider/ffi v0.8.0 h1:IH6lto8OZaRIulQYObtZibII4tq71hXT6Z+KLBcxCcQ=
-github.com/jupiterrider/ffi v0.8.0/go.mod h1:9dauhpOfNqrqk28fxuu0kkdeFtT9Qr4vbfigiuIXN7c=
 github.com/kevinburke/ssh_config v1.6.0 h1:J1FBfmuVosPHf5GRdltRLhPJtJpTlMdKTBjRgTaQBFY=
 github.com/kevinburke/ssh_config v1.6.0/go.mod h1:q2RIzfka+BXARoNexmF9gkxEX7DmvbW9P4hIVx2Kg4M=
 github.com/klauspost/compress v1.20.3 h1:zWNoFqq/lSuYQRim3dUXlXeA0IqwuZGicdG5ZTfY5j4=

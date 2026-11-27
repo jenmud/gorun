@@ -13,6 +13,7 @@ import (
 
 	"github.com/hybridgroup/yzma/pkg/llama"
 	"github.com/jenmud/gorun"
+	"github.com/jupiterrider/ffi"
 )
 
 // Engine runs a GGUF model in-process. It loads llama.cpp and the model on its first Chat, and
@@ -49,6 +50,12 @@ const (
 func (e *Engine) load(ctx context.Context) error {
 	if e.loaded {
 		return nil
+	}
+	// checked before anything is downloaded, so a missing libffi doesn't cost a 2.5 GB download
+	if err := ffi.Ready(); err != nil {
+		return fmt.Errorf("the built-in model needs the libffi 8 library, which this machine lacks: "+
+			"install it (apt install libffi8 on Debian 12 or Ubuntu 22.04 and newer, dnf install libffi, "+
+			"apk add libffi), or set GORUN_LLM_URL to use a model server: %w", err)
 	}
 	libs, err := libraries(ctx, e.Dir, e.Progress)
 	if err != nil {

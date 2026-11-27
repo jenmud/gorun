@@ -5,7 +5,7 @@ templ AssistantPage(d AssistantPageData) {
 	<div class="mx-auto flex max-w-3xl flex-col gap-4" id="assistant" data-run={ d.RunID }>
 		<div>
 			<h1 class="flex items-center gap-2 text-xl font-semibold text-zinc-100">Assistant <span class="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-zinc-400">experimental</span></h1>
-			<p class="mt-1 text-sm text-zinc-400">Ask about your tasks and servers, have it summarise runs and explain failures, or have it write tasks. It reads the loaded Gorunfile and the run history. The model is { d.Model }. It is small, so check what it says.</p>
+			<p class="mt-1 text-sm text-zinc-400">Ask about your tasks and servers, have it summarise runs and explain failures, or have it write tasks and schedules. It reads the loaded Gorunfile and the run history. The model is { d.Model }. It is small, so check what it says.</p>
 		</div>
 		@privacyNote(d)
 		<div id="assistant-stats">
@@ -188,14 +188,22 @@ templ assistantScript() {
 		if (reply.taskError) {
 			var n = document.createElement('p');
 			n.className = 'mt-2 text-xs text-amber-300';
-			n.textContent = "These tasks don't load, so they can't be added: " + reply.taskError + '. Ask it to fix them.';
+			n.textContent = "These don't load, so they can't be saved: " + reply.taskError + '. Ask it to fix them.';
 			b.appendChild(n);
 		}
 		if (!reply.tasks || !addTmpl) { return; }
 		var box = addTmpl.content.firstElementChild.cloneNode(true);
-		box.querySelector('[data-names]').textContent = 'Tasks that load: ' + reply.taskNames +
-			(reply.replaces ? '. These replace the tasks the Gorunfile has: ' + reply.replaces : '');
+		// names are "task" or "schedule name", so the button and link can say which there are
+		var names = reply.taskNames.split(', ');
+		var scheds = names.filter(function (n) { return n.indexOf('schedule ') === 0; }).length;
+		var tasks = names.length - scheds;
+		box.querySelector('[data-names]').textContent = 'These load: ' + reply.taskNames +
+			(reply.replaces ? '. They replace what the Gorunfile has: ' + reply.replaces : '');
 		var btn = box.querySelector('[data-add]');
+		var what = [];
+		if (tasks) { what.push(tasks === 1 ? 'task' : 'tasks'); }
+		if (scheds) { what.push(scheds === 1 ? 'schedule' : 'schedules'); }
+		btn.textContent = (names.length === 1 ? 'Save this ' : 'Save these ') + what.join(' and ');
 		btn.addEventListener('click', function () {
 			btn.disabled = true;
 			fetch('/assistant/add', {
@@ -209,7 +217,8 @@ templ assistantScript() {
 				box.appendChild(p);
 				if (!out.error) {
 					var a = document.createElement('a');
-					a.href = '/tasks'; a.className = 'text-xs text-accent underline'; a.textContent = 'See them on the Tasks page';
+					a.href = tasks ? '/tasks' : '/schedules'; a.className = 'text-xs text-accent underline';
+					a.textContent = tasks ? 'See them on the Tasks page' : 'See them on the Schedules page';
 					box.appendChild(a);
 				}
 			}).catch(function (e) { btn.disabled = false; alert(e); });

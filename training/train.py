@@ -39,7 +39,7 @@ def main():
     p.add_argument("--epochs", type=float, default=1)
     p.add_argument("--lr", type=float, default=2e-4)
     p.add_argument("--rank", type=int, default=16)
-    p.add_argument("--max-len", type=int, default=2560)  # longer ones run an 8 GB GPU out of memory
+    p.add_argument("--max-len", type=int, default=3072)  # about 5.2 GB on an 8 GB GPU; docs in the prompt need the room
     p.add_argument("--data", default="data/train.jsonl")
     p.add_argument("--out", default="out/adapter")
     args = p.parse_args()

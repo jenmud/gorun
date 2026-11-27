@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"regexp"
 	"slices"
@@ -148,7 +149,21 @@ check = "systemctl is-active --quiet nginx && systemctl is-enabled --quiet nginx
 cmd = "systemctl enable --now nginx"
 verify = "systemctl is-active nginx"
 sudo = true
-rerun = "safe"`
+rerun = "safe"
+
+To run a task or a bundle at set times, add a [[schedule]] entry next to the tasks. gorun -serve
+runs it. Keys a schedule may use:
+
+  name = "nightly-backup"                   # required, unique
+  description = "one line summary"
+  target = "task-name"                      # required: a task, or "@bundle"
+  cron = "0 2 * * *"                        # five fields: minute hour day month weekday
+  at = "2027-01-15T10:00"                   # instead of cron, to run once
+  timezone = "Australia/Sydney"             # IANA zone for cron and at; default UTC
+  missed = "run"                            # run once on start-up if a time was missed; default skip
+
+Set exactly one of cron or at. To change a schedule, write its whole [[schedule]] entry again
+with the same name.`
 
 // GenerateTasks asks the model for tasks that do what request describes, and returns them as
 // Gorunfile TOML. The tasks in cfg, when given, are offered as dependencies. The reply is
@@ -234,12 +249,18 @@ var boolCopy = regexp.MustCompile(`(?m)^[ \t]*copy[ \t]*=[ \t]*(true|false)[ \t]
 
 var fence = regexp.MustCompile("(?s)```[a-zA-Z]*\\n(.*?)```")
 
+// HasEdits reports whether text holds a task table or a schedule, the things a reply can add.
+func HasEdits(text string) bool {
+	return strings.Contains(text, "[tasks.") || strings.Contains(text, "[[schedule]]")
+}
+
 // stripFences takes the TOML out of a markdown code block, which small models add anyway. A reply
-// may also hold shell commands in blocks of their own, so the first block with a task table wins.
+// may also hold shell commands in blocks of their own, so the first block with a task table or
+// schedule wins.
 func stripFences(reply string) string {
 	blocks := fence.FindAllStringSubmatch(reply, -1)
 	for _, m := range blocks {
-		if strings.Contains(m[1], "[tasks.") {
+		if HasEdits(m[1]) {
 			return strings.TrimSpace(m[1])
 		}
 	}
@@ -249,17 +270,18 @@ func stripFences(reply string) string {
 	return strings.TrimSpace(reply)
 }
 
-// ExtractTasks returns the tasks in a model's reply as Gorunfile TOML: the first markdown code
-// block holding a [tasks.<name>] table, else the first block, or else the whole reply. It fails
-// when they don't load, aren't valid, redefine a task in cfg, depend on one that doesn't
-// exist or lack a check or a verify. Files the tasks copy or run aren't looked for, as they may not have been written yet.
+// ExtractTasks returns the tasks and schedules in a model's reply as Gorunfile TOML: the first
+// markdown code block holding a [tasks.<name>] table or a [[schedule]] entry, else the first
+// block, or else the whole reply. It fails when they don't load, aren't valid, redefine a task or
+// schedule in cfg, depend on or target a task that doesn't exist, or a task lacks a check or a
+// verify. Files the tasks copy or run aren't looked for, as they may not have been written yet.
 // A "copy = true" or "copy = false" line, which small models write, is left out. cfg may be nil.
 func ExtractTasks(reply string, cfg *Config) (string, error) {
 	return extractTasks(reply, cfg, false)
 }
 
-// ExtractTaskEdits is ExtractTasks for a reply that may also change tasks cfg has: a task with
-// the name of one in cfg is its replacement.
+// ExtractTaskEdits is ExtractTasks for a reply that may also change tasks and schedules cfg has:
+// a task or schedule with the name of one in cfg is its replacement.
 func ExtractTaskEdits(reply string, cfg *Config) (string, error) {
 	return extractTasks(reply, cfg, true)
 }
@@ -272,10 +294,12 @@ func extractTasks(reply string, cfg *Config, replace bool) (string, error) {
 	return text + "\n", nil
 }
 
-// checkTasks reports why text isn't a set of valid tasks, new ones unless replace is set.
+// checkTasks reports why text isn't a set of valid tasks and schedules, new ones unless replace
+// is set.
 func checkTasks(text string, cfg *Config, replace bool) error {
 	var file struct {
-		Tasks map[string]Task `toml:"tasks"`
+		Tasks    map[string]Task `toml:"tasks"`
+		Schedule []Schedule      `toml:"schedule"`
 	}
 	meta, err := toml.Decode(text, &file)
 	if err != nil {
@@ -284,8 +308,8 @@ func checkTasks(text string, cfg *Config, replace bool) error {
 	if keys := meta.Undecoded(); len(keys) > 0 {
 		return fmt.Errorf("unknown key %s", keys[0])
 	}
-	if len(file.Tasks) == 0 {
-		return errors.New("no [tasks.<name>] tables")
+	if len(file.Tasks) == 0 && len(file.Schedule) == 0 {
+		return errors.New("no [tasks.<name>] tables or [[schedule]] entries")
 	}
 	var existing map[string]Task
 	if cfg != nil {
@@ -313,6 +337,31 @@ func checkTasks(text string, cfg *Config, replace bool) error {
 		}
 		if strings.TrimSpace(task.Verify) == "" {
 			return fmt.Errorf("task %s has no verify: add verify, a command that exits non-zero when cmd didn't work", name)
+		}
+	}
+	return checkSchedules(file.Schedule, file.Tasks, cfg, replace)
+}
+
+// checkSchedules reports why schedules wouldn't load in cfg with tasks added: a name used twice
+// or, unless replace is set, already in cfg, or a bad timing, zone or target.
+func checkSchedules(schedules []Schedule, tasks map[string]Task, cfg *Config, replace bool) error {
+	c := &Config{Tasks: map[string]Task{}}
+	if cfg != nil {
+		maps.Copy(c.Tasks, cfg.Tasks)
+		c.Bundles = cfg.Bundles
+	}
+	maps.Copy(c.Tasks, tasks)
+	seen := map[string]bool{}
+	for _, s := range schedules {
+		if seen[s.Name] {
+			return fmt.Errorf("schedule %q is written twice", s.Name)
+		}
+		seen[s.Name] = true
+		if cfg != nil && !replace && slices.ContainsFunc(cfg.Schedules, func(o Schedule) bool { return o.Name == s.Name }) {
+			return fmt.Errorf("schedule %q already exists", s.Name)
+		}
+		if err := c.validateSchedule(s); err != nil {
+			return err
 		}
 	}
 	return nil

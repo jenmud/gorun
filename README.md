@@ -219,6 +219,7 @@ that draws its own progress bars. The events and the rest of the API are in
 | [Recording runs](docs/history.md) | keep runs with the built-in SQLite recorder or your own, and what each event carries |
 | [Integrations](docs/integrations.md) | use the web UI, OpenTelemetry, NATS events, the Go library and shell completion |
 | [Reference](docs/reference.md) | look up any flag, Gorunfile key, environment variable or shortcut |
+| [Questions](docs/faq.md) | find quick answers: installing, CI, events, security, Docker and the assistant |
 | [Recipes](recipes/README.md) | try bigger examples against a lab of a hundred SSH servers |
 | [Examples](examples/README.md) | build your own tools on the Go library: a web app and a CLI with live progress |
 

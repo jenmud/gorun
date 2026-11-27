@@ -128,6 +128,42 @@ func TestChatChangesExistingTasks(t *testing.T) {
 	}
 }
 
+// The chat can add a schedule and change one the Gorunfile has, and is shown the schedules.
+func TestChatWritesAndChangesSchedules(t *testing.T) {
+	a, path := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	add := "```toml\n[[schedule]]\nname = \"nightly-hello\"\ntarget = \"hello\"\ncron = \"0 2 * * *\"\n```"
+	e := &recordingEngine{reply: add}
+	a.gen = &generator{assistant: gorun.Assistant{Engine: e}}
+
+	out := postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "Run hello every night at 2"}}})
+	if out.TaskNames != "schedule nightly-hello" || out.Replaces != "" || out.TaskError != "" {
+		t.Fatalf("reply = %+v", out)
+	}
+	if added := postJSON(t, a, "/assistant/add", map[string]string{"tasks": out.Tasks, "file": path}); added.Error != "" || !strings.Contains(added.Reply, "schedule nightly-hello") {
+		t.Fatalf("add = %+v", added)
+	}
+	if len(a.cfg.Schedules) != 1 || a.cfg.Schedules[0].Cron != "0 2 * * *" {
+		t.Fatalf("schedules = %+v", a.cfg.Schedules)
+	}
+
+	// a question naming it shows it, and a reply with the same name replaces it in place
+	e.reply = strings.Replace(add, "0 2 * * *", "30 4 * * *", 1)
+	out = postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "Move nightly-hello to 4:30"}}})
+	system := e.got[0].Content
+	if !strings.Contains(system, "Schedules (1):") || !strings.Contains(system, "[[schedule]]") {
+		t.Errorf("the context doesn't show the schedule:\n%s", system)
+	}
+	if out.Replaces != "schedule nightly-hello" {
+		t.Fatalf("reply = %+v, want it to replace the schedule", out)
+	}
+	postJSON(t, a, "/assistant/add", map[string]string{"tasks": out.Tasks, "file": path})
+	data, _ := os.ReadFile(path)
+	if len(a.cfg.Schedules) != 1 || a.cfg.Schedules[0].Cron != "30 4 * * *" || strings.Count(string(data), "[[schedule]]") != 1 {
+		t.Errorf("schedules = %+v, file:\n%s", a.cfg.Schedules, data)
+	}
+}
+
 // Tasks in a reply that don't load are reported, not offered.
 func TestChatReportsTasksThatDontLoad(t *testing.T) {
 	a, _ := newTestApp(t)
@@ -259,7 +295,7 @@ func TestAssistantStatsPanel(t *testing.T) {
 	a.gen = &generator{engine: &llm.Engine{Dir: t.TempDir()}}
 	a.gen.assistant.Engine = a.gen.engine
 	page := get(t, a, "/assistant").Body.String()
-	for _, want := range []string{`id="assistant-stats"`, "Not downloaded yet", "gorun-qwen3-4b-v2-q4_k_m.gguf"} {
+	for _, want := range []string{`id="assistant-stats"`, "Not downloaded yet", "gorun-qwen3-4b-v3-q4_k_m.gguf"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the Assistant page is missing %q", want)
 		}
@@ -315,5 +351,42 @@ func TestChatRepairsTasksThatDontLoad(t *testing.T) {
 	out = postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "a page"}}})
 	if out.TaskError == "" || len(e.asked) != 1+chatRepairs {
 		t.Errorf("after %d calls, taskError = %q", len(e.asked), out.TaskError)
+	}
+}
+
+// Saving a local task and its schedule into a Gorunfile with no local server adds one, as the
+// forms do, so the schedule has somewhere to run.
+func TestChatSaveAddsALocalServer(t *testing.T) {
+	a, path := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	if err := os.WriteFile(path, []byte("[tasks.hello]\ncmd = \"echo hi\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.loadConfig(path); err != nil {
+		t.Fatal(err)
+	}
+	tasks := "[tasks.stats]\ncmd = \"df -h\"\ncheck = \"false\"\nverify = \"true\"\nlocal = true\n\n[[schedule]]\nname = \"stats-hourly\"\ntarget = \"stats\"\ncron = \"0 * * * *\"\n"
+	out := postJSON(t, a, "/assistant/add", map[string]string{"tasks": tasks, "file": path})
+	if out.Error != "" || !strings.Contains(out.Reply, "Added a local server") {
+		t.Fatalf("add = %+v", out)
+	}
+	if !slices.ContainsFunc(a.cfg.Servers, func(s gorun.Server) bool { return s.IsLocal() }) {
+		t.Errorf("servers = %+v, want a local one", a.cfg.Servers)
+	}
+}
+
+// A question about gorun is sent with the docs that answer it; a request for tasks isn't.
+func TestChatSendsDocsWithQuestions(t *testing.T) {
+	a, _ := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	e := &recordingEngine{reply: "ok"}
+	a.gen = &generator{assistant: gorun.Assistant{Engine: e}}
+	postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "Is the web UI safe to expose?"}}})
+	if system := e.got[0].Content; !strings.Contains(system, "## From gorun's docs") || !strings.Contains(system, "no login") {
+		t.Errorf("the context has no docs on exposing the web UI:\n%s", system)
+	}
+	postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "Write a task that installs redis"}}})
+	if strings.Contains(e.got[0].Content, "## From gorun's docs") {
+		t.Error("a request for tasks was sent docs")
 	}
 }

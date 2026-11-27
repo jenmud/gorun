@@ -11,7 +11,8 @@ GORUN_LLM_MODEL=$PWD/training/out/gorun-qwen3-4b-q4_k_m.gguf gorun -serve Gorunf
 ```
 
 It trains a QLoRA adapter (a small set of extra weights on a 4-bit copy of the model), so it
-fits an 8 GB GPU. On an RTX 2060 SUPER one epoch takes about two hours. An RTX 20 has no bf16 or
+fits an 8 GB GPU: examples up to 3,072 tokens take about 5.2 GB. On an RTX 2060 SUPER one epoch
+takes about two and a half hours. An RTX 20 has no bf16 or
 flash attention, so `train.py` trains in fp16 and keeps SDPA on its memory-efficient kernel; the
 math kernel it would otherwise fall back to runs out of memory on the longest examples.
 
@@ -35,7 +36,11 @@ saved in a history database. So the model learns the exact context it gets in `g
   writes the diagnosis from the failure catalogue.
 - Answers about a Gorunfile (what a server runs, what depends on what) are worked out from the
   loaded config.
-- Tasks in replies are checked with `gorun.ExtractTasks`, so every task learned loads.
+- Tasks and schedules in replies are checked with `gorun.ExtractTasks`, so every one learned
+  loads. Schedule requests and changes are built from each Gorunfile's tasks and schedules.
+- Questions carry the doc sections the chat handler finds for them (`docs/docs.go`), so the model
+  learns to answer from them. A docs change reaches answers at once, but training on it again
+  keeps the examples in step.
 - About one example in eight is held out for the evaluation.
 
 ## Steps

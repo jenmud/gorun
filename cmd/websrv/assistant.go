@@ -12,12 +12,14 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/cmd/web/ui"
+	"github.com/jenmud/gorun/docs"
 	"github.com/jenmud/gorun/internal/store"
 )
 
@@ -37,12 +39,13 @@ over SSH, as a Gorunfile describes. Answer briefly and plainly. You can:
 - answer questions about the Gorunfile's servers, tasks and bundles, listed below;
 - summarise runs and diagnose why tasks failed, from the history below: name the task, the
   server and the likely cause, quote the line of output that shows it, and suggest a fix;
-- write new tasks, or change the Gorunfile's tasks. Put them in one ` + "```toml" + ` code block of
-  [tasks.<name>] tables; to change a task, write its whole table again under the same name. The
-  page offers to add them to the Gorunfile, replacing the tasks they change.
+- write new tasks and schedules, or change the Gorunfile's tasks and schedules. Put them in one
+  ` + "```toml" + ` code block of [tasks.<name>] tables and [[schedule]] entries; to change one, write
+  it whole again under the same name. The page offers to save them into the Gorunfile, replacing
+  the ones they change.
 Only state what the context shows or what you know of gorun; say so when you don't know.
 
-How to write tasks:
+How to write tasks and schedules:
 `
 
 // private reports whether the model runs on this machine, so nothing it is sent leaves it.
@@ -107,12 +110,12 @@ type chatEvent struct {
 	Done   *chatReply `json:"done,omitempty"`
 }
 
-// chatReply is the model's answer, and the tasks in it when they load.
+// chatReply is the model's answer, and the tasks and schedules in it when they load.
 type chatReply struct {
 	Reply     string `json:"reply,omitempty"`
-	Tasks     string `json:"tasks,omitempty"`
-	TaskNames string `json:"taskNames,omitempty"`
-	Replaces  string `json:"replaces,omitempty"` // the tasks in Tasks the Gorunfile has already
+	Tasks     string `json:"tasks,omitempty"`     // tasks and schedules, as Gorunfile TOML
+	TaskNames string `json:"taskNames,omitempty"` // such as "redis-install, schedule nightly"
+	Replaces  string `json:"replaces,omitempty"`  // the ones in Tasks the Gorunfile has already
 	TaskError string `json:"taskError,omitempty"`
 	Error     string `json:"error,omitempty"`
 }
@@ -152,6 +155,9 @@ func (a *app) chatHandler(w http.ResponseWriter, r *http.Request) {
 	send(chatEvent{Status: "Reading the Gorunfile and the recent runs"})
 	conv := trimConversation(req.Messages)
 	system := a.chatContext(ctx, cfg, req.Run) + mentionedTasks(cfg, conv)
+	if req.Run == "" {
+		system += docsFor(conv[len(conv)-1].Content)
+	}
 	messages := append([]gorun.ChatMessage{{Role: "system", Content: system}}, conv...)
 
 	release, err := a.genQ.acquire(ctx, func(s string) { send(chatEvent{Status: s}) })
@@ -180,11 +186,13 @@ func (a *app) chatHandler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			out.TaskError = err.Error()
 		} else {
-			names := taskNames(tasks)
+			names, scheds := editNames(tasks)
 			out.Tasks = tasks
-			out.TaskNames = strings.Join(names, ", ")
+			out.TaskNames = strings.Join(append(slices.Clone(names), labelSchedules(scheds)...), ", ")
 			if cfg != nil {
-				out.Replaces = strings.Join(slices.DeleteFunc(names, func(n string) bool { _, ok := cfg.Tasks[n]; return !ok }), ", ")
+				names = slices.DeleteFunc(names, func(n string) bool { _, ok := cfg.Tasks[n]; return !ok })
+				scheds = slices.DeleteFunc(scheds, func(n string) bool { return !inFile(cfg, kindSchedule, n) })
+				out.Replaces = strings.Join(append(names, labelSchedules(scheds)...), ", ")
 			}
 		}
 	}
@@ -205,7 +213,7 @@ func (a *app) repairTasks(ctx context.Context, messages []gorun.ChatMessage, rep
 		send(chatEvent{Status: fmt.Sprintf("The tasks don't load (%s). Asking the model to fix them, try %d of %d", shortError(err), try, chatRepairs)})
 		ask := append(slices.Clone(messages),
 			gorun.ChatMessage{Role: "assistant", Content: last},
-			gorun.ChatMessage{Role: "user", Content: "Those tasks don't load: " + err.Error() + ". Write all the tasks again, corrected, in one ```toml block and nothing else. Use only the keys listed above. Put any program, page or config in a [[tasks.<name>.copy]] table's content and run the file from cmd, rather than writing it into cmd with python3 -c or a heredoc."},
+			gorun.ChatMessage{Role: "user", Content: "Those don't load: " + err.Error() + ". Write all the tasks and schedules again, corrected, in one ```toml block and nothing else. Use only the keys listed above. Put any program, page or config in a [[tasks.<name>.copy]] table's content and run the file from cmd, rather than writing it into cmd with python3 -c or a heredoc."},
 		)
 		release, cerr := a.genQ.acquire(ctx, func(s string) { send(chatEvent{Status: s}) })
 		if cerr != nil {
@@ -229,7 +237,7 @@ func (a *app) repairTasks(ctx context.Context, messages []gorun.ChatMessage, rep
 func replaceTaskBlock(reply, fix string) string {
 	block := ""
 	for _, m := range codeBlock.FindAllStringSubmatch(fix, -1) {
-		if strings.Contains(m[1], "[tasks.") {
+		if gorun.HasEdits(m[1]) {
 			block = m[0]
 			break
 		}
@@ -238,7 +246,7 @@ func replaceTaskBlock(reply, fix string) string {
 		block = "```toml\n" + strings.TrimSpace(fix) + "\n```"
 	}
 	for _, loc := range codeBlock.FindAllStringSubmatchIndex(reply, -1) {
-		if strings.Contains(reply[loc[2]:loc[3]], "[tasks.") {
+		if gorun.HasEdits(reply[loc[2]:loc[3]]) {
 			return reply[:loc[0]] + block + reply[loc[1]:]
 		}
 	}
@@ -257,11 +265,11 @@ func shortError(err error) string {
 // codeBlock is a fenced code block in a reply, and its text.
 var codeBlock = regexp.MustCompile("(?s)```[a-zA-Z]*\n(.*?)```")
 
-// hasTaskBlock reports whether a reply has a code block with a task table. A reply that only
-// names one in its prose, such as "[tasks.site] deploys the page", holds no tasks to offer.
+// hasTaskBlock reports whether a reply has a code block with a task table or a schedule. A reply
+// that only names one in its prose, such as "[tasks.site] deploys the page", holds none to offer.
 func hasTaskBlock(reply string) bool {
 	for _, m := range codeBlock.FindAllStringSubmatch(reply, -1) {
-		if strings.Contains(m[1], "[tasks.") {
+		if gorun.HasEdits(m[1]) {
 			return true
 		}
 	}
@@ -285,8 +293,8 @@ func streamEvents(w http.ResponseWriter) func(chatEvent) {
 	}
 }
 
-// addTasksHandler saves the tasks a chat reply wrote straight into the Gorunfile, as the
-// Tasks page's edits are: there is nothing left to review on the Config page. A task with
+// addTasksHandler saves the tasks and schedules a chat reply wrote straight into the Gorunfile,
+// as the Tasks page's edits are: there is nothing left to review on the Config page. One with
 // unsaved changes there is left alone.
 func (a *app) addTasksHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct{ Tasks, File string }
@@ -308,8 +316,8 @@ func (a *app) addTasksHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnprocessableEntity, chatReply{Error: err.Error()})
 		return
 	}
-	for _, name := range names {
-		if msg := pendingConflict(pending, kindTask, name); msg != "" {
+	for _, ch := range changes {
+		if msg := pendingConflict(pending, ch.Kind, ch.Name); msg != "" {
 			writeJSON(w, http.StatusConflict, chatReply{Error: msg})
 			return
 		}
@@ -318,11 +326,17 @@ func (a *app) addTasksHandler(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnprocessableEntity, chatReply{Error: "could not save them: " + err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, chatReply{Reply: fmt.Sprintf("Saved %s into %s.", strings.Join(names, ", "), rel(cfg.Path, req.File))})
+	// a local task, or a schedule of one, needs a local server to run on, as the forms' saves do
+	note, err := a.addLocalServerIfNeeded(changes)
+	if err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, chatReply{Error: "saved them, but " + err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, chatReply{Reply: fmt.Sprintf("Saved %s into %s.", strings.Join(names, ", "), rel(cfg.Path, req.File)) + note})
 }
 
-// queueTasks checks the tasks in text against the loaded file and queues them as unsaved
-// changes; see taskChanges. a.mu must be held.
+// queueTasks checks the tasks and schedules in text against the loaded file and queues them as
+// unsaved changes; see taskChanges. a.mu must be held.
 func (a *app) queueTasks(text, file string, replace bool) ([]string, error) {
 	names, changes, err := taskChanges(a.cfg, a.pending, text, file, replace)
 	if err != nil {
@@ -332,9 +346,10 @@ func (a *app) queueTasks(text, file string, replace bool) ([]string, error) {
 	return names, nil
 }
 
-// taskChanges checks the tasks in text against cfg and the unsaved changes in pending, and
-// returns their names and the changes that save them into file. With replace, a task that is
-// there already is changed where it is defined; without, it is an error.
+// taskChanges checks the tasks and schedules in text against cfg and the unsaved changes in
+// pending, and returns their names (schedules as "schedule <name>") and the changes that save them
+// into file. With replace, one that is there already is changed where it is defined; without, it
+// is an error.
 func taskChanges(cfg *gorun.Config, pending []gorun.Change, text, file string, replace bool) ([]string, []gorun.Change, error) {
 	if !slices.Contains(cfg.Files, file) {
 		return nil, nil, fmt.Errorf("pick the file to save into")
@@ -343,40 +358,96 @@ func taskChanges(cfg *gorun.Config, pending []gorun.Change, text, file string, r
 		return nil, nil, err
 	}
 	var doc struct {
-		Tasks map[string]map[string]any `toml:"tasks"`
+		Tasks    map[string]map[string]any `toml:"tasks"`
+		Schedule []map[string]any          `toml:"schedule"`
 	}
 	if _, err := toml.Decode(text, &doc); err != nil {
 		return nil, nil, err
 	}
-	names := slices.Sorted(maps.Keys(doc.Tasks))
-	for _, name := range names {
-		if err := validName(kindTask, name); err != nil {
+	type entity struct {
+		kind, name string
+		body       map[string]any
+	}
+	var all []entity
+	for _, name := range slices.Sorted(maps.Keys(doc.Tasks)) {
+		all = append(all, entity{kindTask, name, doc.Tasks[name]})
+	}
+	for _, body := range doc.Schedule {
+		name, _ := body["name"].(string)
+		all = append(all, entity{kindSchedule, name, body})
+	}
+	for _, e := range all {
+		if err := validName(e.kind, e.name); err != nil {
 			return nil, nil, err
 		}
-		if !replace && present(cfg, pending, kindTask, name) {
-			return nil, nil, fmt.Errorf("a task named %s already exists", name)
+		if !replace && present(cfg, pending, e.kind, e.name) {
+			return nil, nil, fmt.Errorf("a %s named %s already exists", kindNames[e.kind], e.name)
 		}
 	}
+	var names []string
 	var changes []gorun.Change
-	for _, name := range names {
-		if present(cfg, pending, kindTask, name) {
-			src := sourceOf(cfg, pending, kindTask, name)
+	for _, e := range all {
+		names = append(names, map[string]string{kindTask: e.name, kindSchedule: "schedule " + e.name}[e.kind])
+		if present(cfg, pending, e.kind, e.name) {
+			src := sourceOf(cfg, pending, e.kind, e.name)
 			changes = append(changes,
-				gorun.Change{Kind: kindTask, Name: name, File: src, Remove: true},
-				gorun.Change{Kind: kindTask, Name: name, File: src, Body: doc.Tasks[name]},
+				gorun.Change{Kind: e.kind, Name: e.name, File: src, Remove: true},
+				gorun.Change{Kind: e.kind, Name: e.name, File: src, Body: e.body},
 			)
 			continue
 		}
-		changes = append(changes, gorun.Change{Kind: kindTask, Name: name, File: file, Body: doc.Tasks[name]})
+		changes = append(changes, gorun.Change{Kind: e.kind, Name: e.name, File: file, Body: e.body})
 	}
 	return names, changes, nil
+}
+
+// Budgets for the docs a question is sent with: they share the context with everything else.
+const (
+	maxDocSections = 2
+	maxDocChars    = 2000
+)
+
+// requestWords start a request, such as for tasks or a schedule, which docs don't help answer.
+var requestWords = map[string]bool{"write": true, "add": true, "create": true, "install": true, "set": true, "setup": true,
+	"run": true, "schedule": true, "change": true, "move": true, "make": true, "edit": true, "remove": true, "delete": true,
+	"give": true, "put": true, "deploy": true, "configure": true, "update": true, "rename": true, "point": true, "generate": true}
+
+// docsFor is the parts of gorun's docs that answer question, so the model answers from them
+// rather than from memory. Requests, such as for tasks, and questions about runs get none.
+func docsFor(question string) string {
+	q := strings.TrimSpace(question)
+	first, _, _ := strings.Cut(strings.ToLower(q), " ")
+	if requestWords[strings.Trim(first, ",.:")] && !strings.HasSuffix(q, "?") {
+		return ""
+	}
+	// questions about runs are answered from the history, which takes the room
+	low := strings.ToLower(q)
+	for _, w := range []string{"this run", "last run", "recent run", "latest run", "the runs", "summar", "why did"} {
+		if strings.Contains(low, w) {
+			return ""
+		}
+	}
+	found := docs.Search(q, maxDocSections, maxDocChars)
+	if len(found) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n## From gorun's docs\nAnswer questions about gorun from these. Don't name options, flags or settings they and the rest of this context don't show; when they don't cover the question, say so.\n")
+	for _, sec := range found {
+		text := sec.Text
+		if len(text) > maxDocChars {
+			text = text[:maxDocChars] + "…"
+		}
+		fmt.Fprintf(&b, "\n### %s\n%s\n", sec.Title, text)
+	}
+	return b.String()
 }
 
 // maxMentioned caps the tasks whose TOML goes in the context, so it stays small.
 const maxMentioned = 3
 
-// mentionedTasks writes out, as TOML, the tasks the newest question names, so the model can
-// change them without guessing what they hold now.
+// mentionedTasks writes out, as TOML, the tasks and schedules the newest question names, so the
+// model can change them without guessing what they hold now.
 func mentionedTasks(cfg *gorun.Config, conv []gorun.ChatMessage) string {
 	if cfg == nil || len(conv) == 0 {
 		return ""
@@ -384,19 +455,26 @@ func mentionedTasks(cfg *gorun.Config, conv []gorun.ChatMessage) string {
 	question := strings.ToLower(conv[len(conv)-1].Content)
 	var b strings.Builder
 	n := 0
-	for _, name := range slices.Sorted(maps.Keys(cfg.Tasks)) {
-		if n == maxMentioned || !mentions(question, strings.ToLower(name)) {
-			continue
-		}
-		data, err := (&gorun.Config{Tasks: map[string]gorun.Task{name: cfg.Tasks[name]}}).Marshal()
+	write := func(c *gorun.Config) {
+		data, err := c.Marshal()
 		if err != nil {
-			continue
+			return
 		}
 		if n == 0 {
-			b.WriteString("\n## Tasks the question names, as they are now\nTo change one, write its whole table again under the same name.\n```toml\n")
+			b.WriteString("\n## Tasks and schedules the question names, as they are now\nTo change one, write it whole again under the same name.\n```toml\n")
 		}
 		b.Write(data)
 		n++
+	}
+	for _, name := range slices.Sorted(maps.Keys(cfg.Tasks)) {
+		if n < maxMentioned && mentions(question, strings.ToLower(name)) {
+			write(&gorun.Config{Tasks: map[string]gorun.Task{name: cfg.Tasks[name]}})
+		}
+	}
+	for _, s := range cfg.Schedules {
+		if n < maxMentioned && mentions(question, strings.ToLower(s.Name)) {
+			write(&gorun.Config{Schedules: []gorun.Schedule{s}})
+		}
 	}
 	if n > 0 {
 		b.WriteString("```\n")
@@ -424,13 +502,26 @@ func wordByte(c byte) bool {
 	return c == '-' || c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z'
 }
 
-// taskNames lists the tasks in Gorunfile TOML.
-func taskNames(text string) []string {
+// editNames lists the tasks and the schedules in Gorunfile TOML.
+func editNames(text string) (tasks, schedules []string) {
 	var doc struct {
-		Tasks map[string]any `toml:"tasks"`
+		Tasks    map[string]any `toml:"tasks"`
+		Schedule []struct{ Name string }
 	}
 	_, _ = toml.Decode(text, &doc)
-	return slices.Sorted(maps.Keys(doc.Tasks))
+	for _, s := range doc.Schedule {
+		schedules = append(schedules, s.Name)
+	}
+	return slices.Sorted(maps.Keys(doc.Tasks)), schedules
+}
+
+// labelSchedules names schedules for a message, such as "schedule nightly".
+func labelSchedules(names []string) []string {
+	out := make([]string, len(names))
+	for i, n := range names {
+		out[i] = "schedule " + n
+	}
+	return out
 }
 
 // trimConversation keeps the newest user and assistant messages that fit the budget, starting
@@ -511,6 +602,20 @@ func writeGorunfile(b *strings.Builder, cfg *gorun.Config) {
 	}
 	if len(names) > 40 {
 		fmt.Fprintf(b, "- and %d more\n", len(names)-40)
+	}
+	if len(cfg.Schedules) > 0 {
+		fmt.Fprintf(b, "Schedules (%d):\n", len(cfg.Schedules))
+		for _, s := range cfg.Schedules[:min(len(cfg.Schedules), 20)] {
+			when := "cron " + strconv.Quote(s.Cron)
+			if s.At != "" {
+				when = "once at " + s.At
+			}
+			fmt.Fprintf(b, "- %s: runs %s, %s, %s", s.Name, s.Target, when, cmp.Or(s.Timezone, "UTC"))
+			if s.Missed != "" {
+				fmt.Fprintf(b, ", missed = %s", s.Missed)
+			}
+			b.WriteString("\n")
+		}
 	}
 	bundles := slices.Sorted(maps.Keys(cfg.Bundles))
 	if len(bundles) > 0 {

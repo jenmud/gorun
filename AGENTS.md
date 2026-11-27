@@ -22,6 +22,9 @@
   terminal). `cmd/websrv` is the web server, `cmd/web/ui` the templ components,
   `internal/store` the sqlite history and the wire event, `internal/nats` the NATS client,
   `internal/envvars` env access.
+- `docs/docs.go` (package `docs`) embeds `docs/*.md` and keyword-searches them by heading: the
+  assistant sends the best sections with questions about gorun, so a docs change reaches its
+  answers without retraining. `docs/faq.md` holds the questions people ask most.
 - `training/` fine-tunes the assistant's model (see its README). Its seeds become conversations in
   `cmd/websrv/dataset_test.go` (build tag `dataset`), through the real prompts, so a change to the
   assistant's prompt or context only reaches a trained model after rebuilding the data and

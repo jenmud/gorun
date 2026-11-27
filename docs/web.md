@@ -315,11 +315,15 @@ model. To use Ollama or another OpenAI-compatible server instead, set `GORUN_LLM
 ### Assistant
 
 A chat (experimental) with the same language model. Ask it about the loaded Gorunfile's tasks and
-servers, have it summarise runs or explain why a task failed, or have it write tasks. Each
+servers, have it summarise runs or explain why a task failed, or have it write tasks and
+schedules. Each
 question sends it:
 
-- the Gorunfile's tasks, bundles and servers, with each server's tasks in run order;
-- the tasks the question names, as TOML, so it can change them;
+- the Gorunfile's tasks, bundles, schedules and servers, with each server's tasks in run order;
+- the tasks and schedules the question names, as TOML, so it can change them;
+- for a question about gorun, the two sections of these docs that match it best (from `docs/`,
+  built into gorun), so it answers from them rather than from memory; requests, such as for
+  tasks, and questions about runs aren't sent any;
 - the ten newest runs;
 - the newest run in detail: every task's state, and the command, exit code and end of the output
   of each failed task. A run of more than 40 tasks is counted per server instead, and only its
@@ -354,10 +358,17 @@ the Gorunfile straight away, as an edit on the Tasks page does; there is nothing
 the Config page. A task with unsaved changes on the Config page is left alone until you save or
 discard them. Tasks that don't load are reported, so you can ask it to fix them.
 
+It writes schedules too: ask "run backup every night at 2am, Sydney time", or "and run it every
+Monday" after a request for tasks, and the reply holds a `[[schedule]]` entry. It is checked as
+the loader checks one (its target exists, exactly one of `cron` or `at`, a real time zone) and
+saved by the same button. Ask it to change a schedule by name, such as "move nightly-backup to
+4am", and the reply replaces that schedule in place. Pausing and skipping stay on the
+[Schedules](#schedules) page.
+
 It can change tasks too: ask, for example, "add a timeout to the migrate task". When a question
-names a task, the model is sent that task as it is now. A task in the reply with the name of one
-the Gorunfile has replaces it, in the file it's defined in, and the chat says which tasks it
-replaces. Generate tasks only writes new ones. A
+names a task or schedule, the model is sent it as it is now. A task or schedule in the reply with
+the name of one the Gorunfile has replaces it, in the file it's defined in, and the chat says
+which ones it replaces. Generate tasks only writes new ones. A
 task may copy or run a file that isn't there yet; create it before you save, as the Gorunfile
 doesn't load without it.
 

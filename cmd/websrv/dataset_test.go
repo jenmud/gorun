@@ -43,6 +43,7 @@ var dsScenarios = []string{
 	"recipes/02-dependency-dag/Gorunfile",
 	"recipes/03-mega-pipeline/Gorunfile",
 	"recipes/04-dev-server/Gorunfile",
+	"recipes/05-scheduled-jobs/Gorunfile",
 	"recipes/07-big-upload/Gorunfile",
 	"recipes/large-inventory/Gorunfile",
 	"recipes/local-run/Gorunfile",
@@ -150,6 +151,7 @@ func TestBuildDataset(t *testing.T) {
 	for _, sc := range b.scenarios {
 		if sc.cfg != nil {
 			b.gorunfileExamples(sc)
+			b.scheduleExamples(sc)
 		}
 	}
 	for _, sc := range b.scenarios {
@@ -296,6 +298,14 @@ func (b *builder) taskExamples(s taskSeed) {
 			for range 2 {
 				b.genExample(id, q, answer)
 				b.chatGenExample(id, q, answer, note)
+			}
+			// the same request, run at set times
+			if b.rng.IntN(3) == 0 {
+				sAnswer, say, sched := b.withSchedule(answer)
+				sNote := note + " " + scheduleNote(sched, sched.Target)
+				sq := q + ", and run it" + say
+				b.chatGenExample(id+"/sched", sq, sAnswer, sNote)
+				b.genExample(id+"/sched", sq, sAnswer)
 			}
 			// the same request, after a task the Gorunfile already has
 			sc := b.pick()
@@ -1134,6 +1144,9 @@ func score(ex dsExample, reply string, cfg *gorun.Config) (bool, string) {
 		if why := taskShape(text, ex.Messages[len(ex.Messages)-1].Content, cfg); why != "" {
 			return false, why
 		}
+		if why := scheduleShape(text, ex.Messages[len(ex.Messages)-1].Content, cfg); why != "" {
+			return false, why
+		}
 	}
 	low := strings.ToLower(reply)
 	for _, w := range ex.Want {
@@ -1197,4 +1210,187 @@ func badCommand(text string) string {
 		}
 	}
 	return ""
+}
+
+// when is a timing a request can ask for, the cron or at it means, and a schedule name suffix.
+type when struct{ say, cron, at, suffix string }
+
+var whens = []when{
+	{"every night at 2am", "0 2 * * *", "", "nightly"},
+	{"every day at 6:30", "30 6 * * *", "", "daily"},
+	{"every Monday at 9am", "0 9 * * 1", "", "weekly"},
+	{"every 15 minutes", "*/15 * * * *", "", "every-15m"},
+	{"every hour", "0 * * * *", "", "hourly"},
+	{"on weekdays at 7pm", "0 19 * * 1-5", "", "weekdays"},
+	{"on the first of every month at midnight", "0 0 1 * *", "", "monthly"},
+	{"every Sunday at 3am", "0 3 * * 0", "", "sunday"},
+	{"every 6 hours", "0 */6 * * *", "", "every-6h"},
+	{"once, on 15 January 2027 at 10am", "", "2027-01-15T10:00", "once"},
+	{"at 11:45 every night", "45 23 * * *", "", "late"},
+}
+
+// zones are the time zones a request can name, with how it says them.
+var zones = [][2]string{{"Sydney time", "Australia/Sydney"}, {"New York time", "America/New_York"}, {"Berlin time", "Europe/Berlin"}, {"Tokyo time", "Asia/Tokyo"}}
+
+// scheduleTOML writes s as a reply writes it: every key it has, in a fixed order.
+func scheduleTOML(s gorun.Schedule) string {
+	var b strings.Builder
+	b.WriteString("[[schedule]]\n")
+	fmt.Fprintf(&b, "name = %q\n", s.Name)
+	if s.Description != "" {
+		fmt.Fprintf(&b, "description = %q\n", s.Description)
+	}
+	fmt.Fprintf(&b, "target = %q\n", s.Target)
+	if s.Cron != "" {
+		fmt.Fprintf(&b, "cron = %q\n", s.Cron)
+	} else {
+		fmt.Fprintf(&b, "at = %q\n", s.At)
+	}
+	if s.Timezone != "" {
+		fmt.Fprintf(&b, "timezone = %q\n", s.Timezone)
+	}
+	if s.Missed != "" {
+		fmt.Fprintf(&b, "missed = %q\n", s.Missed)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// timing fills in s from w, with a zone and a catch-up the request may add, and returns the
+// words the request adds for them.
+func (b *builder) timing(s *gorun.Schedule, w when) string {
+	s.Cron, s.At = w.cron, w.at
+	say := " " + w.say
+	if b.rng.IntN(3) == 0 {
+		z := one(b.rng, zones)
+		s.Timezone = z[1]
+		say += ", " + z[0]
+	}
+	if w.cron != "" && b.rng.IntN(5) == 0 {
+		s.Missed = gorun.MissedRun
+		say += ", and catch up if gorun was down"
+	}
+	return say
+}
+
+func scheduleNote(s gorun.Schedule, what string) string {
+	when := "on cron " + s.Cron
+	if s.At != "" {
+		when = "once, at " + s.At
+	}
+	n := fmt.Sprintf("This schedule runs %s %s", what, when)
+	if s.Timezone != "" {
+		n += " in " + s.Timezone
+	}
+	n += "."
+	if s.Missed == gorun.MissedRun {
+		n += " missed = \"run\" runs it once on start-up when a time was missed."
+	}
+	return n + " gorun -serve runs schedules, so keep it running."
+}
+
+// scheduleExamples ask for new schedules of sc's tasks and bundles, and for changes to the
+// schedules it has.
+func (b *builder) scheduleExamples(sc *dsScenario) {
+	cfg := sc.cfg
+	targets := listedTasks(cfg, !hasSSH(cfg))
+	for _, bn := range slices.Sorted(maps.Keys(cfg.Bundles)) {
+		targets = append(targets, gorun.BundlePrefix+bn)
+	}
+	if len(targets) == 0 {
+		return
+	}
+	asks := []string{"Run %s%s", "Schedule %s to run%s", "can you set up a schedule that runs %s%s?", "I want %s to run%s", "add a schedule: %s%s"}
+	for i := range 14 {
+		target := one(b.rng, targets)
+		w := one(b.rng, whens)
+		s := gorun.Schedule{Name: strings.TrimPrefix(target, gorun.BundlePrefix) + "-" + w.suffix, Target: target}
+		what := target
+		if bn, ok := strings.CutPrefix(target, gorun.BundlePrefix); ok {
+			what = "the " + bn + " bundle"
+		}
+		say := b.timing(&s, w)
+		q := fmt.Sprintf(one(b.rng, asks), what, say)
+		b.scheduleChat(sc, fmt.Sprintf("sched/%s/add/%d", sc.name, i), q, scheduleNote(s, what), scheduleTOML(s))
+	}
+	for i, old := range cfg.Schedules[:min(len(cfg.Schedules), 4)] {
+		for j := range 3 {
+			s := old
+			var q, note string
+			switch b.rng.IntN(4) {
+			case 0:
+				w := one(b.rng, whens)
+				s.Timezone, s.Missed = old.Timezone, old.Missed
+				s.Cron, s.At = w.cron, w.at
+				q = fmt.Sprintf(one(b.rng, []string{"Change %s to run %s", "move the %s schedule to %s", "make %s run %s instead"}), old.Name, w.say)
+				note = "This replaces " + old.Name + " with the new timing; the rest stays as it was."
+			case 1:
+				z := one(b.rng, zones)
+				s.Timezone = z[1]
+				q = fmt.Sprintf(one(b.rng, []string{"Make %s use %s", "%s should be in %s"}), old.Name, z[0])
+				note = "This replaces " + old.Name + ": its times are now read in " + z[1] + "."
+			case 2:
+				if old.Cron == "" {
+					continue
+				}
+				s.Missed = gorun.MissedRun
+				q = fmt.Sprintf(one(b.rng, []string{"Make %s catch up runs it missed", "if gorun is down when %s is due, run it when it starts"}), old.Name)
+				note = "This replaces " + old.Name + " with missed = \"run\": when gorun -serve was down at a due time, it runs once on start-up."
+			default:
+				target := one(b.rng, targets)
+				if target == old.Target {
+					continue
+				}
+				s.Target = target
+				q = fmt.Sprintf(one(b.rng, []string{"Point %s at %s", "make the %s schedule run %s"}), old.Name, target)
+				note = "This replaces " + old.Name + ": it now runs " + target + " at the same times."
+			}
+			b.scheduleChat(sc, fmt.Sprintf("sched/%s/edit/%d/%d", sc.name, i, j), q, note, scheduleTOML(s))
+		}
+	}
+}
+
+// scheduleChat adds a chat example whose reply is note and answer, when answer loads in sc.
+func (b *builder) scheduleChat(sc *dsScenario, id, q, note, answer string) {
+	if _, err := gorun.ExtractTaskEdits("```toml\n"+answer+"\n```", sc.cfg); err != nil {
+		return
+	}
+	b.add(dsExample{ID: id, Kind: "chat-sched", Scenario: sc.name, Tasks: true,
+		Messages: b.chat(sc, b.withPrefix(q), "", chatTasks(note, answer))}, id)
+}
+
+// withSchedule adds a schedule for the last task in answer, the one that finishes the job.
+func (b *builder) withSchedule(answer string) (string, string, gorun.Schedule) {
+	heads := taskHeader.FindAllString(answer, -1)
+	last := strings.TrimSuffix(strings.TrimPrefix(heads[len(heads)-1], "[tasks."), "]")
+	w := one(b.rng, whens[:9])
+	s := gorun.Schedule{Name: last + "-" + w.suffix, Target: last}
+	say := b.timing(&s, w)
+	return answer + "\n\n" + scheduleTOML(s), say, s
+}
+
+// scheduleShape reports a reply whose schedules don't match the example's: each wanted one needs
+// one with its target and timing, and its name when it changes a schedule cfg has.
+func scheduleShape(text, want string, cfg *gorun.Config) string {
+	var got, wanted struct {
+		Schedule []gorun.Schedule `toml:"schedule"`
+	}
+	_, _ = toml.Decode(stripBlock(text), &got)
+	_, _ = toml.Decode(stripBlock(want), &wanted)
+	for _, w := range wanted.Schedule {
+		edit := cfg != nil && slices.ContainsFunc(cfg.Schedules, func(s gorun.Schedule) bool { return s.Name == w.Name })
+		if !slices.ContainsFunc(got.Schedule, func(g gorun.Schedule) bool {
+			return g.Target == w.Target && g.Cron == w.Cron && g.At == w.At && g.Timezone == w.Timezone && g.Missed == w.Missed && (!edit || g.Name == w.Name)
+		}) {
+			return fmt.Sprintf("no schedule runs %s on %q %s as wanted", w.Target, w.Cron+w.At, w.Timezone)
+		}
+	}
+	return ""
+}
+
+// stripBlock is the TOML of a reply's code block, or the reply itself.
+func stripBlock(s string) string {
+	if m := regexp.MustCompile("(?s)```(?:toml)?\\n(.*?)```").FindStringSubmatch(s); m != nil {
+		return m[1]
+	}
+	return s
 }

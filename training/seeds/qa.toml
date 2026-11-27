@@ -416,7 +416,7 @@ want = ["gorun_llm_url", "gorun_llm_model", "gguf"]
 
 [[qa]]
 q = ["What happens when several people use the assistant at once?", "Does the assistant load the model for every user?", "Will many users run the assistant out of memory?"]
-a = """No. gorun loads the model once and answers one question at a time, whoever asks, so more users only means a wait: the chat says how many questions are ahead of yours, and with 8 waiting the next is asked to try again in a minute. Each gorun -serve process loads its own copy, so run one per machine."""
+a = """gorun loads the model once and answers one question at a time, whoever asks, so more users only means a wait: the chat says how many questions are ahead of yours, and with 8 waiting the next is asked to try again in a minute. Each gorun -serve process loads its own copy, so run one per machine."""
 want = ["once", "one at a time"]
 
 [[qa]]
@@ -472,3 +472,18 @@ want = ["docker", "/var/lib/gorun"]
 q = ["Is the web UI safe to expose?", "Does gorun -serve have a login?", "how do I secure gorun -serve?"]
 a = """It has no login: anyone who can reach the port can run tasks, browse folders and edit the Gorunfile, and it listens on all interfaces by default. Keep it on a trusted network, or set GORUN_ADDRESS=127.0.0.1:8080 and reach it over an SSH tunnel: ssh -L 8080:127.0.0.1:8080 you@gorun-host."""
 want = ["login", "127.0.0.1", "ssh -l"]
+
+[[qa]]
+q = ["Can the assistant set up schedules?", "Can you schedule tasks for me?", "can the assistant change a schedule?"]
+a = """Yes. Ask, for example, "run backup every night at 2am" or "move nightly-backup to 4am, Sydney time", and the reply holds a [[schedule]] entry, next to any tasks it writes. gorun checks that it loads: its target is a task or @bundle that exists, it has exactly one of cron or at, and its timezone is a real IANA zone. Save writes it into the Gorunfile; one with the name of a schedule the Gorunfile has replaces it. Schedules run inside gorun -serve, and the Schedules page can pause, resume or skip them."""
+want = ["[[schedule]]", "cron", "-serve"]
+
+[[qa]]
+q = ["How do I pause a schedule?", "Can I skip the next run of a schedule?", "how do I stop a schedule for a while?"]
+a = """On the Schedules page of gorun -serve: Pause stops a schedule until you press Resume, and Skip next run skips only its next time. A paused schedule's runs are recorded as missed, and with missed = "run" it catches up once when it resumes. Pausing isn't written into the Gorunfile; to stop a schedule for good, remove its [[schedule]] entry."""
+want = ["Pause", "Schedules page"]
+
+[[qa]]
+q = ["What cron format do schedules use?", "how do I write the cron for a schedule?", "what does cron = \"0 2 * * *\" mean?"]
+a = """Five fields: minute, hour, day of the month, month and day of the week. "0 2 * * *" is every day at 02:00, "*/15 * * * *" every 15 minutes, "0 9 * * 1" Mondays at 09:00 and "0 19 * * 1-5" weekdays at 19:00. The times are in the schedule's timezone, UTC unless it sets one such as timezone = "Australia/Sydney". To run once, set at = "2027-01-15T10:00" instead of cron."""
+want = ["minute", "timezone"]

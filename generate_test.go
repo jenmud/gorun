@@ -122,6 +122,44 @@ func TestExtractTaskEditsReplacesExistingTasks(t *testing.T) {
 	}
 }
 
+// Schedules in a reply are checked as the loader checks them, against the reply's tasks too.
+func TestExtractTasksChecksSchedules(t *testing.T) {
+	cfg := &Config{
+		Tasks:     map[string]Task{"backup": {Cmd: "true"}},
+		Schedules: []Schedule{{Name: "nightly", Target: "backup", Cron: "0 2 * * *"}},
+	}
+	task := "[tasks.report]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\n"
+	tests := []struct {
+		name, text, wantErr string
+		edit                bool
+	}{
+		{name: "new schedule for a task the reply adds", text: task + "[[schedule]]\nname = \"weekly\"\ntarget = \"report\"\ncron = \"0 9 * * 1\"\n"},
+		{name: "schedule only, for a task cfg has", text: "[[schedule]]\nname = \"hourly\"\ntarget = \"backup\"\ncron = \"0 * * * *\"\ntimezone = \"Australia/Sydney\"\n"},
+		{name: "unknown target", text: "[[schedule]]\nname = \"x\"\ntarget = \"nope\"\ncron = \"0 2 * * *\"\n", wantErr: `unknown task "nope"`},
+		{name: "bad cron", text: "[[schedule]]\nname = \"x\"\ntarget = \"backup\"\ncron = \"every night\"\n", wantErr: "schedule \"x\""},
+		{name: "cron and at", text: "[[schedule]]\nname = \"x\"\ntarget = \"backup\"\ncron = \"0 2 * * *\"\nat = \"2027-01-01T10:00\"\n", wantErr: "exactly one of cron or at"},
+		{name: "existing name", text: "[[schedule]]\nname = \"nightly\"\ntarget = \"backup\"\ncron = \"0 4 * * *\"\n", wantErr: "already exists"},
+		{name: "existing name, as an edit", text: "[[schedule]]\nname = \"nightly\"\ntarget = \"backup\"\ncron = \"0 4 * * *\"\n", edit: true},
+		{name: "twice", text: "[[schedule]]\nname = \"x\"\ntarget = \"backup\"\ncron = \"0 4 * * *\"\n[[schedule]]\nname = \"x\"\ntarget = \"backup\"\ncron = \"0 5 * * *\"\n", wantErr: "written twice"},
+		{name: "unknown key", text: "[[schedule]]\nname = \"x\"\ntarget = \"backup\"\ncron = \"0 4 * * *\"\nevery = \"day\"\n", wantErr: "unknown key"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reply := "Here:\n```toml\n" + tt.text + "```"
+			_, err := ExtractTasks(reply, cfg)
+			if tt.edit {
+				_, err = ExtractTaskEdits(reply, cfg)
+			}
+			switch {
+			case tt.wantErr == "" && err != nil:
+				t.Errorf("error = %v, want nil", err)
+			case tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)):
+				t.Errorf("error = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestExtractTasksSkipsShellBlocks(t *testing.T) {
 	reply := "Stop it first:\n```bash\nsudo systemctl stop nginx\n```\nThen add:\n```toml\n[tasks.a]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\n```\n"
 	got, err := ExtractTasks(reply, nil)

@@ -41,7 +41,8 @@ NARRATION = {
         "So after the first night, it would never run again. That's exactly the kind of mistake a small model still makes."
     ),
     "schedules": (
-        "It sets up schedules too. That postgres answer came with one: the backup task, every night at one. "
+        "It sets up schedules too. That postgres answer came with one for the backup. "
+        "But read it closely: we asked for one in the morning, and it wrote half past one, in Sydney time, which nobody asked for. "
         "And it can change the ones you have. Ask it to move nightly disk to half past four, Sydney time, "
         "and it rewrites that schedule under the same name, with only the time and zone changed.\n"
         "gorun checks every schedule the way it checks the Gorunfile: the target has to exist, and the timing and time zone have to be real. "

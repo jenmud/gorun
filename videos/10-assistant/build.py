@@ -86,7 +86,7 @@ SCENES = [
     ]),
     ("write", None, [
         (12, shot("write", "Small tasks, each with a check and a verify")),
-        (12, shot("complex", "A bigger job: small tasks, and a schedule at 1am")),
+        (12, shot("complex", "A bigger job: small tasks, and a schedule")),
         (5, shot("complex-saved", "Save these tasks: saved straight away")),
         (6, shot("tasks-saved", "Ready on the Tasks page")),
     ]),

@@ -4,6 +4,12 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.36.1 (since v0.36.0)
+
+- The macOS and Windows builds work again. The vendored `libffi` libraries they embed were left
+  out of the repository by `.gitignore`, so v0.36.0 has no release binaries, and the module
+  doesn't build for those systems.
+
 ## v0.36.0 (since v0.35.0)
 
 ### An assistant in the web UI (experimental)

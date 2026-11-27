@@ -51,7 +51,7 @@ func (a *app) schedulesPage(w http.ResponseWriter, r *http.Request) {
 			d.Targets = targetNames(cfg)
 		}
 	}
-	a.page(w, "Schedules", "schedules", ui.SchedulesPage(d))
+	a.page(w, r, "Schedules", "schedules", ui.SchedulesPage(d))
 }
 
 // schedulePause, scheduleResume and scheduleSkip are the POST actions on the schedules page.

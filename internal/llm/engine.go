@@ -19,8 +19,10 @@ import (
 // Engine runs a GGUF model in-process. It loads llama.cpp and the model on its first Chat, and
 // holds them until Close. llama.cpp's state is global, so a program has one Engine at a time.
 type Engine struct {
-	Dir      string    // where the libraries and models are kept
-	Model    string    // a GGUF path or https URL; "" is DefaultModel
+	Dir string // where the libraries and models are kept
+	// Model is a GGUF path or https URL; "" is DefaultModel. Set it before the first Chat, and
+	// change it afterwards with Use.
+	Model    string
 	Progress io.Writer // downloads and loading report here when set
 	Verbose  bool      // let llama.cpp log to stderr
 
@@ -229,18 +231,55 @@ func (e *Engine) format(chat []llama.ChatMessage) (string, error) {
 	return string(buf[:n]), nil
 }
 
-// Close frees the model and llama.cpp.
-func (e *Engine) Close() {
+// Load loads the model now, rather than on the next Chat.
+func (e *Engine) Load(ctx context.Context) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return e.load(ctx)
+}
+
+// Unload frees the model's memory, keeping llama.cpp, so the next Chat loads the model again.
+func (e *Engine) Unload() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.unload()
+}
+
+// Use switches to model, a GGUF path or "" for DefaultModel, freeing the one loaded now. The
+// next Chat, or Load, loads it.
+func (e *Engine) Use(model string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.unload()
+	e.statsMu.Lock()
+	e.Model = model // Stats reads it under statsMu
+	e.statsMu.Unlock()
+}
+
+// unload frees the model, its context and sampler. e.mu is held.
+func (e *Engine) unload() {
 	if !e.loaded {
 		return
 	}
 	llama.SamplerFree(e.sampler)
 	_ = llama.Free(e.lctx)
 	_ = llama.ModelFree(e.model)
+	e.loaded = false
+	e.statsMu.Lock()
+	e.stats = Stats{Answers: e.stats.Answers}
+	e.statsMu.Unlock()
+}
+
+// Close frees the model and llama.cpp.
+func (e *Engine) Close() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.started {
+		return
+	}
+	e.unload()
 	llama.Close()
-	e.loaded, e.started = false, false
+	e.started = false
 	e.statsMu.Lock()
 	e.stats = Stats{}
 	e.statsMu.Unlock()

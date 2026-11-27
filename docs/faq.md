@@ -40,10 +40,21 @@ OpenTelemetry traces, metrics and logs to the `OTEL_*` endpoint you set. See
 
 ## Is the web UI safe to expose?
 
-`gorun -serve` has no login: anyone who can reach its port can run tasks and edit the Gorunfile,
-and it listens on all interfaces by default. Keep it on a trusted network, or bind it to this
-machine with `GORUN_ADDRESS=127.0.0.1:8080` and reach it over an SSH tunnel:
-`ssh -L 8080:127.0.0.1:8080 you@gorun-host`. See [the web UI](web.md).
+Turn the login on: add the first user on the **Users** page (they are an admin), or set
+`GORUN_ADMIN_PASSWORD` in gorun's environment. Then anyone can look and ask the assistant, but
+running tasks and editing the Gorunfile need **Sign in**, and managing users and models needs an
+admin. Users are kept in the history database with bcrypt-hashed passwords. Behind an auth proxy,
+list its admin users in `GORUN_ADMINS` instead. Without any of these, anyone who can reach its
+port can run tasks and edit the Gorunfile, and it listens on all interfaces by default: keep it
+on a trusted network, or bind it with `GORUN_ADDRESS=127.0.0.1:8080` and use an SSH tunnel.
+Serve it over HTTPS, usually through a proxy. See [signing in](web.md#signing-in).
+
+## How do I reset a forgotten password?
+
+Restart the web UI with a new `GORUN_ADMIN_PASSWORD` in its environment, sign in as `admin` with
+it, and use **Set** on the Users page to give the user a new password; their old sessions end.
+`GORUN_ADMIN_PASSWORD` is never stored, so a forgotten one is reset the same way: set a new value
+and restart. Another admin can also set the password on the Users page, with no restart.
 
 ## Can gorun run in Docker?
 
@@ -83,5 +94,6 @@ See [storage](storage.md).
 The Assistant tab in `gorun -serve` explains failed runs, summarises runs, answers questions and
 writes tasks and schedules. It is experimental. By default it runs gorun's own fine-tune of Qwen3
 4B Instruct (Apache 2.0) on this machine, downloaded on the first question. `GORUN_LLM_MODEL`
-points at another GGUF file or URL, and `GORUN_LLM_URL` at a server such as Ollama. See
+points at another GGUF file or URL, and `GORUN_LLM_URL` at a server such as Ollama. The Assistant
+page's Models panel also downloads GGUF models from Hugging Face and switches between them. See
 [the assistant](web.md#assistant).

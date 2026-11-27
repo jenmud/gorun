@@ -25,6 +25,7 @@ type startupInfo struct {
 	dbPath                      string
 	dbErr                       error // why the history store did not open
 	logPath                     string
+	login                       string // who may change things
 }
 
 // startupMessage writes the lines that tell the user the service is up, where to open it and
@@ -39,6 +40,9 @@ func startupMessage(w io.Writer, info startupInfo) {
 		line("history", fmt.Sprintf("off (%v)", info.dbErr))
 	} else {
 		line("history", store.Redact(info.dbPath))
+	}
+	if info.login != "" {
+		line("login", info.login)
 	}
 	if info.logPath != "" {
 		line("log", info.logPath)

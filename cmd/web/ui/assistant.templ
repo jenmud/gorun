@@ -11,6 +11,9 @@ templ AssistantPage(d AssistantPageData) {
 		<div id="assistant-stats">
 			@AssistantStatsPanel(d.Stats)
 		</div>
+		if d.Models != nil {
+			@ModelsPanel(*d.Models)
+		}
 		if d.RunID != "" {
 			<p class="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">About run <a href={ templ.SafeURL("/history/" + d.RunID) } class="text-accent hover:underline">{ d.RunTitle }</a> <span class="font-mono text-zinc-500">{ d.RunID }</span>. <a href="/assistant" class="text-zinc-300 underline underline-offset-2">Ask about the newest run instead</a>.</p>
 		}
@@ -335,6 +338,60 @@ templ assistantScript() {
 			var d = box.querySelector('details');
 			if (d) { d.open = open; }
 		}).catch(function () {});
+	}
+	// The models panel: its list is drawn again by the server after each action, and every two
+	// seconds while a download runs.
+	var models = document.getElementById('assistant-models');
+	if (models) {
+		var list = document.getElementById('models-list');
+		var hub = document.getElementById('hub-results');
+		var polling = null;
+		function showList(html) {
+			list.innerHTML = html;
+			refreshStats();
+			var busy = !!list.querySelector('[data-downloading]');
+			if (busy && !polling) {
+				polling = setInterval(function () { fetch('/assistant/models').then(function (r) { return r.text(); }).then(showList).catch(function () {}); }, 2000);
+			}
+			if (!busy && polling) { clearInterval(polling); polling = null; }
+		}
+		function post(url, data) {
+			list.setAttribute('aria-busy', 'true');
+			list.style.opacity = '0.6';
+			return fetch(url, { method: 'POST', body: new URLSearchParams(data) })
+				.then(function (r) { return r.text(); })
+				.then(showList)
+				.finally(function () { list.style.opacity = ''; list.removeAttribute('aria-busy'); });
+		}
+		function showHub(url) {
+			hub.innerHTML = '<p class="text-zinc-500">Asking Hugging Face…</p>';
+			fetch(url).then(function (r) { return r.text(); }).then(function (html) { hub.innerHTML = html; })
+				.catch(function () { hub.innerHTML = '<p class="text-red-300">Could not reach Hugging Face.</p>'; });
+		}
+		models.addEventListener('click', function (e) {
+			var b = e.target.closest('button');
+			if (!b) { return; }
+			if (b.dataset.modelAction) {
+				if (b.dataset.confirm && !confirm(b.dataset.confirm)) { return; }
+				b.disabled = true;
+				if (b.dataset.modelAction === 'use' || b.dataset.modelAction === 'load') { b.textContent = 'Opening…'; }
+				post('/assistant/models/' + b.dataset.modelAction, { name: b.dataset.name || '', force: b.dataset.force || '' });
+			} else if (b.dataset.hubRepo) {
+				showHub('/assistant/hub/files?' + new URLSearchParams({ repo: b.dataset.hubRepo, q: b.dataset.query || '' }));
+			} else if (b.dataset.hubBack !== undefined) {
+				showHub('/assistant/hub/search?' + new URLSearchParams({ q: b.dataset.hubBack }));
+			} else if (b.dataset.hubDownload) {
+				b.disabled = true;
+				b.textContent = 'Starting…';
+				post('/assistant/hub/download', { repo: b.dataset.hubDownload, file: b.dataset.file });
+			}
+		});
+		var search = models.querySelector('[data-hub-search]');
+		if (search) search.addEventListener('submit', function (e) {
+			e.preventDefault();
+			showHub('/assistant/hub/search?' + new URLSearchParams(new FormData(e.target)));
+		});
+		if (list.querySelector('[data-downloading]')) { showList(list.innerHTML); }
 	}
 	form.addEventListener('submit', function (e) { e.preventDefault(); ask(input.value); });
 	input.addEventListener('keydown', function (e) {

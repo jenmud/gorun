@@ -54,10 +54,13 @@ type app struct {
 	saveMu sync.Mutex // one direct save from a page at a time, so edits can't overwrite each other
 	genQ   modelQueue // one use of the model at a time, in order
 	gen    *generator
-	store  *store.Store
-	nc     *inats.Client
-	topic  string
-	hub    *hub
+	// download is the model being downloaded from Hugging Face, one at a time
+	download modelDownload
+	store    *store.Store
+	nc       *inats.Client
+	topic    string
+	hub      *hub
+	auth     *auth
 
 	// pushSoon is set while a coalesced dashboard push is waiting, so task events and copy
 	// progress from many servers at once cost one render per interval, not one per event.
@@ -142,11 +145,13 @@ func run(configPath, logPath string, live bool) error {
 		runs:  map[string]context.CancelFunc{},
 		nats:  natsStartState(emb, nc, err, envvars.Get("GORUN_SKIP_NATS") != ""),
 		gen:   newGenerator(),
+		auth:  newAuth(context.Background(), envvars.Get("GORUN_ADMIN_PASSWORD"), envvars.Get("GORUN_ADMINS"), st),
 
 		noFile:      configPath == "",
 		keepsStored: stored,
 	}
 	defer a.gen.close()
+	defer a.download.stop()
 	if nc != nil {
 		defer nc.Close()
 		if _, err := nc.Subscribe(a.topic, a.onEvent); err != nil {
@@ -155,7 +160,7 @@ func run(configPath, logPath string, live bool) error {
 			log.Printf("gorun web: subscribed to %s", a.topic)
 		}
 	}
-	info := startupInfo{nats: a.nats, topic: a.topic, dbPath: dbPath, dbErr: dbErr, logPath: logPath, noFile: a.noFile}
+	info := startupInfo{nats: a.nats, topic: a.topic, dbPath: dbPath, dbErr: dbErr, logPath: logPath, noFile: a.noFile, login: a.auth.describe()}
 	if configPath != "" {
 		info.cfgErr = a.loadConfig(configPath)
 		if info.cfgErr != nil {
@@ -186,7 +191,7 @@ func run(configPath, logPath string, live bool) error {
 	// the exit until it is finished
 	reqCtx, cancelRequests := context.WithCancel(context.Background())
 	defer cancelRequests()
-	srv := &http.Server{Addr: addr, Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second,
+	srv := &http.Server{Addr: addr, Handler: a.guard(a.routes()), ReadHeaderTimeout: 10 * time.Second,
 		BaseContext: func(net.Listener) context.Context { return reqCtx }}
 	go func() {
 		<-ctx.Done()
@@ -232,9 +237,21 @@ func (a *app) routes() *http.ServeMux {
 	mux.HandleFunc("GET /history/{id}/task", a.taskDetail)
 	mux.HandleFunc("POST /runs/{id}/delete", a.deleteRun)
 	mux.HandleFunc("POST /runs/truncate", a.truncateRuns)
+	mux.HandleFunc("GET /login", a.loginPage)
+	mux.HandleFunc("POST /login", a.loginHandler)
+	mux.HandleFunc("POST /logout", a.logoutHandler)
+	mux.HandleFunc("GET /users", a.usersPage)
+	mux.HandleFunc("POST /users/add", a.addUserHandler)
+	mux.HandleFunc("POST /users/password", a.setPasswordHandler)
+	mux.HandleFunc("POST /users/delete", a.deleteUserHandler)
 	mux.HandleFunc("GET /assistant", a.assistantPage)
 	mux.HandleFunc("POST /assistant/chat", a.chatHandler)
 	mux.HandleFunc("GET /assistant/stats", a.assistantStatsHandler)
+	mux.HandleFunc("GET /assistant/models", a.modelsHandler)
+	mux.HandleFunc("POST /assistant/models/{action}", a.modelActionHandler)
+	mux.HandleFunc("GET /assistant/hub/search", a.hubSearchHandler)
+	mux.HandleFunc("GET /assistant/hub/files", a.hubFilesHandler)
+	mux.HandleFunc("POST /assistant/hub/download", a.hubDownloadHandler)
 	withFile := func(pattern string, h http.HandlerFunc) {
 		if !a.noFile {
 			mux.HandleFunc(pattern, h)

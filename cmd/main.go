@@ -563,6 +563,8 @@ in the environment):
 
   GORUN_NAME                          default: gorun
   GORUN_ADDRESS                       default: :8080 (-serve listen address)
+  GORUN_ADMIN_PASSWORD                default: unset (-serve: a password that signs in as admin; or add users on the Users page)
+  GORUN_ADMINS                        default: unset (-serve: proxy users, by X-Forwarded-User, who are admins)
   GORUN_DB_PATH                       default: ~/.gorun/gorun.db (falls back to gorun.db); or a postgres:// or mysql:// URL
   GORUN_CACHE_DIR                     default: ~/.cache/gorun (git includes are kept here)
   GORUN_LOG_FILE                      default: ~/.gorun/gorun.log (appended to on every run)

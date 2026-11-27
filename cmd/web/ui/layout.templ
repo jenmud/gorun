@@ -185,6 +185,9 @@ function gorunSelect(formId, on) {
 							@navLink("/config", "Config", active == "config")
 						}
 						@navLink("/assistant", "Assistant", active == "assistant")
+						if v := viewer(ctx); v.Admin && v.Users {
+							@navLink("/users", "Users", active == "users")
+						}
 						if name, ok := storedName(ctx); ok {
 							@navLink("/gorunfiles", "Gorunfiles", active == "gorunfiles")
 							if name != "" {
@@ -201,6 +204,16 @@ function gorunSelect(formId, on) {
 						</span>
 					} else {
 						<span class="ml-auto text-xs text-amber-400">NATS is off ({ nats.Reason }): runs and live updates are off</span>
+					}
+					if v := viewer(ctx); v.LoginOn && v.User != "" {
+						<span class="flex items-center gap-2 text-xs text-zinc-400">
+							signed in as <span class="font-mono text-zinc-200">{ v.User }</span>
+							if !v.Proxy {
+								<form method="post" action="/logout"><button class="underline underline-offset-2 hover:text-white">Sign out</button></form>
+							}
+						</span>
+					} else if v.LoginOn {
+						<a href={ templ.SafeURL("/login?" + loginQuery(v.Path)) } class="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-200 hover:bg-zinc-800">Sign in</a>
 					}
 					<a href="https://github.com/jenmud/gorun" target="_blank" rel="noopener noreferrer" class="text-xs text-zinc-400 underline underline-offset-2 hover:text-white">GitHub</a>
 				</div>

@@ -31,6 +31,32 @@ func storedName(ctx context.Context) (string, bool) {
 	return name, ok
 }
 
+// Viewer is who is looking at a page, when the web UI has a login.
+type Viewer struct {
+	LoginOn bool   // changes need signing in
+	User    string // who is signed in, or ""
+	Admin   bool   // may manage users and models: an admin, or anyone while there is no login
+	Users   bool   // the history database is open, so there are users to manage
+	Proxy   bool   // signed in by an auth proxy, so there is no sign out here
+	Path    string // the page, to come back to after signing in
+}
+
+type viewerKey struct{}
+
+// WithViewer marks ctx with who is looking at the page, for the menu's sign in and the parts of
+// a page that only an admin may use.
+func WithViewer(ctx context.Context, v Viewer) context.Context {
+	return context.WithValue(ctx, viewerKey{}, v)
+}
+
+func viewer(ctx context.Context) Viewer {
+	v, _ := ctx.Value(viewerKey{}).(Viewer)
+	return v
+}
+
+// canAdmin reports whether the viewer may manage users and the assistant's models.
+func canAdmin(ctx context.Context) bool { return viewer(ctx).Admin }
+
 // noGorunfile reports whether ctx was marked by WithoutGorunfile.
 func noGorunfile(ctx context.Context) bool {
 	no, _ := ctx.Value(noGorunfileKey{}).(bool)
@@ -241,6 +267,60 @@ type AssistantPageData struct {
 	RunID    string // the run the chat starts on, if any
 	RunTitle string
 	Stats    AssistantStats
+	Models   *ModelsData // the built-in model's models; nil with a model server
+}
+
+// ModelsData is the Assistant page's list of downloaded models and the one in use.
+type ModelsData struct {
+	Rows     []ModelRow
+	Download *ModelDownload // the download from Hugging Face going on or just over, if any
+	Error    string         // why the last action failed
+	// Retry, when set, offers to do the refused action anyway: it was refused because someone
+	// was using the assistant
+	Retry *ModelRetry
+}
+
+// ModelRetry is a model action to try again, regardless of who is using the assistant.
+type ModelRetry struct {
+	Action, Name, Label string
+}
+
+// ModelRow is one model the assistant can use: gorun's own, or a downloaded GGUF file.
+type ModelRow struct {
+	Name    string // its file name; "" for gorun's own model
+	Label   string // what the page calls it
+	Size    string // "" when it isn't downloaded yet
+	InUse   bool   // questions go to it
+	Loaded  bool   // it is in memory now
+	Builtin bool   // gorun's own model, which can't be deleted
+}
+
+// ModelDownload is how a download from Hugging Face is going.
+type ModelDownload struct {
+	Repo, File, Status, Error string
+	Running, Done             bool
+}
+
+// HubResults is a Hugging Face search, or one repository's files, for the Assistant page.
+type HubResults struct {
+	Query  string
+	Models []HubModelRow
+	Repo   *HubModelRow // set when listing one repository's files
+	Files  []HubFileRow
+	Error  string
+}
+
+// HubModelRow is a model repository on Hugging Face.
+type HubModelRow struct {
+	ID, License, Downloads string
+	Permissive             bool // Apache 2.0 or MIT, like gorun's own model
+	Gated                  bool // needs a Hugging Face login to download
+}
+
+// HubFileRow is one GGUF file of a repository.
+type HubFileRow struct {
+	Name, Size string
+	Have       bool // a model with its file name is downloaded already
 }
 
 // AssistantStats describes the assistant's model: where it runs and how it is doing.

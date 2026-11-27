@@ -171,7 +171,7 @@ func (a *app) configPage(w http.ResponseWriter, r *http.Request) {
 	if !a.storedPage(r.Context(), &d) {
 		d.Browser = browse(pickerDir(r.URL.Query().Get("dir"), d.Path))
 	}
-	a.page(w, "Config", "config", ui.ConfigPage(d))
+	a.page(w, r, "Config", "config", ui.ConfigPage(d))
 }
 
 // editPage shows the config page with the edit form for one entity, filled with its current values.
@@ -200,7 +200,7 @@ func (a *app) editPage(w http.ResponseWriter, r *http.Request) {
 		d.Browser = browse(pickerDir("", d.Path))
 	}
 	d.Edit = editFields(body)
-	a.page(w, "Config", "config", ui.ConfigPage(d))
+	a.page(w, r, "Config", "config", ui.ConfigPage(d))
 }
 
 // entityPath is where each kind's tables live in a Gorunfile.

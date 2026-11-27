@@ -31,7 +31,7 @@ func (a *app) gorunfilesPage(w http.ResponseWriter, r *http.Request) {
 		}
 		d.Items = append(d.Items, row)
 	}
-	a.page(w, "Gorunfiles", "gorunfiles", ui.GorunfilesPage(d))
+	a.page(w, r, "Gorunfiles", "gorunfiles", ui.GorunfilesPage(d))
 }
 
 // storedShares maps each stored Gorunfile to the stored ones it includes.

@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
+	"path"
 	"slices"
 	"strings"
 	"time"
@@ -33,7 +33,9 @@ func newGenerator() *generator {
 	}
 	g := &generator{assistant: a}
 	if a.URL == "" {
-		g.engine = &llm.Engine{Dir: llm.Dir(), Model: a.Model, Progress: os.Stderr}
+		dir := llm.Dir()
+		// GORUN_LLM_MODEL wins; else the model last opened on the Assistant page
+		g.engine = &llm.Engine{Dir: dir, Model: cmp.Or(a.Model, llm.SavedModel(dir)), Progress: os.Stderr}
 		g.assistant.Engine = g.engine
 	}
 	return g
@@ -48,8 +50,9 @@ func (g *generator) describe() string {
 		return cmp.Or(g.assistant.Model, gorun.DefaultAssistantModel) + " at " + g.assistant.URL
 	case g.engine == nil:
 		return cmp.Or(g.assistant.Model, gorun.DefaultAssistantModel) + " at " + g.assistant.URL + ". Not private: your request and task list are sent there"
-	case g.assistant.Model != "":
-		return filepath.Base(g.assistant.Model) + ", built in"
+	}
+	if m := g.engine.Stats().Model; m != path.Base(llm.DefaultModel.URL) {
+		return m + ", built in"
 	}
 	if !llm.Downloaded(g.engine.Dir) {
 		return "gorun's Qwen3 4B, built in; the first answer downloads it, 2.5 GB, so it takes a few minutes"

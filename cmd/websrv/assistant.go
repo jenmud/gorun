@@ -76,6 +76,10 @@ func (g *generator) host() string {
 // assistantPage is the chat. ?run=ID starts it on that run.
 func (a *app) assistantPage(w http.ResponseWriter, r *http.Request) {
 	d := ui.AssistantPageData{Model: a.gen.describe(), Private: a.gen.private(), Stats: a.assistantStats()}
+	if a.engine() != nil {
+		m := a.modelsData("")
+		d.Models = &m
+	}
 	if !d.Private {
 		d.Host = a.gen.host()
 	}
@@ -90,7 +94,7 @@ func (a *app) assistantPage(w http.ResponseWriter, r *http.Request) {
 			d.RunID, d.RunTitle = run.ID, run.Title
 		}
 	}
-	a.page(w, "Assistant", "assistant", ui.AssistantPage(d))
+	a.page(w, r, "Assistant", "assistant", ui.AssistantPage(d))
 }
 
 // chatRequest is what the chat page posts: the conversation so far, and the run it is about.

@@ -18,6 +18,7 @@ port=$((20000 + RANDOM % 20000))
 mkdir -p "$work/cache"
 (cd "$work" && unshare --map-root-user --uts --mount sh -c "hostname laptop && mount --bind '$cache' '$work/cache' && mount -t tmpfs none /home && mkdir -p /home/dev/.cache/gorun && mount --bind '$work/cache' /home/dev/.cache/gorun && exec env HOME=/home/dev USER=dev LOGNAME=dev XDG_CACHE_HOME=/home/dev/.cache GORUN_CACHE_DIR=/home/dev/.cache/gorun GORUN_DB_PATH='$work/h.db' GORUN_LOG_FILE='$work/g.log' GORUN_ADDRESS=127.0.0.1:$port '$work/gorun' -serve Gorunfile" > "$work/srv.log" 2>&1 &)
 for _ in $(seq 40); do curl -fsS "http://127.0.0.1:$port/" >/dev/null 2>&1 && break; sleep 0.5; done
-cp "$here/capture.mjs" "$PW/capture-assistant.mjs"
+# CAPTURE=other.mjs retakes only some shots, keeping the rest in $OUT
+cp "${CAPTURE:-$here/capture.mjs}" "$PW/capture-assistant.mjs"
 (cd "$PW" && node capture-assistant.mjs "http://127.0.0.1:$port" "$out")
 cp "$work/srv.log" "$out/serve-start.txt"

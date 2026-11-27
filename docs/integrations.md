@@ -17,8 +17,9 @@ runs and writes tasks. It starts its own NATS server when none is running, and i
 [schedules](schedules.md) while it runs. The full guide, with examples and walkthroughs, is in
 [The web UI](web.md).
 
-> **No login.** The web UI listens on all interfaces by default. Keep it on a trusted network, or
-> bind it to `127.0.0.1` and reach it over an SSH tunnel.
+> **Set a login.** The web UI listens on all interfaces by default. Add users on its Users page,
+> or set `GORUN_ADMIN_PASSWORD`, so only they can change things (see [signing in](web.md#signing-in)), keep it on a trusted
+> network, or bind it to `127.0.0.1` and reach it over an SSH tunnel.
 
 ## Logs and OpenTelemetry
 
@@ -83,10 +84,10 @@ GORUN_LABELS="ticket=CHG-42,team=ops" gorun Gorunfile -r
   variables they set; any other system that sets `CI` shows as `ci`.
 - **Git.** gorun asks `git` about the folder the Gorunfile is in, and gives up after 2 seconds.
   A password or token in the remote's URL is never recorded.
-- **The web UI has no login.** A web run's user is the account the web server runs as. Put the web
-  UI behind an auth proxy to record who clicked Run: gorun reads `X-Forwarded-User`,
-  `X-Auth-Request-User` or `Remote-User`. Those headers are only as trustworthy as the proxy,
-  so don't let browsers reach gorun directly.
+- **The web UI's user.** A web run's user is the account the web server runs as. Its web user
+  is whoever signed in (see [signing in](web.md#signing-in)); behind an auth proxy, gorun reads `X-Forwarded-User`, `X-Auth-Request-User` or
+  `Remote-User`. Those headers are only as trustworthy as the proxy, so don't let browsers reach
+  gorun directly.
 - **Programs built on gorun** can set fields on `Config.Origin` before `Run` (a version, a
   trigger, labels). `Run` fills in the rest.
 

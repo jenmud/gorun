@@ -1,7 +1,8 @@
 # Where gorun keeps its history
 
 Every run is recorded: its servers, tasks, commands, output and who started it. `gorun -serve`
-started without a Gorunfile also keeps its Gorunfiles there. That history lives in one of three
+started without a Gorunfile also keeps its Gorunfiles there, and the web UI keeps its
+[users](web.md#signing-in), with bcrypt-hashed passwords. That history lives in one of three
 databases, chosen by `GORUN_DB_PATH`:
 
 | Storage | `GORUN_DB_PATH` | Use it when |
@@ -148,6 +149,9 @@ appear in History once recorded, but not on Live.
 Gorunfiles kept by `gorun -serve` are shared the same way: two web services on one database see
 the same Gorunfiles and versions. Each runs every stored Gorunfile's schedules, though, so run
 one `gorun -serve` per database, or schedules fire twice.
+
+Web UI users are shared too, with the key that signs their sessions, so signing in to one web
+service signs you in to every one on that database.
 
 ## Migrations
 

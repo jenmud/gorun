@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // maxWaiting is how many questions may wait for the model while it answers another. More are
@@ -18,6 +19,7 @@ type modelQueue struct {
 	once    sync.Once
 	slot    chan struct{} // holds a token while a request uses the model
 	waiting atomic.Int32
+	last    atomic.Int64 // when a question last finished with the model, in Unix nanoseconds
 }
 
 // errModelBusy is returned when maxWaiting questions are waiting already.
@@ -32,7 +34,10 @@ func (e errModelBusy) Error() string {
 // when too many requests are waiting.
 func (q *modelQueue) acquire(ctx context.Context, status func(string)) (func(), error) {
 	q.once.Do(func() { q.slot = make(chan struct{}, 1) })
-	release := func() { <-q.slot }
+	release := func() {
+		q.last.Store(time.Now().UnixNano())
+		<-q.slot
+	}
 	select {
 	case q.slot <- struct{}{}:
 		return release, nil
@@ -58,5 +63,47 @@ func (q *modelQueue) acquire(ctx context.Context, status func(string)) (func(), 
 		return release, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	}
+}
+
+// errModelInUse is why claim refused: the model is answering, or was used too recently to tell
+// whether someone's chat is still going.
+type errModelInUse string
+
+func (e errModelInUse) Error() string { return string(e) }
+
+// claim takes the model at once for a change to it, such as switching models, and refuses when
+// someone is using it: it is answering or has questions waiting, or one finished within quiet.
+// Its release doesn't count as a use.
+func (q *modelQueue) claim(quiet time.Duration) (func(), error) {
+	q.once.Do(func() { q.slot = make(chan struct{}, 1) })
+	select {
+	case q.slot <- struct{}{}:
+	default:
+		return nil, errModelInUse("The assistant is answering a question now.")
+	}
+	release := func() { <-q.slot }
+	if n := q.waiting.Load(); n > 0 {
+		release()
+		return nil, errModelInUse("Questions are waiting for the assistant.")
+	}
+	if last := q.last.Load(); last != 0 {
+		if ago := time.Since(time.Unix(0, last)); ago < quiet {
+			release()
+			return nil, errModelInUse(fmt.Sprintf("Someone used the assistant %s ago, so their chat may still be going.", agoText(ago)))
+		}
+	}
+	return release, nil
+}
+
+// agoText is a short duration as people say it: "less than a minute", "3 minutes".
+func agoText(d time.Duration) string {
+	switch m := int(d.Minutes()); {
+	case m < 1:
+		return "less than a minute"
+	case m == 1:
+		return "a minute"
+	default:
+		return fmt.Sprintf("%d minutes", m)
 	}
 }

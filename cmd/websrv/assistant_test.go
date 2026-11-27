@@ -382,7 +382,7 @@ func TestChatSendsDocsWithQuestions(t *testing.T) {
 	e := &recordingEngine{reply: "ok"}
 	a.gen = &generator{assistant: gorun.Assistant{Engine: e}}
 	postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "Is the web UI safe to expose?"}}})
-	if system := e.got[0].Content; !strings.Contains(system, "## From gorun's docs") || !strings.Contains(system, "no login") {
+	if system := e.got[0].Content; !strings.Contains(system, "## From gorun's docs") || !strings.Contains(system, "GORUN_ADMIN_PASSWORD") {
 		t.Errorf("the context has no docs on exposing the web UI:\n%s", system)
 	}
 	postJSON(t, a, "/assistant/chat", chatRequest{Messages: []gorun.ChatMessage{{Role: "user", Content: "Write a task that installs redis"}}})

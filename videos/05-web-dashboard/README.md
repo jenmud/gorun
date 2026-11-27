@@ -1,7 +1,7 @@
 # Video 5: The web dashboard
 
 A 3-minute tutorial: `gorun -serve` (the dashboard, the embedded NATS server, the history database and
-the scheduler), why it has no login and how to keep it private, the Run, Live, History, Tasks and
+the scheduler), adding users and signing in, and how to keep it private, the Run, Live, History, Tasks and
 Schedules pages, and runs that start elsewhere appearing on Live. Same synthetic voice, pace and look as
 videos [1](../01-what-is-gorun/), [2](../02-gorunfile-and-tui/), [3](../03-reliable-deployments/) and
 [4](../04-scaling-up/).

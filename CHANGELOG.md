@@ -4,6 +4,29 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## Next
+
+### Users and sign in for the web UI
+- A **Users** page keeps users in the history database (SQLite, Postgres or MySQL, through a new
+  migration), with bcrypt-hashed passwords. The first user added is an admin and turns the login
+  on; admins add users or admins, set their passwords and delete them.
+- With a login, anyone can still look and ask the assistant. Running tasks, editing the
+  Gorunfile and schedules and deleting history need a user; managing users and the assistant's
+  models needs an admin. Sessions last 7 days and end when the password changes.
+- `GORUN_ADMIN_PASSWORD` signs in as `admin`, without the database too, and behind an auth proxy
+  `GORUN_ADMINS` lists its users who are admins. With none of these, the web UI stays open as
+  before, and the startup message says so.
+
+### Switch models from the Assistant page
+- A **Models** panel on the Assistant page lists gorun's own model and the downloaded ones. **Open**
+  switches to one and loads it; **Close** frees its memory; **Delete** removes a downloaded one.
+  The model opened last is used again after a restart, unless `GORUN_LLM_MODEL` names one.
+- Opening and closing are refused while someone is using the assistant, or did in the last 5
+  minutes, so the model doesn't change in the middle of someone's chat; **Open it anyway** does it
+  regardless, once the answer being written is done.
+- **Search** finds GGUF models on Hugging Face, with their licences, and downloads one in the
+  background, checked against the SHA-256 Hugging Face publishes for it.
+
 ## v0.38.0 (since v0.37.2)
 
 ### A Docker image with the assistant's model built in

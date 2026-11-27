@@ -1,0 +1,151 @@
+package ui
+
+// ModelsPanel lists the models the built-in assistant can use, with the one in use, and finds
+// more on Hugging Face. The list is drawn again after each action, and while a download runs.
+templ ModelsPanel(d ModelsData) {
+	<details id="assistant-models" class="group/models rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs">
+		<summary class="flex cursor-pointer list-none items-center gap-2 text-zinc-300">
+			<span class="inline-block text-zinc-500 transition group-open/models:rotate-90">▸</span>
+			<span class="font-semibold text-zinc-200">Models</span>
+			<span class="text-zinc-500">open, close and switch models, or get one from Hugging Face</span>
+		</summary>
+		<div id="models-list" class="mt-2">
+			@ModelsList(d)
+		</div>
+		if !canAdmin(ctx) {
+			<p class="mt-3 border-t border-zinc-800 pt-3 text-zinc-400"><a href={ templ.SafeURL("/login?" + loginQuery("/assistant")) } class="text-accent hover:underline">Sign in</a> as an admin to open, close or switch models, or to get one from Hugging Face.</p>
+		} else {
+		<div class="mt-3 border-t border-zinc-800 pt-3">
+			<p class="text-zinc-400">Get a model from <a href="https://huggingface.co/models?library=gguf" target="_blank" rel="noopener" class="text-accent hover:underline">Hugging Face</a>: any GGUF model llama.cpp can run. gorun's prompts are tuned for its own model, so others may answer worse, and a bigger model needs more memory.</p>
+			<form data-hub-search class="mt-2 flex gap-2">
+				<input name="q" required placeholder="Search, such as qwen3 4b instruct" class={ inputClass() + " flex-1" }/>
+				<button class="rounded-lg border border-zinc-700 px-3 py-1.5 text-zinc-200 transition hover:bg-zinc-800">Search</button>
+			</form>
+			<div id="hub-results" class="mt-2"></div>
+		</div>
+		}
+	</details>
+}
+
+// ModelsList is the models on this machine, and the download going on, if any.
+templ ModelsList(d ModelsData) {
+	if d.Error != "" {
+		<p class="mb-2 rounded border border-red-900/60 bg-red-950/30 px-2 py-1 text-red-300">
+			{ d.Error }
+			if r := d.Retry; r != nil {
+				<button type="button" data-model-action={ r.Action } data-name={ r.Name } data-force="1" class="ml-2 underline underline-offset-2">{ r.Label }</button>
+			}
+		</p>
+	}
+	{{ admin := canAdmin(ctx) }}
+	<ul class="space-y-1">
+		for _, m := range d.Rows {
+			<li class="flex flex-wrap items-center gap-2 rounded border border-zinc-800 px-2 py-1.5">
+				<span class="min-w-0 flex-1 break-all font-mono text-zinc-200">{ m.Label }</span>
+				if m.Size != "" {
+					<span class="text-zinc-500">{ m.Size }</span>
+				} else {
+					<span class="text-zinc-500">not downloaded</span>
+				}
+				if m.InUse && m.Loaded {
+					<span class="rounded bg-emerald-950/60 px-1.5 py-0.5 text-emerald-300">open</span>
+					if admin {
+						<button type="button" data-model-action="unload" class={ modelButton() }>Close</button>
+					}
+				} else if m.InUse {
+					<span class="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-300">in use, closed</span>
+					if m.Size != "" && admin {
+						<button type="button" data-model-action="load" class={ modelButton() }>Open</button>
+					}
+				} else if admin {
+					<button type="button" data-model-action="use" data-name={ m.Name } class={ modelButton() }>Open</button>
+					if !m.Builtin {
+						<button type="button" data-model-action="delete" data-name={ m.Name } data-confirm={ "Delete " + m.Name + "? It is removed from this machine." } class="rounded border border-red-900/60 px-2 py-0.5 text-red-300 transition hover:bg-red-950/40">Delete</button>
+					}
+				}
+			</li>
+		}
+	</ul>
+	if dl := d.Download; dl != nil {
+		<div data-downloading?={ dl.Running } class={ "mt-2 rounded border px-2 py-1.5", templ.KV("border-violet-900/60 bg-violet-950/20 text-violet-200", dl.Running), templ.KV("border-emerald-900/60 bg-emerald-950/20 text-emerald-300", dl.Done), templ.KV("border-red-900/60 bg-red-950/30 text-red-300", dl.Error != "") }>
+			<span class="font-mono">{ dl.Repo } · { dl.File }</span>
+			<span class="block">
+				switch {
+					case dl.Running:
+						{ dl.Status }
+						if admin {
+							<button type="button" data-model-action="cancel" class="ml-2 underline underline-offset-2">Cancel</button>
+						}
+					case dl.Done:
+						Downloaded and checked. Open it above.
+					default:
+						{ dl.Error }
+				}
+			</span>
+		</div>
+	}
+}
+
+// HubResultsList is a Hugging Face search's repositories, or one repository's GGUF files.
+templ HubResultsList(r HubResults) {
+	if r.Error != "" {
+		<p class="rounded border border-red-900/60 bg-red-950/30 px-2 py-1 text-red-300">{ r.Error }</p>
+	} else if r.Repo != nil {
+		<div class="space-y-1">
+			<p class="text-zinc-400">
+				<button type="button" data-hub-back={ r.Query } class="text-accent hover:underline">← results</button>
+				<a href={ templ.SafeURL("https://huggingface.co/" + r.Repo.ID) } target="_blank" rel="noopener" class="ml-2 font-mono text-zinc-200 hover:underline">{ r.Repo.ID }</a>
+				@licenseBadge(*r.Repo)
+			</p>
+			if len(r.Files) == 0 {
+				<p class="text-zinc-500">No single-file GGUF models here.</p>
+			}
+			<ul class="max-h-80 space-y-1 overflow-y-auto pr-1">
+				for _, f := range r.Files {
+					<li class="flex flex-wrap items-center gap-2 rounded border border-zinc-800 px-2 py-1">
+						<span class="min-w-0 flex-1 break-all font-mono text-zinc-200">{ f.Name }</span>
+						<span class="text-zinc-500">{ f.Size }</span>
+						switch {
+							case f.Have:
+								<span class="text-zinc-500">downloaded</span>
+							case r.Repo.Gated:
+								<span class="text-amber-300">needs a Hugging Face login</span>
+							default:
+								<button type="button" data-hub-download={ r.Repo.ID } data-file={ f.Name } class={ modelButton() }>Download</button>
+						}
+					</li>
+				}
+			</ul>
+		</div>
+	} else if len(r.Models) == 0 {
+		<p class="text-zinc-500">No GGUF models match “{ r.Query }”.</p>
+	} else {
+		<ul class="max-h-80 space-y-1 overflow-y-auto pr-1">
+			for _, m := range r.Models {
+				<li class="flex flex-wrap items-center gap-2 rounded border border-zinc-800 px-2 py-1">
+					<button type="button" data-hub-repo={ m.ID } data-query={ r.Query } class="min-w-0 flex-1 break-all text-left font-mono text-zinc-200 hover:text-white hover:underline">{ m.ID }</button>
+					@licenseBadge(m)
+					<span class="text-zinc-500">{ m.Downloads } downloads</span>
+				</li>
+			}
+		</ul>
+	}
+}
+
+// licenseBadge shows a repository's licence, in amber unless it is as open as gorun's model's.
+templ licenseBadge(m HubModelRow) {
+	if m.License == "" {
+		<span class="rounded bg-amber-950/60 px-1.5 py-0.5 text-amber-300">no licence given</span>
+	} else if m.Permissive {
+		<span class="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-300">{ m.License }</span>
+	} else {
+		<span class="rounded bg-amber-950/60 px-1.5 py-0.5 text-amber-300" title="Check that this licence lets you use the model as you mean to">{ m.License }</span>
+	}
+	if m.Gated {
+		<span class="rounded bg-amber-950/60 px-1.5 py-0.5 text-amber-300">gated</span>
+	}
+}
+
+func modelButton() string {
+	return "rounded border border-zinc-700 px-2 py-0.5 text-zinc-200 transition hover:bg-zinc-800"
+}

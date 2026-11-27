@@ -177,7 +177,7 @@ func (a *app) historyPage(w http.ResponseWriter, r *http.Request) {
 			rows = append(rows, runRow(s))
 		}
 	}
-	a.page(w, "History", "history", ui.HistoryPage(ui.HistoryPageData{Runs: rows, Flash: msg}))
+	a.page(w, r, "History", "history", ui.HistoryPage(ui.HistoryPageData{Runs: rows, Flash: msg}))
 }
 
 // historyDetail shows one saved run with each server's tasks and their output.
@@ -209,7 +209,7 @@ func (a *app) historyDetail(w http.ResponseWriter, r *http.Request) {
 	summary := runRow(d.RunSummary)
 	summary.Servers = len(blocks) // RunDetail.Servers hides the summary's count
 	data := ui.RunDetailData{Run: *d, Summary: summary, Servers: blocks}
-	a.page(w, d.Title, "history", ui.HistoryDetailPage(data))
+	a.page(w, r, d.Title, "history", ui.HistoryDetailPage(data))
 }
 
 // taskDetail streams one saved task's full detail into the element the history page opened.

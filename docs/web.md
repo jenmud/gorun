@@ -67,6 +67,8 @@ If the address is taken, it prints `gorun: listen <addr>: <err>` and exits with 
 | Setting | Default | What it does |
 |---|---|---|
 | `GORUN_ADDRESS` | `:8080` | address to listen on |
+| `GORUN_ADMIN_PASSWORD` | unset | a password that signs in as `admin`; or add users on the Users page, see [signing in](#signing-in) |
+| `GORUN_ADMINS` | unset | users an auth proxy signs in who are admins |
 | `GORUN_DB_PATH` | `~/.gorun/gorun.db` | history database: an SQLite file, or a `postgres://` or `mysql://` URL (see [storage](storage.md)) |
 | `GORUN_NATS_CLIENT_URL` | none | a NATS server to use; when set, none is started |
 | `GORUN_NATS_SERVER_CONFIG` | none | a NATS server config file for the server the web service starts |
@@ -96,8 +98,52 @@ GORUN_NATS_SERVER_CONFIG=nats.conf gorun -serve Gorunfile
 
 The embedded server stops when `gorun -serve` exits.
 
-> **No login.** The web UI listens on all interfaces by default, so anyone who can reach the port
-> can run tasks, browse folders and edit the Gorunfile. Keep it on a trusted network, or set
+## Signing in
+
+Without a login, anyone who can reach the port can run tasks, browse folders, edit the Gorunfile
+and download models, and the web UI listens on all interfaces by default. There are three ways to
+turn the login on; any of them can be used together.
+
+**Users.** Open the **Users** page and add the first user. They are an admin, and the browser
+that added them is signed in as them; from then on, changes need signing in. An admin adds more
+users there, each a plain user or an admin, sets their passwords and deletes them. Users are kept
+in the history database, whichever it is (SQLite, Postgres or MySQL, see [storage](storage.md)),
+with their passwords as bcrypt hashes; every gorun on the same database shares them.
+
+**An admin password**, set in gorun's environment (never in the Gorunfile), signs in as `admin`:
+
+```bash
+GORUN_ADMIN_PASSWORD="$(cat ~/.gorun/admin-password)" gorun -serve Gorunfile
+```
+
+It works without the history database, and keeps a way in if every admin forgets their password.
+
+**An auth proxy** such as oauth2-proxy or Authelia: list its users who are admins in
+`GORUN_ADMINS=alice,bob`. gorun trusts the user the proxy names in `X-Forwarded-User`,
+`X-Auth-Request-User` or `Remote-User`, so gorun must be reachable only through the proxy:
+anyone who can reach it directly can send that header.
+
+With a login on, anyone may still look: the Live, History, Tasks and other pages, and asking the
+assistant. Changes need **Sign in**, at the top right:
+
+| | Anyone | User | Admin |
+|---|---|---|---|
+| Look at every page, ask the assistant | yes | yes | yes |
+| Start and cancel runs, save tasks the assistant wrote, edit the Gorunfile and schedules, delete history | | yes | yes |
+| Open, close, delete and download the assistant's models | | | yes |
+| Add users, set their passwords, delete them | | | yes |
+
+A form sent without signing in goes to the sign in page. A session is a cookie that lasts 7 days.
+It is signed with a key kept in the history database (or, without one, made from the admin
+password), so it survives a restart, and it ends when that user's password changes or they are
+deleted. A wrong name or password waits a second. An admin can't delete themselves, so one is
+always left.
+
+The startup message's `login` line says which of these is on. Serve over HTTPS (a proxy in front
+is the usual way) so passwords and cookies aren't sent in the clear; the cookie is marked
+`Secure` when gorun sees HTTPS or `X-Forwarded-Proto: https`.
+
+> **Without a login** keep the web UI on a trusted network, or set
 > `GORUN_ADDRESS=127.0.0.1:8080` and reach it over an SSH tunnel:
 > `ssh -L 8080:127.0.0.1:8080 you@gorun-host`.
 
@@ -130,8 +176,9 @@ The image is Alpine with gorun, and it runs as the `gorun` user. Its state lives
 them. Local tasks run with the image's `/bin/sh`. Tasks over SSH need the keys and `known_hosts`
 mounted into the container, with the Gorunfile's `[ssh]` settings pointing at them.
 
-> **No login, again.** A published port gives anyone who can reach it the web UI. Publish it only on
-> a trusted network, for example `-p 127.0.0.1:8080:8080`.
+> **Set a login.** A published port gives anyone who can reach it the web UI. Pass
+> `-e GORUN_ADMIN_PASSWORD` (see [signing in](#signing-in)), or publish it only on a trusted
+> network, for example `-p 127.0.0.1:8080:8080`.
 
 ### With the assistant's model built in
 
@@ -374,6 +421,30 @@ but not loaded, or loaded on the GPU or the CPU, and why it is on the CPU. Once 
 the model and its size, the GPU and its free memory, the context size, how long loading took,
 and how fast the last answer was read and written. It is drawn again after each answer. With
 `GORUN_LLM_URL`, it names the server instead, as gorun can't see that server's memory.
+
+The **Models** panel below it lists gorun's own model and every GGUF model in
+`GORUN_LLM_DIR/models`, with the one in use. With a [login](#signing-in) only admins can change
+it; others see the list.
+
+- **Open** switches to a model and loads it, freeing the one loaded before; **Close** frees the
+  model's memory until the next question loads it again. Everyone shares the one model, so these
+  are refused while someone is using it: an answer is being written or waiting, or a question
+  finished in the last 5 minutes, when their chat may still be going. The refusal offers to
+  **Open it anyway** or **Close it anyway**, which still waits for the answer being written. The
+  model opened last is used again after a restart, unless `GORUN_LLM_MODEL` names one.
+- **Delete** removes a downloaded model, once another one is in use. gorun's own can't be deleted.
+- **Search** finds GGUF models on [Hugging Face](https://huggingface.co/models?library=gguf), the
+  most downloaded first, with their licences: one that isn't Apache 2.0 or MIT is shown in amber,
+  to check before you use it. Open one to list its GGUF files, smallest first, and **Download**
+  one. It downloads in the background, one at a time, with its progress shown and a **Cancel**,
+  and is checked against the SHA-256 Hugging Face publishes for it before it can be opened.
+  Gated models, which need a Hugging Face login, and models split over several files can't be
+  downloaded this way.
+
+Any model llama.cpp can run works, but gorun's prompts and training are made for its own model, so
+others usually answer worse, and a bigger one needs more memory and is slower. A download doesn't
+touch the model in use, so it can run while others ask questions. Without a login, anyone who can
+open the web UI can download models onto this machine's disk.
 
 While it answers, the chat shows what it is doing and for how long: downloading the model on first
 use (with how far along), loading it, reading the question, then the reply as it is written.

@@ -105,12 +105,17 @@ SCENES = [
         ("warn", "Weak on general questions about gorun", "it can make up options: check go-run.dev"),
         ("warn", "Needs much more training", "review every task before you run it"),
     ]))]),
-    ("models", None, [(1, slide("Other models", [
+    ("models", None, [
+        (8, shot("models-panel", "Models: open, close and switch")),
+        (6, shot("models-search", "Search Hugging Face for GGUF models")),
+        (7, shot("models-files", "Pick a size, and download it: checked before it opens")),
+        (8, slide("Other models", [
         ("", "Another model file", "GORUN_LLM_MODEL=/path/to/model.gguf (or an https link)"),
         ("", "A model server", "GORUN_LLM_URL=http://localhost:11434/v1 (Ollama, LM Studio, hosted)"),
         ("warn", "Not on your machine?", "the page warns you, in amber"),
         ("", "One model for everyone", "questions wait in a queue: no extra memory"),
-    ]))]),
+    ])),
+    ]),
     ("outro", None, [(1, slide("Recap", [
         ("", "Explain and summarise", "failures, runs and your Gorunfile"),
         ("", "Write small tasks", "each with a check and a verify, chained with depends_on"),

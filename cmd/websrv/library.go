@@ -39,7 +39,7 @@ func (a *app) tasksPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	a.page(w, "Tasks", "tasks", ui.TasksPage(d))
+	a.page(w, r, "Tasks", "tasks", ui.TasksPage(d))
 }
 
 // notes reads the message a form action left on the page: an error, or a confirmation.
@@ -75,7 +75,7 @@ func (a *app) bundlesPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	a.page(w, "Bundles", "bundles", ui.BundlesPage(d))
+	a.page(w, r, "Bundles", "bundles", ui.BundlesPage(d))
 }
 
 // taskAverages is each task's average duration over the last finished runs.

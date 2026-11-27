@@ -21,9 +21,9 @@ import (
 )
 
 // page renders body inside the shared layout.
-func (a *app) page(w http.ResponseWriter, title, active string, body templ.Component) {
+func (a *app) page(w http.ResponseWriter, r *http.Request, title, active string, body templ.Component) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := ui.Layout(title, active, a.natsStatus(), body).Render(a.renderCtx(), w); err != nil {
+	if err := ui.Layout(title, active, a.natsStatus(), body).Render(a.pageCtx(r), w); err != nil {
 		log.Printf("gorun web: render %s: %v", title, err)
 	}
 }
@@ -56,7 +56,7 @@ func (a *app) livePage(w http.ResponseWriter, r *http.Request) {
 	dash := a.dash
 	a.mu.Unlock()
 	d := ui.LivePageData{Dashboard: dash, Stats: a.stats(r.Context()), Flash: msg, FlashBad: bad}
-	a.page(w, "Live", "live", ui.LivePage(d))
+	a.page(w, r, "Live", "live", ui.LivePage(d))
 }
 
 func (a *app) runPage(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +82,7 @@ func (a *app) runPage(w http.ResponseWriter, r *http.Request) {
 	if d.Flash == "" && !d.NATSOK {
 		d.Flash, d.FlashBad = "NATS is not running, so runs can't start from here.", true
 	}
-	a.page(w, "Run", "run", ui.RunPage(d))
+	a.page(w, r, "Run", "run", ui.RunPage(d))
 }
 
 // serverOptions lists the servers in the loaded file for the picker.
@@ -182,11 +182,14 @@ func webOrigin(r *http.Request) gorun.Origin {
 		client += " (forwarded for " + fwd + ")"
 	}
 	o := gorun.Origin{Version: Version, Trigger: "web", Client: client}
-	for _, h := range []string{"X-Forwarded-User", "X-Auth-Request-User", "Remote-User"} {
+	for _, h := range proxyUserHeaders {
 		if u := r.Header.Get(h); u != "" {
 			o.WebUser = u
 			break
 		}
+	}
+	if o.WebUser == "" {
+		o.WebUser = signedIn(r)
 	}
 	return o
 }

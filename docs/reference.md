@@ -60,6 +60,8 @@ already set.
 | `GORUN_CACHE_DIR` | `~/.cache/gorun` | where git includes are fetched and kept |
 | `GORUN_LOG_FILE` | `~/.gorun/gorun.log` | log file |
 | `GORUN_ADDRESS` | `:8080` | web UI listen address |
+| `GORUN_ADMIN_PASSWORD` | unset | web UI: a password that signs in as `admin`, who may change everything; users kept in the history database are added on the Users page instead (see [signing in](web.md#signing-in)) |
+| `GORUN_ADMINS` | unset | web UI: comma-separated users an auth proxy in front of gorun names in `X-Forwarded-User`, `X-Auth-Request-User` or `Remote-User`, who are admins |
 | `GORUN_EVENT_TOPIC` | `gorun.events` | NATS topic for events |
 | `GORUN_SKIP_NATS` | unset | set to skip NATS |
 | `GORUN_LABELS` | unset | your own labels for every run, e.g. `ticket=CHG-42,team=ops` (see [who ran it](integrations.md#who-ran-it-and-where)) |

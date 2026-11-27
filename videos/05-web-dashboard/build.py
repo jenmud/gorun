@@ -56,6 +56,8 @@ def start_output():
         "  Gorunfile  default, kept in the history database (version 1), no schedules",
         "  NATS       embedded server at nats://127.0.0.1:4222, events on gorun.events",
         "  history    /home/dev/.gorun/gorun.db",
+        "  login      none: anyone who can open the web UI may run tasks, edit the Gorunfile and",
+        "             download models (add a user on the Users page, or set GORUN_ADMIN_PASSWORD)",
         "  log        /home/dev/.gorun/gorun.log",
         "Press ctrl+c to stop.",
     ]
@@ -66,10 +68,10 @@ SCENES = [
     ("intro", None, [(1, title_slide())]),
     ("start", None, [
         (6, start_output()),
-        (8, slide("The dashboard has no login", [
-            ("warn", "Anyone who can reach the port can run tasks", "keep it on a trusted network"),
-            ("", "Bind it to your own machine", "GORUN_ADDRESS=127.0.0.1:8080 gorun -serve"),
-            ("", "Reach it over an SSH tunnel", "ssh -L 8080:127.0.0.1:8080 you@gorun-host"),
+        (8, slide("No login until you add one", [
+            ("warn", "Anyone who can reach the port can run tasks", "until you add a user, or set a password"),
+            ("", "Add users", "on the Users page, at the end of this video"),
+            ("", "Or bind it to your own machine", "GORUN_ADDRESS=127.0.0.1:8080 gorun -serve"),
         ])),
     ]),
     ("gorunfiles", None, [
@@ -110,10 +112,19 @@ SCENES = [
             ("warn", "Needs much more training", "it can make things up: read everything it writes"),
         ])),
     ]),
+    ("users", None, [
+        (5, shot("users-first", "Users: the first one turns the login on")),
+        (7, shot("users", "Admins and users, kept in the history database")),
+        (6, slide("Who may do what", [
+            ("", "Anyone", "looks at every page and asks the assistant"),
+            ("", "A user", "also runs tasks and edits the Gorunfile"),
+            ("", "An admin", "also manages users and the assistant's models"),
+        ])),
+    ]),
     ("outro", None, [(1, slide("Recap", [
         ("", "gorun -serve", "the dashboard, the scheduler and your Gorunfiles"),
         ("", "Run, Live and History", "start, watch and look back"),
-        ("", "No login", "keep it on a network you trust"),
+        ("", "Add users", "or keep it on a network you trust"),
     ]))]),
 ]
 
@@ -127,6 +138,7 @@ CHAPTERS = {
     "tasks": "Tasks and bundles",
     "schedules": "Schedules",
     "assistant": "The assistant (experimental)",
+    "users": "Users and sign in",
     "outro": "Wrap up",
 }
 

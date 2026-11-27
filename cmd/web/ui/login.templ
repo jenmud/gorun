@@ -1,0 +1,46 @@
+package ui
+
+import "net/url"
+
+// LoginPageData is the sign in page.
+type LoginPageData struct {
+	Next          string // the page to go back to
+	Error         string
+	Form          bool // there are users or an admin password to sign in with
+	AdminPassword bool // GORUN_ADMIN_PASSWORD is set, which signs in as admin
+}
+
+// LoginPage signs a user in, or says to sign in through the proxy.
+templ LoginPage(d LoginPageData) {
+	<section class="mx-auto mt-10 max-w-sm rounded-xl border border-zinc-800 bg-zinc-900/60 p-6">
+		<h1 class="text-lg font-semibold">Sign in</h1>
+		<p class="mt-1 text-sm text-zinc-400">Anyone can watch runs and ask the assistant. Running tasks and changing the Gorunfile need signing in; managing users and the assistant's models needs an admin.</p>
+		if d.Error != "" {
+			<p class="mt-3 rounded border border-red-900/60 bg-red-950/30 px-2 py-1 text-sm text-red-300">{ d.Error }</p>
+		}
+		if d.Form {
+			<form method="post" action="/login" class="mt-4 space-y-3">
+				<input type="hidden" name="next" value={ d.Next }/>
+				<label class="block text-sm text-zinc-300">
+					Name
+					<input name="name" required autofocus autocomplete="username" class={ inputClass() + " mt-1 w-full" }/>
+				</label>
+				<label class="block text-sm text-zinc-300">
+					Password
+					<input type="password" name="password" required autocomplete="current-password" class={ inputClass() + " mt-1 w-full" }/>
+				</label>
+				<button class="w-full rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-600">Sign in</button>
+				if d.AdminPassword {
+					<p class="text-xs text-zinc-500">GORUN_ADMIN_PASSWORD signs in as <span class="font-mono">admin</span>.</p>
+				}
+			</form>
+		} else {
+			<p class="mt-4 text-sm text-zinc-300">Sign in through the proxy in front of gorun. Its user must be in GORUN_ADMINS.</p>
+		}
+	</section>
+}
+
+// loginQuery is the sign in page's query that comes back to path.
+func loginQuery(path string) string {
+	return url.Values{"next": {path}}.Encode()
+}

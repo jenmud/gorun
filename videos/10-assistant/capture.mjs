@@ -74,5 +74,17 @@ await p.locator("textarea[name=request]").scrollIntoViewIfNeeded(); await shot("
 await Promise.all([p.waitForNavigation(), p.click("button:has-text('Generate')")]);
 await p.waitForTimeout(1200); await shot("generate-done");
 
+// the Models panel: what is downloaded, and a Hugging Face search (nothing is downloaded)
+await go("/assistant");
+await p.evaluate(() => { document.getElementById("assistant-models").open = true; });
+await p.locator("#assistant-models").scrollIntoViewIfNeeded(); await p.evaluate(() => scrollBy(0, 120)); await shot("models-panel");
+await p.fill("[data-hub-search] input[name=q]", "qwen3 4b instruct");
+await p.click("[data-hub-search] button");
+await p.waitForSelector("#hub-results [data-hub-repo]", { timeout: 30000 }); await p.waitForTimeout(500);
+await p.locator("#hub-results").scrollIntoViewIfNeeded(); await shot("models-search");
+await p.click("#hub-results [data-hub-repo] >> nth=0");
+await p.waitForSelector("#hub-results [data-hub-download], #hub-results [data-hub-back]", { timeout: 30000 }); await p.waitForTimeout(500);
+await p.locator("#hub-results").scrollIntoViewIfNeeded(); await shot("models-files");
+
 writeFileSync(`${out}/replies.json`, JSON.stringify(replies, null, 2));
 await b.close();

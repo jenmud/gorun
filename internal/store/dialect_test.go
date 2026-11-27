@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -199,7 +200,7 @@ func dropTables(t *testing.T, location string) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	for _, table := range []string{"tasks", "servers", "runs", "gorunfiles", "schema_migrations"} {
+	for _, table := range []string{"tasks", "servers", "runs", "gorunfiles", "users", "settings", "schema_migrations"} {
 		if _, err := db.Exec("DROP TABLE IF EXISTS " + table); err != nil {
 			t.Fatalf("drop %s: %v", table, err)
 		}
@@ -288,6 +289,34 @@ func exerciseStore(t *testing.T, location string) {
 		t.Errorf("Gorunfile = %q %v, versions %d, list %+v", content, ok, versions, list)
 	}
 	must(st.DeleteGorunfile(ctx, "base"))
+
+	// users and the session key
+	must(st.AddUser(ctx, User{Name: "alice", PasswordHash: "h1", Admin: true, CreatedAt: start}))
+	must(st.AddUser(ctx, User{Name: "bob", PasswordHash: "h2", CreatedAt: start}))
+	if err := st.AddUser(ctx, User{Name: "bob", PasswordHash: "h3", CreatedAt: start}); !errors.Is(err, ErrUserExists) {
+		t.Errorf("adding bob twice: %v", err)
+	}
+	must(st.SetUserPassword(ctx, "bob", "h4"))
+	if u, ok, err := st.User(ctx, "bob"); err != nil || !ok || u.PasswordHash != "h4" || u.Admin || !u.CreatedAt.Equal(start) {
+		t.Errorf("bob = %+v, %v, %v", u, ok, err)
+	}
+	if n, admins, err := st.CountUsers(ctx); err != nil || n != 2 || admins != 1 {
+		t.Errorf("CountUsers = %d, %d, %v", n, admins, err)
+	}
+	must(st.DeleteUser(ctx, "bob"))
+	if users, err := st.Users(ctx); err != nil || len(users) != 1 || users[0].Name != "alice" || !users[0].Admin {
+		t.Errorf("Users = %+v, %v", users, err)
+	}
+	if _, ok, err := st.User(ctx, "nobody"); ok || err != nil {
+		t.Errorf("User(nobody) = %v, %v", ok, err)
+	}
+	k1, err := st.SessionKey(ctx)
+	must(err)
+	k2, err := st.SessionKey(ctx)
+	must(err)
+	if len(k1) != 32 || string(k1) != string(k2) {
+		t.Errorf("session keys %x and %x, want one 32-byte key kept", k1, k2)
+	}
 
 	must(st.TruncateRuns(ctx, 1))
 	runs, err = st.ListRuns(ctx)

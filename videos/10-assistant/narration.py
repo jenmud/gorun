@@ -66,7 +66,14 @@ NARRATION = {
         "It never runs anything or changes your servers by itself."
     ),
     "models": (
-        "You can also use other models. Point G O R U N L L M model at another model file, or a link to one, and gorun runs that instead.\n"
+        "You can also use other models. The new Models panel, under the Model panel, lists every model on this machine. "
+        "Open switches to one and loads it, Close frees its memory, and Delete removes one you don't need. "
+        "Once you've added users, only an admin can do this. And since everyone shares the model, it won't switch while someone is still chatting, unless you say so.\n"
+        "Search finds models on Hugging Face, any GGUF model llama.cpp can run, with their licences. "
+        "Open one to see its sizes, smallest first, and Download one. It downloads in the background, "
+        "and is checked against the digest Hugging Face publishes before you can open it. "
+        "Just remember: gorun's prompts are tuned for its own model, so others usually answer worse.\n"
+        "You can also point G O R U N L L M model at a model file, or a link to one.\n"
         "Or set G O R U N L L M U R L to a model server, like Ollama, L M Studio, or a hosted one. "
         "If that server isn't on your machine, the page warns you, in amber, that your Gorunfile and run output are sent there.\n"
         "And one model serves everyone. Questions wait in a queue, so more people never costs more memory, just a short wait."

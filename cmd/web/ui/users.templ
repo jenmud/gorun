@@ -1,0 +1,93 @@
+package ui
+
+// UsersPageData is the Users page.
+type UsersPageData struct {
+	Users         []UserRow
+	Flash         string
+	FlashBad      bool
+	NoStore       bool // the history database isn't open, so there are no users
+	LoginOff      bool // nobody needs to sign in yet: the first user added is an admin, signed in
+	AdminPassword bool // GORUN_ADMIN_PASSWORD is set, so the name admin is taken
+}
+
+// UserRow is one user.
+type UserRow struct {
+	Name    string
+	Admin   bool
+	Created string
+	You     bool // the one looking, who can't delete themselves
+}
+
+// UsersPage lists the web UI's users, for an admin to add one, set a password or delete one.
+templ UsersPage(d UsersPageData) {
+	if d.Flash != "" {
+		@flash(d.Flash, d.FlashBad)
+	}
+	<div class="mb-6 max-w-3xl">
+		<h1 class="text-xl font-semibold text-zinc-100">Users</h1>
+		<p class="mt-1 text-sm text-zinc-400">Who may sign in. Anyone may look; a user may also run tasks and change the Gorunfile; an admin may also manage users and the assistant's models. Passwords are kept as bcrypt hashes in the history database.</p>
+		if d.LoginOff && !d.NoStore {
+			<p class="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">There is no login yet, so anyone who can open the web UI may change things. Add the first user, an admin, to turn it on: you are signed in as them.</p>
+		}
+	</div>
+	if d.NoStore {
+		<p class="text-sm text-zinc-400">The history database isn't open, so users can't be kept. Set GORUN_ADMIN_PASSWORD instead.</p>
+	} else {
+		<div class="grid gap-6 lg:grid-cols-[1fr_20rem]">
+			<section class="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900/40">
+				if len(d.Users) == 0 {
+					<p class="px-4 py-3 text-sm text-zinc-500">No users yet.</p>
+				}
+				<ul class="divide-y divide-zinc-800">
+					for _, u := range d.Users {
+						<li class="flex flex-wrap items-center gap-3 px-4 py-3">
+							<div class="min-w-0 flex-1">
+								<div class="flex items-center gap-2">
+									<span class="font-mono text-sm text-zinc-100">{ u.Name }</span>
+									if u.Admin {
+										<span class="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-violet-300">admin</span>
+									}
+									if u.You {
+										<span class="text-xs text-zinc-500">you</span>
+									}
+								</div>
+								<p class="mt-0.5 text-xs text-zinc-500">added { u.Created }</p>
+							</div>
+							<form method="post" action="/users/password" class="flex items-center gap-2">
+								<input type="hidden" name="name" value={ u.Name }/>
+								<input type="password" name="password" required minlength="8" maxlength="72" autocomplete="new-password" placeholder="New password" class={ inputClass() + " w-40" }/>
+								<button class="rounded-lg border border-zinc-700 px-3 py-1 text-xs text-zinc-200 transition hover:bg-zinc-800">Set</button>
+							</form>
+							if !u.You {
+								<form method="post" action="/users/delete" onsubmit="return confirm('Delete this user? They are signed out.')">
+									<input type="hidden" name="name" value={ u.Name }/>
+									<button class="rounded-lg px-3 py-1 text-xs text-red-300 transition hover:bg-red-950/40">Delete</button>
+								</form>
+							}
+						</li>
+					}
+				</ul>
+			</section>
+			<aside class="self-start rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+				<h2 class="text-sm font-semibold text-zinc-100">Add a user</h2>
+				<form method="post" action="/users/add" class="mt-3 space-y-2">
+					<input name="name" required pattern="[A-Za-z0-9][A-Za-z0-9._@\-]{0,63}" autocomplete="off" placeholder="Name, e.g. alice" class={ inputClass() }/>
+					<input type="password" name="password" required minlength="8" maxlength="72" autocomplete="new-password" placeholder="Password, 8 or more characters" class={ inputClass() }/>
+					if d.LoginOff {
+						<input type="hidden" name="admin" value="on"/>
+						<p class="text-[11px] text-zinc-500">The first user is an admin.</p>
+					} else {
+						<label class="flex items-center gap-2 text-xs text-zinc-300">
+							<input type="checkbox" name="admin"/>
+							Admin: may manage users and models
+						</label>
+					}
+					if d.AdminPassword {
+						<p class="text-[11px] text-zinc-500">The name admin is GORUN_ADMIN_PASSWORD's.</p>
+					}
+					<button class={ addButtonClass() }>Add</button>
+				</form>
+			</aside>
+		</div>
+	}
+}

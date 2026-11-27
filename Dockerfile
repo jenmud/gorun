@@ -11,7 +11,8 @@ RUN CGO_ENABLED=0 go build -trimpath -tags timetzdata \
       -ldflags "-s -w -X main.version=${VERSION}" -o /out/gorun ./cmd
 
 FROM alpine:3.21
-RUN apk add --no-cache ca-certificates \
+# libffi: gorun loads it at start on Linux, for the assistant's llama.cpp bindings
+RUN apk add --no-cache ca-certificates libffi \
  && addgroup -S gorun \
  && adduser -S -G gorun -h /var/lib/gorun gorun \
  && mkdir -p /etc/gorun /var/lib/gorun \

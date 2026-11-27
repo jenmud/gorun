@@ -4,6 +4,14 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.37.1 (since v0.37.0)
+
+- The Docker image builds again. `.dockerignore` left out `docs/`, which is also the Go package
+  holding the docs the assistant searches, so no image was published for v0.37.0.
+- The image includes libffi. Since v0.36.0, gorun on Linux loads `libffi.so.8` when it starts, for
+  the assistant's llama.cpp bindings, and stops if it is missing. Most Linux distributions have it;
+  the README says how to install it where they don't.
+
 ## v0.37.0 (since v0.36.1)
 
 ### Docker images from GitHub

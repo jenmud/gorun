@@ -9,7 +9,6 @@
 *.log
 builds
 dist
-docs
 videos
 recipes
 examples
@@ -20,3 +19,4 @@ factory
 .codex
 .agents
 .worktrees
+# docs/ is not ignored: it is also the Go package that embeds the docs the assistant searches

@@ -113,6 +113,11 @@ curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install
 Or download a binary from the [releases](https://github.com/jenmud/gorun/releases), or build it
 yourself with `go build -o gorun ./cmd`.
 
+On Linux, gorun needs the libffi 8 library (`libffi.so.8`), which most current distributions
+already have. If gorun stops at start with `Error loading shared library libffi.so.8`, install it:
+`apt install libffi8` (Debian 12, Ubuntu 22.04 and newer), `dnf install libffi`, or
+`apk add libffi`. The Docker image includes it.
+
 <details>
 <summary>Two builds: instrumented (default) and standard</summary>
 

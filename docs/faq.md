@@ -20,6 +20,8 @@ curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install
 It installs the latest release (`VERSION=v0.31.0` picks another), and `gorun -version` says which
 you have. Or download a binary from the [releases](https://github.com/jenmud/gorun/releases), or
 build it with `go build -o gorun ./cmd`. Nothing is installed on the servers: gorun only needs SSH.
+On Linux, gorun itself needs the libffi 8 library: if it stops at start with `Error loading shared
+library libffi.so.8`, install it (`apt install libffi8`, `dnf install libffi` or `apk add libffi`).
 
 ## How do I run gorun in CI?
 

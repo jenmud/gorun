@@ -4,7 +4,7 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
-## Next
+## v0.37.0 (since v0.36.1)
 
 ### Docker images from GitHub
 - The release workflow now pushes the web service image to GitHub Container Registry

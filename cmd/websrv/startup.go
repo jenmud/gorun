@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+
+	"github.com/jenmud/gorun/internal/store"
 )
 
 // startupInfo is what the startup message reports about a service that is listening.
@@ -36,7 +38,7 @@ func startupMessage(w io.Writer, info startupInfo) {
 	if info.dbErr != nil {
 		line("history", fmt.Sprintf("off (%v)", info.dbErr))
 	} else {
-		line("history", info.dbPath)
+		line("history", store.Redact(info.dbPath))
 	}
 	if info.logPath != "" {
 		line("log", info.logPath)

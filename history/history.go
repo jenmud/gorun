@@ -54,9 +54,13 @@ type Store struct {
 }
 
 // DefaultPath is the database the gorun CLI and web UI use: GORUN_DB_PATH, or
-// ~/.gorun/gorun.db. Use it to share history with them.
+// ~/.gorun/gorun.db. Use it to share history with them. GORUN_DB_PATH may be a postgres:// or
+// mysql:// URL instead of a file.
 func DefaultPath() string {
 	if p := envvars.Get("GORUN_DB_PATH"); p != "" {
+		if store.IsURL(p) {
+			return p
+		}
 		return expandHome(p)
 	}
 	home, err := os.UserHomeDir()
@@ -66,17 +70,21 @@ func DefaultPath() string {
 	return filepath.Join(home, ".gorun", "gorun.db")
 }
 
-// Open opens the history database at path, creating it and its folder if needed.
+// Open opens the history database at path, creating it and its folder if needed. path is an
+// SQLite file, or a postgres:// or mysql:// URL whose database already exists; either way the
+// tables are created or migrated on open.
 func Open(path string) (*Store, error) {
-	path = expandHome(path)
-	if dir := filepath.Dir(path); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return nil, fmt.Errorf("history: %w", err)
+	if !store.IsURL(path) {
+		path = expandHome(path)
+		if dir := filepath.Dir(path); dir != "" {
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, fmt.Errorf("history: %w", err)
+			}
 		}
 	}
 	st, err := store.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("history: open %s: %w", path, err)
+		return nil, fmt.Errorf("history: open %s: %w", store.Redact(path), err)
 	}
 	return &Store{st: st}, nil
 }

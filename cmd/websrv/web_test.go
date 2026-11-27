@@ -179,7 +179,7 @@ func TestConfigPickerListsFolder(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(dir, "inventory"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".hidden"), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".hidden-dotfile"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -189,7 +189,7 @@ func TestConfigPickerListsFolder(t *testing.T) {
 			t.Errorf("picker does not list %q", want)
 		}
 	}
-	if strings.Contains(body, ".hidden") {
+	if strings.Contains(body, ".hidden-dotfile") {
 		t.Error("picker lists a hidden file")
 	}
 }

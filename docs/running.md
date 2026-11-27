@@ -269,6 +269,9 @@ to see exactly what ran:
 **Where it's stored:** a SQLite file: `GORUN_DB_PATH` when it is set (created if it doesn't exist
 yet), otherwise `./gorun.db` if there is one, otherwise `~/.gorun/gorun.db`.
 
+**Postgres or MySQL instead:** set `GORUN_DB_PATH` to a `postgres://` or `mysql://` URL, and a team
+shares one history. See [where gorun keeps its history](storage.md) for setting one up.
+
 The [web UI](web.md#history) shows the same history at `http://localhost:8080/history`. It uses
 `GORUN_DB_PATH` or `~/.gorun/gorun.db`, without the `./gorun.db` fallback, so set `GORUN_DB_PATH` if
 you keep a `gorun.db` in your project folder. Programs built on the gorun library can save their runs

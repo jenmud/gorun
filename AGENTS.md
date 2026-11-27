@@ -20,7 +20,8 @@
 - `cmd/` Bubble Tea TUI: `select.go`/`selectpanes.go` (picker), `tui.go` (live view),
   `listview.go` (`-list-*` trees), `historyview.go`, `plain.go` (`-plain`, used when stdout is not a
   terminal). `cmd/websrv` is the web server, `cmd/web/ui` the templ components,
-  `internal/store` the sqlite history and the wire event, `internal/nats` the NATS client,
+  `internal/store` the history (SQLite, Postgres or MySQL, with
+  per-database migrations in `internal/store/migrations/`) and the wire event, `internal/nats` the NATS client,
   `internal/envvars` env access.
 - `docs/docs.go` (package `docs`) embeds `docs/*.md` and keyword-searches them by heading: the
   assistant sends the best sections with questions about gorun, so a docs change reaches its
@@ -64,6 +65,10 @@ tests execute tasks locally.
   `TestEmptyGorunfileDocumentsEveryKey` until the key appears in `cmd/Gorunfile.empty`. That file is
   embedded for `-dump` and is also test-executed, so it must load and run as-is. Update
   `docs/reference.md` and `docs/gorunfile.md` too.
+- A schema change is a new `internal/store/migrations/<db>/NNNN_what.sql` for **all three**
+  databases (a test checks they match); never edit a released one. `TestStoreOnEveryDatabase`
+  runs on Postgres and MySQL only when `GORUN_TEST_POSTGRES_URL` / `GORUN_TEST_MYSQL_URL` are set
+  (CI sets them), and it drops that database's tables first.
 - `.env` in the repo root is autoloaded by `godotenv` from both `cmd` and the root package, so it
   affects `go run ./cmd` and `go test ./...` (`GORUN_DB_PATH`, `GORUN_NATS_CLIENT_URL`, `OTEL_*`).
   It is gitignored — never commit it. Use `GORUN_SKIP_NATS=1` to stop runs dialing NATS.
@@ -97,7 +102,7 @@ tests execute tasks locally.
 
 `docs/tutorial.md` (step by step), `docs/gorunfile.md` (every option), `docs/running.md` (picker,
 live view, CI mode, history), `docs/integrations.md` (web UI, OpenTelemetry, NATS, Go library,
-completion), `docs/reference.md` (flags/keys/env), `recipes/README.md` (demo lab).
+completion), `docs/reference.md` (flags/keys/env), `docs/storage.md` (SQLite, Postgres, MySQL), `recipes/README.md` (demo lab).
 
 `videos/` builds the tutorial videos (script, demo Gorunfile, screen capture and voiceover); see
 `videos/README.md`. **A change that a video shows or describes must update that video in the same

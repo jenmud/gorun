@@ -1,6 +1,7 @@
-# Publishes the gorun web server image to Docker Hub when a version tag is pushed.
-# Needs the repository variable DOCKERHUB_IMAGE (e.g. youruser/gorun) and the secrets
-# DOCKERHUB_USERNAME and DOCKERHUB_TOKEN. Without DOCKERHUB_IMAGE the job does nothing.
+# Publishes the gorun web server image on each version tag. The image always goes to GitHub
+# Container Registry (ghcr.io/<owner>/<repo>) with the built-in GITHUB_TOKEN. It also goes to
+# Docker Hub when the repository variable DOCKERHUB_IMAGE (e.g. youruser/gorun) is set, which
+# needs the secrets DOCKERHUB_USERNAME and DOCKERHUB_TOKEN.
 
 name: docker
 
@@ -15,14 +16,31 @@ permissions:
 jobs:
   image:
     runs-on: ubuntu-latest
-    if: vars.DOCKERHUB_IMAGE != ''
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
+
+      - id: names
+        env:
+          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+        run: |
+          names="ghcr.io/${GITHUB_REPOSITORY}"
+          if [ -n "$DOCKERHUB_IMAGE" ]; then names="$names"$'\n'"$DOCKERHUB_IMAGE"; fi
+          { echo "list<<EOF"; echo "$names"; echo "EOF"; } >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - if: vars.DOCKERHUB_IMAGE != ''
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -30,11 +48,12 @@ jobs:
       - id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ vars.DOCKERHUB_IMAGE }}
+          images: ${{ steps.names.outputs.list }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=sha,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - uses: docker/build-push-action@v6
         with:

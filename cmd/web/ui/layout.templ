@@ -25,6 +25,80 @@ templ Layout(title string, active string, nats NATSStatus, body templ.Component)
 				}
 			</script>
 			<script>
+// A task picker shows its comma separated field as labels, with the tasks and bundles to pick
+// from below them; the field stays the one the form posts.
+function gorunTaskPicker(root) {
+	var field = root.querySelector('[data-picker-value]');
+	var chips = root.querySelector('[data-picker-chips]');
+	var empty = root.querySelector('[data-picker-empty]');
+	var search = root.querySelector('[data-picker-search]');
+	var options = root.querySelectorAll('[data-picker-option]');
+	var required = field.required;
+	var picked = field.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+	field.required = false;
+	field.hidden = true;
+	root.querySelector('[data-picker-ui]').hidden = false;
+	function render() {
+		field.value = picked.join(', ');
+		chips.querySelectorAll('[data-chip]').forEach(function (c) { c.remove(); });
+		empty.hidden = picked.length > 0;
+		picked.forEach(function (name, i) {
+			var chip = document.createElement('span');
+			chip.dataset.chip = name;
+			var bundle = name.charAt(0) === '@';
+			chip.className = 'inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-mono text-xs ' +
+				(bundle ? 'bg-sky-500/15 text-sky-200 ring-1 ring-sky-500/30' : 'bg-accent/20 text-violet-100 ring-1 ring-accent/40');
+			chip.appendChild(document.createTextNode(name));
+			var x = document.createElement('button');
+			x.type = 'button';
+			x.className = 'text-zinc-400 hover:text-white';
+			x.setAttribute('aria-label', 'Remove ' + name);
+			x.textContent = '×';
+			x.onclick = function () { picked.splice(i, 1); render(); };
+			chip.appendChild(x);
+			chips.insertBefore(chip, empty);
+		});
+		options.forEach(function (o) {
+			var on = picked.indexOf(o.dataset.pickerOption) !== -1;
+			o.disabled = on;
+			o.classList.toggle('opacity-40', on);
+		});
+	}
+	options.forEach(function (o) {
+		o.onclick = function () {
+			if (picked.indexOf(o.dataset.pickerOption) === -1) { picked.push(o.dataset.pickerOption); }
+			chips.classList.remove('border-red-500');
+			render();
+		};
+	});
+	search.oninput = function () {
+		var terms = search.value.toLowerCase().split(/\s+/).filter(Boolean);
+		options.forEach(function (o) {
+			var ok = terms.every(function (t) { return o.dataset.pickerOption.toLowerCase().indexOf(t) !== -1; });
+			o.parentElement.style.display = ok ? '' : 'none';
+		});
+	};
+	search.onkeydown = function (ev) {
+		if (ev.key === 'Escape') { search.value = ''; search.oninput(); }
+		if (ev.key === 'Enter') {
+			ev.preventDefault(); // pick the first match instead of submitting the form
+			var first = Array.prototype.find.call(options, function (o) { return o.parentElement.style.display !== 'none' && !o.disabled; });
+			if (first) { first.click(); search.value = ''; search.oninput(); }
+		}
+	};
+	root.closest('form').addEventListener('submit', function (ev) {
+		if (required && picked.length === 0) {
+			ev.preventDefault();
+			chips.classList.add('border-red-500');
+			empty.textContent = 'Pick at least one task or bundle.';
+			search.focus();
+		}
+	});
+	render();
+}
+document.addEventListener('DOMContentLoaded', function () {
+	document.querySelectorAll('[data-task-picker]').forEach(gorunTaskPicker);
+});
 function gorunFilter(input, listId) {
 	// every word typed must appear in a row, so "deploy sudo" finds sudo tasks about deploys
 	var terms = input.value.toLowerCase().split(/\s+/).filter(Boolean);

@@ -9,16 +9,16 @@ type Recorder interface {
 }
 ```
 
-You can use the built-in SQLite recorder in the `history` package, which is what the gorun CLI
+You can use the built-in recorder in the `history` package, which is what the gorun CLI
 and web UI use, or write your own to keep runs in your own database, a log file, a queue or
 metrics.
 
-- [The built-in SQLite recorder](#the-built-in-sqlite-recorder)
+- [The built-in recorder](#the-built-in-recorder)
 - [Writing your own recorder](#writing-your-own-recorder)
 - [The events](#the-events)
 - [Example: a JSON lines recorder](#example-a-json-lines-recorder)
 
-## The built-in SQLite recorder
+## The built-in recorder
 
 ```go
 import "github.com/jenmud/gorun/history"
@@ -36,7 +36,9 @@ err = cfg.Run(ctx)
 
 `history.DefaultPath()` is the database the CLI and web UI use: `GORUN_DB_PATH`, or
 `~/.gorun/gorun.db`. Runs you save there show in `gorun -history` and `gorun -serve` too. To keep a
-separate history, pass your own path to `Open`, which creates the file and its folder.
+separate history, pass your own path to `Open`, which creates the file and its folder. `Open` also
+takes a `postgres://` or `mysql://` URL, creating or updating the tables in that database (see
+[where gorun keeps its history](storage.md)).
 
 Read the runs back with:
 
@@ -129,7 +131,7 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
 | `CheckOnly` | set for a check-only run (`--check`): only checks ran, and nothing changed |
 | `Includes` | the [git includes](gorunfile.md#tasks-from-a-git-repository) the Gorunfile read: each one's `Source`, `Ref` and the `Commit` it used |
 | `Schedule` | the [schedule](schedules.md) that started the run, or empty when it was started any other way |
-| `Origin` | who started the run, where, and with what: the user, machine, gorun version, trigger, command line, CI job, the Gorunfile's git commit and labels (see [Who ran it, and where](integrations.md#who-ran-it-and-where)). The SQLite recorder saves it as `Run.Origin`, which is nil for runs saved by an older gorun |
+| `Origin` | who started the run, where, and with what: the user, machine, gorun version, trigger, command line, CI job, the Gorunfile's git commit and labels (see [Who ran it, and where](integrations.md#who-ran-it-and-where)). The built-in recorder saves it as `Run.Origin`, which is nil for runs saved by an older gorun |
 
 ### `PlanEvent` (`plan`)
 
@@ -171,7 +173,7 @@ Every event has a `Type` (the string below) and the run's `GorunUUID`.
   success: `ExitCode` is 0, `Stdout` and `Stderr` are empty, and `Check` has the check's output.
 - **Skipped** is sent once when a task doesn't run: a task it depends on failed, an earlier task
   on that server failed, or the run was cancelled. `Err` and `Stderr` say which.
-- `TaskPending` is never sent. It is what the SQLite store records for a planned task that hasn't
+- `TaskPending` is never sent. It is what the built-in store records for a planned task that hasn't
   run.
 
 ### `ServerErrorEvent` (`server_error`)
@@ -203,7 +205,7 @@ progress.
   with `Done` set. A task with two copies sends a series for each, one after the other.
 - A copy that fails or is cancelled sends no `Done` event; the task's failed event follows.
 - `content` copies and files with `render = true` send none.
-- They come often, so the built-in SQLite recorder doesn't save them. A recorder that writes each
+- They come often, so the built-in recorder doesn't save them. A recorder that writes each
   event somewhere slow may want to skip them, or keep only the `Done` ones.
 
 ```go

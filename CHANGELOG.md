@@ -4,6 +4,27 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## Next
+
+### Docker images from GitHub
+- The release workflow now pushes the web service image to GitHub Container Registry
+  (`ghcr.io/jenmud/gorun`) on every version tag. It needs no secrets. Docker Hub is still
+  optional, set by `DOCKERHUB_IMAGE`.
+
+### History in Postgres or MySQL
+- `GORUN_DB_PATH` takes a `postgres://` or `mysql://` URL as well as an SQLite file, so several
+  gorun processes and machines can share one history, Gorunfiles kept by `gorun -serve` included.
+  The startup message and logs hide the URL's password.
+- The tables come from numbered migration files for each database, built into gorun and applied
+  on open under a lock, and recorded in `schema_migrations`. An SQLite file from an older gorun
+  is upgraded in place.
+- `history.Open` takes the same URLs, for programs built on the library.
+
+### Picking a bundle's tasks
+- The web UI's bundle forms, and the Config page's server group forms, list the Gorunfile's tasks
+  and bundles to pick from, and show the picked ones as labels, in run order, each with a ×. Before,
+  they were typed into a comma separated field.
+
 ## v0.36.1 (since v0.36.0)
 
 - The macOS and Windows builds work again. The vendored `libffi` libraries they embed were left

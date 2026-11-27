@@ -13,6 +13,25 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    # the history store's tests also run on these (internal/store/dialect_test.go)
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: gorun
+          POSTGRES_PASSWORD: gorun
+          POSTGRES_DB: gorun_test
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U gorun" --health-interval 2s --health-retries 30
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_USER: gorun
+          MYSQL_PASSWORD: gorun
+          MYSQL_DATABASE: gorun_test
+          MYSQL_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: --health-cmd "mysqladmin ping -ugorun -pgorun" --health-interval 2s --health-retries 60
     steps:
     - uses: actions/checkout@v4
 
@@ -26,6 +45,9 @@ jobs:
 
     - name: Test
       run: go test -race -v ./...
+      env:
+        GORUN_TEST_POSTGRES_URL: postgres://gorun:gorun@localhost:5432/gorun_test
+        GORUN_TEST_MYSQL_URL: mysql://gorun:gorun@localhost:3306/gorun_test
 
     - name: Build the library examples
       run: make examples

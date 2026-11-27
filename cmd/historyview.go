@@ -1331,7 +1331,9 @@ func getHistoryDBPath() string {
 		}
 	}
 	path := history.DefaultPath()
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	if !store.IsURL(path) {
+		_ = os.MkdirAll(filepath.Dir(path), 0o755)
+	}
 	return path
 }
 

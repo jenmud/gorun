@@ -71,6 +71,27 @@ func TestBundleAddAndEditFromTheBundlesPage(t *testing.T) {
 	}
 }
 
+// TestBundlePagePicksTasksFromAList makes sure the bundle forms offer the Gorunfile's tasks and
+// bundles to pick, and that editing a bundle starts from the tasks it has.
+func TestBundlePagePicksTasksFromAList(t *testing.T) {
+	a, path := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	if _, bad := flashOf(t, post(t, a, "/bundles/add", url.Values{"name": {"base"}, "tasks": {"hello"}, "file": {path}}).Header().Get("Location")); bad {
+		t.Fatal("bundle add was refused")
+	}
+
+	body := get(t, a, "/bundles").Body.String()
+	for _, want := range []string{`data-task-picker`, `data-picker-option="hello"`, `data-picker-option="@base"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the bundles page has no %s", want)
+		}
+	}
+	body = get(t, a, "/bundles?edit=base").Body.String()
+	if !strings.Contains(body, `name="tasks" value="hello"`) {
+		t.Error("the edit form doesn't start from the bundle's tasks")
+	}
+}
+
 func TestEditThatBreaksTheFileIsRolledBack(t *testing.T) {
 	a, path := newTestApp(t)
 	t.Cleanup(a.stopScheduler)

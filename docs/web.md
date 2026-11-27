@@ -67,7 +67,7 @@ If the address is taken, it prints `gorun: listen <addr>: <err>` and exits with 
 | Setting | Default | What it does |
 |---|---|---|
 | `GORUN_ADDRESS` | `:8080` | address to listen on |
-| `GORUN_DB_PATH` | `~/.gorun/gorun.db` | history database |
+| `GORUN_DB_PATH` | `~/.gorun/gorun.db` | history database: an SQLite file, or a `postgres://` or `mysql://` URL (see [storage](storage.md)) |
 | `GORUN_NATS_CLIENT_URL` | none | a NATS server to use; when set, none is started |
 | `GORUN_NATS_SERVER_CONFIG` | none | a NATS server config file for the server the web service starts |
 | `GORUN_EVENT_TOPIC` | `gorun.events` | the NATS subject run events go to |
@@ -153,21 +153,30 @@ docker buildx build --platform linux/amd64,linux/arm64 -t gorun:dev --build-arg 
 A multi-platform build can't be loaded into the local Docker; add `--push` to send it to a registry
 (see below), or build one platform with `--load`.
 
-### Publish to Docker Hub
+### Publish from a release
 
-Sign in once, then tag the image with your Docker Hub name and push it:
+Every version tag `vX.Y.Z` builds an image for `linux/amd64` and `linux/arm64`, and pushes it as
+`X.Y.Z`, `X.Y` and `latest`. The workflow is `.github/workflows/docker.yml`. It always pushes to
+GitHub Container Registry, with the built-in token and no setup:
+
+```bash
+docker pull ghcr.io/jenmud/gorun:latest
+```
+
+The first push creates the package as private. To make it public, open the package's settings on
+GitHub and change its visibility.
+
+To also push to Docker Hub, set the repository variable `DOCKERHUB_IMAGE` to `youruser/gorun`, and
+add the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` (a Docker Hub access token). Then the same
+tags go to Docker Hub too.
+
+To push by hand, sign in to the registry, tag the image, and push it:
 
 ```bash
 docker login
 docker tag gorun:dev youruser/gorun:0.34.0
 docker push youruser/gorun:0.34.0
 ```
-
-To publish from a release instead, fork or clone the repository, set the repository variable
-`DOCKERHUB_IMAGE` to `youruser/gorun`, and add the secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`
-(a Docker Hub access token). Every version tag `vX.Y.Z` then builds an image for `linux/amd64` and
-`linux/arm64`, and pushes it as `X.Y.Z`, `X.Y` and `latest`. The workflow is
-`.github/workflows/docker.yml`.
 
 ## The pages
 
@@ -233,8 +242,13 @@ Each bundle, its tasks in order, and what it expands to, with **Run this bundle*
 **Filter bundles** searches each bundle's name, description, source file, the tasks it expands to,
 and the bundles that use it, with the same word matching and count as the Tasks page.
 
-- **Add a bundle**: name, tasks (comma separated, `@bundles` allowed), description, file.
+- **Add a bundle**: name, tasks, description, file.
 - **Edit** on a bundle: change its tasks and description.
+
+Tasks are picked from a list of the Gorunfile's tasks and `@bundles`, and shown as labels in the
+order picked, which is the order they run. **×** on a label removes it; the filter box above the
+list narrows it, and enter picks the first match. The Config page's bundle and server group forms
+pick tasks the same way. Without JavaScript the field is a comma separated list.
 
 ### Schedules
 

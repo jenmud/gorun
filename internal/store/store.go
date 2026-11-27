@@ -1,5 +1,5 @@
-// Package store is the SQLite database behind gorun's history: every run, its servers and its
-// tasks. The public history package wraps it for library users.
+// Package store is the database behind gorun's history: every run, its servers and its tasks,
+// in SQLite, Postgres or MySQL. The public history package wraps it for library users.
 package store
 
 import (
@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -97,19 +98,33 @@ type RunDetail struct {
 
 // Store is an open history database.
 type Store struct {
-	db *sql.DB
+	db      *sql.DB
+	dialect dialect
 }
 
-// Open opens the database at path, creating its tables if needed.
-func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+// Open opens the history database at location and applies the migrations it hasn't had.
+// location is an SQLite file path, or a postgres:// or mysql:// URL.
+func Open(location string) (*Store, error) {
+	name, dsn, err := driver(location)
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(1)
-	s := &Store{db: db}
-	_, _ = db.Exec("PRAGMA busy_timeout=5000;")
-	if err := s.migrate(); err != nil {
+	db, err := sql.Open(name, dsn)
+	if err != nil {
+		return nil, err
+	}
+	s := &Store{db: db, dialect: dialectOf(location)}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if s.dialect == dialectSQLite {
+		db.SetMaxOpenConns(1)
+		_, _ = db.Exec("PRAGMA busy_timeout=5000;")
+		_, _ = db.Exec("PRAGMA journal_mode=WAL;")
+	} else if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("connect to %s: %w", Redact(location), err)
+	}
+	if err := s.migrate(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
@@ -119,89 +134,20 @@ func Open(path string) (*Store, error) {
 // Close closes the database.
 func (s *Store) Close() error { return s.db.Close() }
 
-// schema is the original tables. Columns added since are in addedColumns, so databases made
-// by older versions gain them on open.
-var schema = []string{
-	`CREATE TABLE IF NOT EXISTS runs (
-		id TEXT PRIMARY KEY,
-		title TEXT,
-		hostname TEXT,
-		pid INTEGER,
-		started_at TEXT,
-		finished_at TEXT,
-		success INTEGER,
-		total_tasks INTEGER,
-		failed INTEGER,
-		skipped INTEGER,
-		duration_ns INTEGER
-	)`,
-	`CREATE TABLE IF NOT EXISTS servers (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		run_id TEXT,
-		name TEXT,
-		address TEXT,
-		UNIQUE(run_id, name)
-	)`,
-	`CREATE TABLE IF NOT EXISTS tasks (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		run_id TEXT,
-		server TEXT,
-		name TEXT,
-		state INTEGER,
-		command TEXT,
-		stdout TEXT,
-		stderr TEXT,
-		exit_code INTEGER,
-		duration_ns INTEGER,
-		UNIQUE(run_id, server, name)
-	)`,
-	// each save of the Gorunfiles kept here, by name, for gorun -serve started without one
-	`CREATE TABLE IF NOT EXISTS gorunfiles (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT,
-		content TEXT NOT NULL,
-		saved_at TEXT NOT NULL
-	)`,
-}
-
-// addedColumns are TEXT columns added after the first release, as {table, column}. To store
-// something new, add its column here.
-var addedColumns = [][2]string{
-	{"tasks", "command"},
-	{"servers", "error"},
-	{"servers", "envvars"},
-	{"servers", "vars"},
-	{"tasks", "envvars"},
-	{"tasks", "vars"},
-	{"runs", "envvars"},
-	{"runs", "vars"},
-	{"runs", "includes"},
-	{"runs", "schedule"},
-	{"tasks", "steps"},
-	{"runs", "check_only"},
-	{"runs", "origin"},
-	{"gorunfiles", "name"},
-}
-
-// migrate creates the tables and adds the columns newer versions need.
-func (s *Store) migrate() error {
-	_, _ = s.db.Exec("PRAGMA journal_mode=WAL;")
-	for _, stmt := range schema {
-		if _, err := s.db.Exec(stmt); err != nil {
-			return err
-		}
-	}
-	for _, c := range addedColumns {
-		// fails when the column is already there, which is fine
-		_, _ = s.db.Exec("ALTER TABLE " + c[0] + " ADD COLUMN " + c[1] + " TEXT")
-	}
-	return nil
-}
-
 // exec runs a statement that returns no rows.
 func (s *Store) exec(ctx context.Context, query string, args ...any) error {
-	_, err := s.db.ExecContext(ctx, query, args...)
+	_, err := s.db.ExecContext(ctx, s.dialect.rebind(query), s.dialect.clean(args)...)
 	return err
+}
+
+// query runs a statement that returns rows.
+func (s *Store) query(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return s.db.QueryContext(ctx, s.dialect.rebind(query), args...)
+}
+
+// queryRow runs a statement that returns at most one row.
+func (s *Store) queryRow(ctx context.Context, query string, args ...any) *sql.Row {
+	return s.db.QueryRowContext(ctx, s.dialect.rebind(query), args...)
 }
 
 // toJSON encodes v for a TEXT column.
@@ -219,14 +165,14 @@ func fromJSON(col sql.NullString, dst any) {
 
 // CreateRun records the start of a run.
 func (s *Store) CreateRun(ctx context.Context, id, title, hostname string, pid int, startedAt time.Time) error {
-	return s.exec(ctx, `INSERT OR REPLACE INTO runs (id,title,hostname,pid,started_at) VALUES (?,?,?,?,?)`,
+	return s.exec(ctx, s.dialect.upsert("runs", []string{"id", "title", "hostname", "pid", "started_at"}, []string{"id"}, []string{"title", "hostname", "pid", "started_at"}),
 		id, title, hostname, pid, startedAt.UTC().Format(time.RFC3339Nano))
 }
 
 // FinishRun records how a run ended.
 func (s *Store) FinishRun(ctx context.Context, runID string, success bool, total, failed, skipped int, duration time.Duration, finishedAt time.Time) error {
 	return s.exec(ctx, `UPDATE runs SET finished_at=?, success=?, total_tasks=?, failed=?, skipped=?, duration_ns=? WHERE id=?`,
-		finishedAt.UTC().Format(time.RFC3339Nano), success, total, failed, skipped, int64(duration), runID)
+		finishedAt.UTC().Format(time.RFC3339Nano), boolInt(success), total, failed, skipped, int64(duration), runID)
 }
 
 // SetRunEnvVars stores a run's global envvars and vars.
@@ -251,7 +197,7 @@ func (s *Store) SetRunIncludes(ctx context.Context, runID string, includes []Inc
 
 // AddServer records a server of a run, replacing what was saved for it.
 func (s *Store) AddServer(ctx context.Context, runID, name, address string) error {
-	return s.exec(ctx, `INSERT OR REPLACE INTO servers (run_id,name,address) VALUES (?,?,?)`, runID, name, address)
+	return s.exec(ctx, s.dialect.upsert("servers", []string{"run_id", "name", "address"}, []string{"run_id", "name"}, []string{"address"}), runID, name, address)
 }
 
 // SetServerEnvVars stores a server's merged envvars and vars.
@@ -261,25 +207,30 @@ func (s *Store) SetServerEnvVars(ctx context.Context, runID, name string, envvar
 
 // SetServerError records why a server couldn't run its tasks at all.
 func (s *Store) SetServerError(ctx context.Context, runID, name, message string) error {
-	return s.exec(ctx, `INSERT INTO servers (run_id,name,address,error) VALUES (?,?,'',?)
-		ON CONFLICT(run_id,name) DO UPDATE SET error=excluded.error`, runID, name, message)
+	return s.exec(ctx, s.dialect.upsert("servers", []string{"run_id", "name", "address", "error"}, []string{"run_id", "name"}, []string{"error"}), runID, name, "", message)
 }
 
 // PlanTask records a task as pending, unless it already has a row, so a run shows the tasks a
 // server was meant to run even when it never got to them.
 func (s *Store) PlanTask(ctx context.Context, runID, server, name string) error {
-	return s.exec(ctx, `INSERT OR IGNORE INTO tasks (run_id,server,name,state,command,stdout,stderr,exit_code,duration_ns)
-		VALUES (?,?,?,0,'','','',0,0)`, runID, server, name)
+	return s.exec(ctx, s.dialect.upsert("tasks", taskColumns, []string{"run_id", "server", "name"}, nil),
+		runID, server, name, StatePending, "", "", "", 0, 0)
 }
 
 // UpsertTask saves a task's latest state and output.
 func (s *Store) UpsertTask(ctx context.Context, runID, server, name string, state int, command, stdout, stderr string, exitCode int, duration time.Duration) error {
-	return s.exec(ctx, `INSERT INTO tasks (run_id,server,name,state,command,stdout,stderr,exit_code,duration_ns)
-		VALUES (?,?,?,?,?,?,?,?,?)
-		ON CONFLICT(run_id,server,name) DO UPDATE SET
-			state=excluded.state, command=excluded.command, stdout=excluded.stdout, stderr=excluded.stderr,
-			exit_code=excluded.exit_code, duration_ns=excluded.duration_ns`,
+	return s.exec(ctx, s.dialect.upsert("tasks", taskColumns, []string{"run_id", "server", "name"}, taskColumns[3:]),
 		runID, server, name, state, command, stdout, stderr, exitCode, int64(duration))
+}
+
+// taskColumns are the columns PlanTask and UpsertTask write, the key first.
+var taskColumns = []string{"run_id", "server", "name", "state", "command", "stdout", "stderr", "exit_code", "duration_ns"}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // SetTaskSteps stores a task's check and verify results.
@@ -338,7 +289,7 @@ func scanRun(scan func(...any) error, r *RunSummary, extra ...any) error {
 
 // ListRuns returns every run, oldest first.
 func (s *Store) ListRuns(ctx context.Context) ([]RunSummary, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.query(ctx,
 		`SELECT `+runColumns+`,(SELECT COUNT(*) FROM servers WHERE run_id=runs.id) FROM runs ORDER BY started_at ASC`)
 	if err != nil {
 		return nil, err
@@ -364,7 +315,7 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 		ServerVars:    map[string]map[string]any{},
 	}
 	var env, vars, includes sql.NullString
-	row := s.db.QueryRowContext(ctx, `SELECT `+runColumns+`,envvars,vars,includes FROM runs WHERE id=?`, id)
+	row := s.queryRow(ctx, `SELECT `+runColumns+`,envvars,vars,includes FROM runs WHERE id=?`, id)
 	if err := scanRun(row.Scan, &r.RunSummary, &env, &vars, &includes); err != nil {
 		return nil, err
 	}
@@ -372,7 +323,7 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 	fromJSON(vars, &r.RunVars)
 	fromJSON(includes, &r.Includes)
 
-	servers, err := s.db.QueryContext(ctx, `SELECT name,address,error,envvars,vars FROM servers WHERE run_id=?`, id)
+	servers, err := s.query(ctx, `SELECT name,address,error,envvars,vars FROM servers WHERE run_id=?`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -403,7 +354,7 @@ func (s *Store) GetRun(ctx context.Context, id string) (*RunDetail, error) {
 
 	// each task's check and verify come with the list, so a view can show them straight away;
 	// the command's own output waits for GetTask
-	tasks, err := s.db.QueryContext(ctx, `SELECT server,name,state,exit_code,duration_ns,steps FROM tasks WHERE run_id=?`, id)
+	tasks, err := s.query(ctx, `SELECT server,name,state,exit_code,duration_ns,steps FROM tasks WHERE run_id=?`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -429,7 +380,7 @@ func (s *Store) GetTask(ctx context.Context, runID, server, name string) (TaskDe
 	var t TaskDetail
 	var duration sql.NullInt64
 	var env, vars, stepsCol sql.NullString
-	err := s.db.QueryRowContext(ctx,
+	err := s.queryRow(ctx,
 		`SELECT server,name,state,command,stdout,stderr,exit_code,duration_ns,envvars,vars,steps FROM tasks WHERE run_id=? AND server=? AND name=?`,
 		runID, server, name).Scan(&t.Server, &t.Name, &t.State, &t.Command, &t.Stdout, &t.Stderr, &t.ExitCode, &duration, &env, &vars, &stepsCol)
 	if err != nil {
@@ -453,7 +404,7 @@ func (s *Store) DeleteRun(ctx context.Context, id string) error {
 
 // TruncateRuns deletes all but the keep most recently started runs.
 func (s *Store) TruncateRuns(ctx context.Context, keep int) error {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM runs ORDER BY started_at DESC LIMIT -1 OFFSET ?`, max(keep, 0))
+	rows, err := s.query(ctx, `SELECT id FROM runs ORDER BY started_at DESC`)
 	if err != nil {
 		return err
 	}
@@ -469,7 +420,7 @@ func (s *Store) TruncateRuns(ctx context.Context, keep int) error {
 	if err := rows.Close(); err != nil {
 		return err
 	}
-	for _, id := range ids {
+	for _, id := range ids[min(max(keep, 0), len(ids)):] {
 		if err := s.DeleteRun(ctx, id); err != nil {
 			return err
 		}
@@ -487,7 +438,7 @@ const gorunfileName = `COALESCE(name, '` + DefaultGorunfile + `')`
 // is none.
 func (s *Store) Gorunfile(ctx context.Context, name string) (string, bool, error) {
 	var content string
-	err := s.db.QueryRowContext(ctx, `SELECT content FROM gorunfiles WHERE `+gorunfileName+` = ? ORDER BY id DESC LIMIT 1`, name).Scan(&content)
+	err := s.queryRow(ctx, `SELECT content FROM gorunfiles WHERE `+gorunfileName+` = ? ORDER BY id DESC LIMIT 1`, name).Scan(&content)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -511,7 +462,7 @@ func (s *Store) SaveGorunfile(ctx context.Context, name, content string, at time
 // GorunfileVersions counts the saved versions of the Gorunfile called name.
 func (s *Store) GorunfileVersions(ctx context.Context, name string) (int, error) {
 	var n int
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM gorunfiles WHERE `+gorunfileName+` = ?`, name).Scan(&n)
+	err := s.queryRow(ctx, `SELECT COUNT(*) FROM gorunfiles WHERE `+gorunfileName+` = ?`, name).Scan(&n)
 	return n, err
 }
 
@@ -524,7 +475,7 @@ type StoredGorunfile struct {
 
 // Gorunfiles lists the Gorunfiles kept in the database, the most recently saved first.
 func (s *Store) Gorunfiles(ctx context.Context) ([]StoredGorunfile, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+gorunfileName+` AS n, COUNT(*), MAX(saved_at), MAX(id) AS last FROM gorunfiles GROUP BY n ORDER BY last DESC`)
+	rows, err := s.query(ctx, `SELECT `+gorunfileName+` AS n, COUNT(*), MAX(saved_at), MAX(id) AS last FROM gorunfiles GROUP BY n ORDER BY last DESC`)
 	if err != nil {
 		return nil, err
 	}

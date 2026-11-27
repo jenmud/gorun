@@ -238,7 +238,7 @@ across a fleet and streams every server's progress to the browser;
 ### History
 
 The library doesn't save runs by itself: it hands every event to `Config.Recorder`, a
-`gorun.Recorder` with one method, `Record(event any)`. Use the built-in SQLite implementation in
+`gorun.Recorder` with one method, `Record(event any)`. Use the built-in implementation in
 the `history` package, or implement the interface yourself. [Recording runs](history.md) has the
 order of a run's events, every field, and a complete recorder. It
 writes to the same SQLite database as the CLI and the web UI, so runs from your program show in

@@ -34,6 +34,7 @@ def title_slide():
         '<div class="mono acc" style="font-size:40px;margin-bottom:20px">$ gorun -serve Gorunfile</div>'
         "<h1>The built-in <span class=acc>assistant</span></h1>"
         '<div class="sub">Explain failures, summarise runs and write tasks, on your own machine.</div>'
+        '<div class="sub" style="margin-top:30px;color:var(--warn)">Experimental: a first version that needs much more training.</div>'
         '<div class="sub" style="margin-top:70px;font-size:30px">Tutorial 10 of the series</div></div>'
     )
 
@@ -55,7 +56,7 @@ def first_use():
         "gorun is serving on http://localhost:8080 (listening on :8080, all interfaces)",
         "Press ctrl+c to stop.",
         "downloading llama-b12359-bin-ubuntu-vulkan-x64.tar.gz  36 MB",
-        "downloading Qwen3-4B-Instruct-2507-Q4_K_M.gguf  2.5 GB",
+        "downloading gorun-qwen3-4b-v3-q4_k_m.gguf  2.5 GB",
         "  kept in ~/.cache/gorun/llm",
     ]
     return shell([("cmd", "gorun -serve Gorunfile")] + [("out", ln) for ln in lines], "bash")
@@ -66,6 +67,7 @@ SCENES = [
     ("start", None, [
         (5, shot("assistant", "The Assistant tab, in gorun -serve")),
         (9, first_use()),
+        (6, shot("assistant-stats", "The Model panel: where it runs, and how fast")),
         (7, slide("Private by default", [
             ("", "The model runs on this machine", "your Gorunfile and run history don't leave it"),
             ("", "It reads", "your tasks, bundles and servers, and the recent runs"),
@@ -73,7 +75,7 @@ SCENES = [
         ])),
     ]),
     ("diagnose", None, [
-        (4, shot("live-done", "nginx failed on web-3")),
+        (4, shot("live-done", "Live: Ask the assistant")),
         (4, shot("run-page", "History: Ask the assistant")),
         (3, shot("diagnose-thinking", "Why did this run fail?")),
         (8, shot("diagnose", "Port 80 is already in use on web-3")),
@@ -83,22 +85,37 @@ SCENES = [
         (6, shot("servers", "Which tasks run on which servers?")),
     ]),
     ("write", None, [
-        (8, shot("write", "A task with a check and a verify, checked to load")),
-        (5, shot("write-added", "Added as unsaved changes")),
+        (12, shot("write", "Small tasks, each with a check and a verify")),
+        (12, shot("complex", "A bigger job: small tasks, and a schedule at 1am")),
+        (5, shot("complex-saved", "Save these tasks: saved straight away")),
+        (6, shot("tasks-saved", "Ready on the Tasks page")),
+    ]),
+    ("schedules", None, [
+        (8, shot("sched", "Move nightly-disk to 4:30am, Sydney time")),
+        (6, shot("sched-saved", "Saved: it replaces the schedule in place")),
+        (10, shot("schedules", "gorun warns: the model forgot local = true")),
     ]),
     ("generate", None, [
         (6, shot("generate-form", "Config: Generate tasks")),
         (6, shot("generate-done", "Review, edit what's wrong, then save")),
     ]),
+    ("experimental", None, [(1, slide("Experimental", [
+        ("", "Writes working tasks about 8 times in 10", "on held-out tests; the stock model: about 5 in 10"),
+        ("", "Sets up schedules 7 times in 8", "new ones, and changes to the ones you have"),
+        ("warn", "Weak on general questions about gorun", "it can make up options: check go-run.dev"),
+        ("warn", "Needs much more training", "review every task before you run it"),
+    ]))]),
     ("models", None, [(1, slide("Other models", [
         ("", "Another model file", "GORUN_LLM_MODEL=/path/to/model.gguf (or an https link)"),
         ("", "A model server", "GORUN_LLM_URL=http://localhost:11434/v1 (Ollama, LM Studio, hosted)"),
         ("warn", "Not on your machine?", "the page warns you, in amber"),
+        ("", "One model for everyone", "questions wait in a queue: no extra memory"),
     ]))]),
     ("outro", None, [(1, slide("Recap", [
         ("", "Explain and summarise", "failures, runs and your Gorunfile"),
-        ("", "Write tasks", "checked to load, saved only when you say"),
-        ("", "Private", "runs on your machine, never runs anything itself"),
+        ("", "Write small tasks", "each with a check and a verify, chained with depends_on"),
+        ("", "Set up schedules", "new ones, or changes to the ones you have"),
+        ("warn", "Experimental", "private, never runs anything itself: review every task"),
     ]))]),
 ]
 
@@ -108,7 +125,9 @@ CHAPTERS = {
     "diagnose": "Why did it fail?",
     "summary": "Summaries and questions",
     "write": "Writing tasks",
+    "schedules": "Schedules",
     "generate": "Generate tasks",
+    "experimental": "How good is it?",
     "models": "Other models",
     "outro": "Wrap up",
 }

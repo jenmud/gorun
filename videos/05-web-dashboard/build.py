@@ -31,7 +31,7 @@ BADGE = "Demo run: stand-in servers"
 def title_slide():
     return page(
         '<div class="wrap" style="display:flex;flex-direction:column;justify-content:center">'
-        '<div class="mono acc" style="font-size:40px;margin-bottom:20px">$ gorun -serve Gorunfile</div>'
+        '<div class="mono acc" style="font-size:40px;margin-bottom:20px">$ gorun -serve</div>'
         "<h1>The web <span class=acc>dashboard</span></h1>"
         '<div class="sub">Run, watch and look back, from a browser.</div>'
         '<div class="sub" style="margin-top:70px;font-size:30px">Tutorial 5 of the series</div></div>'
@@ -53,13 +53,13 @@ def start_output():
     # the demo's port and temp folder are replaced with the defaults a reader would see
     lines = [
         "gorun is serving on http://localhost:8080 (listening on :8080, all interfaces)",
-        "  Gorunfile  /home/dev/web/Gorunfile, 1 schedule, scheduler running",
+        "  Gorunfile  default, kept in the history database (version 1), no schedules",
         "  NATS       embedded server at nats://127.0.0.1:4222, events on gorun.events",
         "  history    /home/dev/.gorun/gorun.db",
         "  log        /home/dev/.gorun/gorun.log",
         "Press ctrl+c to stop.",
     ]
-    return shell([("cmd", "gorun -serve Gorunfile")] + [("out", ln) for ln in lines], "bash")
+    return shell([("cmd", "gorun -serve")] + [("out", ln) for ln in lines], "bash")
 
 
 SCENES = [
@@ -68,12 +68,22 @@ SCENES = [
         (6, start_output()),
         (8, slide("The dashboard has no login", [
             ("warn", "Anyone who can reach the port can run tasks", "keep it on a trusted network"),
-            ("", "Bind it to your own machine", "GORUN_ADDRESS=127.0.0.1:8080 gorun -serve Gorunfile"),
+            ("", "Bind it to your own machine", "GORUN_ADDRESS=127.0.0.1:8080 gorun -serve"),
             ("", "Reach it over an SSH tunnel", "ssh -L 8080:127.0.0.1:8080 you@gorun-host"),
         ])),
     ]),
+    ("gorunfiles", None, [
+        (6, shot("config-imported", "Config: Import a Gorunfile or a zip")),
+        (9, shot("gorunfiles", "Gorunfiles: several, kept in the database")),
+        (6, slide("Kept in the database", [
+            ("", "Share tasks", 'include = ["stored::base"]'),
+            ("", "Every save is a version", "Export as zip: one file per task"),
+            ("", "Only watching?", "gorun -serve -live: Live, History and Assistant"),
+        ])),
+    ]),
     ("run", None, [
-        (6, shot("run-picker", "Run: pick servers, then tasks or a bundle")),
+        (4, shot("live-empty", "Live: stats and recent runs")),
+        (5, shot("run-picker", "Run: pick servers, then tasks or a bundle")),
         (4, shot("live-run", "Live: each run starts collapsed")),
         (5, shot("live-srv", "Open a server to see its tasks")),
         (6, shot("live-fail", "A failed task turns its server red")),
@@ -90,11 +100,18 @@ SCENES = [
     ]))]),
     ("tasks", None, [
         (4, shot("tasks", "Tasks: filter, add and edit")),
-        (6, shot("tasks-open", "A task: command, check, verify and who runs it")),
+        (7, shot("tasks-open", "A task: command, check, verify and who runs it")),
     ]),
     ("schedules", None, [(1, shot("schedules", "Schedules: pause, resume, skip and edit"))]),
+    ("assistant", None, [
+        (6, shot("assistant", "New: the Assistant tab")),
+        (5, slide("Experimental", [
+            ("", "A small model, trained on gorun", "runs on your own machine"),
+            ("warn", "Needs much more training", "it can make things up: read everything it writes"),
+        ])),
+    ]),
     ("outro", None, [(1, slide("Recap", [
-        ("", "gorun -serve Gorunfile", "the dashboard and the scheduler"),
+        ("", "gorun -serve", "the dashboard, the scheduler and your Gorunfiles"),
         ("", "Run, Live and History", "start, watch and look back"),
         ("", "No login", "keep it on a network you trust"),
     ]))]),
@@ -103,11 +120,13 @@ SCENES = [
 CHAPTERS = {
     "intro": "Welcome",
     "start": "Starting the dashboard",
+    "gorunfiles": "Gorunfiles in the database",
     "run": "Running and watching",
     "history": "History",
     "terminal": "Runs from anywhere",
     "tasks": "Tasks and bundles",
     "schedules": "Schedules",
+    "assistant": "The assistant (experimental)",
     "outro": "Wrap up",
 }
 

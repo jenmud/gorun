@@ -1,0 +1,14 @@
+# Shared tasks for the web dashboard demo, imported as the stored Gorunfile "base".
+title = "Base"
+
+[tasks.update]
+description = "Update the package index"
+cmd = "sleep $((4 + RANDOM % 3))"
+timeout = "5m"
+retries = 2
+local = true
+
+[tasks.disk]
+description = "Report disk usage"
+cmd = "sleep 1; echo '/dev/sda1  40G  12G  26G  32% /'"
+local = true

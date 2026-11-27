@@ -1,5 +1,7 @@
 # The web dashboard demo: the web fleet on local stand-ins (sleeps, no real hosts); the video labels it "Demo run".
 title = "Web fleet"
+# update and disk come from the stored Gorunfile "base"
+include = ["stored::base"]
 
 [[schedule]]
 name = "nightly-disk"
@@ -9,16 +11,12 @@ cron = "0 2 * * *"
 timezone = "Australia/Sydney"
 
 
-[tasks.update]
-description = "Update the package index"
-cmd = "sleep $((4 + RANDOM % 3))"
-timeout = "5m"
-retries = 2
-local = true
-
 [tasks.nginx]
 description = "Install nginx"
 cmd = "sleep $((8 + RANDOM % 4))"
+# stand-ins: nginx-demo never runs here, so the task always runs, and /etc is always there
+check = "pgrep -x nginx-demo"
+verify = "test -d /etc"
 depends_on = ["update"]
 local = true
 
@@ -33,11 +31,6 @@ description = "Check the site answers"
 cmd = "sleep 1; {{if eq .Name \"web-3\"}}echo 'curl: (7) Failed to connect to localhost port 80' >&2; exit 7{{end}}"
 timeout = "30s"
 depends_on = ["site"]
-local = true
-
-[tasks.disk]
-description = "Report disk usage"
-cmd = "sleep 1; echo '/dev/sda1  40G  12G  26G  32% /'"
 local = true
 
 [bundles.webapp]

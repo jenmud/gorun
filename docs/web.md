@@ -67,7 +67,7 @@ If the address is taken, it prints `gorun: listen <addr>: <err>` and exits with 
 | Setting | Default | What it does |
 |---|---|---|
 | `GORUN_ADDRESS` | `:8080` | address to listen on |
-| `GORUN_DB_PATH` | `~/.gorun/gorun.db` | history database: an SQLite file, or a `postgres://` or `mysql://` URL |
+| `GORUN_DB_PATH` | `~/.gorun/gorun.db` | history database: an SQLite file, or a `postgres://` or `mysql://` URL (see [storage](storage.md)) |
 | `GORUN_NATS_CLIENT_URL` | none | a NATS server to use; when set, none is started |
 | `GORUN_NATS_SERVER_CONFIG` | none | a NATS server config file for the server the web service starts |
 | `GORUN_EVENT_TOPIC` | `gorun.events` | the NATS subject run events go to |

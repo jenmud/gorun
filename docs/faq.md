@@ -65,6 +65,14 @@ Yes, `gorun -serve` started without a Gorunfile keeps several in its database, a
 page switches between them. One can share another's tasks with `include = ["stored::base"]`. See
 [the web UI](web.md).
 
+## Can gorun keep its history in Postgres or MySQL?
+
+Yes. Set `GORUN_DB_PATH` to a URL instead of a file:
+`GORUN_DB_PATH=postgres://gorun:secret@db:5432/gorun` or `mysql://gorun:secret@db:3306/gorun`. The
+database must exist; gorun creates and migrates its tables on start. Every gorun pointed at it,
+laptops, CI and the web UI, then shares one history. SQLite (`~/.gorun/gorun.db`) stays the default.
+See [storage](storage.md).
+
 ## What does the assistant do, and which model is it?
 
 The Assistant tab in `gorun -serve` explains failed runs, summarises runs, answers questions and

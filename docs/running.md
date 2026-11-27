@@ -269,24 +269,8 @@ to see exactly what ran:
 **Where it's stored:** a SQLite file: `GORUN_DB_PATH` when it is set (created if it doesn't exist
 yet), otherwise `./gorun.db` if there is one, otherwise `~/.gorun/gorun.db`.
 
-**Postgres or MySQL instead:** set `GORUN_DB_PATH` to a URL, and gorun keeps its history there.
-The database must exist; gorun creates and updates its tables when it opens it. Several gorun
-processes and machines can share one database, so a team sees one history.
-
-```bash
-GORUN_DB_PATH=postgres://gorun:secret@db.internal:5432/gorun gorun -serve
-GORUN_DB_PATH='mysql://gorun:secret@db.internal:3306/gorun?tls=true' gorun Gorunfile -r
-```
-
-A Postgres URL takes [the usual libpq options](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING-URIS),
-such as `?sslmode=require`. A MySQL URL takes `tls` (`true`, `skip-verify` or `preferred`), and
-passes any other query parameter to the server as a session setting. Put the password in `.env` or
-the environment, not in a script; gorun shows the URL with the password hidden.
-
-**Migrations:** each database has numbered migration files in `internal/store/migrations/`, built
-into gorun. On open, gorun applies the ones the database hasn't had and records them in its
-`schema_migrations` table, holding a lock so two gorun processes starting together don't both apply
-them. An SQLite file from a gorun older than migrations is upgraded in place, keeping its runs.
+**Postgres or MySQL instead:** set `GORUN_DB_PATH` to a `postgres://` or `mysql://` URL, and a team
+shares one history. See [where gorun keeps its history](storage.md) for setting one up.
 
 The [web UI](web.md#history) shows the same history at `http://localhost:8080/history`. It uses
 `GORUN_DB_PATH` or `~/.gorun/gorun.db`, without the `./gorun.db` fallback, so set `GORUN_DB_PATH` if

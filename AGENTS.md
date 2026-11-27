@@ -102,7 +102,7 @@ tests execute tasks locally.
 
 `docs/tutorial.md` (step by step), `docs/gorunfile.md` (every option), `docs/running.md` (picker,
 live view, CI mode, history), `docs/integrations.md` (web UI, OpenTelemetry, NATS, Go library,
-completion), `docs/reference.md` (flags/keys/env), `recipes/README.md` (demo lab).
+completion), `docs/reference.md` (flags/keys/env), `docs/storage.md` (SQLite, Postgres, MySQL), `recipes/README.md` (demo lab).
 
 `videos/` builds the tutorial videos (script, demo Gorunfile, screen capture and voiceover); see
 `videos/README.md`. **A change that a video shows or describes must update that video in the same

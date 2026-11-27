@@ -38,7 +38,7 @@ err = cfg.Run(ctx)
 `~/.gorun/gorun.db`. Runs you save there show in `gorun -history` and `gorun -serve` too. To keep a
 separate history, pass your own path to `Open`, which creates the file and its folder. `Open` also
 takes a `postgres://` or `mysql://` URL, creating or updating the tables in that database (see
-[Postgres or MySQL](running.md#history)).
+[where gorun keeps its history](storage.md)).
 
 Read the runs back with:
 

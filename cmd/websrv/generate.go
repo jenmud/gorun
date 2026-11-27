@@ -33,7 +33,7 @@ func newGenerator() *generator {
 	}
 	g := &generator{assistant: a}
 	if a.URL == "" {
-		g.engine = &llm.Engine{Dir: llmDir(), Model: a.Model, Progress: os.Stderr}
+		g.engine = &llm.Engine{Dir: llm.Dir(), Model: a.Model, Progress: os.Stderr}
 		g.assistant.Engine = g.engine
 	}
 	return g
@@ -73,18 +73,6 @@ func (g *generator) close() {
 	case <-time.After(3 * time.Second):
 		log.Printf("gorun web: the model is still busy; quitting without unloading it")
 	}
-}
-
-// llmDir is where the built-in model and llama.cpp are kept, in gorun's cache folder.
-func llmDir() string {
-	if dir := envvars.Get("GORUN_CACHE_DIR"); dir != "" {
-		return filepath.Join(dir, "llm")
-	}
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		dir = os.TempDir()
-	}
-	return filepath.Join(dir, "gorun", "llm")
 }
 
 // generateHandler asks the model for tasks that do what the form describes and queues them as

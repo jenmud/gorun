@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/jenmud/gorun"
+	"github.com/jenmud/gorun/internal/envvars"
 )
 
 // llamaTag is the llama.cpp build the yzma version in go.mod is made for: yzma's
@@ -56,6 +57,35 @@ func ggml(suffix string) string {
 var DefaultModel = asset{
 	"https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF/resolve/main/gorun-qwen3-4b-v3-q4_k_m.gguf",
 	"53f237147bff4d35dbfbfb21f65694ef21d9c7376726b37eb0e1f2320d32072c",
+}
+
+// Dir is where llama.cpp and the models are kept: GORUN_LLM_DIR, else llm in gorun's cache
+// folder (GORUN_CACHE_DIR, or the user's cache folder).
+func Dir() string {
+	if dir := envvars.Get("GORUN_LLM_DIR"); dir != "" {
+		return dir
+	}
+	if dir := envvars.Get("GORUN_CACHE_DIR"); dir != "" {
+		return filepath.Join(dir, "llm")
+	}
+	dir, err := os.UserCacheDir()
+	if err != nil {
+		dir = os.TempDir()
+	}
+	return filepath.Join(dir, "gorun", "llm")
+}
+
+// Pull downloads llama.cpp for this platform and the default model into dir, unless they are
+// there already, so the first question needn't wait for them, and returns where each is.
+// gorun -pull-model and the Docker image with the model built in use it.
+func Pull(ctx context.Context, dir string, progress io.Writer) (libs, modelFile string, err error) {
+	if libs, err = libraries(ctx, dir, progress); err != nil {
+		return "", "", fmt.Errorf("llama.cpp: %w", err)
+	}
+	if modelFile, err = model(ctx, dir, "", progress); err != nil {
+		return "", "", fmt.Errorf("model: %w", err)
+	}
+	return libs, modelFile, nil
 }
 
 // Downloaded reports whether llama.cpp and the default model are already in dir.

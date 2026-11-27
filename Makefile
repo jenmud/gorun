@@ -1,4 +1,4 @@
-.PHONY: vendor test build-otel build-go build templ-gen web web-dev examples model
+.PHONY: vendor test build-otel build-go build templ-gen web web-dev examples model docker docker-slim
 
 all: vendor build
 
@@ -30,6 +30,17 @@ build-go:
 
 
 build: build-go build-otel
+
+# Docker images of the web service. `make docker` builds it with the assistant's model built in
+# (Debian, about 3 GB, the Dockerfile's llm stage), so the first question needn't download it;
+# `make docker-slim` builds the default image without it (Alpine, about 60 MB).
+DOCKER_IMAGE ?= gorun
+
+docker:
+	docker build --target llm --build-arg VERSION=$(VERSION) -t $(DOCKER_IMAGE):llm -t $(DOCKER_IMAGE):$(VERSION)-llm .
+
+docker-slim:
+	docker build --build-arg VERSION=$(VERSION) -t $(DOCKER_IMAGE):latest -t $(DOCKER_IMAGE):$(VERSION) .
 
 TEMPL := $(shell go env GOPATH)/bin/templ
 

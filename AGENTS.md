@@ -45,6 +45,8 @@ go build ./... && go vet ./...             # no golangci config; keep gofmt clea
 make build                                 # builds/gorun + builds/gorun-otel-CTI (gitignored)
 make vendor                                # go mod tidy && go mod vendor — vendor/ IS committed
 make templ-gen                             # regenerate committed cmd/web/ui/*_templ.go
+make docker                                # web service image with the assistant's model built in (~3 GB)
+make docker-slim                           # the default Alpine image, without the model
 make web-dev                               # templ watch + go run ./cmd -serve (GORUN_ADDRESS=:8080 overridable)
 make up / make down                        # recipes lab: 100 SSH containers + NATS (docker compose)
 go run ./cmd recipes/Gorunfile -r          # run the lab's own starter recipe

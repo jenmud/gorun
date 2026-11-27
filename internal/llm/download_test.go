@@ -126,3 +126,15 @@ func TestEveryReleaseIsPinned(t *testing.T) {
 		}
 	}
 }
+
+func TestDirPrefersGORUN_LLM_DIR(t *testing.T) {
+	t.Setenv("GORUN_CACHE_DIR", "/cache")
+	t.Setenv("GORUN_LLM_DIR", "")
+	if got := Dir(); got != filepath.Join("/cache", "llm") {
+		t.Errorf("with GORUN_CACHE_DIR: Dir() = %q, want /cache/llm", got)
+	}
+	t.Setenv("GORUN_LLM_DIR", "/opt/gorun/llm")
+	if got := Dir(); got != "/opt/gorun/llm" {
+		t.Errorf("with GORUN_LLM_DIR: Dir() = %q, want /opt/gorun/llm", got)
+	}
+}

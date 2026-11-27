@@ -4,6 +4,16 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## Next
+
+### A Docker image with the assistant's model built in
+- `make docker` builds the web service image with llama.cpp and gorun's model inside (Debian,
+  about 3 GB, the Dockerfile's `llm` stage), so the assistant answers its first question without
+  downloading anything, and works offline. `make docker-slim` builds the default Alpine image,
+  whose assistant needs `GORUN_LLM_URL`, since llama.cpp's Linux build doesn't run on Alpine.
+- `gorun -pull-model` downloads the assistant's llama.cpp and model ahead of its first question.
+- `GORUN_LLM_DIR` says where they are kept (default `GORUN_CACHE_DIR/llm`).
+
 ## v0.37.2 (since v0.37.1)
 
 - gorun starts on Linux without libffi again. Since v0.36.0 it loaded `libffi.so.8` at start, for

@@ -1048,7 +1048,7 @@ func TestEvalModel(t *testing.T) {
 	if model == "base" {
 		model = ""
 	}
-	e := &llm.Engine{Dir: llmDir(), Model: model, Progress: os.Stderr}
+	e := &llm.Engine{Dir: llm.Dir(), Model: model, Progress: os.Stderr}
 	defer e.Close()
 
 	f, err := os.Open(filepath.Join(dataDir, "eval.jsonl"))

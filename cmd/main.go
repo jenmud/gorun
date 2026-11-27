@@ -23,6 +23,7 @@ import (
 	"github.com/jenmud/gorun"
 	web "github.com/jenmud/gorun/cmd/websrv"
 	"github.com/jenmud/gorun/history"
+	"github.com/jenmud/gorun/internal/llm"
 )
 
 // version is set for releases with -ldflags "-X main.version=v1.2.3". Without it, buildVersion
@@ -154,6 +155,7 @@ func (s *stringSlice) Set(v string) error { *s = append(*s, v); return nil }
 // options are the command line flags. printUsage documents each one.
 type options struct {
 	verbose, plain, run, dump, version, serve, live, history, updateIncludes, force, checkOnly bool
+	pullModel                                                                                  bool
 	listTasks, listServers, listTags, listGroups, listBundles                                  bool
 	tasks, bundles, servers, exclude, tags, groups                                             stringSlice
 	parallel                                                                                   int
@@ -178,7 +180,7 @@ func parseArgs(fs *flag.FlagSet, args []string) *options {
 	for name, dst := range map[string]*bool{
 		"v": &o.verbose, "plain": &o.plain, "run": &o.run, "r": &o.run, "dump": &o.dump, "version": &o.version,
 		"serve": &o.serve, "web": &o.serve, "live": &o.live, "history": &o.history,
-		"update-includes": &o.updateIncludes, "force": &o.force, "check": &o.checkOnly,
+		"update-includes": &o.updateIncludes, "force": &o.force, "check": &o.checkOnly, "pull-model": &o.pullModel,
 		"list-tasks": &o.listTasks, "list-servers": &o.listServers, "list-tags": &o.listTags,
 		"list-groups": &o.listGroups, "list-server-groups": &o.listGroups, "list-bundles": &o.listBundles,
 	} {
@@ -230,6 +232,13 @@ func main() {
 		return
 	case o.dump:
 		fmt.Print(emptyGorunfile)
+		return
+	case o.pullModel:
+		// one "what path" line each, which the Dockerfile reads to copy just these into the image
+		libs, model, err := llm.Pull(ctx, llm.Dir(), os.Stderr)
+		check(err)
+		fmt.Println("llama.cpp", libs)
+		fmt.Println("model", model)
 		return
 	}
 
@@ -541,6 +550,7 @@ Options:
   -dump-tasks DIR  dump each task as a file in DIR and exit
   -update-includes  look up every git include's ref again, update the lock file and exit
   -version  print version and exit
+  -pull-model  download the web UI assistant's llama.cpp and model now (into GORUN_LLM_DIR), not on the first question
   -serve [Gorunfile]  start the web service (scheduler, NATS, web UI); -web is an alias
                       without a Gorunfile, it keeps one in the history database
   -live  with -serve: only the Live, History and Assistant pages, for runs started elsewhere;
@@ -565,6 +575,7 @@ in the environment):
   GORUN_NATS_CLIENT_RECONNECT_WAIT    default: nats default (e.g. 2s)
   GORUN_NATS_CLIENT_TIMEOUT           default: nats default (e.g. 5s)
   GORUN_NATS_SERVER_CONFIG            default: none (NATS server config for the server -serve starts)
+  GORUN_LLM_DIR                       default: $GORUN_CACHE_DIR/llm (where the assistant's llama.cpp and model are kept)
   GORUN_LLM_URL                       default: unset (an OpenAI-compatible API for the web UI's assistant, instead of the built-in model)
   GORUN_LLM_MODEL                     default: gorun's Qwen3 4B (a GGUF path or https URL; a model name with GORUN_LLM_URL)
   GORUN_LLM_API_KEY                   default: unset (sent as a bearer token)

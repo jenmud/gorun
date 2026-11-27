@@ -125,13 +125,33 @@ docker run --rm -p 8080:8080 \
 docker run --rm -p 8080:8080 -e GORUN_NATS_CLIENT_URL=nats://nats.internal:4222 gorun
 ```
 
-The image is Alpine with a static gorun, and it runs as the `gorun` user. Its state lives in
+The image is Alpine with gorun, and it runs as the `gorun` user. Its state lives in
 `/var/lib/gorun`: the history database, the log and git include checkouts. Mount that folder to keep
 them. Local tasks run with the image's `/bin/sh`. Tasks over SSH need the keys and `known_hosts`
 mounted into the container, with the Gorunfile's `[ssh]` settings pointing at them.
 
 > **No login, again.** A published port gives anyone who can reach it the web UI. Publish it only on
 > a trusted network, for example `-p 127.0.0.1:8080:8080`.
+
+### With the assistant's model built in
+
+The default image has no model: llama.cpp's Linux build needs glibc, which Alpine lacks, so its
+assistant only works with `GORUN_LLM_URL` pointing at a model server. The Dockerfile's `llm` stage
+builds a Debian image instead, with llama.cpp and gorun's model already inside, so the assistant
+answers its first question without downloading anything, and works offline:
+
+```bash
+make docker                                   # or: docker build --target llm -t gorun:llm .
+docker run --rm -p 127.0.0.1:8080:8080 -v gorun-data:/var/lib/gorun gorun:llm
+```
+
+The image is about 3 GB, most of it the model. The model is in `/opt/gorun/llm`
+(`GORUN_LLM_DIR`), outside the `/var/lib/gorun` volume, so mounting a volume doesn't hide it. It
+runs on the CPU, which is slower than a GPU: a short answer takes several seconds, and the first
+loads the model, about 4 GB of memory. The build downloads llama.cpp and the model with
+`gorun -pull-model`, checked against the same digests as a download in the web UI, and keeps them in
+a Docker build cache, so rebuilding after a code change doesn't download them again.
+`make docker-slim` builds the default image.
 
 ### Build your own image
 
@@ -325,7 +345,8 @@ commands wrong. The model is Qwen3 4B Instruct (Apache 2.0) fine-tuned on gorun,
 when one is found. It needs about 4 GB of GPU memory; when there isn't that much free, such as
 when another program or another `gorun -serve` is using it, the model runs on the CPU instead,
 which is slower, and the chat says so. The first use downloads llama.cpp (about 36 MB) and the model (2.5 GB) into
-`GORUN_CACHE_DIR/llm`. Only the web service does this; the command line and the TUI never load a
+`GORUN_LLM_DIR` (default `GORUN_CACHE_DIR/llm`); `gorun -pull-model` downloads them ahead, and the
+[Docker image with the model](#with-the-assistants-model-built-in) has them built in. Only the web service does this; the command line and the TUI never load a
 model. On Linux the built-in model also needs the libffi 8 library; when it is missing, the chat
 says so before downloading anything (`apt install libffi8`, `dnf install libffi` or
 `apk add libffi`). To use Ollama or another OpenAI-compatible server instead, set `GORUN_LLM_URL` (and

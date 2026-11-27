@@ -49,7 +49,8 @@ machine with `GORUN_ADDRESS=127.0.0.1:8080` and reach it over an SSH tunnel:
 
 Yes: the repository's Dockerfile builds an image that runs `gorun -serve` on port 8080. Keep
 `/var/lib/gorun` in a volume; it holds the history database, the log, git include checkouts and the
-Gorunfiles kept in the database. See [running in Docker](web.md#running-in-docker).
+Gorunfiles kept in the database. `make docker` builds a larger image with the assistant's model
+built in, so it works offline. See [running in Docker](web.md#running-in-docker).
 
 ## How does gorun connect to servers?
 

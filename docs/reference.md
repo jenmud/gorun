@@ -44,6 +44,7 @@ Flags take one or two dashes and can go before or after the Gorunfile, except `-
 | `-history` | browse past runs |
 | `-serve [Gorunfile]` | start the web service (scheduler, NATS, web UI) on a Gorunfile; without one it keeps the Gorunfile in the history database; `-web` is an alias |
 | `-live` | with `-serve`: only the Live, History and Assistant pages, for runs started elsewhere; no Gorunfile, given or kept in the database |
+| `-pull-model` | download the web UI assistant's llama.cpp and model now, into `GORUN_LLM_DIR`, instead of on its first question; prints where each is |
 | `-complete <kind>` | print shell completion candidates |
 | `-version` | print the version |
 
@@ -68,6 +69,7 @@ already set.
 | `GORUN_NATS_CLIENT_RECONNECT_WAIT` | NATS default | wait between reconnects, e.g. `2s` |
 | `GORUN_NATS_CLIENT_TIMEOUT` | NATS default | connection timeout, e.g. `5s` |
 | `GORUN_NATS_SERVER_CONFIG` | none | NATS server config file for the server `gorun -serve` starts when none is running; see [integrations](integrations.md#events-nats) |
+| `GORUN_LLM_DIR` | `$GORUN_CACHE_DIR/llm` | where the built-in model and llama.cpp are kept, and downloaded to on first use or by `-pull-model` |
 | `GORUN_LLM_URL` | unset | an OpenAI-compatible API for the web UI's assistant and task generator to use instead of the built-in model, such as `http://localhost:11434/v1` for Ollama, llama.cpp's `llama-server`, LM Studio or a hosted one |
 | `GORUN_LLM_MODEL` | gorun's Qwen3 4B | built in: a GGUF file's path or `https://` URL; with `GORUN_LLM_URL`: the model's name there (default `qwen3:4b-instruct`) |
 | `GORUN_LLM_API_KEY` | unset | sent as a bearer token, for hosted APIs |

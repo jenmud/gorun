@@ -4,7 +4,7 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
-## Next
+## v0.37.2 (since v0.37.1)
 
 - gorun starts on Linux without libffi again. Since v0.36.0 it loaded `libffi.so.8` at start, for
   the assistant's llama.cpp bindings, and stopped when it was missing (Debian 11, minimal

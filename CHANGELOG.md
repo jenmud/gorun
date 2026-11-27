@@ -4,7 +4,7 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
-## Next
+## v0.39.0 (since v0.38.0)
 
 ### Users and sign in for the web UI
 - A **Users** page keeps users in the history database (SQLite, Postgres or MySQL, through a new

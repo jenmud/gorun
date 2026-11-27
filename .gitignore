@@ -7,6 +7,9 @@
 *.dll
 *.so
 *.dylib
+# vendored packages embed their own libraries (jupiterrider/ffi's libffi for macOS and Windows)
+!vendor/**/*.dll
+!vendor/**/*.dylib
 
 # Test binary, built with `go test -c`
 *.test

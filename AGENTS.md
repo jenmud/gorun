@@ -22,6 +22,14 @@
   terminal). `cmd/websrv` is the web server, `cmd/web/ui` the templ components,
   `internal/store` the sqlite history and the wire event, `internal/nats` the NATS client,
   `internal/envvars` env access.
+- `docs/docs.go` (package `docs`) embeds `docs/*.md` and keyword-searches them by heading: the
+  assistant sends the best sections with questions about gorun, so a docs change reaches its
+  answers without retraining. `docs/faq.md` holds the questions people ask most.
+- `training/` fine-tunes the assistant's model (see its README). Its seeds become conversations in
+  `cmd/websrv/dataset_test.go` (build tag `dataset`), through the real prompts, so a change to the
+  assistant's prompt or context only reaches a trained model after rebuilding the data and
+  training again. Its `.venv/`, `.hf/`, `.llama.cpp/`, `data/` and `out/` are gitignored, not
+  vendored.
 - `examples/` holds programs built on the library (`servicedeck`, a web app; `rollout`, a CLI). Each
   is its own module with `replace github.com/jenmud/gorun => ../..`, so root `go test ./...` skips
   them; `make examples` vets and builds them (CI runs it). An API change that breaks them must fix
@@ -92,7 +100,8 @@ live view, CI mode, history), `docs/integrations.md` (web UI, OpenTelemetry, NAT
 completion), `docs/reference.md` (flags/keys/env), `recipes/README.md` (demo lab).
 
 `videos/` builds the tutorial videos (script, demo Gorunfile, screen capture and voiceover); see
-`videos/README.md`. Re-record `record.sh` after TUI changes, and update the narration when a feature
+`videos/README.md`. **A change that a video shows or describes must update that video in the same
+work**: narration, recording, rebuilt mp4, then the website copy (gorun-website). Re-record `record.sh` after TUI changes, and update the narration when a feature
 it describes changes. The video files themselves are not committed: the website repo serves them.
 
 # Agent Instructions: Go Development

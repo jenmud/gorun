@@ -5,7 +5,9 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"io"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -16,9 +18,11 @@ import (
 
 // limitedSSHServer is an in-process SSH server that, like sshd's MaxSessions,
 // rejects sessions beyond maxSessions with "open failed". Every exec request
-// takes a few milliseconds and exits 0.
+// takes a few milliseconds and exits 0, except one containing hang, which runs
+// until the client closes its session.
 type limitedSSHServer struct {
 	maxSessions int
+	hang        string
 	open        atomic.Int32
 	peak        atomic.Int32
 	rejected    atomic.Int32
@@ -80,6 +84,11 @@ func (s *limitedSSHServer) start(t *testing.T) *ssh.Client {
 						continue
 					}
 					_ = req.Reply(true, nil)
+					var exec struct{ Command string }
+					_ = ssh.Unmarshal(req.Payload, &exec)
+					if s.hang != "" && strings.Contains(exec.Command, s.hang) {
+						continue
+					}
 					time.Sleep(5 * time.Millisecond)
 					_, _ = ch.SendRequest("exit-status", false, ssh.Marshal(struct{ Status uint32 }{0}))
 					return
@@ -173,5 +182,42 @@ func TestNewSessionWaitIsCancellable(t *testing.T) {
 	defer cancel()
 	if _, _, err := newSession(ctx, client); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want context.DeadlineExceeded", err)
+	}
+}
+
+// TestRemoteTimeoutKeepsTheConnection makes sure a task that times out over SSH
+// stops only its own session: the server's other tasks share the connection and
+// must still run.
+func TestRemoteTimeoutKeepsTheConnection(t *testing.T) {
+	old := logOutput
+	SetLogOutput(io.Discard)
+	t.Cleanup(func() { SetLogOutput(old) })
+
+	srv := &limitedSSHServer{maxSessions: maxSessions, hang: "stuck"}
+	client := srv.start(t)
+	tasks, err := NewTaskExec(client,
+		Task{Name: "stuck", Cmd: "stuck", Timeout: 100 * time.Millisecond},
+		Task{Name: "alongside", Cmd: "true"},
+		Task{Name: "after", Cmd: "true"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	started := time.Now()
+	stuck := make(chan error, 1)
+	go func() { stuck <- tasks[0].Execute(context.Background()) }()
+	time.Sleep(20 * time.Millisecond)
+	if err := tasks[1].Execute(context.Background()); err != nil {
+		t.Errorf("task alongside the stuck one: %v", err)
+	}
+	if err := <-stuck; err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("stuck task: err = %v, want a timeout", err)
+	}
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
+		t.Errorf("stuck task took %s to stop, want well under %s", elapsed, taskKillGrace)
+	}
+	if err := tasks[2].Execute(context.Background()); err != nil {
+		t.Errorf("task after the timeout: %v", err)
 	}
 }

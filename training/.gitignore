@@ -1,0 +1,5 @@
+.venv/
+.hf/
+.llama.cpp/
+data/
+out/

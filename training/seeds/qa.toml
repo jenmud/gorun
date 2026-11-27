@@ -1,0 +1,489 @@
+# Questions about gorun itself, with answers taken from the docs. want lists words a good answer
+# has, for the evaluation.
+
+[[qa]]
+q = ["What is gorun?", "what does gorun do?", "Explain gorun in a few sentences"]
+a = """gorun runs tasks, which are shell commands, on servers over SSH, or on your own machine. A TOML file called a Gorunfile says what to run (tasks) and where (servers). Tasks can depend on each other, copy files first, skip themselves with a check when there is nothing to do, and run on many servers at once. You can run it from the terminal, with a picker and a live view, or from the web UI with gorun -serve, which also keeps the run history and runs schedules."""
+want = ["ssh", "gorunfile", "task"]
+
+[[qa]]
+q = ["What is a Gorunfile?", "what goes in a Gorunfile?", "How is a Gorunfile laid out?"]
+a = """A Gorunfile is a TOML file with:
+- [tasks.<name>] tables: what can run, each defined once;
+- [bundles.<name>]: optional names for lists of tasks;
+- [server_groups.<name>]: optional settings shared by servers, like an SSH login and tags;
+- [servers] tasks = [...]: what every server runs, and [servers.hosts.<name>] for each server.
+gorun -dump prints a starting Gorunfile that runs as-is and documents every option."""
+want = ["tasks", "servers.hosts", "toml"]
+
+[[qa]]
+q = ["How do I make a task run only when it needs to?", "How can a task skip itself when there's nothing to do?", "what does check do?"]
+a = """Give it a check: a command that runs first. If the check exits 0, the task is marked unchanged and its copies, command and verify don't run. Any other exit code runs the task. For example:
+
+```toml
+[tasks.nginx]
+check = "dpkg -s nginx >/dev/null 2>&1"
+cmd = "apt-get install -y nginx"
+verify = "dpkg -s nginx >/dev/null 2>&1"
+sudo = true
+```
+
+A task without a check always runs. For tasks that copy files, check_copies = true compares the files' MD5 with the ones on the server instead."""
+want = ["check", "exit", "0", "unchanged"]
+
+[[qa]]
+q = ["What's the difference between check and verify?", "When does verify run?", "what does verify do in a task?"]
+a = """check runs before the task and decides whether it needs to run: exit 0 means nothing to do, so the task is unchanged. verify runs after the command and confirms the change took: if it exits non-zero, the task fails with the verify's exit code, and tasks that depend on it are skipped."""
+want = ["before", "after", "fail"]
+
+[[qa]]
+q = ["What does unchanged mean in a run?", "A task shows as unchanged, is that bad?", "why does my task say unchanged?"]
+a = """Unchanged means the task's check exited 0, so gorun decided there was nothing to do and didn't run its copies, command or verify. It counts as a success: tasks that depend on it still run and the run still passes. To run it anyway, use --force on the command line or Force on the web UI's Run page."""
+want = ["check", "success", "force"]
+
+[[qa]]
+q = ["How do I run a task even when its check says it's done?", "How do I force tasks to run?", "what does -force do?"]
+a = """Run with -force (or Force on the web UI's Run page). Checks don't run then, so every task runs and nothing ends unchanged. Verifies still run. -force can't be combined with -check."""
+want = ["force", "check"]
+
+[[qa]]
+q = ["How do I do a dry run?", "Can I see what would run without changing anything?", "what does -check do?"]
+a = """Use -check (or Check only on the web UI's Run page). Only the checks run; nothing is copied, run or verified. Each task ends unchanged, or would run when its check found something to do or it has no check. History marks the run as check only."""
+want = ["-check", "would run"]
+
+[[qa]]
+q = ["How do dependencies work?", "What does depends_on do?", "how do I make one task run after another?"]
+a = """depends_on lists tasks that must run first on the same server:
+
+```toml
+[tasks.restart-app]
+check = "false"
+cmd = "systemctl restart app"
+verify = "systemctl is-active app"
+depends_on = ["migrate"]
+```
+
+A dependency always runs first, once, even when the server doesn't list it. If a dependency fails or is skipped, the task is skipped too. Independent tasks still run. Cycles and names of tasks that don't exist are errors when the Gorunfile loads."""
+want = ["depends_on", "first", "skipped"]
+
+[[qa]]
+q = ["Why was my task skipped?", "What does skipped mean?", "a task says skipped, why?"]
+a = """A task is skipped when a task it depends on (through depends_on) failed or was itself skipped on the same server, or when the run was cancelled. Fix the task that failed first; the skipped ones run once it passes. That is different from unchanged, which means the task's own check said there was nothing to do."""
+want = ["depends", "failed"]
+
+[[qa]]
+q = ["Does a failed task stop the whole run?", "If one task fails do the other tasks still run?"]
+a = """No. A failed task only skips the tasks that depend on it on that server. Tasks that don't depend on it still run, and other servers carry on. The run as a whole is marked failed. A timeout is the exception: a task that times out fails with exit code 124 and the rest of that server's tasks are skipped."""
+want = ["depend", "skip"]
+
+[[qa]]
+q = ["How do I run a command as root?", "How do I use sudo in a task?", "can I write sudo in cmd?"]
+a = """Set sudo = true on the task. gorun runs its cmd, check and verify with sudo -n, so the login user needs passwordless sudo. Don't write sudo in the command itself. Copies don't use sudo: copy to /tmp and move the file into place in the command."""
+want = ["sudo = true", "passwordless"]
+
+[[qa]]
+q = ["How do I copy a file to the servers?", "How can I upload a file with a task?", "how do copies work?"]
+a = """Add a copy table to the task. Copies run before the command, as the login user (not sudo), so copy to somewhere writable and move the file in the command:
+
+```toml
+[tasks.app-config]
+check = "false"
+cmd = "mv /tmp/app.conf /etc/app/app.conf"
+verify = "test -s /etc/app/app.conf"
+sudo = true
+[[tasks.app-config.copy]]
+src = "./files/app.conf"
+dst = "/tmp/app.conf"
+```
+
+src can be a file or a folder; content writes inline text; render = true fills a src file in as a template for each server; mode, owner and group set permissions."""
+want = ["copy", "src", "dst", "/tmp"]
+
+[[qa]]
+q = ["Why does my copy get permission denied?", "copy to /etc fails with permission denied"]
+a = """Copies run as the SSH login user, not with sudo, even when the task has sudo = true. Copy to a writable place like /tmp and move the file into place in the task's cmd, which does run as root with sudo = true."""
+want = ["/tmp", "login user", "sudo"]
+
+[[qa]]
+q = ["How do I put a secret in a task?", "Where do passwords go?", "how should I pass an API token to a task?"]
+a = """Never write it in the Gorunfile. Put it in gorun's own environment, or a .env file where you run gorun, and reference it in envvars:
+
+```toml
+[tasks.registry-login]
+check = "grep -q registry.example.com ~/.docker/config.json"
+cmd = 'printf %s "$TOKEN" | docker login registry.example.com -u me --password-stdin'
+verify = "grep -q registry.example.com ~/.docker/config.json"
+envvars = { TOKEN = "${REGISTRY_TOKEN}" }
+```
+
+$VAR and ${VAR} are expanded from gorun's environment, and the values are sent to the task over stdin, so they stay out of logs, the history, events and the server's process list."""
+want = ["envvars", "${", ".env"]
+
+[[qa]]
+q = ["How do environment variables work in gorun?", "What order do envvars override in?", "where can I set envvars?"]
+a = """envvars are exported to a task's command, on SSH and local servers, also under sudo. They can be set globally, on a server group, on a server or on a task, and the most specific wins: task, then server, then its groups, then global. Keys are upper-cased, and values can use $VAR from gorun's own environment."""
+want = ["task", "server", "group", "global"]
+
+[[qa]]
+q = ["What can I use in templates?", "How do I use the server's name in a command?", "what template variables are there?"]
+a = """Every setting is a Go template filled in for each server:
+- {{.Name}}: the server's name;
+- {{.Hostname}}: its address;
+- {{.SSH.Port}}: its SSH port;
+- {{.Tags}}: its tags;
+- {{index .EnvVars "REGION"}}: one of its env vars;
+- {{.Server.Vars.port}}: a server variable;
+- {{.vars.port}}: the task's own vars.
+Set raw = true on a task when its text has {{ of its own, like docker --format."""
+want = ["{{.Name}}", "{{.Hostname}}"]
+
+[[qa]]
+q = ["My command has {{ in it and gorun breaks it", "how do I stop gorun treating {{ as a template?", "docker ps --format fails in a task"]
+a = """Set raw = true on the task. Its command, check, verify, envvars, vars and copies are then used exactly as written, so text like docker ps --format '{{.Names}}' isn't read as a template."""
+want = ["raw = true"]
+
+[[qa]]
+q = ["What's the difference between task vars and server vars?", "How do I give a server its own values for a template?"]
+a = """Task vars ([tasks.<name>.vars], read as {{.vars.KEY}}) belong to the task and are the same wherever it runs. Server vars (vars on the global file, a group, a bundle or a server, read as {{.Server.Vars.KEY}}) belong to the host; the layers merge global, then groups, then the bundle, then the host, later ones winning. Neither reaches the command's environment: use envvars for that."""
+want = ["{{.vars", "{{.Server.Vars"]
+
+[[qa]]
+q = ["What is a bundle?", "How do bundles work?", "how do I group tasks under one name?"]
+a = """A bundle is a name for a list of tasks:
+
+```toml
+[bundles.baseline]
+description = "Every box gets these"
+tasks = ["packages", "timezone"]
+```
+
+Use it as @baseline anywhere a task list goes: [servers] tasks, a server's tasks, add_tasks or skip_tasks, a group's tasks, another bundle, or -task @baseline. It expands to its tasks in order, and depends_on still applies."""
+want = ["@", "tasks"]
+
+[[qa]]
+q = ["What are server groups?", "How do I share an SSH login between servers?", "what can a server group set?"]
+a = """A server group holds settings servers share by joining it with groups = ["name"]: tags, tasks, envvars, vars, log_level and an ssh table. For example a group's ssh table can set username and identityfile for every server in it. Servers apply their groups in the order they list them, and a server's own settings win."""
+want = ["groups", "ssh", "tags"]
+
+[[qa]]
+q = ["How do I decide which tasks a server runs?", "What do add_tasks and skip_tasks do?", "how is a server's task list built?"]
+a = """By default a server runs [servers] tasks plus its groups' tasks. On the server:
+- add_tasks = [...] adds tasks;
+- skip_tasks = [...] removes them;
+- tasks = [...] replaces the list completely.
+Bundles are expanded first, and a task's dependencies are added. gorun Gorunfile -list-servers shows each server's final list."""
+want = ["add_tasks", "skip_tasks", "-list-servers"]
+
+[[qa]]
+q = ["Why does my server run no tasks?", "gorun says no tasks to run", "my local server has an empty task list"]
+a = """A server without SSH settings is local: it runs on your machine, and only runs tasks marked local = true. A server with SSH settings runs only tasks without local = true. So either give the server an ssh table (or a group with one), or mark the tasks local = true if they should run on your machine. gorun Gorunfile -list-servers shows each server's list."""
+want = ["local = true", "ssh"]
+
+[[qa]]
+q = ["How do I run tasks on my own machine?", "Can gorun run things locally?", "what does local = true do?"]
+a = """Yes. A server with no SSH settings, like [servers.hosts.localhost], runs on your machine. It runs only tasks marked local = true; tasks without it run only over SSH. A task that depends on a task left out on that server is left out too."""
+want = ["local = true", "ssh"]
+
+[[qa]]
+q = ["How does gorun connect over SSH?", "What SSH settings can a server have?", "how do I set the ssh user and key?"]
+a = """Give the server (or one of its groups) an ssh table:
+
+```toml
+[servers.hosts.db-01.ssh]
+username = "root"
+port = 22
+identityfile = "~/.ssh/id_ed25519"
+```
+
+Anything missing is read from your SSH config (~/.ssh/config, or config_file). Without an identityfile gorun offers the keys your SSH config lists for the host. It opens one connection per server and reuses it for every task. Host keys aren't verified, so use it on networks you trust."""
+want = ["username", "identityfile", "~/.ssh/config"]
+
+[[qa]]
+q = ["How long can a task run?", "What is the default timeout?", "my task got killed after 30 minutes"]
+a = """Every task has a 30 minute timeout unless it sets timeout, such as timeout = "2h". The timeout covers its copies, check, command and verify. A task that times out fails with exit code 124, and the rest of that server's tasks are skipped. There's no unlimited timeout; give long tasks a long one."""
+want = ["30", "timeout", "124"]
+
+[[qa]]
+q = ["What does exit code 124 mean?", "My task failed with exit code 124"]
+a = """124 is the exit code gorun gives a task that ran past its timeout (30 minutes unless the task sets timeout). Either the command hung, or it needs longer: raise it with timeout = "1h" on the task."""
+want = ["timeout"]
+
+[[qa]]
+q = ["How do I retry a flaky task?", "Can gorun retry a task that fails?", "how do retries work?"]
+a = """Set retries, the number of extra attempts, and optionally retry_delay (default 50ms):
+
+```toml
+retries = 2          # up to three attempts
+retry_delay = "10s"
+```
+
+Each attempt gets a fresh timeout. Timeouts and cancelled runs are never retried, and tasks marked rerun = "unsafe" aren't retried unless they also set retry_unsafe = true."""
+want = ["retries", "retry_delay"]
+
+[[qa]]
+q = ["What does rerun mean?", "What's rerun = \"unsafe\" for?"]
+a = """rerun labels whether running a task again is harmless: "safe" for tasks that only converge, like installing a package, and "unsafe" for ones that may change the server again or fail, like appending a line. Unsafe tasks are shown with a warning sign and aren't retried. It's a label, not a guard: gorun still runs them when asked."""
+want = ["safe", "unsafe", "retried"]
+
+[[qa]]
+q = ["How do I run tasks on many servers in parallel?", "How do I limit how many servers run at once?", "what's max_parallel?"]
+a = """Servers run at the same time by default. max_parallel at the top of the Gorunfile limits how many run at once (0, the default, means all), and -parallel N overrides it for one run. max_task_parallel sets how many tasks run at once on each server: 0 (the default) is one at a time, -1 runs every independent task together."""
+want = ["max_parallel", "max_task_parallel"]
+
+[[qa]]
+q = ["How do I run only one task?", "Can I run a single task from the command line?", "how do I pick which servers to run on?"]
+a = """Use -task <name> to run only that task with its dependencies (repeatable; globs and @bundles work). To pick servers use -server <name>, -exclude-server, -tag or -group; they're repeatable and take globs. -bundles <name> replaces each server's task list with a bundle. Add -r to run without the picker."""
+want = ["-task", "-server"]
+
+[[qa]]
+q = ["How do I run gorun in CI?", "Can I run gorun without the TUI?", "gorun in a script with no terminal"]
+a = """Run it with -r (no picker), and -plain for plain log lines: gorun Gorunfile -r -plain. -plain is the default when stdout isn't a terminal, and -r is then required. The exit code is non-zero when a task fails."""
+want = ["-r", "-plain"]
+
+[[qa]]
+q = ["How do I check my Gorunfile before running it?", "how do I see what each server will run?"]
+a = """The -list-* flags print it without running anything: -list-servers shows each server's groups, tags and final task list, -list-tasks the dependency tree, -list-bundles what each bundle expands to, and -list-groups and -list-tags their servers. Mistakes like unknown keys, unknown tasks and dependency cycles are reported when the Gorunfile loads, before anything runs."""
+want = ["-list-servers", "-list-tasks"]
+
+[[qa]]
+q = ["How do I split a big Gorunfile into files?", "Can a Gorunfile include other files?", "what does include do?"]
+a = """Add a top-level include list of files or globs, relative to the file that names them:
+
+```toml
+include = ["tasks/*.toml", "groups/*.toml", "hosts/*/*.toml"]
+```
+
+Every file is merged into one config. A name defined in two files is an error. Only the root file sets title, log_level, max_parallel, max_task_parallel, ssh and [servers] tasks. Relative paths in any file are relative to the root Gorunfile."""
+want = ["include"]
+
+[[qa]]
+q = ["How do I share tasks between projects?", "Can I include tasks from a git repository?", "what's a git include?"]
+a = """Use a git:: include pinned with ?ref=:
+
+```toml
+include = ["git::https://github.com/you/task-library.git//web/*.toml?ref=v1.2.0"]
+```
+
+ref is required. Gorunfile.lock records the commit each include resolved to; commit it, and run gorun Gorunfile -update-includes to look refs up again. Files from git can only add tasks and bundles, never servers, groups or schedules. Credentials are git's own."""
+want = ["git::", "ref", "Gorunfile.lock"]
+
+[[qa]]
+q = ["How do I schedule a task?", "Can gorun run something every night?", "how do schedules work?"]
+a = """Add a [[schedule]] table; the scheduler runs inside gorun -serve:
+
+```toml
+[[schedule]]
+name = "nightly-backup"
+target = "@backup"
+cron = "0 2 * * *"
+timezone = "Australia/Sydney"
+```
+
+target is a task or @bundle, run on every server. Use cron (five fields) or at for a single time. timezone defaults to UTC, and missed = "run" runs a schedule that was missed while gorun was down (the default is skip)."""
+want = ["[[schedule]]", "cron", "-serve"]
+
+[[qa]]
+q = ["What is gorun -serve?", "How do I start the web UI?", "what does the web dashboard do?"]
+a = """gorun -serve [Gorunfile] starts the web service: a dashboard of live runs, the run history, a Run page, a Config page for editing the Gorunfile, schedules, and this assistant. It listens on :8080 unless GORUN_ADDRESS says otherwise, and publishes events to NATS unless GORUN_SKIP_NATS is set."""
+want = ["-serve", "8080"]
+
+[[qa]]
+q = ["Where is the run history kept?", "How do I see past runs?", "does gorun keep a history?"]
+a = """Every run is saved in a SQLite database, ~/.gorun/gorun.db unless GORUN_DB_PATH says otherwise. Browse it with gorun -history in the terminal, or the History tab in gorun -serve, which shows each task's command, exit code and output, and its check and verify."""
+want = ["gorun.db", "-history"]
+
+[[qa]]
+q = ["Does the history keep my secrets?", "Are env var values stored in history?"]
+a = """envvars are recorded as written in the Gorunfile, before $VAR is expanded, so a secret referenced as ${TOKEN} is stored as ${TOKEN}, not its value. The values are sent to the task over stdin, so they stay out of logs, the history, NATS events and the server's process list."""
+want = ["stdin", "${"]
+
+[[qa]]
+q = ["Does the assistant send my data anywhere?", "Is this assistant private?", "what does the assistant see?"]
+a = """It sees the loaded Gorunfile's tasks, bundles and servers, and the recent runs with the output of failed tasks. It never sees env vars or template variables. The built-in model runs on this machine, so nothing leaves it; with GORUN_LLM_URL set to another host, each question is sent there. The note at the top of this page says which."""
+want = ["private", "GORUN_LLM_URL"]
+
+[[qa]]
+q = ["Can you change an existing task?", "edit the migrate task to add a timeout", "Can the assistant modify my tasks?"]
+a = """Yes. Name the task and say what to change, and I write its whole table again under the same name; the page offers to replace it as an unsaved change, to review and save on the Config page. For example, for a timeout I add timeout = "1h" to the task's table."""
+want = ["config"]
+
+[[qa]]
+q = ["What does description do on a task?", "What are description and details for?"]
+a = """description is the one-line summary shown in lists, the picker and the live view; details is longer text shown when the task is expanded. Neither changes how the task runs."""
+want = ["description", "details"]
+
+[[qa]]
+q = ["How do I run a script file instead of a command?", "what is cmd_file?"]
+a = """Use cmd_file = "./scripts/setup.sh" instead of cmd. gorun sends the local script to the server and runs it. Like cmd it is a template, and relative paths are relative to the Gorunfile. A task has one of cmd or cmd_file."""
+want = ["cmd_file"]
+
+[[qa]]
+q = ["How do I see a task's output?", "where is the output of a run?"]
+a = """In the live view press v for verbose, or open a task to see its output. Afterwards, the History tab in gorun -serve, or gorun -history, keeps each task's command, exit code, stdout and stderr. gorun -v prints every task and its output."""
+want = ["history", "-v"]
+
+[[qa]]
+q = ["What does check_copies do?", "how do I skip a copy when the file hasn't changed?"]
+a = """check_copies = true compares the MD5 of each file a task would copy with the file on the server. When they all match the task is unchanged: nothing is copied and its command doesn't run. With a check as well, the task is unchanged only when the copies match and the check exits 0. A file missing on the server counts as changed."""
+want = ["md5", "unchanged"]
+
+[[qa]]
+q = ["What happens with an unknown key in the Gorunfile?", "I made a typo in a key and gorun refuses to load"]
+a = """Unknown keys are an error when the Gorunfile loads, before anything runs, so a typo like cmd_flie is caught. The message names the key. Unknown tasks, groups and bundles, dependency cycles, and skipping a task another task depends on are errors too."""
+want = ["error", "load"]
+
+[[qa]]
+q = ["How do I send gorun's events to other systems?", "Does gorun support NATS?", "what about OpenTelemetry?"]
+a = """gorun publishes run events to NATS on the gorun.events topic (GORUN_EVENT_TOPIC) at GORUN_NATS_CLIENT_URL; set GORUN_SKIP_NATS to turn it off. The gorun-otel build exports traces, metrics and logs with OpenTelemetry using the standard OTEL_* variables."""
+want = ["nats", "otel"]
+
+[[qa]]
+q = ["Can I use gorun from Go code?", "Is there a gorun library?"]
+a = """Yes: the module github.com/jenmud/gorun is the library, and the CLI is a thin layer over it. Load a Gorunfile with Config.LoadFile and run it with Run; events report every task as it runs, and the history package reads saved runs."""
+want = ["github.com/jenmud/gorun"]
+
+[[qa]]
+q = ["Which OS can the servers run?", "Does gorun need an agent on the servers?"]
+a = """No agent: gorun only needs SSH on the server, and runs commands in the login shell (or sh -c with sudo). Any Unix-like system works; check_copies uses md5sum, md5 -r or openssl md5, whichever is there, and copies anyway when none is."""
+want = ["ssh", "agent"]
+
+[[qa]]
+q = ["How do I install gorun?", "how can I get gorun on my machine?", "Is there an install script for gorun?"]
+a = """Run the install script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jenmud/gorun/master/scripts/install.sh | sh
+```
+
+It installs the latest release; VERSION=v0.31.0 picks another, and gorun -version says which you have. You can also download a binary from the GitHub releases at github.com/jenmud/gorun, or build it with go build -o gorun ./cmd. The script installs the instrumented build (with OpenTelemetry, off until you set an OTEL_* endpoint) on Linux x86-64, and the standard build elsewhere."""
+want = ["install.sh", "releases"]
+
+[[qa]]
+q = ["Where can I learn gorun?", "Is there a tutorial for gorun?", "Where are gorun's docs?"]
+a = """The website, go-run.dev, has the docs, a step-by-step tutorial, tutorial videos and a playground that loads a Gorunfile in your browser and shows the plan and a simulated run. The source and the same docs (docs/tutorial.md, docs/gorunfile.md for every option, docs/running.md, docs/web.md, docs/reference.md) are at github.com/jenmud/gorun. gorun -dump prints a starting Gorunfile that documents every key."""
+want = ["go-run.dev", "github.com/jenmud/gorun"]
+
+[[qa]]
+q = ["Can I try a Gorunfile without installing gorun?", "Is there a gorun playground?", "how do I test a Gorunfile in the browser?"]
+a = """Yes: the playground on go-run.dev loads a Gorunfile in your browser, says whether it loads, and shows the plan (which tasks each server runs, in order) and a simulated run. Nothing connects to a server. Keys that read files, such as cmd_file or copy sources, can't be used there."""
+want = ["playground", "go-run.dev"]
+
+[[qa]]
+q = ["How do I start a new Gorunfile?", "Is there a template Gorunfile?", "what does -dump do?"]
+a = """gorun -dump prints a starting Gorunfile that runs as it is and documents every option in comments:
+
+```bash
+gorun -dump > Gorunfile
+```
+
+-dump must come first on the command line. To turn tasks into shell files you can read or run by hand, gorun -dump-tasks DIR Gorunfile writes one per task."""
+want = ["-dump", "gorunfile"]
+
+[[qa]]
+q = ["Where does gorun -serve keep my Gorunfile when I start it without one?", "I started gorun -serve with no Gorunfile, where are my tasks saved?", "Does gorun -serve write files when there is no Gorunfile?"]
+a = """In the history database (GORUN_DB_PATH, ~/.gorun/gorun.db by default), not in files. The first start saves a starter Gorunfile called default, with only a title; add servers, tasks, bundles and schedules on the Config page or with the assistant. Every save is kept as a new version, and an edit is checked to load before it is saved. To use a Gorunfile file as it is, start gorun -serve Gorunfile instead: then the database keeps only runs."""
+want = ["database", "default", "version"]
+
+[[qa]]
+q = ["Can gorun -serve keep more than one Gorunfile?", "How do I make a second Gorunfile in the web UI?", "what is the Gorunfiles page?"]
+a = """Yes, when it runs without a Gorunfile. The Gorunfiles page lists the ones kept in the database: Open one and the Run, Tasks, Bundles, Schedules, Config and Assistant pages show it, Create and open adds a new one, and Delete removes one that isn't open and that no other includes. Every one's schedules run, whichever is open, and gorun starts on the one saved most recently. A Gorunfile can share another's tasks and bundles with include = ["stored::base"]."""
+want = ["gorunfiles", "open", "stored::"]
+
+[[qa]]
+q = ["What does stored:: mean in an include?", "How do two Gorunfiles in gorun -serve share tasks?", "include stored::base"]
+a = """include = ["stored::base"] brings in the tasks and bundles of the Gorunfile called base that gorun -serve keeps in its database. base's servers, groups and schedules stay its own. The include is live: editing a shared task, from either Gorunfile, changes it for every Gorunfile that includes base. stored:: includes only load in gorun -serve, and a Gorunfile kept in the database can include only other stored ones, not local files or git repositories."""
+want = ["stored::", "tasks", "bundles"]
+
+[[qa]]
+q = ["How do I import a Gorunfile into the web UI?", "How do I move my Gorunfile into gorun -serve's database?", "How do I export my Gorunfile from the web UI?"]
+a = """On the Config page. Import, shown when the open Gorunfile is kept in the database, replaces it with an uploaded Gorunfile, or a zip holding one and the files it includes; it is checked to load first, and the one before is kept as an earlier version. Export as zip downloads the saved Gorunfile as a folder that loads anywhere: a Gorunfile with settings, servers, groups and schedules, plus tasks/<name>.toml and bundles/<name>.toml, one each. Unsaved changes, comments and the files tasks copy aren't in the zip."""
+want = ["import", "export", "zip"]
+
+[[qa]]
+q = ["What does gorun -serve -live do?", "How do I only watch runs in the web UI?", "what is -live?"]
+a = """gorun -serve -live only watches: the menu has just Live, History and Assistant, for runs started elsewhere, such as gorun Gorunfile -r in a terminal that reaches the same NATS server. There is no Gorunfile, given or kept in the database, so Run, Tasks, Bundles, Schedules and Config don't exist and the stored Gorunfiles and their schedules are left alone."""
+want = ["live", "history", "nats"]
+
+[[qa]]
+q = ["Why does the Run page say I need to tick a server?", "My local task won't run from the web UI", "How do I run a task on the gorun machine from the web UI?"]
+a = """Only tasks marked local = true run on the machine running gorun without a server ticked; every other task runs over SSH, so it needs a ticked SSH server. Set local = true on the task (the Local box when you edit it), and on the tasks it depends on, or this machine skips them. When the Gorunfile has no SSH server at all, every task needs local = true."""
+want = ["local = true", "ssh"]
+
+[[qa]]
+q = ["Which model does the assistant use?", "Can I use Ollama with gorun's assistant?", "How do I change the assistant's model?"]
+a = """By default it runs a model inside gorun -serve: a version of Qwen3 4B Instruct (Apache 2.0) fine-tuned on gorun, on the GPU when about 4 GB is free and on the CPU otherwise. The first question downloads llama.cpp and the model into GORUN_CACHE_DIR/llm. GORUN_LLM_MODEL points at another GGUF file or https URL. To use Ollama, llama-server, LM Studio or a hosted API, set GORUN_LLM_URL (such as http://localhost:11434/v1), GORUN_LLM_MODEL to the model's name there, and GORUN_LLM_API_KEY if it needs one."""
+want = ["gorun_llm_url", "gorun_llm_model", "gguf"]
+
+[[qa]]
+q = ["What happens when several people use the assistant at once?", "Does the assistant load the model for every user?", "Will many users run the assistant out of memory?"]
+a = """gorun loads the model once and answers one question at a time, whoever asks, so more users only means a wait: the chat says how many questions are ahead of yours, and with 8 waiting the next is asked to try again in a minute. Each gorun -serve process loads its own copy, so run one per machine."""
+want = ["once", "one at a time"]
+
+[[qa]]
+q = ["How do I write good tasks?", "What makes a good gorun task?", "Should one task do many things?"]
+a = """Keep each task small: one step, such as installing a package, writing one file or starting one service. Chain the steps with depends_on, so a failure stops at the step that broke and the rest are skipped. Give every task a check, a command that exits 0 when the step is done already, so a second run changes nothing, and a verify, a command that exits non-zero when the step didn't work, even for a one-liner. A complex job becomes several small tasks and a bundle that runs them in order."""
+want = ["small", "depends_on", "check", "verify"]
+
+[[qa]]
+q = ["Does gorun support OpenTelemetry?", "How do I send gorun traces to a collector?", "where do gorun's logs go?"]
+a = """gorun's log goes to ~/.gorun/gorun.log (or GORUN_LOG_FILE). The instrumented build, which the install script installs on Linux x86-64, adds OpenTelemetry traces, metrics and logs, off until you configure an exporter:
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 gorun Gorunfile -r
+```
+
+Each run is one trace with a gorun.run span and a server.run span per server, and every log line is also sent as a log record linked to its span."""
+want = ["otel", "trace", "gorun.log"]
+
+[[qa]]
+q = ["How do I use tasks from a git repository?", "Can I include tasks from GitHub?", "what is a git include?"]
+a = """Include them with a git:: source and a ref:
+
+```toml
+include = ["git::https://github.com/you/task-library.git//web/*.toml?ref=v1.2.0"]
+```
+
+After // comes a path or glob in the repository, and ?ref= (a tag, branch or commit) is required. Gorunfile.lock records the commit each include resolved to; commit it, and run gorun Gorunfile -update-includes to move to newer commits. Only tasks and bundles come from a git include, never servers, groups, schedules or global vars, and your own git credentials are used."""
+want = ["git::", "ref", "gorunfile.lock"]
+
+[[qa]]
+q = ["How do I list the tasks in a Gorunfile?", "Can gorun show me my servers and their tasks?", "what do the -list flags do?"]
+a = """gorun Gorunfile -list-tasks prints the tasks as a dependency tree, -list-servers the servers with their groups, tags and task lists, -list-bundles what each bundle expands to, and -list-tags and -list-groups the servers under each tag and group. In a terminal they are collapsible trees; with -plain, or when stdout isn't a terminal, they are printed in full. Nothing runs."""
+want = ["-list-tasks", "-list-servers"]
+
+[[qa]]
+q = ["How do I look at old runs from the terminal?", "what does gorun -history do?", "Can I see past runs without the web UI?"]
+a = """gorun -history browses the runs saved in the history database (GORUN_DB_PATH, ~/.gorun/gorun.db by default): each run, its servers and tasks, and each task's exit code and output. gorun -serve shows the same runs on its History page."""
+want = ["-history", "database"]
+
+[[qa]]
+q = ["Can gorun run in Docker?", "Is there a gorun container image?", "how do I run the web UI in Docker?"]
+a = """Yes: the repository's Dockerfile builds an image that runs gorun -serve on port 8080:
+
+```bash
+docker build -t gorun .
+docker run --rm -p 127.0.0.1:8080:8080 -v gorun-data:/var/lib/gorun gorun
+```
+
+Keep /var/lib/gorun in a volume: it holds the history database, the log and git include checkouts, and without a Gorunfile the one kept in the database. GORUN_FILE names a Gorunfile to load instead, mounted into the container. Tasks over SSH need the keys and known_hosts mounted, with the Gorunfile's [ssh] settings pointing at them. The web UI has no login, so publish the port only on a trusted network."""
+want = ["docker", "/var/lib/gorun"]
+
+[[qa]]
+q = ["Is the web UI safe to expose?", "Does gorun -serve have a login?", "how do I secure gorun -serve?"]
+a = """It has no login: anyone who can reach the port can run tasks, browse folders and edit the Gorunfile, and it listens on all interfaces by default. Keep it on a trusted network, or set GORUN_ADDRESS=127.0.0.1:8080 and reach it over an SSH tunnel: ssh -L 8080:127.0.0.1:8080 you@gorun-host."""
+want = ["login", "127.0.0.1", "ssh -l"]
+
+[[qa]]
+q = ["Can the assistant set up schedules?", "Can you schedule tasks for me?", "can the assistant change a schedule?"]
+a = """Yes. Ask, for example, "run backup every night at 2am" or "move nightly-backup to 4am, Sydney time", and the reply holds a [[schedule]] entry, next to any tasks it writes. gorun checks that it loads: its target is a task or @bundle that exists, it has exactly one of cron or at, and its timezone is a real IANA zone. Save writes it into the Gorunfile; one with the name of a schedule the Gorunfile has replaces it. Schedules run inside gorun -serve, and the Schedules page can pause, resume or skip them."""
+want = ["[[schedule]]", "cron", "-serve"]
+
+[[qa]]
+q = ["How do I pause a schedule?", "Can I skip the next run of a schedule?", "how do I stop a schedule for a while?"]
+a = """On the Schedules page of gorun -serve: Pause stops a schedule until you press Resume, and Skip next run skips only its next time. A paused schedule's runs are recorded as missed, and with missed = "run" it catches up once when it resumes. Pausing isn't written into the Gorunfile; to stop a schedule for good, remove its [[schedule]] entry."""
+want = ["Pause", "Schedules page"]
+
+[[qa]]
+q = ["What cron format do schedules use?", "how do I write the cron for a schedule?", "what does cron = \"0 2 * * *\" mean?"]
+a = """Five fields: minute, hour, day of the month, month and day of the week. "0 2 * * *" is every day at 02:00, "*/15 * * * *" every 15 minutes, "0 9 * * 1" Mondays at 09:00 and "0 19 * * 1-5" weekdays at 19:00. The times are in the schedule's timezone, UTC unless it sets one such as timezone = "Australia/Sydney". To run once, set at = "2027-01-15T10:00" instead of cron."""
+want = ["minute", "timezone"]

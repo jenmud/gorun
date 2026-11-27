@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/BurntSushi/toml"
 	"github.com/jenmud/gorun"
 	"github.com/jenmud/gorun/cmd/web/ui"
 )
@@ -119,10 +118,10 @@ func checkChangeIn(cfg *gorun.Config, ch gorun.Change) error {
 	return cfg.CheckSchedule(scheduleFromBody(ch.Name, ch.Body))
 }
 
-// scheduleBodyIn returns the table of the named schedule in a file.
-func scheduleBodyIn(file, name string) (map[string]any, error) {
+// scheduleBodyIn returns the table of the named schedule in one of cfg's Gorunfiles.
+func scheduleBodyIn(cfg *gorun.Config, file, name string) (map[string]any, error) {
 	var doc map[string]any
-	if _, err := toml.DecodeFile(file, &doc); err != nil {
+	if err := decodeGorunfile(cfg, file, &doc); err != nil {
 		return nil, fmt.Errorf("read %s: %w", file, err)
 	}
 	tables, _ := doc["schedule"].([]map[string]any)

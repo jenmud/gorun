@@ -153,12 +153,12 @@ func (s *stringSlice) Set(v string) error { *s = append(*s, v); return nil }
 
 // options are the command line flags. printUsage documents each one.
 type options struct {
-	verbose, plain, run, dump, version, serve, history, updateIncludes, force, checkOnly bool
-	listTasks, listServers, listTags, listGroups, listBundles                            bool
-	tasks, bundles, servers, exclude, tags, groups                                       stringSlice
-	parallel                                                                             int
-	parallelSet                                                                          bool // -parallel was given
-	dumpTasksDir, complete, filename                                                     string
+	verbose, plain, run, dump, version, serve, live, history, updateIncludes, force, checkOnly bool
+	listTasks, listServers, listTags, listGroups, listBundles                                  bool
+	tasks, bundles, servers, exclude, tags, groups                                             stringSlice
+	parallel                                                                                   int
+	parallelSet                                                                                bool // -parallel was given
+	dumpTasksDir, complete, filename                                                           string
 }
 
 // lists reports whether a flag that only prints and exits was given.
@@ -177,7 +177,7 @@ func parseArgs(fs *flag.FlagSet, args []string) *options {
 	o := &options{}
 	for name, dst := range map[string]*bool{
 		"v": &o.verbose, "plain": &o.plain, "run": &o.run, "r": &o.run, "dump": &o.dump, "version": &o.version,
-		"serve": &o.serve, "web": &o.serve, "history": &o.history,
+		"serve": &o.serve, "web": &o.serve, "live": &o.live, "history": &o.history,
 		"update-includes": &o.updateIncludes, "force": &o.force, "check": &o.checkOnly,
 		"list-tasks": &o.listTasks, "list-servers": &o.listServers, "list-tags": &o.listTags,
 		"list-groups": &o.listGroups, "list-server-groups": &o.listGroups, "list-bundles": &o.listBundles,
@@ -253,10 +253,14 @@ func main() {
 	case o.history:
 		check(runHistoryTUI())
 		return
+	case o.serve && o.live && o.filename != "":
+		fatal(errors.New("-live shows only runs started elsewhere, so it takes no Gorunfile"))
 	case o.serve:
 		web.Version = version
-		web.Run(o.filename, logPath)
+		web.Run(o.filename, logPath, o.live)
 		return
+	case o.live:
+		fatal(errors.New("-live goes with -serve: gorun -serve -live"))
 	case o.filename == "":
 		printUsage()
 		exit(1)
@@ -538,6 +542,9 @@ Options:
   -update-includes  look up every git include's ref again, update the lock file and exit
   -version  print version and exit
   -serve [Gorunfile]  start the web service (scheduler, NATS, web UI); -web is an alias
+                      without a Gorunfile, it keeps one in the history database
+  -live  with -serve: only the Live, History and Assistant pages, for runs started elsewhere;
+         no Gorunfile, given or kept in the database
   -history  view historical runs
 
 Environment variables (can be overridden via the process environment or a .env file
@@ -558,6 +565,9 @@ in the environment):
   GORUN_NATS_CLIENT_RECONNECT_WAIT    default: nats default (e.g. 2s)
   GORUN_NATS_CLIENT_TIMEOUT           default: nats default (e.g. 5s)
   GORUN_NATS_SERVER_CONFIG            default: none (NATS server config for the server -serve starts)
+  GORUN_LLM_URL                       default: unset (an OpenAI-compatible API for the web UI's assistant, instead of the built-in model)
+  GORUN_LLM_MODEL                     default: gorun's Qwen3 4B (a GGUF path or https URL; a model name with GORUN_LLM_URL)
+  GORUN_LLM_API_KEY                   default: unset (sent as a bearer token)
 
 OpenTelemetry SDK variables (OTEL_*) are also honoured by the instrumented build.
 Exporters are disabled unless an OTLP endpoint or exporter is configured.

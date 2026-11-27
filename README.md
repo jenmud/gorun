@@ -1,5 +1,7 @@
 # Gorun
 
+<p align="center"><img src="docs/gorun-gopher.png" alt="The gorun gopher, holding a laptop and a terminal" width="260"></p>
+
 [![Go Reference](https://pkg.go.dev/badge/github.com/jenmud/gorun.svg)](https://pkg.go.dev/github.com/jenmud/gorun)
 [![XERJ Corpus Hub contributor](https://hub.xerj.org/contributors/jenmud/badge.svg)](https://hub.xerj.org/contributors/jenmud)
 
@@ -217,6 +219,7 @@ that draws its own progress bars. The events and the rest of the API are in
 | [Recording runs](docs/history.md) | keep runs with the built-in SQLite recorder or your own, and what each event carries |
 | [Integrations](docs/integrations.md) | use the web UI, OpenTelemetry, NATS events, the Go library and shell completion |
 | [Reference](docs/reference.md) | look up any flag, Gorunfile key, environment variable or shortcut |
+| [Questions](docs/faq.md) | find quick answers: installing, CI, events, security, Docker and the assistant |
 | [Recipes](recipes/README.md) | try bigger examples against a lab of a hundred SSH servers |
 | [Examples](examples/README.md) | build your own tools on the Go library: a web app and a CLI with live progress |
 

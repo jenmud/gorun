@@ -101,7 +101,7 @@ func TestDashboardShowsAServerThatCouldNotRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	html := buf.String()
-	for _, want := range []string{"connection refused", "could not run its tasks", "Its 2 tasks did not run.", "not run"} {
+	for _, want := range []string{"connection refused", "could not run its tasks", "Its 2 tasks did not run.", "not run", `href="/assistant?run=run-1"`, "Ask the assistant"} {
 		if !strings.Contains(html, want) {
 			t.Errorf("dashboard does not contain %q", want)
 		}

@@ -17,6 +17,20 @@ func WithoutGorunfile(ctx context.Context) context.Context {
 	return context.WithValue(ctx, noGorunfileKey{}, true)
 }
 
+type storedKey struct{}
+
+// WithStored marks ctx for a web UI on the Gorunfiles kept in its history database, with name
+// the open one. The menu then links to the Gorunfiles page, and names the open one.
+func WithStored(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, storedKey{}, name)
+}
+
+// storedName is the open stored Gorunfile, and whether ctx was marked by WithStored.
+func storedName(ctx context.Context) (string, bool) {
+	name, ok := ctx.Value(storedKey{}).(string)
+	return name, ok
+}
+
 // noGorunfile reports whether ctx was marked by WithoutGorunfile.
 func noGorunfile(ctx context.Context) bool {
 	no, _ := ctx.Value(noGorunfileKey{}).(bool)
@@ -192,6 +206,53 @@ type ConfigPageData struct {
 	EditingKind string // kind of entity being edited (e.g. "task")
 	EditingName string // name of entity being edited
 	Edit        EditFields
+	Model       string // the model the task generator asks, as the page names it; empty hides it
+	// Stored is set when the Gorunfile is kept in the history database, not as a file: it is
+	// then named StoredName, has StoredVersions saved versions, and is imported into, not loaded
+	Stored         bool
+	StoredName     string
+	StoredVersions int
+}
+
+// GorunfilesPageData is the list of Gorunfiles kept in the history database.
+type GorunfilesPageData struct {
+	Flash    string
+	FlashBad bool
+	Open     string // the one open now
+	Items    []StoredGorunfileRow
+}
+
+// StoredGorunfileRow is one Gorunfile kept in the history database.
+type StoredGorunfileRow struct {
+	Name     string
+	Versions int
+	SavedAt  string
+	Shares   []string // the stored Gorunfiles it includes, sharing their tasks and bundles
+	SharedBy []string // the stored Gorunfiles that include it
+}
+
+// AssistantPageData is the chat page.
+type AssistantPageData struct {
+	Model    string // the model, as the page names it
+	Private  bool   // the model runs on this machine
+	Host     string // where a model that isn't private runs
+	CanAdd   bool   // a Gorunfile is loaded, so tasks can be added
+	Files    []FileOption
+	RunID    string // the run the chat starts on, if any
+	RunTitle string
+	Stats    AssistantStats
+}
+
+// AssistantStats describes the assistant's model: where it runs and how it is doing.
+type AssistantStats struct {
+	State string // one line: not downloaded, loaded on the GPU, and so on
+	Tone  string // "good", "warn" or "" for the state's colour
+	Rows  []StatRow
+}
+
+// StatRow is one fact in AssistantStats.
+type StatRow struct {
+	Label, Value, Note string
 }
 
 // EditFields are the current values the edit form starts from.

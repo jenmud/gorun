@@ -1,0 +1,44 @@
+title = "Build and ship the CLI"
+
+[tasks.tidy]
+description = "Tidy the Go modules"
+cmd = "go mod tidy"
+local = true
+
+[tasks.vet]
+description = "Run go vet"
+cmd = "go vet ./..."
+depends_on = ["tidy"]
+local = true
+
+[tasks.test]
+description = "Run the tests"
+cmd = "go test -race ./..."
+depends_on = ["tidy"]
+timeout = "20m"
+local = true
+
+[tasks.build]
+description = "Build the binary"
+cmd = "CGO_ENABLED=0 go build -o dist/tool ./cmd/tool"
+depends_on = ["vet", "test"]
+local = true
+
+[tasks.install-binary]
+description = "Install the binary on the server"
+cmd = "install -m 755 /tmp/tool /usr/local/bin/tool"
+verify = "/usr/local/bin/tool --version"
+sudo = true
+rerun = "safe"
+[[tasks.install-binary.copy]]
+src = "dist/tool"
+dst = "/tmp/tool"
+
+[servers.hosts.laptop]
+tasks = ["build"]
+
+[servers.hosts.tools-1]
+hostname = "tools-1.lan"
+tasks = ["install-binary"]
+    [servers.hosts.tools-1.ssh]
+    username = "admin"

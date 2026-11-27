@@ -731,6 +731,26 @@ writes the lock file. Set `Config.UpdateIncludes` to look refs up again, and rea
 See [recipes/large-inventory](../recipes/large-inventory) for a complete example that splits tasks,
 groups and hosts across multiple files.
 
+
+## Tasks from another stored Gorunfile
+
+`gorun -serve` started without a Gorunfile keeps Gorunfiles in its history database, each with a
+name (see [the web UI](web.md)). One can use another's tasks and bundles with a `stored::` include:
+
+```toml
+include = ["stored::base"]
+
+[servers.hosts.web-1]
+hostname = "10.0.0.11"
+tasks = ["@baseline", "nginx"]            # baseline is a bundle in base
+```
+
+As with a git include, only tasks and bundles come along; `base`'s servers, groups and schedules
+stay its own. The include is live: a change to `base`'s tasks reaches every Gorunfile that
+includes it. It only loads in `gorun -serve`; anywhere else it is an error, and the web UI's
+export adds the shared tasks to the zip so it loads anywhere. A stored Gorunfile can include only other stored
+ones: it is kept in the database, not as a file, so it has no folder for a local or git include
+to start from.
 ## Schedules
 
 A `[[schedule]]` table runs a task or bundle on every server, on a cron pattern or once at a

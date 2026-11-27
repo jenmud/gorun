@@ -4,6 +4,60 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.36.1 (since v0.36.0)
+
+- The macOS and Windows builds work again. The vendored `libffi` libraries they embed were left
+  out of the repository by `.gitignore`, so v0.36.0 has no release binaries, and the module
+  doesn't build for those systems.
+
+## v0.36.0 (since v0.35.0)
+
+### An assistant in the web UI (experimental)
+- `gorun -serve` has an **Assistant** tab: a small language model that runs on your own machine.
+  It explains failed runs, summarises runs, answers questions about the loaded Gorunfile, and
+  writes tasks and schedules. A failed run on Live and History has an **Ask the assistant** link.
+- The built-in model is gorun's own fine-tune of Qwen3 4B Instruct (Apache 2.0),
+  `jenmud/gorun-qwen3-4b-GGUF`, about 2.5 GB. The first question downloads it and llama.cpp into
+  gorun's cache folder. It runs on the GPU when there is room and on the CPU otherwise; the
+  Model panel shows where, and how fast. Questions from many users wait in one queue.
+- Tasks it writes are small, one step each, with a `check` and a `verify`; a bigger job becomes
+  small tasks chained with `depends_on`. It writes `[[schedule]]` entries too, and changes an
+  existing task or schedule by writing it again under the same name. Every reply is checked to
+  load, and sent back to the model to repair when it doesn't. **Save** puts it in the Gorunfile.
+- Questions about gorun carry the best-matching sections of its docs, embedded in the binary.
+  A new [FAQ](docs/faq.md) answers the common ones.
+- Your env vars and template variables are never sent to the model. `GORUN_LLM_MODEL` points at
+  another GGUF file or URL; `GORUN_LLM_URL` at a server such as Ollama, with an amber warning
+  when that server isn't on this machine.
+- It is experimental and needs much more training: it writes working tasks about 8 times in 10
+  on held-out tests, but can still make up options. Read everything it writes.
+- `-generate` writes tasks from the command line with the same model.
+
+### Gorunfiles in the database
+- Started without a Gorunfile, `gorun -serve` keeps Gorunfiles in its history database, starting
+  with one called `default`, and every save is a new version. The **Gorunfiles** page creates,
+  opens and deletes them, and one can use another's tasks with `include = ["stored::base"]`.
+- **Export** downloads a Gorunfile as a zip, one file per task; **Import** takes a Gorunfile or a
+  zip, checked to load before anything changes.
+- `gorun -serve -live` shows only Live, History and the Assistant, to watch runs from elsewhere.
+
+### Fixes
+- A task that timed out over SSH closed the server's whole connection, so the server's other
+  tasks, running alongside it or after it, failed with "use of closed network connection". Only
+  the timed-out task's session is closed now.
+- The Live page could deadlock `gorun -serve` with a stored Gorunfile open.
+- Local tasks run from the web UI.
+- ctrl-c stops `gorun -serve` while the assistant is answering.
+
+## v0.35.0 (since v0.34.0)
+
+### A Docker image for the web service
+- A `Dockerfile` runs `gorun -serve` on Alpine, with a static binary. It is about 56 MB on amd64
+  and runs as a non-root user. Configure it with the `GORUN_*` variables. `GORUN_FILE` names an
+  optional Gorunfile; without one, only the Live and History pages run.
+- `.github/workflows/docker.yml` publishes linux/amd64 and linux/arm64 images to Docker Hub on
+  version tags, once the `DOCKERHUB_IMAGE` repository variable is set.
+
 ## v0.34.0 (since v0.33.0)
 
 ### OpenTelemetry logs, and nothing lost on exit

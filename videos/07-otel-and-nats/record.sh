@@ -19,7 +19,7 @@ otel_bin=${GORUN_OTEL_BIN:-$src/builds/gorun-otel-CTI}
 cp "$otel_bin" "$work/bin/gorun-otel"
 (cd "$src" && go build -ldflags "-X main.version=$(git describe --tags --abbrev=0)" -o "$work/bin/gorun" ./cmd)
 (cd "$here/natssub" && go build -o "$work/bin/natssub" .)
-cp "$here/record/Gorunfile" "$web/"; cp "$here/record/filelog.yaml" "$web/"
+cp "$here/record/Gorunfile" "$web/"
 
 # as_dev <program> <args>: as dev on laptop, in /home/dev/web, and the process is called gorun
 as_dev() {
@@ -34,12 +34,11 @@ wait_http() { for _ in $(seq 60); do curl -fsS "$1" >/dev/null 2>&1 && return 0;
 pw() { cp "$here/$1" "$PW/$1"; (cd "$PW" && node "$@"); }
 stop_serve() { pkill -INT -x gorun-otel 2>/dev/null || true; pkill -INT -x gorun 2>/dev/null || true; sleep 3; }
 
-# --- OpenTelemetry: gorun -serve sends traces and metrics to Grafana's collector -----------------
+# --- OpenTelemetry: gorun -serve sends traces, metrics and logs to Grafana's collector -----------------
 docker rm -f gorun-lgtm >/dev/null 2>&1 || true
 docker run -d --name gorun-lgtm -p 127.0.0.1:3000:3000 -p 127.0.0.1:4317:4317 -p 127.0.0.1:4318:4318 \
-  -v "$web:/gorun-logs" grafana/otel-lgtm:latest >/dev/null
+  grafana/otel-lgtm:latest >/dev/null
 wait_http http://127.0.0.1:3000/api/health; sleep 15
-docker exec -d gorun-lgtm /otel-lgtm/otelcol-contrib/otelcol-contrib --config /gorun-logs/filelog.yaml  # ships gorun's log file
 
 port=$((20000 + RANDOM % 20000))
 (OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 OTEL_METRIC_EXPORT_INTERVAL=3000 GORUN_NAME=gorun GORUN_ADDRESS=127.0.0.1:$port \

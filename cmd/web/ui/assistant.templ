@@ -1,0 +1,353 @@
+package ui
+
+// AssistantPage is a chat with the language model about the Gorunfile and the run history.
+templ AssistantPage(d AssistantPageData) {
+	<div class="mx-auto flex max-w-3xl flex-col gap-4" id="assistant" data-run={ d.RunID }>
+		<div>
+			<h1 class="flex items-center gap-2 text-xl font-semibold text-zinc-100">Assistant <span class="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-normal uppercase tracking-wider text-zinc-400">experimental</span></h1>
+			<p class="mt-1 text-sm text-zinc-400">Ask about your tasks and servers, have it summarise runs and explain failures, or have it write tasks and schedules. It reads the loaded Gorunfile and the run history. The model is { d.Model }. It is small, so check what it says.</p>
+		</div>
+		@privacyNote(d)
+		<div id="assistant-stats">
+			@AssistantStatsPanel(d.Stats)
+		</div>
+		if d.RunID != "" {
+			<p class="rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs text-zinc-400">About run <a href={ templ.SafeURL("/history/" + d.RunID) } class="text-accent hover:underline">{ d.RunTitle }</a> <span class="font-mono text-zinc-500">{ d.RunID }</span>. <a href="/assistant" class="text-zinc-300 underline underline-offset-2">Ask about the newest run instead</a>.</p>
+		}
+		<div class="relative">
+		<div id="chat-log" class="flex min-h-[16rem] max-h-[65vh] flex-col gap-3 overflow-y-auto overscroll-contain rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+			<div id="chat-empty" class="flex flex-wrap gap-2">
+				if d.RunID != "" {
+					@suggestion("Summarise this run")
+					@suggestion("Why did this run fail, and how do I fix it?")
+				} else {
+					@suggestion("Summarise the recent runs")
+					@suggestion("Why did the last run fail?")
+				}
+				@suggestion("Which tasks run on which servers?")
+				if d.CanAdd {
+					@suggestion("Write a task that installs nginx and keeps it running")
+				}
+			</div>
+		</div>
+		<button id="chat-newest" type="button" hidden class="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-zinc-700 bg-zinc-900/95 px-3 py-1 text-xs text-zinc-200 shadow-lg transition hover:bg-zinc-800">↓ Newest</button>
+		</div>
+		<form id="chat-form" class="flex items-end gap-2">
+			<textarea id="chat-input" rows="2" required placeholder="Ask something. Enter sends, shift+enter starts a new line." class={ inputClass() + " flex-1 resize-y" }></textarea>
+			<button id="chat-send" class="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-600 disabled:opacity-50">Send</button>
+			<button id="chat-stop" type="button" hidden class="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition hover:bg-zinc-800">Stop</button>
+		</form>
+		<button id="chat-clear" type="button" class="self-start text-xs text-zinc-500 hover:text-zinc-300">Start a new conversation</button>
+		if d.CanAdd {
+			<template id="chat-add">
+				<div class="mt-2 flex flex-wrap items-end gap-2 rounded-lg border border-emerald-900/60 bg-emerald-950/20 p-2">
+					<p class="w-full text-xs text-emerald-300" data-names></p>
+					<div class="min-w-0 flex-1">
+						@fileSelect(d.Files)
+					</div>
+					<button type="button" class="rounded-lg border border-emerald-800 px-3 py-1.5 text-xs text-emerald-200 transition hover:bg-emerald-900/40" data-add>Save these tasks</button>
+				</div>
+			</template>
+		}
+		@assistantScript()
+	</div>
+}
+
+// AssistantStatsPanel shows where the assistant's model runs, its memory, and how its last
+// answer went. The page draws it again after each answer.
+templ AssistantStatsPanel(s AssistantStats) {
+	<details class="group/stats rounded-lg border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs" open>
+		<summary class="flex cursor-pointer list-none items-center gap-2 text-zinc-300">
+			<span class="inline-block text-zinc-500 transition group-open/stats:rotate-90">▸</span>
+			<span class={ "h-2 w-2 shrink-0 rounded-full", templ.KV("bg-emerald-400", s.Tone == "good"), templ.KV("bg-amber-400", s.Tone == "warn"), templ.KV("bg-zinc-500", s.Tone == "") }></span>
+			<span class="font-semibold text-zinc-200">Model</span>
+			<span class={ templ.KV("text-amber-300", s.Tone == "warn") }>{ s.State }</span>
+		</summary>
+		if len(s.Rows) > 0 {
+			<dl class="mt-2 grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1">
+				for _, r := range s.Rows {
+					<dt class="text-zinc-500">{ r.Label }</dt>
+					<dd class="min-w-0 break-words text-zinc-200">
+						{ r.Value }
+						if r.Note != "" {
+							<span class="text-zinc-500">· { r.Note }</span>
+						}
+					</dd>
+				}
+			</dl>
+		}
+	</details>
+}
+
+templ privacyNote(d AssistantPageData) {
+	if d.Private {
+		<p class="flex items-center gap-2 rounded-lg border border-emerald-900/60 bg-emerald-950/20 px-3 py-2 text-xs text-emerald-300">
+			<span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+			Private: the model runs on this machine. Your Gorunfile and run history don't leave it.
+		</p>
+	} else {
+		<p class="flex items-center gap-2 rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-300">
+			<span class="h-2 w-2 rounded-full bg-amber-400"></span>
+			Not private: each question sends your Gorunfile's tasks and servers, and recent run output, to { d.Host }.
+		</p>
+	}
+}
+
+templ suggestion(text string) {
+	<button type="button" data-suggest class="rounded-full border border-zinc-700 px-3 py-1 text-xs text-zinc-300 transition hover:bg-zinc-800">{ text }</button>
+}
+
+templ assistantScript() {
+	<script>
+(function () {
+	var root = document.getElementById('assistant');
+	var log = document.getElementById('chat-log');
+	var newest = document.getElementById('chat-newest');
+	// stick is set while the chat is scrolled to the bottom: new text is then followed, and
+	// scrolling up to read stops that until the bottom is reached again
+	var stick = true;
+	function atBottom() { return log.scrollTop + log.clientHeight >= log.scrollHeight - 24; }
+	function follow() {
+		if (stick) { log.scrollTop = log.scrollHeight; }
+		newest.hidden = stick;
+	}
+	log.addEventListener('scroll', function () {
+		stick = atBottom();
+		if (stick) { newest.hidden = true; }
+	});
+	newest.addEventListener('click', function () { stick = true; follow(); });
+	var empty = document.getElementById('chat-empty');
+	var form = document.getElementById('chat-form');
+	var input = document.getElementById('chat-input');
+	var send = document.getElementById('chat-send');
+	var addTmpl = document.getElementById('chat-add');
+	var run = root.dataset.run || '';
+	var key = 'gorunChat:' + run;
+	var messages = [];
+	try { messages = JSON.parse(sessionStorage.getItem(key) || '[]'); } catch (e) {}
+	function save() { try { sessionStorage.setItem(key, JSON.stringify(messages)); } catch (e) {} }
+
+	// text, with ``` blocks drawn as code; nothing is parsed as HTML
+	function body(el, text) {
+		var re = /```[a-zA-Z]*\n?([\s\S]*?)(```|$)/g, last = 0, m;
+		while ((m = re.exec(text)) !== null) {
+			if (m.index > last) { para(el, text.slice(last, m.index)); }
+			var pre = document.createElement('pre');
+			pre.className = 'my-2 overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 p-3 font-mono text-xs text-zinc-200';
+			pre.textContent = m[1];
+			el.appendChild(pre);
+			last = re.lastIndex;
+			if (m[0].length === 0) { break; }
+		}
+		if (last < text.length) { para(el, text.slice(last)); }
+	}
+	// prose, with the markdown models write: # headings, **bold** and `code`, drawn as DOM nodes
+	function para(el, text) {
+		if (!text.trim()) { return; }
+		var p = document.createElement('div');
+		p.className = 'whitespace-pre-wrap';
+		text.trim().split('\n').forEach(function (line, i) {
+			if (i) { p.appendChild(document.createTextNode('\n')); }
+			var h = /^#{1,6}\s+(.*)$/.exec(line);
+			var target = p;
+			if (h) {
+				target = document.createElement('strong');
+				target.className = 'text-zinc-100';
+				p.appendChild(target);
+				line = h[1];
+			}
+			inline(target, line);
+		});
+		el.appendChild(p);
+	}
+	function inline(el, line) {
+		var re = /\*\*(.+?)\*\*|`([^`]+)`/g, last = 0, m;
+		while ((m = re.exec(line)) !== null) {
+			el.appendChild(document.createTextNode(line.slice(last, m.index)));
+			var n = document.createElement(m[1] !== undefined ? 'strong' : 'code');
+			n.className = m[1] !== undefined ? 'text-zinc-100' : 'rounded bg-zinc-950 px-1 font-mono text-xs';
+			n.textContent = m[1] !== undefined ? m[1] : m[2];
+			el.appendChild(n);
+			last = re.lastIndex;
+		}
+		el.appendChild(document.createTextNode(line.slice(last)));
+	}
+	function bubble(role, text) {
+		empty.style.display = 'none';
+		var b = document.createElement('div');
+		b.className = role === 'user'
+			? 'self-end max-w-[85%] rounded-2xl bg-accent/20 px-3 py-2 text-sm text-zinc-100'
+			: 'self-start max-w-full rounded-2xl bg-zinc-800/60 px-3 py-2 text-sm text-zinc-200';
+		if (role === 'error') { b.className = 'self-start rounded-2xl border border-red-900/60 bg-red-950/30 px-3 py-2 text-sm text-red-300'; }
+		body(b, text);
+		log.appendChild(b);
+		follow();
+		return b;
+	}
+	function offerTasks(b, reply) {
+		if (reply.taskError) {
+			var n = document.createElement('p');
+			n.className = 'mt-2 text-xs text-amber-300';
+			n.textContent = "These don't load, so they can't be saved: " + reply.taskError + '. Ask it to fix them.';
+			b.appendChild(n);
+		}
+		if (!reply.tasks || !addTmpl) { return; }
+		var box = addTmpl.content.firstElementChild.cloneNode(true);
+		// names are "task" or "schedule name", so the button and link can say which there are
+		var names = reply.taskNames.split(', ');
+		var scheds = names.filter(function (n) { return n.indexOf('schedule ') === 0; }).length;
+		var tasks = names.length - scheds;
+		box.querySelector('[data-names]').textContent = 'These load: ' + reply.taskNames +
+			(reply.replaces ? '. They replace what the Gorunfile has: ' + reply.replaces : '');
+		var btn = box.querySelector('[data-add]');
+		var what = [];
+		if (tasks) { what.push(tasks === 1 ? 'task' : 'tasks'); }
+		if (scheds) { what.push(scheds === 1 ? 'schedule' : 'schedules'); }
+		btn.textContent = (names.length === 1 ? 'Save this ' : 'Save these ') + what.join(' and ');
+		btn.addEventListener('click', function () {
+			btn.disabled = true;
+			fetch('/assistant/add', {
+				method: 'POST', headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ tasks: reply.tasks, file: box.querySelector('select[name=file]').value }),
+			}).then(function (r) { return r.json(); }).then(function (out) {
+				box.innerHTML = '';
+				var p = document.createElement('p');
+				p.className = out.error ? 'text-xs text-red-300' : 'text-xs text-emerald-300';
+				p.textContent = out.error || out.reply;
+				box.appendChild(p);
+				if (!out.error) {
+					var a = document.createElement('a');
+					a.href = tasks ? '/tasks' : '/schedules'; a.className = 'text-xs text-accent underline';
+					a.textContent = tasks ? 'See them on the Tasks page' : 'See them on the Schedules page';
+					box.appendChild(a);
+				}
+			}).catch(function (e) { btn.disabled = false; alert(e); });
+		});
+		b.appendChild(box);
+	}
+	messages.forEach(function (m) { bubble(m.role, m.content); });
+
+	var stop = document.getElementById('chat-stop');
+	var running = null; // the AbortController of the answer being written
+
+	// progress is the waiting bubble: what the assistant is doing, and for how long
+	function progress() {
+		empty.style.display = 'none';
+		var b = document.createElement('div');
+		b.className = 'self-start max-w-full rounded-2xl bg-zinc-800/60 px-3 py-2 text-sm text-zinc-200';
+		var status = document.createElement('div');
+		status.className = 'flex items-center gap-2 text-xs text-zinc-400';
+		var dot = document.createElement('span');
+		dot.className = 'h-2 w-2 shrink-0 animate-pulse rounded-full bg-violet-400';
+		var label = document.createElement('span');
+		label.textContent = 'Starting';
+		var clock = document.createElement('span');
+		clock.className = 'tabular-nums text-zinc-500';
+		status.append(dot, label, clock);
+		var text = document.createElement('div');
+		text.className = 'mt-1';
+		text.hidden = true;
+		b.append(status, text);
+		log.appendChild(b);
+		follow();
+		var started = Date.now(), written = '';
+		var tick = setInterval(function () { clock.textContent = Math.round((Date.now() - started) / 1000) + 's'; }, 1000);
+		return {
+			status: function (s) { label.textContent = s; },
+			token: function (t) {
+				written += t;
+				text.hidden = false;
+				text.replaceChildren();
+				body(text, written);
+				follow();
+			},
+			remove: function () { clearInterval(tick); b.remove(); },
+		};
+	}
+
+	// readEvents calls each for every JSON line of a streamed reply
+	function readEvents(body, each) {
+		var reader = body.getReader(), dec = new TextDecoder(), buf = '';
+		function pump() {
+			return reader.read().then(function (r) {
+				buf += dec.decode(r.value || new Uint8Array(), { stream: !r.done });
+				var lines = buf.split('\n');
+				buf = lines.pop();
+				lines.forEach(function (l) { if (l.trim()) { each(JSON.parse(l)); } });
+				if (r.done) {
+					if (buf.trim()) { each(JSON.parse(buf)); }
+					return;
+				}
+				return pump();
+			});
+		}
+		return pump();
+	}
+
+	function ask(text) {
+		text = text.trim();
+		if (!text || running) { return; }
+		messages.push({ role: 'user', content: text });
+		save();
+		stick = true;
+		bubble('user', text);
+		input.value = '';
+		send.hidden = true;
+		stop.hidden = false;
+		running = new AbortController();
+		var wait = progress(), done = null;
+		fetch('/assistant/chat', {
+			method: 'POST', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ messages: messages, run: run, stream: true }),
+			signal: running.signal,
+		}).then(function (r) {
+			return readEvents(r.body, function (ev) {
+				if (ev.status) { wait.status(ev.status); }
+				if (ev.token) { wait.token(ev.token); }
+				if (ev.done) { done = ev.done; }
+			});
+		}).then(function () {
+			wait.remove();
+			if (!done) { bubble('error', 'The answer stopped before it finished.'); return; }
+			if (done.error) { bubble('error', done.error); return; }
+			messages.push({ role: 'assistant', content: done.reply });
+			save();
+			offerTasks(bubble('assistant', done.reply), done);
+		}).catch(function (e) {
+			wait.remove();
+			bubble('error', e.name === 'AbortError' ? 'Stopped.' : String(e));
+		}).finally(function () {
+			refreshStats();
+			running = null;
+			send.hidden = false;
+			stop.hidden = true;
+			input.focus();
+		});
+	}
+	stop.addEventListener('click', function () { if (running) { running.abort(); } });
+
+	// refreshStats draws the model's stats again, keeping the panel open or closed
+	function refreshStats() {
+		var box = document.getElementById('assistant-stats');
+		var open = box.querySelector('details') ? box.querySelector('details').open : true;
+		fetch('/assistant/stats').then(function (r) { return r.text(); }).then(function (html) {
+			box.innerHTML = html;
+			var d = box.querySelector('details');
+			if (d) { d.open = open; }
+		}).catch(function () {});
+	}
+	form.addEventListener('submit', function (e) { e.preventDefault(); ask(input.value); });
+	input.addEventListener('keydown', function (e) {
+		if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input.value); }
+	});
+	document.querySelectorAll('[data-suggest]').forEach(function (s) {
+		s.addEventListener('click', function () { ask(s.textContent); });
+	});
+	document.getElementById('chat-clear').addEventListener('click', function () {
+		messages = []; save();
+		log.querySelectorAll(':scope > :not(#chat-empty)').forEach(function (n) { n.remove(); });
+		empty.style.display = '';
+	});
+})();
+	</script>
+}

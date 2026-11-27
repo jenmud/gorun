@@ -1,0 +1,71 @@
+package ui
+
+import "strings"
+
+// GorunfilesPage lists the Gorunfiles kept in the history database: open one, add one, or
+// delete one. Every one's schedules run, whichever is open.
+templ GorunfilesPage(d GorunfilesPageData) {
+	if d.Flash != "" {
+		@flash(d.Flash, d.FlashBad)
+	}
+	<div class="mb-6 max-w-3xl">
+		<h1 class="text-xl font-semibold text-zinc-100">Gorunfiles</h1>
+		<p class="mt-1 text-sm text-zinc-400">The Gorunfiles kept in gorun's history database. The open one is what the Run, Tasks, Bundles, Schedules, Config and Assistant pages show. Every one's schedules run, whichever is open.</p>
+		<p class="mt-2 text-sm text-zinc-400">To use another one's tasks and bundles, include it in the Gorunfile: <code class="rounded bg-zinc-900 px-1 font-mono text-xs text-zinc-200">include = ["stored::base"]</code>. Its servers and schedules stay its own, and changes to its tasks reach every Gorunfile that includes it.</p>
+	</div>
+	<div class="grid gap-6 lg:grid-cols-[1fr_20rem]">
+		<section class="min-w-0 rounded-2xl border border-zinc-800 bg-zinc-900/40">
+			<ul class="divide-y divide-zinc-800">
+				for _, g := range d.Items {
+					<li class="flex flex-wrap items-center gap-3 px-4 py-3">
+						<div class="min-w-0 flex-1">
+							<div class="flex items-center gap-2">
+								<span class="font-mono text-sm text-zinc-100">{ g.Name }</span>
+								if g.Name == d.Open {
+									<span class="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-violet-300">open</span>
+								}
+							</div>
+							<p class="mt-0.5 text-xs text-zinc-500">
+								{ plural(g.Versions, "version") }, last saved { g.SavedAt }
+								if len(g.Shares) > 0 {
+									· uses the tasks of { strings.Join(g.Shares, ", ") }
+								}
+								if len(g.SharedBy) > 0 {
+									· its tasks are used by { strings.Join(g.SharedBy, ", ") }
+								}
+							</p>
+						</div>
+						if g.Name != d.Open {
+							<form method="post" action="/gorunfiles/open">
+								<input type="hidden" name="name" value={ g.Name }/>
+								<button class="rounded-lg border border-zinc-700 px-3 py-1 text-xs text-zinc-200 transition hover:bg-zinc-800">Open</button>
+							</form>
+							if len(g.SharedBy) == 0 {
+								<form method="post" action="/gorunfiles/delete" onsubmit="return confirm('Delete this Gorunfile and every version of it? Its schedules stop. This can\'t be undone.')">
+									<input type="hidden" name="name" value={ g.Name }/>
+									<button class="rounded-lg px-3 py-1 text-xs text-red-300 transition hover:bg-red-950/40">Delete</button>
+								</form>
+							}
+						}
+					</li>
+				}
+			</ul>
+		</section>
+		<aside class="self-start rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+			<h2 class="text-sm font-semibold text-zinc-100">New Gorunfile</h2>
+			<p class="mt-1 text-xs text-zinc-500">It starts empty and opens, ready for servers and tasks on the Config page, or an import.</p>
+			<form method="post" action="/gorunfiles/new" class="mt-3 space-y-2">
+				<input name="name" required pattern="[A-Za-z0-9][A-Za-z0-9_\-]{0,63}" placeholder="e.g. web-fleet" class={ inputClass() }/>
+				<p class="text-[11px] text-zinc-500">Letters, digits, - and _. Other Gorunfiles include it as stored::&lt;name&gt;.</p>
+				<button class={ addButtonClass() }>Create and open</button>
+			</form>
+		</aside>
+	</div>
+}
+
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return itoa(n) + " " + noun + "s"
+}

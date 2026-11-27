@@ -1,0 +1,122 @@
+title = "Shop web fleet"
+
+[tasks.packages]
+description = "Install the base packages"
+check = "dpkg -s curl git jq >/dev/null 2>&1"
+cmd = "apt-get update && apt-get install -y curl git jq"
+sudo = true
+retries = 2
+rerun = "safe"
+
+[tasks.timezone]
+description = "Set the time zone to UTC"
+check = "test \"$(timedatectl show -p Timezone --value)\" = UTC"
+cmd = "timedatectl set-timezone UTC"
+sudo = true
+rerun = "safe"
+
+[tasks.nginx]
+description = "Install nginx and keep it running"
+check = "dpkg -s nginx >/dev/null 2>&1 && systemctl is-active --quiet nginx"
+cmd = "apt-get install -y nginx && systemctl enable --now nginx"
+verify = "systemctl is-active nginx"
+depends_on = ["packages"]
+sudo = true
+rerun = "safe"
+
+[tasks.site-config]
+description = "Install the nginx site and reload nginx"
+cmd = "mv /tmp/shop.conf /etc/nginx/conf.d/shop.conf && nginx -t && systemctl reload nginx"
+check_copies = true
+depends_on = ["nginx"]
+sudo = true
+rerun = "safe"
+[[tasks.site-config.copy]]
+content = "server { listen 80; server_name {{.Hostname}}; location / { proxy_pass http://127.0.0.1:8080; } }\n"
+dst = "/tmp/shop.conf"
+
+[tasks.deploy]
+description = "Unpack the release into /srv/shop"
+cmd = "mkdir -p /srv/shop && tar -xzf /tmp/shop.tar.gz -C /srv/shop && chown -R shop:shop /srv/shop"
+depends_on = ["packages"]
+sudo = true
+timeout = "10m"
+rerun = "safe"
+[[tasks.deploy.copy]]
+src = "./dist/shop.tar.gz"
+dst = "/tmp/shop.tar.gz"
+
+[tasks.migrate]
+description = "Apply database migrations"
+cmd = "cd /srv/shop && ./shop migrate up"
+depends_on = ["deploy"]
+envvars = { DATABASE_URL = "${SHOP_DATABASE_URL}" }
+timeout = "15m"
+rerun = "unsafe"
+
+[tasks.restart-app]
+description = "Restart the shop service"
+cmd = "systemctl restart shop"
+verify = "systemctl is-active shop"
+depends_on = ["migrate"]
+sudo = true
+rerun = "safe"
+
+[tasks.healthcheck]
+description = "Check the shop answers on port 8080"
+cmd = "curl -fsS http://127.0.0.1:8080/healthz"
+depends_on = ["restart-app"]
+retries = 3
+retry_delay = "5s"
+rerun = "safe"
+
+[tasks.pg-install]
+description = "Install PostgreSQL 16"
+check = "dpkg -s postgresql-16 >/dev/null 2>&1"
+cmd = "apt-get install -y postgresql-16"
+depends_on = ["packages"]
+sudo = true
+rerun = "safe"
+
+[bundles.baseline]
+description = "Every box gets these"
+tasks = ["packages", "timezone"]
+
+[bundles.release]
+description = "Ship a new release"
+tasks = ["deploy", "migrate", "restart-app", "healthcheck"]
+
+[server_groups.prod]
+tags = ["prod"]
+envvars = { APP_ENV = "production" }
+    [server_groups.prod.ssh]
+    username = "deploy"
+    identityfile = "~/.ssh/id_ed25519"
+
+[server_groups.web]
+tags = ["web"]
+tasks = ["nginx", "site-config", "@release"]
+
+[server_groups.db]
+tags = ["db"]
+tasks = ["pg-install"]
+
+[servers]
+tasks = ["@baseline"]
+
+[servers.hosts.web-1]
+hostname = "10.0.1.11"
+groups = ["prod", "web"]
+
+[servers.hosts.web-2]
+hostname = "10.0.1.12"
+groups = ["prod", "web"]
+
+[servers.hosts.web-3]
+hostname = "10.0.1.13"
+groups = ["prod", "web"]
+skip_tasks = ["timezone"]
+
+[servers.hosts.db-1]
+hostname = "10.0.2.21"
+groups = ["prod", "db"]

@@ -44,15 +44,36 @@ var kindNames = map[string]string{
 // loadConfig reads path into the editor. Runs use this file from now on, and unsaved changes
 // are dropped.
 func (a *app) loadConfig(path string) error {
-	cfg := &gorun.Config{}
+	cfg := a.newConfig()
 	if err := cfg.LoadFile(expandHome(path)); err != nil {
 		return err
 	}
 	a.mu.Lock()
+	var stop *gorun.Scheduler
+	if prev, next := a.storedNameOf(a.cfgPath), a.storedNameOf(cfg.Path); prev != next || a.cfgPath != cfg.Path {
+		// a stored Gorunfile's schedules keep firing when another is open; a file's don't
+		if prev != "" && a.sched != nil {
+			if a.bg == nil {
+				a.bg = map[string]*gorun.Scheduler{}
+			}
+			a.bg[prev] = a.sched
+		} else {
+			stop = a.sched
+		}
+		a.sched = nil
+		if next != "" {
+			a.sched = a.bg[next]
+			delete(a.bg, next)
+		}
+	}
 	a.cfg = cfg
 	a.cfgPath = cfg.Path
+	a.openStored.Store(a.storedNameOf(cfg.Path))
 	a.pending = nil
 	a.mu.Unlock()
+	if stop != nil {
+		stop.Stop()
+	}
 	a.startScheduler(cfg)
 	return nil
 }
@@ -62,8 +83,18 @@ func (a *app) loadConfig(path string) error {
 func (a *app) startScheduler(cfg *gorun.Config) {
 	old := a.schedulerStatus()
 	a.stopScheduler()
+	if s := a.newScheduler(cfg, old); s != nil {
+		a.mu.Lock()
+		a.sched = s
+		a.mu.Unlock()
+	}
+}
+
+// newScheduler starts a scheduler for cfg's schedules, keeping the pauses and skips in old, or
+// returns nil when cfg has none.
+func (a *app) newScheduler(cfg *gorun.Config, old []gorun.ScheduleStatus) *gorun.Scheduler {
 	if len(cfg.Schedules) == 0 {
-		return
+		return nil
 	}
 	// Without NATS nothing carries a scheduled run's events to the dashboard and history, so
 	// the web service records them itself. With NATS its subscriber already does, and recording
@@ -78,7 +109,7 @@ func (a *app) startScheduler(cfg *gorun.Config) {
 	})
 	if err := s.Start(context.Background()); err != nil {
 		log.Printf("gorun web: scheduler: %v", err)
-		return
+		return nil
 	}
 	// a reload keeps the pauses and skips set on schedules that still exist
 	for _, st := range old {
@@ -89,9 +120,7 @@ func (a *app) startScheduler(cfg *gorun.Config) {
 			_ = s.Skip(st.Name)
 		}
 	}
-	a.mu.Lock()
-	a.sched = s
-	a.mu.Unlock()
+	return s
 }
 
 // schedulerStatus is the running scheduler's status, or nil when none is running.
@@ -138,7 +167,10 @@ func (a *app) configPage(w http.ResponseWriter, r *http.Request) {
 	d := configData(cfg, pending)
 	d.NATS = a.natsStatus()
 	d.Flash, d.FlashBad = msg, bad
-	d.Browser = browse(pickerDir(r.URL.Query().Get("dir"), d.Path))
+	d.Model = a.gen.describe()
+	if !a.storedPage(r.Context(), &d) {
+		d.Browser = browse(pickerDir(r.URL.Query().Get("dir"), d.Path))
+	}
 	a.page(w, "Config", "config", ui.ConfigPage(d))
 }
 
@@ -162,8 +194,11 @@ func (a *app) editPage(w http.ResponseWriter, r *http.Request) {
 
 	d := configData(cfg, pending)
 	d.NATS = a.natsStatus()
-	d.Browser = browse(pickerDir("", d.Path))
 	d.EditingKind, d.EditingName = kind, name
+	d.Model = a.gen.describe()
+	if !a.storedPage(r.Context(), &d) {
+		d.Browser = browse(pickerDir("", d.Path))
+	}
 	d.Edit = editFields(body)
 	a.page(w, "Config", "config", ui.ConfigPage(d))
 }
@@ -175,6 +210,21 @@ var entityPath = map[string][]string{
 	kindTask:     {"tasks"},
 	kindBundle:   {"bundles"},
 	kindSchedule: {"schedule"},
+}
+
+// decodeGorunfile decodes one of cfg's Gorunfiles into v: a stored one from the database, which
+// cfg reads it from, and any other from its file.
+func decodeGorunfile(cfg *gorun.Config, file string, v any) error {
+	if name, ok := gorun.StoredName(file); ok && cfg.Stored != nil {
+		text, err := cfg.Stored(name)
+		if err != nil {
+			return err
+		}
+		_, err = toml.Decode(text, v)
+		return err
+	}
+	_, err := toml.DecodeFile(file, v)
+	return err
 }
 
 // currentBody is the entity's table as written: its latest unsaved add, else the table in the
@@ -193,10 +243,10 @@ func currentBody(cfg *gorun.Config, pending []gorun.Change, kind, name string) (
 	}
 	file := sourceOf(cfg, pending, kind, name)
 	if kind == kindSchedule {
-		return scheduleBodyIn(file, name)
+		return scheduleBodyIn(cfg, file, name)
 	}
 	var doc map[string]any
-	if _, err := toml.DecodeFile(file, &doc); err != nil {
+	if err := decodeGorunfile(cfg, file, &doc); err != nil {
 		return nil, fmt.Errorf("read %s: %w", file, err)
 	}
 	var node any = doc
@@ -452,8 +502,12 @@ func configData(cfg *gorun.Config, pending []gorun.Change) ui.ConfigPageData {
 	return d
 }
 
-// rel shows path relative to the folder of the root Gorunfile, when it is inside it.
+// rel shows path relative to the folder of the root Gorunfile, when it is inside it, and a stored
+// Gorunfile by its name.
 func rel(root, path string) string {
+	if name, ok := gorun.StoredName(path); ok {
+		return name
+	}
 	if path == "" || root == "" {
 		return path
 	}
@@ -655,7 +709,7 @@ func (a *app) addHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.pending = append(a.pending, change)
-	redirectWith(w, r, "/config", describe(change)+". Save to write it to the file.", false)
+	redirectWith(w, r, "/config", describe(change)+". Press Save to keep it.", false)
 }
 
 // editHandler queues an edit: the entity is removed and written back with the form's changes,
@@ -691,7 +745,7 @@ func (a *app) editHandler(w http.ResponseWriter, r *http.Request) {
 		gorun.Change{Kind: kind, Name: name, File: file, Remove: true},
 		gorun.Change{Kind: kind, Name: name, File: file, Body: body},
 	)
-	redirectWith(w, r, "/config", fmt.Sprintf("Edited %s %s. Save to write it to the file.", kindNames[kind], name), false)
+	redirectWith(w, r, "/config", fmt.Sprintf("Edited %s %s. Press Save to keep it.", kindNames[kind], name), false)
 }
 
 // removeHandler queues the removal of a server, group, task or bundle.
@@ -715,7 +769,7 @@ func (a *app) removeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	change := gorun.Change{Kind: kind, Name: name, File: sourceOf(a.cfg, a.pending, kind, name), Remove: true}
 	a.pending = append(a.pending, change)
-	redirectWith(w, r, "/config", describe(change)+". Save to write it to the file.", false)
+	redirectWith(w, r, "/config", describe(change)+". Press Save to keep it.", false)
 }
 
 // saveHandler writes the unsaved changes into their files, then reloads the file to check it.
@@ -727,7 +781,7 @@ func (a *app) saveHandler(w http.ResponseWriter, r *http.Request) {
 		redirectWith(w, r, "/config", "Nothing to save.", true)
 		return
 	}
-	if err := gorun.SaveChanges(pending); err != nil {
+	if err := a.saveChanges(pending); err != nil {
 		redirectWith(w, r, "/config", "Could not save: "+err.Error(), true)
 		return
 	}
@@ -758,6 +812,10 @@ func (a *app) discardHandler(w http.ResponseWriter, r *http.Request) {
 
 // loadHandler loads another Gorunfile into the editor.
 func (a *app) loadHandler(w http.ResponseWriter, r *http.Request) {
+	if a.keepsStored {
+		redirectWith(w, r, "/config", "This gorun keeps its Gorunfiles in the history database. Import a Gorunfile to bring it in, or start gorun -serve with a Gorunfile to use that file.", true)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		redirectWith(w, r, "/config", "Could not read the form.", true)
 		return

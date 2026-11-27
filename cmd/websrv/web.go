@@ -52,6 +52,8 @@ var Version string
 // app holds the state the handlers share. Each piece is guarded by mu.
 type app struct {
 	saveMu sync.Mutex // one direct save from a page at a time, so edits can't overwrite each other
+	genQ   modelQueue // one use of the model at a time, in order
+	gen    *generator
 	store  *store.Store
 	nc     *inats.Client
 	topic  string
@@ -70,23 +72,30 @@ type app struct {
 	sched   *gorun.Scheduler              // fires the loaded Gorunfile's schedules, if any
 	nats    natsState                     // how this service reaches NATS; set once at startup
 
-	// noFile is set when the service started without a Gorunfile: it then shows only the Live
-	// and History pages, for runs started elsewhere.
+	// noFile is set when the service has no Gorunfile, given or stored: it then shows only the
+	// Live and History pages, for runs started elsewhere.
 	noFile bool
+	// keepsStored is set when the service started without a Gorunfile and keeps its Gorunfiles in
+	// the history database, never as files; see stored.go. bg runs the schedules of those that
+	// aren't open, so every one's schedules fire.
+	keepsStored bool
+	bg          map[string]*gorun.Scheduler
+	openStored  atomic.Value // the open stored Gorunfile's name, or ""; read without a.mu
 }
 
 // Run starts the web server on GORUN_ADDRESS (default :8080). configPath, when set, is the
-// Gorunfile to load. Without one the service shows only the Live and History pages. logPath is shown in the startup
+// Gorunfile to load. Without one the service uses the Gorunfile kept in the history database,
+// or, with live or when the database doesn't open, shows only the Live and History pages. logPath is shown in the startup
 // message; empty means logs go to stderr. Run exits with status 1 when it can't listen.
-func Run(configPath, logPath string) {
-	if err := run(configPath, logPath); err != nil {
+func Run(configPath, logPath string, live bool) {
+	if err := run(configPath, logPath, live); err != nil {
 		fmt.Fprintf(os.Stderr, "gorun: %v\n", err)
 		os.Exit(1)
 	}
 }
 
 // run is Run without the exit, so deferred cleanup happens before gorun exits.
-func run(configPath, logPath string) error {
+func run(configPath, logPath string, live bool) error {
 	dbPath := history.DefaultPath()
 	st, dbErr := openStore(dbPath)
 	if st != nil {
@@ -110,6 +119,15 @@ func run(configPath, logPath string) error {
 		}
 	}
 
+	storedNames, err := pickStored(context.Background(), configPath, st, live)
+	if err != nil {
+		log.Printf("gorun web: %v", err)
+	}
+	stored := len(storedNames) > 0
+	if stored {
+		configPath = gorun.StoredPath(storedNames[0])
+	}
+
 	gorun.StartNATS()
 	nc, err := inats.NewClient()
 	if err != nil {
@@ -123,9 +141,12 @@ func run(configPath, logPath string) error {
 		hub:   &hub{clients: map[chan string]struct{}{}},
 		runs:  map[string]context.CancelFunc{},
 		nats:  natsStartState(emb, nc, err, envvars.Get("GORUN_SKIP_NATS") != ""),
+		gen:   newGenerator(),
 
-		noFile: configPath == "",
+		noFile:      configPath == "",
+		keepsStored: stored,
 	}
+	defer a.gen.close()
 	if nc != nil {
 		defer nc.Close()
 		if _, err := nc.Subscribe(a.topic, a.onEvent); err != nil {
@@ -144,6 +165,11 @@ func run(configPath, logPath string) error {
 			info.cfgPath, info.schedules, info.schedulerOn = a.cfgPath, len(a.cfg.Schedules), a.sched != nil
 			a.mu.Unlock()
 		}
+		if stored {
+			info.storedName, info.storedCount = storedNames[0], len(storedNames)
+			info.storedVersions, _ = st.GorunfileVersions(context.Background(), storedNames[0])
+			a.refreshBackground()
+		}
 	}
 
 	addr := envvars.Get("GORUN_ADDRESS")
@@ -154,10 +180,19 @@ func run(configPath, logPath string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	defer a.stopScheduler()
+	defer a.stopBackground()
 
-	srv := &http.Server{Addr: addr, Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second}
+	// requests end with the server: an answer the model is writing stops, rather than holding up
+	// the exit until it is finished
+	reqCtx, cancelRequests := context.WithCancel(context.Background())
+	defer cancelRequests()
+	srv := &http.Server{Addr: addr, Handler: a.routes(), ReadHeaderTimeout: 10 * time.Second,
+		BaseContext: func(net.Listener) context.Context { return reqCtx }}
 	go func() {
 		<-ctx.Done()
+		stop() // a second ctrl-c quits at once
+		fmt.Fprintln(os.Stderr, "gorun: stopping; press ctrl+c again to quit now")
+		cancelRequests()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
@@ -197,13 +232,17 @@ func (a *app) routes() *http.ServeMux {
 	mux.HandleFunc("GET /history/{id}/task", a.taskDetail)
 	mux.HandleFunc("POST /runs/{id}/delete", a.deleteRun)
 	mux.HandleFunc("POST /runs/truncate", a.truncateRuns)
-
-	// the pages that need a Gorunfile
+	mux.HandleFunc("GET /assistant", a.assistantPage)
+	mux.HandleFunc("POST /assistant/chat", a.chatHandler)
+	mux.HandleFunc("GET /assistant/stats", a.assistantStatsHandler)
 	withFile := func(pattern string, h http.HandlerFunc) {
 		if !a.noFile {
 			mux.HandleFunc(pattern, h)
 		}
 	}
+	withFile("POST /assistant/add", a.addTasksHandler)
+
+	// the pages that need a Gorunfile
 	withFile("GET /run", a.runPage)
 	withFile("POST /run", a.startRunHandler)
 	withFile("GET /tasks", a.tasksPage)
@@ -220,6 +259,7 @@ func (a *app) routes() *http.ServeMux {
 	withFile("POST /bundles/edit", a.editEntity(kindBundle, "/bundles"))
 	withFile("GET /config", a.configPage)
 	withFile("GET /config/edit", a.editPage)
+	withFile("GET /config/export", a.exportHandler)
 	withFile("GET /file", a.viewFile)
 	withFile("POST /config/load", a.loadHandler)
 	withFile("POST /config/add", a.addHandler)
@@ -227,6 +267,14 @@ func (a *app) routes() *http.ServeMux {
 	withFile("POST /config/remove", a.removeHandler)
 	withFile("POST /config/save", a.saveHandler)
 	withFile("POST /config/discard", a.discardHandler)
+	withFile("POST /config/generate", a.generateHandler)
+	withFile("POST /config/import", a.importHandler)
+	if a.keepsStored {
+		mux.HandleFunc("GET /gorunfiles", a.gorunfilesPage)
+		mux.HandleFunc("POST /gorunfiles/new", a.newGorunfile)
+		mux.HandleFunc("POST /gorunfiles/open", a.openGorunfile)
+		mux.HandleFunc("POST /gorunfiles/delete", a.deleteGorunfile)
+	}
 	return mux
 }
 
@@ -234,6 +282,9 @@ func (a *app) routes() *http.ServeMux {
 func (a *app) renderCtx() context.Context {
 	if a.noFile {
 		return ui.WithoutGorunfile(context.Background())
+	}
+	if a.keepsStored {
+		return ui.WithStored(context.Background(), a.currentStored())
 	}
 	return context.Background()
 }

@@ -34,10 +34,9 @@ NARRATION = {
         "These are the numbers you'd put on a dashboard, or alert on: a task that suddenly fails everywhere, or one that's getting slower."
     ),
     "logs": (
-        "Logs work a little differently. gorun writes its logs to a file, gorun dot log, and the server and task lines carry the run's id.\n"
-        "To get them into Grafana, ship the file with a collector. This is a small OpenTelemetry collector config: read the log file, "
-        "pull out the level and the run id, and send it to the same backend.\n"
-        "And now, in Loki, you can filter the errors. Take the run id from a trace, and you can find that run's logs. "
+        "Logs come along too, with no extra setup. Every log line gorun writes is also sent to the collector, and each one carries the id of the trace and the span it belongs to.\n"
+        "Here's Loki, filtered to errors. These are the failed smoke tests, with the exit code, the reason, and the error output. "
+        "Copy the trace id from one of them, and you can open the exact run in Tempo. "
         "Traces, metrics and logs, all from the same runs."
     ),
     "natswhat": (
@@ -66,7 +65,7 @@ NARRATION = {
         "And G O R U N skip NATS turns it all off, for when you don't want it."
     ),
     "outro": (
-        "So that's gorun from the outside. OpenTelemetry gives you traces and metrics in Grafana, and you can ship the log file alongside them. "
+        "So that's gorun from the outside. OpenTelemetry gives you traces, metrics and logs in Grafana. "
         "And NATS gives you every event as it happens, from an embedded server, or one you already run.\n"
         "The written tutorial, with every option, is linked below.\n"
         "Thanks so much for watching, and happy deploying!"

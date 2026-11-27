@@ -1,6 +1,6 @@
 module github.com/jenmud/gorun/examples/rollout
 
-go 1.26.10
+go 1.27.4
 
 require github.com/jenmud/gorun v0.0.0
 

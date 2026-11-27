@@ -4,6 +4,15 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.39.2 (since v0.39.1)
+
+### Scheduled runs use the latest Gorunfile
+- `gorun -serve` loads the Gorunfile again before every scheduled run, so it runs what the file
+  says then: edited on disk, pulled from git, or saved as a new version by another gorun on the
+  same database. Before, it ran the copy loaded when the web service started or last saved. A
+  Gorunfile that no longer loads, or no longer has the schedule, fails that run with the reason.
+- `Scheduler.LoadLatest` does the same for programs built on the library.
+
 ## v0.39.1 (since v0.39.0)
 
 ### The database comes first in the docs

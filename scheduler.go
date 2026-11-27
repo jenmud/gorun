@@ -45,6 +45,7 @@ type ScheduleStatus struct {
 // State lives in memory: pauses, skips and missed runs are lost when the process exits.
 type Scheduler struct {
 	cfg     *Config
+	load    func() (*Config, error) // see LoadLatest
 	onEvent func(ScheduleEvent)
 	now     func() time.Time
 
@@ -85,6 +86,39 @@ func NewScheduler(c *Config, onEvent func(ScheduleEvent)) *Scheduler {
 	// reports that error
 	_ = s.prime(s.now())
 	return s
+}
+
+// LoadLatest makes every scheduled run load the Gorunfile again first, with load, so it runs the
+// Gorunfile as it is then: edited on disk, pulled from git, or saved as a new version by another
+// gorun. The schedule is looked up by name in what load returns, and its target, tasks and
+// servers are used from there; OnEvent, Recorder, Origin, Force and CheckOnly still come from the
+// config the scheduler was made with. A run whose Gorunfile doesn't load, or no longer has the
+// schedule, fails with the reason instead of running an old copy.
+func (s *Scheduler) LoadLatest(load func() (*Config, error)) {
+	s.mu.Lock()
+	s.load = load
+	s.mu.Unlock()
+}
+
+// latest is the config a run of the schedule called name uses, and its target.
+func (s *Scheduler) latest(name, target string) (*Config, string, error) {
+	s.mu.Lock()
+	load := s.load
+	s.mu.Unlock()
+	if load == nil {
+		return s.cfg, target, nil
+	}
+	c, err := load()
+	if err != nil {
+		return nil, "", fmt.Errorf("the Gorunfile doesn't load, so the scheduled run didn't start: %w", err)
+	}
+	i := slices.IndexFunc(c.Schedules, func(sc Schedule) bool { return sc.Name == name })
+	if i < 0 {
+		return nil, "", fmt.Errorf("schedule %q is no longer in the Gorunfile", name)
+	}
+	c.OnEvent, c.Recorder, c.Origin = s.cfg.OnEvent, s.cfg.Recorder, s.cfg.Origin
+	c.Force, c.CheckOnly = s.cfg.Force, s.cfg.CheckOnly
+	return c, c.Schedules[i].Target, nil
 }
 
 // Start begins firing schedules until Stop or until ctx is done. Runs in progress are
@@ -289,9 +323,14 @@ func (s *Scheduler) run(ctx context.Context, st *scheduleState, occ time.Time, n
 	reason := note
 	s.emit([]ScheduleEvent{{Schedule: name, Kind: ScheduleFired, At: occ, Reason: reason}})
 
+	base, target, err := s.latest(name, st.sched.Target)
+	if err != nil {
+		s.finish(st, occ, err)
+		return
+	}
 	// As -task does: the target runs on every server, whatever its own task list says.
-	c := *s.cfg
-	names, err := c.ExpandTaskRefs(st.sched.Target)
+	c := *base
+	names, err := c.ExpandTaskRefs(target)
 	if err != nil {
 		s.finish(st, occ, err)
 		return

@@ -107,6 +107,13 @@ func (a *app) newScheduler(cfg *gorun.Config, old []gorun.ScheduleStatus) *gorun
 		slog.Info("schedule", "schedule", ev.Schedule, "kind", ev.Kind, "at", ev.At, "reason", ev.Reason)
 		a.recordScheduleEvent(ev)
 	})
+	// a run uses the Gorunfile as it is when it fires: edited on disk, pulled from git, or saved
+	// by another gorun on the same database
+	path := cfg.Path
+	s.LoadLatest(func() (*gorun.Config, error) {
+		latest := a.newConfig()
+		return latest, latest.LoadFile(path)
+	})
 	if err := s.Start(context.Background()); err != nil {
 		log.Printf("gorun web: scheduler: %v", err)
 		return nil

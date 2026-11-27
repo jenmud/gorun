@@ -2,6 +2,7 @@ package gorun
 
 import (
 	"context"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -350,5 +351,67 @@ at = "2026-12-01T02:00"
 	}
 	if f.cfg.Schedule != "" {
 		t.Errorf("the scheduler changed the shared config's Schedule to %q", f.cfg.Schedule)
+	}
+}
+
+// TestScheduledRunUsesTheLatestGorunfile edits the Gorunfile after the scheduler started, as an
+// editor or a git pull would: the run uses the edited file, and a broken or emptied one fails
+// with the reason instead of running the old copy.
+func TestScheduledRunUsesTheLatestGorunfile(t *testing.T) {
+	const sched = `
+[[schedule]]
+name = "nightly"
+target = "migrate"
+cron = "0 2 * * *"
+`
+	f := newSchedulerFixture(t, sched, time.Date(2026, 11, 30, 0, 0, 0, 0, time.UTC))
+	path := f.cfg.Path
+	onEvent := f.cfg.OnEvent
+	f.sched.LoadLatest(func() (*Config, error) {
+		c := &Config{}
+		return c, c.LoadFile(path)
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := f.sched.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	defer f.sched.Stop()
+	fire := func(day int) {
+		t.Helper()
+		f.sched.tick(time.Date(2026, 12, day, 2, 0, 1, 0, time.UTC))
+		f.settle()
+	}
+	write := func(text string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// the schedule now targets hello, and the run reports to the scheduler's OnEvent
+	write(schedulerBody + strings.Replace(sched, `"migrate"`, `"hello"`, 1))
+	fire(1)
+	if !f.ranTask("hello") || f.ranTask("migrate") {
+		t.Fatalf("ran hello %v, migrate %v: want the edited target", f.ranTask("hello"), f.ranTask("migrate"))
+	}
+	if f.cfg.OnEvent == nil || onEvent == nil {
+		t.Fatal("lost the OnEvent hook")
+	}
+
+	write("this isn't TOML")
+	fire(2)
+	write(schedulerBody)
+	fire(3)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var reasons []string
+	for _, ev := range f.events {
+		if ev.Kind == ScheduleFailed {
+			reasons = append(reasons, ev.Reason)
+		}
+	}
+	if len(reasons) != 2 || !strings.Contains(reasons[0], "doesn't load") || !strings.Contains(reasons[1], "no longer in the Gorunfile") {
+		t.Errorf("failures = %q, want a broken file then a removed schedule", reasons)
 	}
 }

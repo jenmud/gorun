@@ -59,6 +59,12 @@ if err := s.Start(ctx); err != nil {
 }
 defer s.Stop()
 
+// load the Gorunfile again before each run, so edits since Start are used
+s.LoadLatest(func() (*gorun.Config, error) {
+	var latest gorun.Config
+	return &latest, latest.LoadFile("Gorunfile")
+})
+
 _ = s.Pause("nightly-backup")
 _ = s.Resume("nightly-backup")
 _ = s.Skip("hourly-check")
@@ -104,6 +110,13 @@ it; the choice lasts for the browser session. The page refreshes every 30 second
 
 Any reload of the file, from the Config page or the schedules page, keeps the pauses and skips
 on schedules that still exist.
+
+**Every scheduled run uses the Gorunfile as it is when it fires.** `gorun -serve` loads it again
+first, with its includes, so a run picks up a file edited on disk or pulled from git, and a new
+version saved by another gorun on the same database, without a restart. If it no longer loads,
+or no longer has the schedule, that run fails with the reason in History instead of running an
+old copy. The times a schedule fires at are read when the Gorunfile is loaded or saved in the web
+UI: after changing a `cron` or `at` outside it, save in the web UI or restart.
 
 Scheduled runs appear in **History** and in the live view whether or not NATS is connected.
 Without NATS, the web server applies their events itself. Each one carries a

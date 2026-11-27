@@ -7,9 +7,6 @@
 *.dll
 *.so
 *.dylib
-# vendored packages embed their own libraries (jupiterrider/ffi's libffi for macOS and Windows)
-!vendor/**/*.dll
-!vendor/**/*.dylib
 
 # Test binary, built with `go test -c`
 *.test
@@ -65,3 +62,7 @@ gorun_bin
 /.agents/
 /CLAUDE.local.md
 __pycache__/
+
+# vendor/ is committed whole: the patterns above must not drop any of it (they once dropped
+# libffi's .dylib/.dll and x/text's coverage.go, breaking builds that the local tree passed)
+!vendor/**

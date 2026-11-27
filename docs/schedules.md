@@ -111,6 +111,11 @@ it; the choice lasts for the browser session. The page refreshes every 30 second
 Any reload of the file, from the Config page or the schedules page, keeps the pauses and skips
 on schedules that still exist.
 
+**Who a scheduled run runs as.** It has no web user, as nobody started it: History shows its
+trigger, `schedule`, with the schedule's name (the **⏱ scheduled** badge), and its user is the
+account `gorun -serve` runs as. On each server its tasks run as the SSH user the Gorunfile gives
+that server, and as root with `sudo = true`, exactly as a run started by hand.
+
 **Every scheduled run uses the Gorunfile as it is when it fires.** `gorun -serve` loads it again
 first, with its includes, so a run picks up a file edited on disk or pulled from git, and a new
 version saved by another gorun on the same database, without a restart. If it no longer loads,

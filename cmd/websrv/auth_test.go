@@ -18,7 +18,7 @@ import (
 // what the guard lets through.
 func guarded(t *testing.T, password, admins string, st *store.Store) (*app, http.Handler) {
 	t.Helper()
-	a := &app{store: st, auth: newAuth(context.Background(), password, admins, st)}
+	a := &app{store: st, auth: newAuth(context.Background(), password, admins, "", st)}
 	return a, a.guard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 }
 
@@ -170,11 +170,40 @@ func TestGuardAnswersEachRequestInItsShape(t *testing.T) {
 	}
 }
 
-func TestNoLoginLeavesEverythingOpen(t *testing.T) {
+func TestNoLoginLeavesEverythingButRunningOpen(t *testing.T) {
 	_, h := guarded(t, "", "", testStore(t))
-	for _, p := range []string{"/run", "/users/add", "/assistant/models/use"} {
+	for _, p := range []string{"/config/save", "/users/add", "/assistant/models/use"} {
 		if got := status(h, httptest.NewRequest("POST", p, nil)); got != 200 {
 			t.Errorf("POST %s with no login = %d", p, got)
+		}
+	}
+	// nobody is signed in, so nobody may run: the Run page says to add a user
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("POST", "/run", nil))
+	if loc := rec.Header().Get("Location"); rec.Code != 303 || !strings.Contains(loc, "/run?") || !strings.Contains(loc, "bad=1") {
+		t.Errorf("POST /run with no login = %d to %q", rec.Code, loc)
+	}
+}
+
+// A user an auth proxy names may run tasks when GORUN_PROXY_USERS lists them, or is "*", and
+// the run records them.
+func TestProxyUsersMayRun(t *testing.T) {
+	for _, c := range []struct {
+		list, user string
+		want       int
+	}{{"jen, sam", "jen", 200}, {"*", "anyone", 200}, {"jen", "mallory", 403}} {
+		a := &app{auth: newAuth(context.Background(), "", "", c.list, nil)}
+		var got string
+		h := a.guard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { got = webOrigin(r).WebUser }))
+		r := httptest.NewRequest("POST", "/run", nil)
+		r.Header.Set("X-Forwarded-User", c.user)
+		if code := status(h, r); code != c.want || (c.want == 200 && got != c.user) {
+			t.Errorf("%s with GORUN_PROXY_USERS=%q = %d, recorded %q", c.user, c.list, code, got)
+		}
+		r = httptest.NewRequest("POST", "/users/add", nil)
+		r.Header.Set("X-Forwarded-User", c.user)
+		if code := status(h, r); code != 403 {
+			t.Errorf("a proxy user who isn't an admin managed users: %d", code)
 		}
 	}
 }
@@ -234,7 +263,7 @@ func u(t *testing.T, st *store.Store, name string) store.User {
 }
 
 func TestSessionCookieIsCheckedAndExpires(t *testing.T) {
-	au := newAuth(context.Background(), "s3cret", "", nil)
+	au := newAuth(context.Background(), "s3cret", "", "", nil)
 	now := time.Now()
 	good := au.sign(adminName, "s3cret", now.Add(time.Hour))
 	if name, _, ok := au.verify(good, now); !ok || name != adminName {
@@ -247,7 +276,7 @@ func TestSessionCookieIsCheckedAndExpires(t *testing.T) {
 	if _, _, ok := au.verify(body+"x."+mac, now); ok {
 		t.Error("a changed session was accepted")
 	}
-	if _, _, ok := newAuth(context.Background(), "other", "", nil).verify(good, now); ok {
+	if _, _, ok := newAuth(context.Background(), "other", "", "", nil).verify(good, now); ok {
 		t.Error("a session signed with another key was accepted")
 	}
 }
@@ -266,7 +295,7 @@ func TestProxyUserMustBeAnAdmin(t *testing.T) {
 }
 
 func TestLoginStaysOnThisSite(t *testing.T) {
-	a := &app{auth: newAuth(context.Background(), "s3cret", "", nil)}
+	a := &app{auth: newAuth(context.Background(), "s3cret", "", "", nil)}
 	post := func(name, password, next string) *httptest.ResponseRecorder {
 		form := url.Values{"name": {name}, "password": {password}, "next": {next}}
 		r := httptest.NewRequest("POST", "/login", strings.NewReader(form.Encode()))

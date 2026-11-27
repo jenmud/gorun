@@ -49,6 +49,14 @@ port can run tasks and edit the Gorunfile, and it listens on all interfaces by d
 on a trusted network, or bind it with `GORUN_ADDRESS=127.0.0.1:8080` and use an SSH tunnel.
 Serve it over HTTPS, usually through a proxy. See [signing in](web.md#signing-in).
 
+## Who does a run started from the web UI, or a schedule, run as?
+
+Starting a run from the web UI needs a signed-in user, and the run records them as its **Web
+user**, shown first on the run in Live and History. Its user is the account `gorun -serve` runs
+as. A scheduled run has no web user: its trigger is `schedule`, with the schedule's name. On the
+servers every run's tasks run as the SSH user the Gorunfile gives each server, and as root with
+`sudo = true`. See [signing in](web.md#signing-in).
+
 ## How do I reset a forgotten password?
 
 Restart the web UI with a new `GORUN_ADMIN_PASSWORD` in its environment, sign in as `admin` with

@@ -73,11 +73,12 @@ func (o *Origin) Bits() []string {
 		return nil
 	}
 	var bits []string
-	if w := o.Where(); w != "" {
-		bits = append(bits, w)
-	}
+	// who signed in and started it comes first; user@host is then the web service's account
 	if o.WebUser != "" {
 		bits = append(bits, "web user "+o.WebUser)
+	}
+	if w := o.Where(); w != "" {
+		bits = append(bits, w)
 	}
 	if o.Trigger != "" {
 		bits = append(bits, o.Trigger)

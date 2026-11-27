@@ -219,6 +219,7 @@ func runAttributes(c *Config, o *Origin) []attribute.KeyValue {
 	str("gorun.ssh_client", o.SSHClient)
 	str("client.address", o.Client)
 	str("gorun.web_user", o.WebUser)
+	str("enduser.id", o.WebUser)
 	str("cicd.system", o.CI)
 	str("gorun.ci.user", o.CIUser)
 	str("cicd.pipeline.run.url.full", o.CIURL)

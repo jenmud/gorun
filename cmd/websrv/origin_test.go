@@ -41,15 +41,19 @@ func TestHistoryShowsWhoStartedARun(t *testing.T) {
 	}
 }
 
-// A run started from the web UI records the browser's address and the user an auth proxy
-// says is signed in.
-func TestWebRunsRecordTheBrowserAndProxyUser(t *testing.T) {
+// A run started from the web UI records the browser's address and the signed-in user, never a
+// user header the guard didn't check.
+func TestWebRunsRecordTheBrowserAndSignedInUser(t *testing.T) {
 	Version = "v0.21.0"
 	t.Cleanup(func() { Version = "" })
 	r := httptest.NewRequest(http.MethodPost, "/run", nil)
 	r.RemoteAddr = "192.0.2.7:51000"
 	r.Header.Set("X-Forwarded-For", "203.0.113.5")
-	r.Header.Set("X-Auth-Request-User", "jen")
+	r.Header.Set("X-Auth-Request-User", "mallory")
+	if o := webOrigin(r); o.WebUser != "" {
+		t.Errorf("recorded an unchecked header as the user: %+v", o)
+	}
+	r = r.WithContext(context.WithValue(r.Context(), whoKey{}, who{Name: "jen"}))
 	o := webOrigin(r)
 	if o.Trigger != "web" || o.Version != "v0.21.0" || o.Client != "192.0.2.7 (forwarded for 203.0.113.5)" || o.WebUser != "jen" {
 		t.Errorf("origin = %+v", o)

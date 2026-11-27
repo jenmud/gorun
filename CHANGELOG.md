@@ -4,6 +4,16 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.40.1 (since v0.40.0)
+
+### Running tasks from the web UI needs a signed-in user
+- Every run started from the web UI now needs a signed-in user, login set up or not, and records
+  them as the run's web user: shown first in Live and History, and sent to OpenTelemetry as
+  `enduser.id`. With no login yet, the Run page says to add a user on the Users page.
+- A user an auth proxy names is no longer recorded unless gorun trusts them: `GORUN_ADMINS` lists
+  its admins, and the new `GORUN_PROXY_USERS` its plain users, or `*` for anyone it names.
+- The docs say who scheduled runs run as: the account `gorun -serve` runs as, with no web user.
+
 ## v0.40.0 (since v0.39.2)
 
 ### Keep the assistant's answers to train its model

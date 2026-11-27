@@ -145,7 +145,7 @@ func run(configPath, logPath string, live bool) error {
 		runs:  map[string]context.CancelFunc{},
 		nats:  natsStartState(emb, nc, err, envvars.Get("GORUN_SKIP_NATS") != ""),
 		gen:   newGenerator(),
-		auth:  newAuth(context.Background(), envvars.Get("GORUN_ADMIN_PASSWORD"), envvars.Get("GORUN_ADMINS"), st),
+		auth:  newAuth(context.Background(), envvars.Get("GORUN_ADMIN_PASSWORD"), envvars.Get("GORUN_ADMINS"), envvars.Get("GORUN_PROXY_USERS"), st),
 
 		noFile:      configPath == "",
 		keepsStored: stored,

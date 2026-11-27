@@ -84,10 +84,15 @@ GORUN_LABELS="ticket=CHG-42,team=ops" gorun Gorunfile -r
   variables they set; any other system that sets `CI` shows as `ci`.
 - **Git.** gorun asks `git` about the folder the Gorunfile is in, and gives up after 2 seconds.
   A password or token in the remote's URL is never recorded.
-- **The web UI's user.** A web run's user is the account the web server runs as. Its web user
-  is whoever signed in (see [signing in](web.md#signing-in)); behind an auth proxy, gorun reads `X-Forwarded-User`, `X-Auth-Request-User` or
-  `Remote-User`. Those headers are only as trustworthy as the proxy, so don't let browsers reach
-  gorun directly.
+- **The web UI's user.** Running tasks from the web UI needs a signed-in user, recorded as the
+  run's web user (`gorun.web_user` and `enduser.id`); its user is the account the web server runs
+  as. See [signing in](web.md#signing-in). Behind an auth proxy, gorun reads `X-Forwarded-User`,
+  `X-Auth-Request-User` or `Remote-User` for the users `GORUN_ADMINS` and `GORUN_PROXY_USERS`
+  list. Those headers are only as trustworthy as the proxy, so don't let browsers reach gorun
+  directly.
+- **Scheduled runs** have no web user: their trigger is `schedule`, with the schedule's name, and
+  their user is the account `gorun -serve` runs as. On the servers, tasks run as the SSH user the
+  Gorunfile gives each server, and as root with `sudo = true`, as every run does.
 - **Programs built on gorun** can set fields on `Config.Origin` before `Run` (a version, a
   trigger, labels). `Run` fills in the rest.
 

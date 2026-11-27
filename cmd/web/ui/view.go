@@ -37,6 +37,7 @@ type Viewer struct {
 	User    string // who is signed in, or ""
 	Admin   bool   // may manage users and models: an admin, or anyone while there is no login
 	Users   bool   // the history database is open, so there are users to manage
+	CanRun  bool   // signed in, so may start runs
 	Proxy   bool   // signed in by an auth proxy, so there is no sign out here
 	Path    string // the page, to come back to after signing in
 }

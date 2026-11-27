@@ -50,7 +50,8 @@ type who struct {
 // admin password, proxy admins or users, everyone may do everything, as before there was a login.
 type auth struct {
 	password string       // GORUN_ADMIN_PASSWORD, which signs in as adminName
-	admins   []string     // GORUN_ADMINS: users an auth proxy in front of gorun may sign in
+	admins   []string     // GORUN_ADMINS: users an auth proxy in front of gorun signs in as admins
+	proxy    []string     // GORUN_PROXY_USERS: users it signs in as plain users; "*" is anyone it names
 	st       *store.Store // the users, when the history database is open
 	key      []byte       // signs session cookies
 
@@ -59,13 +60,8 @@ type auth struct {
 	checkedAt time.Time
 }
 
-func newAuth(ctx context.Context, password, admins string, st *store.Store) *auth {
-	a := &auth{password: password, st: st}
-	for _, u := range strings.Split(admins, ",") {
-		if u = strings.TrimSpace(u); u != "" {
-			a.admins = append(a.admins, u)
-		}
-	}
+func newAuth(ctx context.Context, password, admins, proxyUsers string, st *store.Store) *auth {
+	a := &auth{password: password, st: st, admins: names(admins), proxy: names(proxyUsers)}
 	if st != nil {
 		// kept in the database, so every gorun on it accepts the same sessions
 		key, err := st.SessionKey(ctx)
@@ -82,12 +78,23 @@ func newAuth(ctx context.Context, password, admins string, st *store.Store) *aut
 	return a
 }
 
+// names splits a comma-separated list of user names.
+func names(list string) []string {
+	var out []string
+	for _, u := range strings.Split(list, ",") {
+		if u = strings.TrimSpace(u); u != "" {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
 // on reports whether changes need signing in.
 func (au *auth) on() bool {
 	if au == nil {
 		return false
 	}
-	return au.password != "" || len(au.admins) > 0 || au.usersExist()
+	return au.password != "" || len(au.admins) > 0 || len(au.proxy) > 0 || au.usersExist()
 }
 
 // usersExist reports whether the database has users, asking it again now and then while it has none.
@@ -118,14 +125,14 @@ func (au *auth) usersChanged() {
 // describe is the startup message's login line.
 func (au *auth) describe() string {
 	if !au.on() {
-		return "none: anyone who can open the web UI may run tasks, edit the Gorunfile and download models (add a user on the Users page, or set GORUN_ADMIN_PASSWORD)"
+		return "none: anyone who can open the web UI may edit the Gorunfile and download models, and nobody may run tasks until they sign in (add a user on the Users page, or set GORUN_ADMIN_PASSWORD)"
 	}
 	var ways []string
 	if au.password != "" {
 		ways = append(ways, "admin password")
 	}
-	if len(au.admins) > 0 {
-		ways = append(ways, "proxy users in GORUN_ADMINS")
+	if len(au.admins) > 0 || len(au.proxy) > 0 {
+		ways = append(ways, "users an auth proxy names (GORUN_ADMINS, GORUN_PROXY_USERS)")
 	}
 	if au.usersExist() {
 		ways = append(ways, "users kept in the history database")
@@ -139,8 +146,13 @@ func (au *auth) user(r *http.Request) who {
 		return who{}
 	}
 	for _, h := range proxyUserHeaders {
-		if u := r.Header.Get(h); u != "" && slices.Contains(au.admins, u) {
+		u := r.Header.Get(h)
+		switch {
+		case u == "":
+		case slices.Contains(au.admins, u):
 			return who{Name: u, Admin: true, Proxy: true}
+		case slices.Contains(au.proxy, u) || slices.Contains(au.proxy, "*"):
+			return who{Name: u, Proxy: true}
 		}
 	}
 	c, err := r.Cookie(sessionCookie)
@@ -266,10 +278,27 @@ func adminOnly(path string) bool {
 	return false
 }
 
+// runPaths start runs. Only a signed-in user may start one, login or not, so every run from the
+// web UI records who started it.
+var runPaths = []string{"/run"}
+
 // guard lets anyone look, signed-in users change things, and only admins manage users and models.
+// Starting a run always needs a signed-in user.
 func (a *app) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		read := r.Method == http.MethodGet || r.Method == http.MethodHead
+		if !read && slices.Contains(runPaths, r.URL.Path) {
+			u := a.auth.user(r)
+			switch {
+			case u.Name != "":
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), whoKey{}, u)))
+			case !a.auth.on():
+				redirectWith(w, r, "/run", "Running tasks needs a signed-in user. Add one on the Users page first: you are signed in as them.", true)
+			default:
+				deny(w, r, "Sign in to run tasks.")
+			}
+			return
+		}
 		admin := adminOnly(r.URL.Path)
 		if !a.auth.on() || (read && !admin) || (!read && slices.Contains(openPosts, r.URL.Path)) {
 			next.ServeHTTP(w, r)
@@ -368,6 +397,7 @@ func (a *app) pageCtx(r *http.Request) context.Context {
 	on := a.auth.on()
 	return ui.WithViewer(a.renderCtx(), ui.Viewer{
 		LoginOn: on, User: u.Name, Admin: !on || u.Admin, Proxy: u.Proxy, Path: r.URL.RequestURI(),
-		Users: a.store != nil,
+		CanRun: u.Name != "",
+		Users:  a.store != nil,
 	})
 }

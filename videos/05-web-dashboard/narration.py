@@ -16,7 +16,7 @@ NARRATION = {
         "It also starts a small NATS server of its own, which is how runs send their events to the dashboard. "
         "So live updates and history just work, with nothing else to install.\n"
         "One important warning. Out of the box, the dashboard has no login, so anyone who can reach the port can run tasks. "
-        "The startup message says so. We'll add users at the end of this video. "
+        "The startup message says so. And nobody can run tasks until they've signed in, so we'll add a user before we run anything. "
         "Or bind it to localhost with G O R U N address, and reach it through an S S H tunnel."
     ),
     "gorunfiles": (
@@ -67,11 +67,12 @@ NARRATION = {
         "Video ten covers it in detail."
     ),
     "users": (
-        "Now, the login. Open the Users page, and add the first user. They're an admin, and you're signed in as them. "
-        "From then on, anyone can still look around and ask the assistant, but changing things means signing in.\n"
+        "Before we run anything, open the Users page, and add yourself. The first user is an admin, and you're signed in as them. "
+        "From then on, anyone can still look around and ask the assistant, but changing things means signing in. "
+        "And running tasks always needs a signed-in user, so every run records who started it.\n"
         "A user can run tasks and edit the Gorunfile. An admin can also manage users, and the assistant's models. "
         "Passwords are kept as bcrypt hashes, in the history database, so with Postgres or MySQL every dashboard on it shares the same users.\n"
-        "There's also G O R U N admin password, which signs in as admin, and G O R U N admins, for an auth proxy in front."
+        "There's also G O R U N admin password, which signs in as admin, and for an auth proxy in front, G O R U N admins and G O R U N proxy users."
     ),
     "outro": (
         "So that's the dashboard. Start it with gorun dash serve, keep your Gorunfiles in its database, "

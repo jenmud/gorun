@@ -171,8 +171,8 @@ func (a *app) startRunHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // webOrigin is the origin of a run started from the web UI: the browser's address, and the
-// user an auth proxy in front of gorun says is signed in. The rest (this machine, its user,
-// the Gorunfile) gorun fills in when the run starts.
+// signed-in user who started it. The rest (this machine, its user, the Gorunfile) gorun fills in
+// when the run starts.
 func webOrigin(r *http.Request) gorun.Origin {
 	client := r.RemoteAddr
 	if host, _, err := net.SplitHostPort(client); err == nil {
@@ -181,17 +181,7 @@ func webOrigin(r *http.Request) gorun.Origin {
 	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
 		client += " (forwarded for " + fwd + ")"
 	}
-	o := gorun.Origin{Version: Version, Trigger: "web", Client: client}
-	for _, h := range proxyUserHeaders {
-		if u := r.Header.Get(h); u != "" {
-			o.WebUser = u
-			break
-		}
-	}
-	if o.WebUser == "" {
-		o.WebUser = signedIn(r)
-	}
-	return o
+	return gorun.Origin{Version: Version, Trigger: "web", Client: client, WebUser: signedIn(r)}
 }
 
 // planRun loads the saved Gorunfile into cfg and works out what each ticked server runs. Ticked tasks or

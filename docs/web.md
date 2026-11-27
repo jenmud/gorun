@@ -102,9 +102,13 @@ The embedded server stops when `gorun -serve` exits.
 
 ## Signing in
 
-Without a login, anyone who can reach the port can run tasks, browse folders, edit the Gorunfile
-and download models, and the web UI listens on all interfaces by default. There are three ways to
-turn the login on; any of them can be used together.
+**Running tasks always needs a signed-in user**, so every run started from the web UI records who
+started it (its **Web user**, shown first on the run in Live and History, and sent to
+OpenTelemetry as `enduser.id`). With no login set up, the Run page says to add a user first.
+
+Without a login, anyone who can reach the port can browse folders, edit the Gorunfile and download
+models, and the web UI listens on all interfaces by default. There are three ways to turn the
+login on; any of them can be used together.
 
 **Users.** Open the **Users** page and add the first user. They are an admin, and the browser
 that added them is signed in as them; from then on, changes need signing in. An admin adds more
@@ -121,9 +125,11 @@ GORUN_ADMIN_PASSWORD="$(cat ~/.gorun/admin-password)" gorun -serve Gorunfile
 It works without the history database, and keeps a way in if every admin forgets their password.
 
 **An auth proxy** such as oauth2-proxy or Authelia: list its users who are admins in
-`GORUN_ADMINS=alice,bob`. gorun trusts the user the proxy names in `X-Forwarded-User`,
-`X-Auth-Request-User` or `Remote-User`, so gorun must be reachable only through the proxy:
-anyone who can reach it directly can send that header.
+`GORUN_ADMINS=alice,bob`, and those who are plain users in `GORUN_PROXY_USERS=sam,kim`, or
+`GORUN_PROXY_USERS=*` for anyone the proxy signs in. gorun trusts the user the proxy names in
+`X-Forwarded-User`, `X-Auth-Request-User` or `Remote-User`, so gorun must be reachable only
+through the proxy: anyone who can reach it directly can send that header. A name the proxy sends
+that neither lists is not signed in, and is never recorded on a run.
 
 With a login on, anyone may still look: the Live, History, Tasks and other pages, and asking the
 assistant. Changes need **Sign in**, at the top right:
@@ -131,7 +137,8 @@ assistant. Changes need **Sign in**, at the top right:
 | | Anyone | User | Admin |
 |---|---|---|---|
 | Look at every page, ask the assistant | yes | yes | yes |
-| Start and cancel runs, save tasks the assistant wrote, edit the Gorunfile and schedules, delete history | | yes | yes |
+| Start runs (recorded as theirs) | | yes | yes |
+| Cancel runs, save tasks the assistant wrote, edit the Gorunfile and schedules, delete history | | yes | yes |
 | Open, close, delete and download the assistant's models | | | yes |
 | Add users, set their passwords, delete them | | | yes |
 
@@ -269,6 +276,7 @@ failure, and **Clear finished** drops the runs that are over. **Start a run** op
 ### Run
 
 The picker (`/run`): tick servers, then tasks or bundles (not both), and press **Run selected**.
+It needs a signed-in user, recorded on the run (see [signing in](#signing-in)).
 The run starts and the page moves to **Live** to watch it. **Force** runs every task even when its
 [check](gorunfile.md#checks-run-only-when-needed) says there is nothing to do, and **Check only**
 is a dry run that only runs the checks: its tasks end *unchanged* or *would run*, and the run is

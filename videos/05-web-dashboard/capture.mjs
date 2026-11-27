@@ -34,6 +34,17 @@ await go("/config");
 await p.locator("text=Switch or create").first().scrollIntoViewIfNeeded(); await p.evaluate(() => scrollBy(0, 160)); await p.waitForTimeout(300);
 await shot("config-gorunfile");
 
+// running needs a signed-in user: the first one added turns the login on, signed in; a second,
+// who isn't an admin, is added by them
+await go("/users"); await shot("users-first");
+const addUser = async (name) => {
+  await p.fill("form[action='/users/add'] input[name=name]", name);
+  await p.fill("form[action='/users/add'] input[name=password]", "demo-password-" + name);
+  await Promise.all([p.waitForNavigation(), p.click("form[action='/users/add'] button")]);
+};
+await addUser("alice"); await addUser("bob");
+await p.waitForTimeout(400); await shot("users");
+
 // two runs that pass first, so Live's stats and Recent runs have something to show
 async function run(servers, pick, wait) {
   await go("/run");
@@ -65,13 +76,5 @@ await go("/bundles"); await shot("bundles");
 await go("/schedules"); await shot("schedules");
 await go("/assistant"); await shot("assistant");
 
-// the first user turns the login on; a second, who isn't an admin, is added by them
-await go("/users"); await shot("users-first");
-const addUser = async (name) => {
-  await p.fill("form[action='/users/add'] input[name=name]", name);
-  await p.fill("form[action='/users/add'] input[name=password]", "demo-password-" + name);
-  await Promise.all([p.waitForNavigation(), p.click("form[action='/users/add'] button")]);
-};
-await addUser("alice"); await addUser("bob");
-await p.waitForTimeout(400); await shot("users");
+
 await b.close();

@@ -41,7 +41,8 @@ run NATS, set `GORUN_NATS_CLIENT_URL` to use it.
 A task's `check` and `verify` run in a scheduled run just as in any other:
 
 - `backup` has a check that looks for today's `backup done` line, so it runs at most once a day.
-  Start `@nightly` by hand from the Run page, then again: the second time `backup` shows
+  Start `@nightly` by hand from the Run page (add yourself on the Users page first: running needs
+  a signed-in user), then again: the second time `backup` shows
   *unchanged* and only `report` runs.
 - `backup` and `report` have a `verify`, so a run that didn't write its log line fails, and the
   schedule's run shows as failed in History, with the verify's output in its own drop-down.

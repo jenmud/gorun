@@ -11,6 +11,14 @@ p.setDefaultTimeout(300000);
 const shot = async (name) => p.screenshot({ path: `${out}/${name}.png` });
 const go = async (path, wait = 1200) => { await p.goto(base + path); await p.waitForTimeout(wait); };
 const replies = {};
+// signIn adds the first user, which turns the login on with this browser signed in, or signs in
+// as them when they are there already: running tasks needs a signed-in user.
+async function signIn(page) {
+  const form = { name: "dev", password: "demo-password" };
+  await page.request.post(base + "/users/add", { form });
+  await page.request.post(base + "/login", { form: { ...form, next: "/" } });
+}
+await signIn(p);
 const top = async () => { await p.evaluate(() => scrollTo(0, 0)); await p.waitForTimeout(300); };
 
 async function run(servers, pick) {

@@ -28,6 +28,7 @@ func originRows(o *store.Origin) []originRow {
 			rows = append(rows, originRow{Label: label, Value: value})
 		}
 	}
+	add("Web user", o.WebUser)
 	user := o.User
 	if o.UID != "" && user != "" {
 		user += " (uid " + o.UID + ")"
@@ -42,7 +43,6 @@ func originRows(o *store.Origin) []originRow {
 	}
 	add("Machine", strings.TrimPrefix(machine, " · "))
 	add("Started from", o.Trigger)
-	add("Web user", o.WebUser)
 	add("Browser", o.Client)
 	add("SSH from", o.SSHClient)
 	add("gorun", o.Version)

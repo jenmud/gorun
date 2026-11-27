@@ -70,7 +70,7 @@ SCENES = [
         (6, start_output()),
         (8, slide("No login until you add one", [
             ("warn", "Anyone who can reach the port can run tasks", "until you add a user, or set a password"),
-            ("", "Add users", "on the Users page, at the end of this video"),
+            ("", "Add users", "on the Users page: running tasks needs one"),
             ("", "Or bind it to your own machine", "GORUN_ADDRESS=127.0.0.1:8080 gorun -serve"),
         ])),
     ]),
@@ -81,6 +81,15 @@ SCENES = [
             ("", "Share tasks", 'include = ["stored::base"]'),
             ("", "Every save is a version", "Export as zip: one file per task"),
             ("", "Only watching?", "gorun -serve -live: Live, History and Assistant"),
+        ])),
+    ]),
+    ("users", None, [
+        (5, shot("users-first", "Users: add yourself before you run anything")),
+        (7, shot("users", "Admins and users, kept in the history database")),
+        (6, slide("Who may do what", [
+            ("", "Anyone", "looks at every page and asks the assistant"),
+            ("", "A user", "also runs tasks, recorded on every run, and edits"),
+            ("", "An admin", "also manages users and the assistant's models"),
         ])),
     ]),
     ("run", None, [
@@ -110,15 +119,6 @@ SCENES = [
         (5, slide("Experimental", [
             ("", "A small model, trained on gorun", "runs on your own machine"),
             ("warn", "Needs much more training", "it can make things up: read everything it writes"),
-        ])),
-    ]),
-    ("users", None, [
-        (5, shot("users-first", "Users: the first one turns the login on")),
-        (7, shot("users", "Admins and users, kept in the history database")),
-        (6, slide("Who may do what", [
-            ("", "Anyone", "looks at every page and asks the assistant"),
-            ("", "A user", "also runs tasks and edits the Gorunfile"),
-            ("", "An admin", "also manages users and the assistant's models"),
         ])),
     ]),
     ("outro", None, [(1, slide("Recap", [

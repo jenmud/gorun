@@ -153,7 +153,8 @@ gorun -serve                 # open http://localhost:8080
 With no Gorunfile named, it keeps them in its history database: the first start saves an empty one
 called `default`. Add servers and tasks on the **Config** page, import a Gorunfile you have, or ask
 the **Assistant** to write tasks; every save is a version. Then tick servers on **Run** and watch
-them on **Live**. Open **Users** and add yourself first, so only signed-in users can change things.
+them on **Live**. Open **Users** and add yourself first: running tasks needs a signed-in user, and
+every run records who started it.
 See [the web UI](docs/web.md).
 
 ### From a terminal or CI

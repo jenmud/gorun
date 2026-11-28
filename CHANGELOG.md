@@ -4,6 +4,14 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.40.4 (since v0.40.3)
+
+### Commands entered in the web UI run in sh
+- A command, check or verify of more than one line, entered or edited in the web UI's task
+  forms, was saved with the browser's \r\n line breaks, and sh then failed on the \r
+  (`set: Illegal option -`). The forms now save Unix line breaks. A task saved before this still
+  has them: open it in the web UI and save it again.
+
 ## v0.40.3 (since v0.40.2)
 
 ### The assistant's model is v5, and it sees what passed tasks printed

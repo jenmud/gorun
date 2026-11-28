@@ -347,7 +347,7 @@ func zoneOr(zone string) string {
 // applyEdit writes the edit form's fields over body. A cleared field removes the key.
 func applyEdit(kind string, body map[string]any, form url.Values) error {
 	put := func(m map[string]any, k, v string) {
-		if v = strings.TrimSpace(v); v == "" {
+		if v = formText(v); v == "" {
 			delete(m, k)
 		} else {
 			m[k] = v
@@ -871,7 +871,7 @@ func newChange(kind, name, file string, form url.Values) (gorun.Change, error) {
 		setList(body, "tasks", form.Get("tasks"))
 		setSSH(body, form)
 	case kindTask:
-		cmd := strings.TrimSpace(form.Get("cmd"))
+		cmd := formText(form.Get("cmd"))
 		if cmd == "" {
 			return gorun.Change{}, errors.New("a task needs a command")
 		}
@@ -927,9 +927,15 @@ func setSSH(body map[string]any, form url.Values) {
 
 // setIf sets key to value when the value is not blank.
 func setIf(body map[string]any, key, value string) {
-	if v := strings.TrimSpace(value); v != "" {
+	if v := formText(value); v != "" {
 		body[key] = v
 	}
+}
+
+// formText is a form field's text, trimmed and with Unix line breaks: browsers send a
+// textarea's lines ending in \r\n, and a \r left in a command breaks it in sh.
+func formText(v string) string {
+	return strings.TrimSpace(strings.ReplaceAll(v, "\r\n", "\n"))
 }
 
 // setList sets key to the comma separated items in value, when there are any.

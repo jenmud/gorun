@@ -577,3 +577,361 @@ want = ["database", "file", "-serve"]
 q = ["What does check_copies do?", "how does check_copies decide whether to copy?"]
 a = """check_copies = true compares each copy's file with the one already at its destination on the server, by MD5 hashes the server works out itself, so nothing is sent to compare. When every file matches, nothing is copied and the task is unchanged, as if a check passed. When one differs or is missing, the files are copied and the command runs. With a check as well, the task is unchanged only when both say there is nothing to do."""
 want = ["md5", "unchanged", "copy"]
+
+[[qa]]
+q = ["""one of the tasks created this command but failed
+
+set -e
+curl -fsS 'https://api.example.com/v1/bets?limit=50' -o /tmp/bets.json
+jq -r '
+  (map(select(.place)) | group_by(.place) | map(.[] | length)) as $places
+  | (map(select(.status == "success")) | length) as $success
+  | (map(select(.status == "failed")) | length) as $failed
+  | "places: \\(.places[] | join ', ')"
+  | "successful: \\($success)"
+  | "failed: \\($failed)"
+  | (map(select(.status == "failed")) | map(.failure_reason)) as $reasons
+  | if $reasons[] then "failed with: \\($reasons[] | join ', ')" else "no failures" fi
+' /tmp/bets.json
+
+what is wrong with it""", """why does this jq fail?
+
+jq -r '
+  (map(select(.status == "failed")) | length) as $failed
+  | "places: \\(.places[] | join ', ')"
+  | "failed: \\($failed)"
+  | if $failed then "some failed" else "no failures" fi
+' /tmp/bets.json"""]
+a = """It fails before jq runs anything. The program is in single quotes, and `join ', '` holds a single quote, which ends the shell's quote: jq gets the program in pieces and stops with "jq: 1 compile error".
+
+Fixing the quote isn't enough, though:
+- jq's join takes parentheses and double quotes: `join(", ")`.
+- jq ends an `if` with `end`, not `fi`.
+- Each `|` passes its output on and drops what came before, so `"places: …" | "failed: …"` prints only the last string, and anything after it gets a string, not the array. Separate the lines with `,` instead.
+- `.places` reads a field of the input that isn't there; the variable is `$places`.
+- `if $reasons[]` loops over the reasons, so with none it prints nothing at all; test `length > 0` instead.
+
+This one prints each line:
+
+```bash
+set -e
+curl -fsS 'https://api.example.com/v1/bets?limit=50' -o /tmp/bets.json
+jq -r '
+  "places: \\(map(.place // empty) | group_by(.) | map("\\(.[0]) (\\(length))") | join(", "))",
+  "successful: \\(map(select(.status == "success")) | length)",
+  "failed: \\(map(select(.status == "failed")) | length)",
+  (map(select(.status == "failed") | .failure_reason // "unknown")
+   | if length > 0 then "failed with: \\(join(", "))" else "no failures" end)
+' /tmp/bets.json
+```
+
+The field names (place, status, failure_reason) are guesses: check them with `jq '.[0]' /tmp/bets.json`. In a Gorunfile, put the cmd in a ''' block so TOML needs no escapes."""
+want = ["quote", "join(", "end"]
+
+[[qa]]
+q = ['''will this suggestion fix the issue
+
+```
+[tasks.bet-report]
+description = "Count the bets by place and by status, and group the failed ones by reason (local only)"
+check = "false"
+cmd = "jq -r 'map(select(.status == \"failed\")) | .[] | \"places: \(.places[] | join \", \")\\nsuccessful: \($success)\\nfailed: \($failed)\\nfailed with: \($reasons[] | join \", \")' /tmp/bets.json"
+verify = "jq -r 'map(select(.status == \"failed\")) | .[] | \"places: \(.places[] | join \", \")\\nsuccessful: \($success)\\nfailed: \($failed)\\nfailed with: \($reasons[] | join \", \")' /tmp/bets.json | grep -q 'failed with'"
+sudo = true
+rerun = "safe"
+```''', '''Does this task work now?
+
+[tasks.bet-report]
+check = "false"
+cmd = "jq -r 'map(select(.status == \"failed\")) | .[] | \"failed: \($failed)\\nfailed with: \($reasons[] | join \", \")' /tmp/bets.json"
+verify = "jq -r 'map(select(.status == \"failed\")) | .[] | \"failed with: \($reasons[] | join \", \")' /tmp/bets.json | grep -q 'failed with'"
+sudo = true''']
+a = """No. The Gorunfile won't load with it: in a "…" string TOML allows only a few escapes, and `\\(` isn't one, so loading fails with an invalid escape.
+
+The jq is still broken under that:
+- `join ", "` still has no parentheses; jq needs `join(", ")`.
+- `$success`, `$failed` and `$reasons` are never defined, so jq stops with "$success is not defined".
+- It keeps only the failed bets and prints a block for each one, so it can't count the successful ones, and prints the summary once per failed bet.
+- Nothing downloads /tmp/bets.json: the curl is gone.
+
+And the task's settings:
+- The verify runs the whole command again and needs "failed with" in its output, so a day with no failures fails the task.
+- Reading a file in /tmp doesn't need sudo = true, and with it the task fails where the login user needs a password for sudo.
+
+Put the cmd in a ''' block, where nothing is escaped, so the jq is written as the shell sees it:
+
+```toml
+[tasks.bet-report]
+description = "Count the bets by place and status, and list why the failed ones failed"
+local = true
+cmd = '''
+set -e
+curl -fsS 'https://api.example.com/v1/bets?limit=50' -o /tmp/bets.json
+jq -r '
+  "places: \\(map(.place // empty) | group_by(.) | map("\\(.[0]) (\\(length))") | join(", "))",
+  "successful: \\(map(select(.status == "success")) | length)",
+  "failed: \\(map(select(.status == "failed")) | length)",
+  (map(select(.status == "failed") | .failure_reason // "unknown")
+   | if length > 0 then "failed with: \\(join(", "))" else "no failures" end)
+' /tmp/bets.json
+'''
+verify = "jq -e 'type == \\"array\\"' /tmp/bets.json >/dev/null"
+```
+
+With no check it runs every time, which a report should. Check the field names (place, status, failure_reason) against the real response with `jq '.[0]' /tmp/bets.json`."""
+want = ["escape", "'''", "join("]
+
+[[qa]]
+q = ['''now I am getting
+
+```
+verify failed: exit status 3: jq: 1 compile error
+```''', '''The command works now but the task still fails with "verify failed: exit status 3: jq: 1 compile error"''', '''I fixed the jq in cmd, why does bet-report still fail with verify failed: jq: 1 compile error?''']
+a = """The command works now; it's the task's verify that fails. gorun runs the verify after the command, and "verify failed" means the verify exited non-zero, here with jq's compile error: the verify still holds the old jq, with the same mistakes the command had (`join ", "` without parentheses, variables like `$success` that are never set).
+
+A verify only needs to check that the command did its job, not repeat it. For a report that downloads JSON, check the download is a JSON array:
+
+```toml
+verify = "jq -e 'type == \\"array\\"' /tmp/bets.json >/dev/null"
+```
+
+`jq -e` exits non-zero when the result is false or null, so the verify fails when the download isn't the array the report reads. While you're there: leave check empty (or `false`) so the report runs every time, and untick sudo, since reading /tmp doesn't need root."""
+want = ["verify", "jq -e"]
+
+[[qa]]
+q = ['''the suggested and generated task command does not sum the responses correctly
+
+eg:
+
+[{"id":5101,"method":"place","status":"OK","request":{"params":{"batches":[{"bets":[{"id":1,"stake":5.0,"selection":"6"}],"meta":{"bet_type":"Place","race_number":3}}]}},"response":{"result":{"bets":[{"id":1,"code":200,"cost":5.0,"status":"OK","message":"SUCCESS","receipt":"6788"}]}},"runtime_ms":7222.7},{"id":5102,"method":"place","status":"OK","request":{"params":{"batches":[{"bets":[{"id":1,"stake":3.0,"selection":"3"},{"id":2,"stake":4.0,"selection":"2"}],"meta":{"bet_type":"Place","race_number":3}}]}},"response":{"result":{"bets":[{"id":1,"code":400,"cost":0.0,"status":"ERROR","message":"Unknown","receipt":""},{"id":2,"code":200,"cost":4.0,"status":"OK","message":"SUCCESS","receipt":"4789"}]}},"runtime_ms":4512.7}]
+
+give me
+
+```
+places:
+successful: 0
+failed: 0
+no failures
+```''', '''My bet report prints successful: 0 and failed: 0 but the API returned bets. A record looks like {"id":5103,"method":"place","status":"OK","response":{"result":{"bets":[{"id":1,"status":"ERROR","message":"Race closed","cost":0.0},{"id":2,"status":"OK","message":"SUCCESS","cost":1.0}]}}}. What's wrong?''']
+a = """The jq reads fields your records don't have. It looks for a `.place` field and a `.status` of "success" or "failed" on each record, but:
+- each record is one place request, and its own `status` is "OK" even when bets in it failed;
+- the results are per bet, in `.response.result.bets[]`, each with a `status` of "OK" or "ERROR", a `message` (the reason) and a `cost`.
+
+So nothing matched and every count was 0. Count the bets instead:
+
+```bash
+jq -r '[.[] | .response.result.bets[]?] as $b | ($b | map(select(.status == "OK"))) as $ok | ($b | map(select(.status != "OK"))) as $bad | "places: \\(length) requests, \\($b | length) bets", "successful: \\($ok | length) (\\($ok | map(.cost) | add // 0) placed)", "failed: \\($bad | length)", (if ($bad | length) > 0 then "failed with: \\($bad | group_by(.message) | map("\\(.[0].message) (\\(length))") | join(", "))" else "no failures" end), "success rate: \\(if ($b | length) > 0 then ($ok | length) * 1000 / ($b | length) | round / 10 else 0 end)%"' /tmp/bets.json
+```
+
+It prints the requests and bets, the successful bets with their total cost, the failed ones grouped by message, and the success rate; an empty response prints zeros and "no failures". Before writing a report, look at one record with `jq '.[0]' /tmp/bets.json` so the field names come from the data, not a guess."""
+want = [".response.result.bets", "status"]
+
+[[qa]]
+q = ["how do you add the gorun user to have sudo access", "How do I give gorun sudo?", "my task needs sudo, how do I let the gorun user use it?"]
+a = """It depends on where gorun runs.
+
+In gorun's Docker image you can't: the image runs as the gorun user and has no sudo. Put what your tasks need in the image instead, so they don't have to install anything (see the next question's Dockerfile).
+
+On a normal machine, do it once by hand as root. gorun can't do it as a task, because writing the rule is what needs sudo. gorun runs a sudo = true task as `sudo -n sh -c '…'`, so the rule has to allow any command:
+
+```bash
+echo 'gorun ALL=(root) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/gorun
+sudo chmod 0440 /etc/sudoers.d/gorun
+sudo visudo -cf /etc/sudoers.d/gorun
+```
+
+visudo -cf checks the file, since a broken sudoers file can lock everyone out of sudo. Use the name of the user gorun runs as, if it isn't gorun. That user can then run anything as root, so give it to a dedicated account only."""
+want = ["sudoers.d", "nopasswd", "docker"]
+
+[[qa]]
+q = ["My local tasks need curl and jq but gorun runs in Docker. How do I install them?", "curl: not found in a local task, gorun runs in its docker image", "how do I add packages to the gorun docker image?"]
+a = """Build your own image on top of gorun's, installing them as root, then switch back to the gorun user. gorun's image has no sudo, so a task can't install them itself.
+
+For the default image, which is Alpine:
+
+```dockerfile
+FROM ghcr.io/jenmud/gorun:latest
+USER root
+RUN apk add --no-cache curl jq
+USER gorun
+```
+
+For the image with the assistant's model built in (`make docker`), which is Debian:
+
+```dockerfile
+FROM gorun:llm
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends curl jq && rm -rf /var/lib/apt/lists/*
+USER gorun
+```
+
+Build it with `docker build -t gorun-tools .` and run that image instead. Then drop any task that installs them, and its depends_on."""
+want = ["user root", "user gorun", "jq"]
+
+# --- Round 6: Go templates, parsing output, docker and docker compose
+
+[[qa]]
+q = ["My command printed <no value>, what does that mean?", "why does my task run echo port=<no value>?", "sh: syntax error near unexpected token `newline' and the command has <no value> in it"]
+a = """`<no value>` is what a Go template prints for a key that isn't there. gorun filled in the task's templates for the server, and one of them, such as `{{ .vars.port }}`, named a var the task doesn't have, so the command became `echo port=<no value>`, which sh then can't parse (the `<` and `>` are redirects).
+
+Check the name against the task's vars: `{{ .vars.port }}` reads `vars = { port = 8080 }` on the same task; a server's own vars are `{{ .Server.Vars.port }}`. If the `{{ }}` belongs to another tool, such as `docker ps --format '{{.Names}}'`, set `raw = true` on the task so gorun leaves it alone."""
+want = ["vars", "raw"]
+
+[[qa]]
+q = ["docker ps --format '{{.Names}}' prints nothing in a task", "how do I use docker --format in a gorun task?", "my docker inspect -f template comes out empty"]
+a = """gorun fills in every `{{ }}` in a task as its own Go template before the command runs, so docker's `{{.Names}}` became `<no value>` before docker saw it. Set `raw = true` on the task, and gorun uses the command, check and verify exactly as written:
+
+```toml
+[tasks.containers]
+description = "List the running containers"
+raw = true
+check = "false"
+cmd = "docker ps --format '{{.Names}} {{.Status}}'"
+verify = "docker info >/dev/null"
+```
+
+With raw = true the task can't use gorun's templates too. If it needs both, put docker's braces in a template string: `{{ "{{.Names}}" }}` prints `{{.Names}}`."""
+want = ["raw = true"]
+
+[[qa]]
+q = ["What can I use in gorun templates?", "which functions do gorun templates have?", "function \"upper\" not defined in my task"]
+a = """gorun's templates are Go's text/template with its built-in functions only: `printf`, `index`, `len`, `slice`, `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `and`, `or`, `not`, `print`, `println`, `html`, `js` and `urlquery`. There is no `upper`, `default` or other Sprig function, so a template that calls one stops the run before it starts with `function "upper" not defined`.
+
+What a template sees: the server's fields (`{{ .Name }}`, `{{ .Hostname }}`, `{{ .Tags }}`, `{{ .IsLocal }}`), its vars as `{{ .Server.Vars.key }}`, its env vars as `{{ index .EnvVars "KEY" }}`, and the task's vars as `{{ .vars.key }}`. For example:
+
+```
+{{ if .IsLocal }}local{{ else }}{{ .Hostname }}{{ end }}
+{{ printf "%05d" .vars.port }}
+{{ index .vars.ports 1 }}
+{{ range .Tags }}{{ . }} {{ end }}
+```
+
+Do the rest in the shell: `echo "$NAME" | tr a-z A-Z` instead of upper."""
+want = ["printf", "index", "not defined"]
+
+[[qa]]
+q = ["How do I loop over a list in a task's template?", "range over vars in a gorun template", "how do I reach the server name inside a range?"]
+a = """Put the list in the task's vars and loop over it with `range`. Inside the loop `.` is the item, so its fields are `{{ .host }}`; `$` is still the whole data, so the server's name is `{{ $.Name }}` and other vars are `{{ $.vars.x }}`. `{{-` trims the line break before it:
+
+```toml
+[tasks.upstream]
+description = "Write the upstream for this server"
+sudo = true
+check_copies = true
+check = "systemctl is-active --quiet nginx"
+cmd = "nginx -t && systemctl reload nginx"
+verify = "nginx -t"
+[[tasks.upstream.vars.backends]]
+host = "10.0.1.11"
+port = 8080
+[[tasks.upstream.vars.backends]]
+host = "10.0.1.12"
+port = 8080
+[[tasks.upstream.copy]]
+dst = "/etc/nginx/conf.d/upstream.conf"
+content = '''
+# written for {{ .Name }}
+upstream app {
+{{- range .vars.backends }}
+    server {{ .host }}:{{ .port }};  # on {{ $.Name }}
+{{- end }}
+}
+'''
+```"""
+want = ["range", "$."]
+
+[[qa]]
+q = ["template: x:1: bad character U+007D '}'", "my Gorunfile won't run: template: deploy:1: unexpected }", "gorun says template: unclosed action"]
+a = """One of the task's templates doesn't parse: a `{{` without a matching `}}`, such as `{{.vars.port}`, or the reverse. gorun reads every template before the run starts, so nothing runs; the error names the task and what it was filling in, such as `task deploy command: template: deploy:1: bad character U+007D '}'`, where `:1` is the line.
+
+Close the braces, `{{ .vars.port }}`. If the braces aren't meant for gorun at all, such as a `{{` in a script or another tool's format string, set `raw = true` on the task."""
+want = ["}}", "raw"]
+
+[[qa]]
+q = ["My report task fails with exit code 1 and no error", "the task greps for errors and fails when there are none", "grep -c exits 1 in my task"]
+a = """grep exits 1 when it finds nothing, even `grep -c`, which prints 0 first. The last command decides the task's exit code, so a grep that matches nothing fails the task with exit 1 and nothing on stderr.
+
+Keep the count and decide yourself:
+
+```bash
+n=$(grep -ci error /var/log/app.log || true)
+echo "errors: $n"
+[ "$n" -le 10 ]
+```
+
+`|| true` keeps the 0, and the last line fails the task only when there are too many. In a pipeline only the last command's exit counts, and `set -o pipefail` doesn't exist in dash, the sh on Debian and Ubuntu, so don't rely on it."""
+want = ["|| true", "exit 1"]
+
+[[qa]]
+q = ["How do I pick a column out of a command's output in a task?", "parse the output of df in a task", "how do I get one field from a command's output?"]
+a = """awk splits each line on spaces: `$1` is the first field, `$NF` the last, and `NR` the line number, so `NR > 1` skips a header. For example, the use of / from df:
+
+```bash
+df --output=pcent / | awk 'NR == 2 { sub("%", ""); print $1 }'
+```
+
+Other tools for it:
+- `cut -d: -f1 /etc/passwd` for a fixed separator;
+- `grep -oE '[0-9]+'` to pull numbers out of a line;
+- `jq -r '.[].name'` for JSON;
+- a command's own format option where it has one, such as `df --output`, `ps -o pid,comm` or `docker ps --format` (with `raw = true` in gorun).
+
+To make the task fail on what it finds, end with a test: awk's `exit 1`, or `[ "$n" -le 90 ]`."""
+want = ["awk", "nr"]
+
+[[qa]]
+q = ["Does a task's stderr fail it?", "my command prints warnings on stderr, does gorun mark it failed?", "how does gorun decide a task failed?"]
+a = """Only the exit code: 0 passes and anything else fails the task. Output on stderr doesn't fail it; gorun keeps the end of stdout and stderr with the run either way, and the Assistant sees them.
+
+So a command that prints an error but exits 0 passes. To fail on its output, test it: `out=$(cmd 2>&1); echo "$out"; ! echo "$out" | grep -qi error` fails when the output says error. A verify does the same after the command: it runs once the command passes, and a non-zero exit fails the task."""
+want = ["exit code", "stderr"]
+
+[[qa]]
+q = ["docker compose or docker-compose, which do I use in tasks?", "docker-compose: command not found", "what's the difference between docker compose and docker-compose?"]
+a = """`docker compose` (with a space) is Compose v2, a docker plugin that comes with Docker's packages (docker-compose-plugin). `docker-compose` (with a dash) is the old Python v1, which is no longer maintained and usually not installed. Write tasks with `docker compose`, and pass the file with `-f`:
+
+```bash
+docker compose -f /opt/app/compose.yaml up -d
+```
+
+If `docker compose` says `'compose' is not a docker command`, install the docker-compose-plugin package."""
+want = ["docker compose", "plugin"]
+
+[[qa]]
+q = ["How do I make a task wait until a container is healthy?", "check a container's health in a task", "docker healthcheck status in gorun"]
+a = """`docker inspect -f '{{.State.Health.Status}}' NAME` prints `starting`, `healthy` or `unhealthy` for a container with a HEALTHCHECK. It is docker's Go template, so the task needs `raw = true`:
+
+```toml
+[tasks.wait-api]
+description = "Wait for api to be healthy"
+raw = true
+check = '[ "$(docker inspect -f "{{.State.Health.Status}}" api)" = healthy ]'
+cmd = '''
+i=0
+while [ "$(docker inspect -f '{{.State.Health.Status}}' api)" != healthy ]; do
+  i=$((i + 2)); [ "$i" -ge 60 ] && exit 1
+  sleep 2
+done
+'''
+verify = '[ "$(docker inspect -f "{{.State.Health.Status}}" api)" = healthy ]'
+```
+
+For a compose stack, `docker compose up -d --wait` does the same for every service that has a health check."""
+want = ["raw = true", "healthy"]
+
+[[qa]]
+q = ["Does docker compose up -d restart containers every time?", "is it safe to run compose up on every deploy?", "why didn't compose up recreate my container?"]
+a = """No: `docker compose up -d` compares each service with its running container and only recreates the ones whose image or settings changed, so running it every time is safe, and a task can use check = "false". It doesn't pull a newer image of the same tag on its own: run `docker compose pull` first, or `up -d --pull always`. To recreate a container that hasn't changed, use `up -d --force-recreate SERVICE`."""
+want = ["pull", "force-recreate"]
+
+[[qa]]
+q = ["How do I see why a container keeps restarting?", "my container is in a restart loop, how do I debug it from gorun?"]
+a = """Ask docker for the last exit and the end of its logs, in a task that only reads:
+
+```bash
+docker inspect -f '{{.State.Status}} exit={{.State.ExitCode}} restarts={{.RestartCount}} oom={{.State.OOMKilled}}' app
+docker logs --tail 50 app 2>&1
+```
+
+Set `raw = true` on the task, since the `{{ }}` are docker's. Exit 137 with oom=true means it ran out of memory; another non-zero exit is the app failing, and its last log lines usually say why."""
+want = ["raw = true", "oomkilled"]

@@ -32,9 +32,48 @@ description = "Show who is logged in"
 cmd = "who"
 local = true
 
+[tasks.stats-failed-units]
+description = "List failed systemd units"
+check = "false"
+cmd = "systemctl list-units --failed --plain --no-legend"
+local = true
+
+[tasks.stats-journal-errors]
+description = "Show the journal's recent errors"
+check = "false"
+cmd = "journalctl -p err -n 20 --no-pager"
+local = true
+
+[tasks.stats-var-usage]
+description = "Show what takes space in /var"
+check = "false"
+cmd = "du -sh /var/lib/docker /var/log /var/cache /var/tmp"
+sudo = true
+local = true
+
+[tasks.stats-inodes]
+description = "Show inode use"
+cmd = "df -i"
+local = true
+
+[tasks.stats-disks]
+description = "List the disks"
+cmd = "lsblk"
+local = true
+
+[tasks.stats-kernel]
+description = "Show the kernel"
+cmd = "uname -a"
+local = true
+
+[tasks.stats-top-memory]
+description = "Show the processes using the most memory"
+cmd = "ps aux --sort=-%mem"
+local = true
+
 [bundles.stats]
 description = "All the stats"
-tasks = ["stats-disk", "stats-memory", "stats-uptime", "stats-who"]
+tasks = ["stats-disk", "stats-memory", "stats-uptime", "stats-who", "stats-failed-units", "stats-journal-errors", "stats-var-usage", "stats-inodes", "stats-disks", "stats-kernel", "stats-top-memory"]
 
 [[schedule]]
 name = "stats-disk-every-minute"

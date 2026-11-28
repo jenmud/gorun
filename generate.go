@@ -305,8 +305,11 @@ func checkTasks(text string, cfg *Config, replace bool) error {
 	if err != nil {
 		return fmt.Errorf("invalid TOML: %w", err)
 	}
-	if keys := meta.Undecoded(); len(keys) > 0 {
-		return fmt.Errorf("unknown key %s", keys[0])
+	for _, key := range meta.Undecoded() {
+		// vars may nest tables and lists of tables, which a Gorunfile load allows too
+		if !isVarsNestedKey(key) {
+			return fmt.Errorf("unknown key %s", key)
+		}
 	}
 	if len(file.Tasks) == 0 && len(file.Schedule) == 0 {
 		return errors.New("no [tasks.<name>] tables or [[schedule]] entries")

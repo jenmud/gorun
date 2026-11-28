@@ -304,6 +304,7 @@ templ addTaskForm(files []FileOption) {
 			<input name="cmd" required placeholder="command to run" class={ inputClass() }/>
 			@taskFilesField(EditFields{})
 			@taskCheckFields(EditFields{})
+			@taskVarsFields(EditFields{})
 			<input name="description" placeholder="description shown in the picker" class={ inputClass() }/>
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" class="accent-violet-600"/> run with sudo</label>
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" class="accent-violet-600"/> run only on local servers</label>
@@ -442,6 +443,7 @@ templ editModal(d ConfigPageData) {
 						</label>
 						@taskFilesField(d.Edit)
 						@taskCheckFields(d.Edit)
+						@taskVarsFields(d.Edit)
 						@editField("Description", "description", d.Edit.Description, "")
 						<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" checked?={ d.Edit.Sudo } class="accent-violet-600"/> run with sudo</label>
 						<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" checked?={ d.Edit.Local } class="accent-violet-600"/> run only on local servers</label>

@@ -343,6 +343,7 @@ type EditFields struct {
 	Hostname, Groups, Tags, SSHUser, IdentityFile string
 	Cmd, Description, Tasks                       string
 	Check, Verify                                 string
+	Vars, EnvVars                                 string // TOML, one name = value per line
 	Copies, DependsOn, Timeout, Retries           string // copies one per line, "src -> dst"
 	InlineCopies                                  int    // inline-text copies, kept as they are
 	Sudo, Local, CheckCopies                      bool

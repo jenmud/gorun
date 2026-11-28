@@ -88,6 +88,7 @@ func TestCheckTasks(t *testing.T) {
 	}{
 		{"valid", "[tasks.a]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\ndepends_on = [\"update\"]", ""},
 		{"depends on a new task", "[tasks.a]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\n[tasks.b]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\ndepends_on = [\"a\"]", ""},
+		{"nested vars", "[tasks.a]\ncmd = \"true\"\ncheck = \"false\"\nverify = \"true\"\n[tasks.a.vars.db]\nport = 5432\n[[tasks.a.vars.backends]]\nhost = \"10.0.1.11\"", ""},
 		{"not toml", "sure, here you go", "invalid TOML"},
 		{"no tasks", "name = \"x\"", "unknown key"},
 		{"empty", "", "no [tasks.<name>]"},

@@ -204,3 +204,99 @@ stderr = "inactive\nverify failed: exit status 3"
 quote = "verify failed: exit status 3"
 cause = "the command ran, but its verify (<<verify>>) failed afterwards, so the change didn't take"
 fix = "run the verify by hand on <<server>> to see what it finds; for a service, its journal usually says why it isn't running"
+
+[[failure]]
+id = "jq-quote"
+match = ["jq "]
+exit = 3
+stderr = """jq: error: syntax error, unexpected end of file at <top-level>, line 5, column 33:
+      | "places: \\(.places[] | join ,
+                                    ^
+jq: 1 compile error"""
+quote = "jq: 1 compile error"
+cause = "jq couldn't parse its program: a single quote inside it (join ', ') ended the shell's single-quoted string, so jq got the program cut in pieces"
+fix = "use only double quotes inside a single-quoted jq program, as in join(\", \"), and put the cmd in a ''' block in the Gorunfile so TOML needs no escapes"
+
+[[failure]]
+id = "jq-quote-1.6"
+match = ["jq "]
+exit = 3
+stderr = """jq: error: syntax error, unexpected $end (Unix shell quoting issues?) at <top-level>, line 5:
+  | "places: \\(.places[] | join ,
+jq: 1 compile error"""
+quote = "jq: error: syntax error, unexpected $end (Unix shell quoting issues?) at <top-level>, line 5:"
+cause = "jq couldn't parse its program: no quote is missing, one is too many. The single quote inside it (join ', ') ended the shell's single-quoted string, so jq got the program cut in pieces"
+fix = "use only double quotes inside a single-quoted jq program, as in join(\", \"), and put the cmd in a ''' block in the Gorunfile so TOML needs no escapes; adding another single quote won't fix it"
+
+[[failure]]
+id = "crlf"
+match = ["set -e"]
+exit = 2
+stderr = "sh: 1: set: Illegal option -"
+quote = "sh: 1: set: Illegal option -"
+cause = "the command's lines end in \\r\\n, Windows line breaks, and sh reads the \\r as part of the line: set -e became set -e\\r. Before gorun 0.40.4 the web UI's task form saved commands with the browser's \\r\\n; a file edited on Windows does the same"
+fix = "on gorun 0.40.4 or later, open <<task>> in the web UI and save it again, which saves Unix line breaks; in a Gorunfile on disk, remove them with sed -i 's/\\r$//' Gorunfile"
+
+[[failure]]
+id = "no-sudo-binary"
+match = []
+needs_sudo = true
+exit = 2
+stderr = "check failed: exec: \"sudo\": executable file not found in $PATH"
+quote = "exec: \"sudo\": executable file not found in $PATH"
+cause = "<<task>> has sudo = true, so gorun runs its check and command with sudo -n, but <<server>> has no sudo at all. gorun's Docker image has none: it runs as the gorun user, with no sudo and no way to become root"
+fix = "where gorun runs in its Docker image, put what the task installs in the image instead (a Dockerfile FROM gorun's image that installs it as root, then USER gorun) and drop the task or its sudo = true; on a normal machine, install sudo and give the user gorun runs as a NOPASSWD rule"
+
+[[failure]]
+id = "docker-name-in-use"
+match = ["docker run"]
+exit = 125
+stderr = 'docker: Error response from daemon: Conflict. The container name "/<<task>>" is already in use by container "4f1d2c9a0b3e". You have to remove (or rename) that container to be able to reuse that name.'
+quote = "Conflict. The container name \"/<<task>>\" is already in use"
+cause = "a container with that name already exists on <<server>>, left from an earlier run, so docker run can't make another"
+fix = "give the task a check that skips it when the container is running (docker ps -q -f name=^<<task>>$ | grep -q .), and remove the old one first in the command: docker rm -f <<task>> 2>/dev/null; docker run ..."
+
+[[failure]]
+id = "docker-manifest-unknown"
+match = ["docker pull", "docker run", "docker compose pull", "compose pull"]
+exit = 1
+stderr = "Error response from daemon: manifest for registry.example.com/app:2.5.0 not found: manifest unknown: manifest unknown"
+quote = "manifest unknown"
+cause = "the registry has no image with that tag: the tag is wrong, or it hasn't been pushed yet"
+fix = "check the tag against the registry (docker manifest inspect registry.example.com/app:2.5.0), and push the image before the deploy runs"
+
+[[failure]]
+id = "compose-no-file"
+match = ["docker compose", "docker-compose"]
+exit = 14
+stderr = "no configuration file provided: not found"
+quote = "no configuration file provided: not found"
+cause = "docker compose looked for compose.yaml or docker-compose.yml in the directory the command ran in, the login user's home on <<server>>, and found none"
+fix = "pass the file: docker compose -f /opt/app/compose.yaml up -d, or cd to its folder first in the command"
+
+[[failure]]
+id = "compose-port-allocated"
+match = ["docker compose", "docker run"]
+exit = 1
+stderr = "Error response from daemon: driver failed programming external connectivity on endpoint app-api-1: Bind for 0.0.0.0:8080 failed: port is already allocated"
+quote = "Bind for 0.0.0.0:8080 failed: port is already allocated"
+cause = "another container on <<server>> already publishes port 8080, often an old one of the same app started by hand or from another compose project"
+fix = "find it with docker ps --filter publish=8080, then stop it or change one of the ports"
+
+[[failure]]
+id = "compose-plugin-missing"
+match = ["docker compose"]
+exit = 125
+stderr = "docker: 'compose' is not a docker command.\nSee 'docker --help'"
+quote = "docker: 'compose' is not a docker command."
+cause = "<<server>> has docker but not the Compose v2 plugin"
+fix = "install the docker-compose-plugin package in a task that <<task>> depends on (apt-get install -y docker-compose-plugin, with sudo = true)"
+
+[[failure]]
+id = "grep-no-match"
+match = ["grep -c", "| grep"]
+exit = 1
+stderr = ""
+quote = "exit code 1"
+cause = "the command's last step is a grep that found nothing, and grep exits 1 when nothing matches, so the task failed with no error at all"
+fix = "if finding nothing is fine, end the grep with || true and decide with a test, as in n=$(... | grep -c x || true); [ \"$n\" -le 10 ]"

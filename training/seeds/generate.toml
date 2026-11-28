@@ -1922,3 +1922,372 @@ url = "https://tests.example.com/api/v2/runs?suite=smoke&last=20"
 things = "test runs"
 name = "smoke-stats"
 file = "/tmp/smoke-runs.json"
+
+[[task]]
+id = "api-nested-report"
+request = [
+  "write a task that fetches <<url>> and reports how many <<things>> succeeded and failed, why the failed ones failed, and the success rate. Each record has its results in .response.result.bets[], each with a status of OK or ERROR, a message and a cost",
+  "Count the OK and ERROR <<things>> in .response.result.bets[] of each record from <<url>>, group the failures by message, and give the success rate",
+  "a task that sums the <<things>> from <<url>>: the records are requests, and each one's .response.result.bets[] has status OK or ERROR with a message",
+]
+note = "One task on this machine (local = true). It saves the API's reply to <<file>> and counts the <<things>> inside every record, not the records: a record's own status can be OK while some of its <<things>> failed. It groups the failed ones by message and totals the cost of the successful ones; an empty reply prints zeros and \"no failures\". The command is one line, the URL in single quotes because its & would otherwise end it, and && stops jq when the download fails. It reports every time, so its check never passes, and verify fails it when the reply isn't a JSON array."
+answer = """
+[tasks.<<name>>]
+description = "Count the successful and failed <<things>> from the API, and why they failed"
+local = true
+check = "false"
+cmd = '''curl -fsS '<<url>>' -o <<file>> && jq -r '[.[] | .response.result.bets[]?] as $b | ($b | map(select(.status == "OK"))) as $ok | ($b | map(select(.status != "OK"))) as $bad | "requests: \\(length), <<things>>: \\($b | length)", "successful: \\($ok | length) (\\($ok | map(.cost) | add // 0) placed)", "failed: \\($bad | length)", (if ($bad | length) > 0 then "failed with: \\($bad | group_by(.message) | map("\\(.[0].message) (\\(length))") | join(", "))" else "no failures" end), "success rate: \\(if ($b | length) > 0 then ($ok | length) * 1000 / ($b | length) | round / 10 else 0 end)%"' <<file>>'''
+verify = "jq -e 'type == \\"array\\"' <<file>> >/dev/null"
+"""
+[[task.params]]
+url = "https://api.example.com/v1/services/1005/stacktraces?q=place&limit=3"
+things = "bets"
+name = "bet-report"
+file = "/tmp/bet-report.json"
+[[task.params]]
+url = "https://wagers.example.com/api/v2/requests?method=place&limit=20"
+things = "wagers"
+name = "wager-report"
+file = "/tmp/wagers.json"
+
+# --- Round 6: docker, docker compose, Linux, parsing output, Go templates
+
+[[task]]
+id = "docker-network"
+request = ["create the docker network <<net>>", "a task that makes sure the docker network <<net>> exists", "Add a docker network called <<net>> for the containers"]
+note = "docker network inspect exits 0 when the network exists, so the check skips the task then, and the verify confirms it was made."
+answer = """
+[tasks.<<name>>]
+description = "Create the docker network <<net>>"
+check = "docker network inspect <<net>> >/dev/null 2>&1"
+cmd = "docker network create <<net>>"
+verify = "docker network inspect <<net>> >/dev/null 2>&1"
+"""
+[[task.params]]
+name = "network-backend"
+net = "backend"
+[[task.params]]
+name = "network-proxy"
+net = "proxy"
+
+[[task]]
+id = "docker-volume"
+request = ["create a docker volume named <<vol>>", "make sure the volume <<vol>> exists before the containers start"]
+note = "docker volume inspect exits 0 when the volume is there, so the check skips the task, and verify confirms it."
+answer = """
+[tasks.<<name>>]
+description = "Create the docker volume <<vol>>"
+check = "docker volume inspect <<vol>> >/dev/null 2>&1"
+cmd = "docker volume create <<vol>>"
+verify = "docker volume inspect <<vol>> >/dev/null 2>&1"
+"""
+[[task.params]]
+name = "volume-pgdata"
+vol = "pgdata"
+[[task.params]]
+name = "volume-uploads"
+vol = "uploads"
+
+[[task]]
+id = "docker-prune"
+request = ["remove the dangling docker images", "clean up unused docker images that have no tag", "a task that prunes dangling images"]
+note = "docker images -q -f dangling=true lists the untagged images; the check passes when that list is empty, so the task runs only when there is something to remove. docker image prune -f doesn't ask for confirmation."
+answer = """
+[tasks.<<name>>]
+description = "Remove dangling docker images"
+check = '[ -z "$(docker images -q -f dangling=true)" ]'
+cmd = "docker image prune -f"
+verify = '[ -z "$(docker images -q -f dangling=true)" ]'
+"""
+[[task.params]]
+name = "docker-prune"
+
+[[task]]
+id = "docker-wait-healthy"
+request = ["wait until the <<c>> container is healthy", "a task that waits for <<c>>'s health check to pass, for up to <<secs>> seconds", "make the deploy wait for container <<c>> to report healthy"]
+note = "docker inspect -f prints the container's health status. Its {{.State.Health.Status}} is docker's own Go template, not gorun's, so the task sets raw = true and gorun leaves the {{ }} alone. The check passes when it is already healthy; the command tries every 2 seconds and fails after <<secs>> seconds."
+answer = """
+[tasks.<<name>>]
+description = "Wait for <<c>> to be healthy"
+raw = true
+check = '[ "$(docker inspect -f "{{.State.Health.Status}}" <<c>> 2>/dev/null)" = healthy ]'
+cmd = '''
+i=0
+while [ "$(docker inspect -f '{{.State.Health.Status}}' <<c>> 2>/dev/null)" != healthy ]; do
+  i=$((i + 2))
+  [ "$i" -ge <<secs>> ] && { echo "<<c>> is not healthy after <<secs>>s"; docker inspect -f '{{.State.Health.Status}}' <<c>>; exit 1; }
+  sleep 2
+done
+'''
+verify = '[ "$(docker inspect -f "{{.State.Health.Status}}" <<c>>)" = healthy ]'
+"""
+[[task.params]]
+name = "wait-api-healthy"
+c = "api"
+secs = "60"
+[[task.params]]
+name = "wait-db-healthy"
+c = "postgres"
+secs = "120"
+
+[[task]]
+id = "docker-log-errors"
+request = ["count the errors in the <<c>> container's logs over the last hour, and fail when there are more than <<max>>", "a report task that greps <<c>>'s docker logs for errors since an hour ago"]
+note = "docker logs writes the container's stderr to stderr, so 2>&1 sends both to grep. grep -c prints the count but exits 1 when it is 0, which would fail the task, so || true keeps going; the last line fails the task when the count is over <<max>>. It reports every time, so its check never passes."
+answer = """
+[tasks.<<name>>]
+description = "Count errors in <<c>>'s logs over the last hour"
+check = "false"
+cmd = '''
+n=$(docker logs --since 1h <<c>> 2>&1 | grep -ciE 'error|panic|fatal' || true)
+echo "errors in the last hour: $n"
+[ "$n" -le <<max>> ]
+'''
+verify = "docker inspect <<c>> >/dev/null"
+"""
+[[task.params]]
+name = "api-log-errors"
+c = "api"
+max = "10"
+[[task.params]]
+name = "worker-log-errors"
+c = "worker"
+max = "0"
+
+[[task]]
+id = "compose-pull-up"
+request = ["pull the latest images for <<file>> and restart what changed", "update the compose stack in <<dir>>", "docker compose pull and up for <<file>>"]
+note = "docker compose up -d only recreates the containers whose image or settings changed, so running it again is safe; the check never passes, so the pull always runs. --remove-orphans removes containers of services no longer in the file. The verify fails the task when no container of the stack is running."
+answer = """
+[tasks.<<name>>]
+description = "Pull and start the compose stack in <<dir>>"
+check = "false"
+cmd = "docker compose -f <<file>> pull && docker compose -f <<file>> up -d --remove-orphans"
+verify = "docker compose -f <<file>> ps --status running --quiet | grep -q ."
+rerun = "safe"
+"""
+[[task.params]]
+name = "app-update"
+dir = "/opt/app"
+file = "/opt/app/docker-compose.yml"
+[[task.params]]
+name = "monitoring-update"
+dir = "/opt/monitoring"
+file = "/opt/monitoring/compose.yaml"
+
+[[task]]
+id = "compose-unhealthy"
+request = ["report which containers of the compose stack in <<dir>> aren't healthy", "fail when a service in <<file>> is unhealthy and say which", "a check task that lists unhealthy compose services"]
+note = "docker compose ps --format prints each container's name and health with docker's own Go template, so raw = true keeps gorun from filling in {{.Name}}. awk prints every line whose health is set but isn't healthy, and exits 1 if there were any, which fails the task. It reports every time, so its check never passes."
+answer = """
+[tasks.<<name>>]
+description = "List the unhealthy containers of the stack in <<dir>>"
+raw = true
+check = "false"
+cmd = '''docker compose -f <<file>> ps --format '{{.Name}} {{.Health}}' | awk '$2 != "" && $2 != "healthy" { print $1 " is " $2; bad = 1 } END { if (!bad) print "every container is healthy"; exit bad }' '''
+verify = "docker compose -f <<file>> ps --quiet | grep -q ."
+"""
+[[task.params]]
+name = "app-health"
+dir = "/opt/app"
+file = "/opt/app/docker-compose.yml"
+
+[[task]]
+id = "compose-from-template"
+request = ["write the compose file for <<app>> from a template, with the image tag <<tag>> and port <<port>>, then start it", "deploy <<app>> with docker compose, the compose file filled in per server"]
+note = "The compose file is the copy's content, a Go template gorun fills in for each server: {{.vars.tag}} and {{.vars.port}} come from the task's vars, and {{.Name}} is the server's name. check_copies and the check together skip the task when the server already has the same file and the stack is running, so compose up only runs after a change."
+answer = """
+[tasks.<<name>>]
+description = "Write <<app>>'s compose file and start it"
+check_copies = true
+check = "docker compose -f /opt/<<app>>/compose.yaml ps --status running --quiet | grep -q ."
+cmd = "docker compose -f /opt/<<app>>/compose.yaml up -d"
+verify = "docker compose -f /opt/<<app>>/compose.yaml ps --status running --quiet | grep -q ."
+vars = { tag = "<<tag>>", port = <<port>> }
+[[tasks.<<name>>.copy]]
+dst = "/opt/<<app>>/compose.yaml"
+content = '''
+services:
+  <<app>>:
+    image: registry.example.com/<<app>>:{{ .vars.tag }}
+    restart: unless-stopped
+    ports:
+      - "{{ .vars.port }}:8080"
+    environment:
+      INSTANCE: "{{ .Name }}"
+'''
+"""
+[[task.params]]
+name = "api-compose"
+app = "api"
+tag = "2.4.1"
+port = "8080"
+[[task.params]]
+name = "shop-compose"
+app = "shop"
+tag = "1.9.0"
+port = "9000"
+
+[[task]]
+id = "disk-alert"
+request = ["fail when any disk is more than <<max>>% full, and say which", "a task that checks every filesystem's usage and reports the ones over <<max>>%", "parse df and alert when a mount is above <<max>> percent"]
+note = "df --output=pcent,target prints only the use and the mount point, and -x skips the in-memory filesystems. awk drops the header (NR > 1), strips the %, and prints each mount over <<max>>%; it exits 1 when there was one, which fails the task. It reports every time, so its check never passes."
+answer = """
+[tasks.<<name>>]
+description = "Fail when a filesystem is over <<max>>% full"
+check = "false"
+cmd = '''df --output=pcent,target -x tmpfs -x devtmpfs -x overlay | awk 'NR > 1 { sub("%", "", $1); if ($1 + 0 > <<max>>) { print $2 " is " $1 "% full"; bad = 1 } } END { if (!bad) print "every filesystem is under <<max>>%"; exit bad }' '''
+verify = "df --output=pcent / >/dev/null"
+"""
+[[task.params]]
+name = "disk-alert"
+max = "90"
+[[task.params]]
+name = "disk-warn"
+max = "80"
+
+[[task]]
+id = "failed-units"
+request = ["fail when a systemd unit has failed, and list them", "a task that reports failed systemd services", "check systemctl --failed and alert"]
+note = "systemctl list-units --failed --plain --no-legend prints one line per failed unit and nothing when none have; the task prints them and fails when the list isn't empty. It reports every time, so its check never passes."
+answer = """
+[tasks.<<name>>]
+description = "Fail when a systemd unit has failed"
+check = "false"
+cmd = '''
+failed=$(systemctl list-units --failed --plain --no-legend)
+if [ -n "$failed" ]; then
+  echo "failed units:"
+  echo "$failed" | awk '{ print "  " $1 }'
+  exit 1
+fi
+echo "no failed units"
+'''
+verify = "systemctl --version >/dev/null"
+"""
+[[task.params]]
+name = "failed-units"
+
+[[task]]
+id = "journald-size"
+request = ["limit the journal to <<size>> of disk", "stop journald logs from filling the disk, cap them at <<size>>"]
+note = "A drop-in in /etc/systemd/journald.conf.d sets SystemMaxUse; the check skips the task when the file already says so. journald is restarted to read it, and journalctl --vacuum-size frees what is over the limit now."
+answer = """
+[tasks.<<name>>]
+description = "Cap the journal at <<size>>"
+sudo = true
+check = "grep -qx 'SystemMaxUse=<<size>>' /etc/systemd/journald.conf.d/size.conf"
+cmd = '''
+mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\\nSystemMaxUse=<<size>>\\n' > /etc/systemd/journald.conf.d/size.conf
+systemctl restart systemd-journald
+journalctl --vacuum-size=<<size>>
+'''
+verify = "grep -qx 'SystemMaxUse=<<size>>' /etc/systemd/journald.conf.d/size.conf"
+"""
+[[task.params]]
+name = "journal-size"
+size = "500M"
+
+[[task]]
+id = "fstab-mount"
+request = ["mount <<dev>> on <<dir>> at boot", "add <<dev>> to fstab as <<dir>> and mount it", "a task that mounts the data disk <<dev>> at <<dir>>"]
+note = "findmnt exits 0 when <<dir>> is mounted, so the check skips the task then. The fstab line is added only once (grep first), with nofail so a missing disk doesn't stop the boot, and mount reads it from fstab."
+answer = """
+[tasks.<<name>>]
+description = "Mount <<dev>> at <<dir>>"
+sudo = true
+check = "findmnt <<dir>> >/dev/null"
+cmd = '''
+mkdir -p <<dir>>
+grep -qs ' <<dir>> ' /etc/fstab || echo '<<dev>> <<dir>> <<fs>> defaults,nofail 0 2' >> /etc/fstab
+mount <<dir>>
+'''
+verify = "findmnt <<dir>> >/dev/null"
+"""
+[[task.params]]
+name = "mount-data"
+dev = "/dev/sdb1"
+dir = "/data"
+fs = "ext4"
+[[task.params]]
+name = "mount-backups"
+dev = "LABEL=backups"
+dir = "/srv/backups"
+fs = "xfs"
+
+[[task]]
+id = "nofile-limit"
+request = ["raise the open file limit for <<user>> to <<n>>", "set nofile to <<n>> for the <<user>> user"]
+note = "A file in /etc/security/limits.d sets the soft and hard limit; the check skips the task when it already has them. It applies to new logins, so restart <<user>>'s services afterwards."
+answer = """
+[tasks.<<name>>]
+description = "Raise <<user>>'s open file limit to <<n>>"
+sudo = true
+check = "grep -qx '<<user>> - nofile <<n>>' /etc/security/limits.d/<<user>>.conf"
+cmd = "echo '<<user>> - nofile <<n>>' > /etc/security/limits.d/<<user>>.conf"
+verify = "grep -qx '<<user>> - nofile <<n>>' /etc/security/limits.d/<<user>>.conf"
+"""
+[[task.params]]
+name = "app-nofile"
+user = "app"
+n = "65536"
+
+[[task]]
+id = "env-file-from-vars"
+request = ["write /etc/<<app>>/env with the port and region for each server", "a task that writes <<app>>'s env file from the server's vars"]
+note = "The file is a copy whose content is a Go template: {{ .vars.port }} is the task's var, and {{ .Server.Vars.region }} is the server's own var, so each server gets its own file. check_copies and the check together skip the task when the file on the server is the same and the service is running, so it only restarts after a change."
+answer = """
+[tasks.<<name>>]
+description = "Write <<app>>'s env file for this server"
+sudo = true
+check_copies = true
+check = "systemctl is-active --quiet <<app>>"
+cmd = "systemctl restart <<app>>"
+verify = "systemctl is-active --quiet <<app>>"
+vars = { port = <<port>> }
+[[tasks.<<name>>.copy]]
+dst = "/etc/<<app>>/env"
+mode = "0640"
+content = '''
+PORT={{ .vars.port }}
+REGION={{ .Server.Vars.region }}
+INSTANCE={{ .Name }}
+'''
+"""
+[[task.params]]
+name = "api-env"
+app = "api"
+port = "8080"
+
+[[task]]
+id = "template-loop"
+request = ["write nginx upstream servers for <<app>> from a list in the task's vars", "generate <<app>>'s upstream block with a Go template loop over the backends"]
+note = "The backends are a list in the task's vars, and the copy's content loops over them with {{ range }}; inside the loop . is one backend, so {{ .host }} and {{ .port }} are its fields, and $ is still the whole data. nginx -t checks the result before the reload."
+answer = """
+[tasks.<<name>>]
+description = "Write <<app>>'s nginx upstream"
+sudo = true
+check_copies = true
+check = "systemctl is-active --quiet nginx"
+cmd = "nginx -t && systemctl reload nginx"
+verify = "nginx -t"
+[[tasks.<<name>>.vars.backends]]
+host = "10.0.1.11"
+port = 8080
+[[tasks.<<name>>.vars.backends]]
+host = "10.0.1.12"
+port = 8080
+[[tasks.<<name>>.copy]]
+dst = "/etc/nginx/conf.d/<<app>>-upstream.conf"
+content = '''
+upstream <<app>> {
+{{- range .vars.backends }}
+    server {{ .host }}:{{ .port }};
+{{- end }}
+}
+'''
+"""
+[[task.params]]
+name = "api-upstream"
+app = "api"

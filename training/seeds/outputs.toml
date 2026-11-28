@@ -130,3 +130,108 @@ stdout = '''
 '''
 summary = "It is systemctl status: the service is enabled at boot and active (running) on <<server>>, since 2026-11-24 09:12 UTC, 3 days ago, using 6.1M of memory."
 want = ["running", "enabled"]
+
+[[output]]
+match = ["docker compose ps", "docker compose -f /opt/app/docker-compose.yml ps"]
+stdout = '''
+NAME          IMAGE                                COMMAND                  SERVICE   CREATED       STATUS                   PORTS
+app-api-1     registry.example.com/api:2.4.1       "/app/api"               api       2 days ago    Up 2 days (healthy)      0.0.0.0:8080->8080/tcp
+app-db-1      postgres:16                          "docker-entrypoint.s…"   db        2 days ago    Up 2 days (healthy)      5432/tcp
+app-worker-1  registry.example.com/worker:2.4.1    "/app/worker"            worker    2 days ago    Restarting (1) 4 seconds ago
+'''
+summary = "It is docker compose ps: the stack's containers on <<server>>. api and db have been up 2 days and are healthy, api publishing port 8080; worker is restarting, its last exit code was 1, so it keeps crashing: docker logs app-worker-1 shows why."
+want = ["worker", "restarting"]
+
+[[output]]
+match = ["systemctl list-units --failed", "systemctl --failed"]
+stdout = '''
+backup.service      loaded failed failed Nightly backup
+certbot-renew.service loaded failed failed Renew certificates
+'''
+summary = "It lists the failed systemd units on <<server>>: backup.service and certbot-renew.service both failed the last time they ran. journalctl -u backup.service -n 50 shows why each one failed."
+want = ["backup.service", "certbot"]
+
+[[output]]
+match = ["journalctl -p err", "journalctl -p 3"]
+stdout = '''
+Nov 28 02:00:04 <<server>> backup.sh[4121]: pg_dump: error: connection to server on socket "/var/run/postgresql/.s.PGSQL.5432" failed: No such file or directory
+Nov 28 02:00:04 <<server>> systemd[1]: backup.service: Main process exited, code=exited, status=1/FAILURE
+Nov 28 06:12:51 <<server>> kernel: EXT4-fs warning (device sdb1): ext4_dx_add_entry:2516: Directory (ino: 1310721) index full, reach max htree level :2
+'''
+summary = "It is the journal's errors on <<server>>. At 02:00 the backup failed: pg_dump couldn't reach Postgres on its socket, so Postgres wasn't running then, and backup.service exited 1. At 06:12 the kernel warned that a directory on sdb1 has so many files its index is full."
+want = ["pg_dump", "backup"]
+
+[[output]]
+match = ["du -sh"]
+stdout = '''
+4.2G	/var/lib/docker
+1.1G	/var/log
+312M	/var/cache
+28K	/var/tmp
+'''
+summary = "It is du -sh: how much space each folder takes on <<server>>. /var/lib/docker is the biggest at 4.2G, then /var/log at 1.1G and /var/cache at 312M; /var/tmp is nearly empty. docker system df shows what in Docker could be freed."
+want = ["4.2g", "docker"]
+
+[[output]]
+match = ["df -i"]
+stdout = '''
+Filesystem      Inodes   IUsed   IFree IUse% Mounted on
+/dev/sda1      3276800  412311 2864489   13% /
+/dev/sdb1      6553600 6553588      12  100% /data
+'''
+summary = "It is df -i: the inodes, the number of files each filesystem can hold, on <<server>>. / uses 13%, but /data (sdb1) is at 100% with 12 left, so nothing can create a file there even if df -h shows free space: something is writing many small files."
+want = ["100%", "/data"]
+
+[[output]]
+match = ["lsblk"]
+stdout = '''
+NAME   MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+sda      8:0    0   50G  0 disk
+├─sda1   8:1    0 49.9G  0 part /
+└─sda15  8:15   0  106M  0 part /boot/efi
+sdb      8:16   0  200G  0 disk
+'''
+summary = "It is lsblk: the disks on <<server>>. sda (50G) holds / and /boot/efi; sdb is a 200G disk with no partition and no mount point, so it isn't in use yet."
+want = ["sdb", "200g"]
+
+[[output]]
+match = ["docker logs"]
+stdout = '''
+2026-11-28T03:14:22Z INFO  listening on :8080
+2026-11-28T03:20:51Z WARN  slow query took 2.3s: SELECT * FROM orders WHERE status = $1
+2026-11-28T03:21:07Z ERROR upstream payments.example.com: dial tcp 203.0.113.7:443: i/o timeout
+2026-11-28T03:21:09Z ERROR upstream payments.example.com: dial tcp 203.0.113.7:443: i/o timeout
+'''
+summary = "It is the end of the container's logs on <<server>>. It started listening on 8080 at 03:14, logged one slow query at 03:20, and from 03:21 can't reach payments.example.com: two connection timeouts to 203.0.113.7:443, so the payments service or the network to it is down."
+want = ["timeout", "payments"]
+
+[[output]]
+match = ["uname -a"]
+stdout = '''
+Linux <<server>> 6.8.0-49-generic #49-Ubuntu SMP PREEMPT_DYNAMIC Mon Nov  4 02:06:24 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
+'''
+summary = "It is uname -a: <<server>> runs Linux kernel 6.8.0-49-generic, Ubuntu's, on x86_64."
+want = ["6.8.0", "x86_64"]
+
+[[output]]
+match = ["ps aux --sort=-%mem", "ps aux --sort -%mem"]
+stdout = '''
+USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+postgres    1288  2.1 18.4 2310412 1489220 ?    Ss   Nov24  98:12 postgres: main
+app         2210 11.3  9.7 1912044  786312 ?    Ssl  Nov24 512:40 /opt/app/api
+root         903  0.4  1.2  842212   97480 ?    Ssl  Nov24  21:05 /usr/bin/dockerd
+'''
+summary = "It is ps sorted by memory on <<server>>: Postgres uses the most, 18% (1.4G), then the api at 10% (770M) and 11% CPU, then dockerd at 1%. Nothing looks out of control."
+want = ["postgres", "18"]
+
+[[output]]
+match = ["docker images"]
+stdout = '''
+REPOSITORY                        TAG       IMAGE ID       CREATED        SIZE
+registry.example.com/api          2.4.1     3f2a91c0d7e4   3 days ago     188MB
+registry.example.com/api          2.4.0     9b0e44d1a2f3   2 weeks ago    186MB
+postgres                          16        c1d9b0e7a412   4 weeks ago    432MB
+<none>                            <none>    77ae0c1f9d20   5 weeks ago    185MB
+'''
+summary = "It is docker images on <<server>>: the api's 2.4.1 and the older 2.4.0, postgres 16, and one dangling image (<none>), 185MB, that docker image prune -f would remove."
+want = ["dangling", "2.4.1"]

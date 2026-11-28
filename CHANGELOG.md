@@ -4,6 +4,24 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.41.0 (since v0.40.4)
+
+### Vars and env vars in the web UI's task forms
+- The add and edit task forms, on the Tasks and Config pages, have **Vars** and **Env vars**
+  fields: TOML, one `name = value` per line. Vars can be numbers, strings, lists or `[table]`
+  sections; env vars must be strings, and a secret stays a `"${NAME}"` reference.
+- Tasks the assistant writes may now nest tables and lists of tables in `vars`, as a Gorunfile
+  can. They were refused as an unknown key.
+
+### Training data for the next model
+- New seeds for Docker (networks, volumes, pruning, health waits, log errors), Docker Compose
+  (pull and up, unhealthy services, a compose file from a template), Linux (disk and failed-unit
+  alerts, journald size, fstab mounts, open file limits), parsing command output with awk, grep
+  and jq, and Go templates (vars, loops, `raw` for docker's own `{{ }}`, `<no value>`).
+- Corrections from real conversations: the jq report over nested bet results, a verify that
+  repeats a broken command, Windows line breaks, a missing sudo, sudo for the gorun user, and
+  tools in gorun's Docker image.
+
 ## v0.40.4 (since v0.40.3)
 
 ### Commands entered in the web UI run in sh

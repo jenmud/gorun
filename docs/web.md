@@ -297,10 +297,15 @@ it, with what each does; a task without them says so. The `check` and
 `verify` badges mark the tasks that have them.
 
 - **Add a task**: name, command, files to copy, depends on, timeout, retries, check, verify,
-  check copies, description, sudo, local, and the file to save into. It is written to the file
-  straight away.
+  check copies, vars, env vars, description, sudo, local, and the file to save into. It is
+  written to the file straight away.
 - **Edit** on a task: change any of those. Clear a field to remove it. Settings the form doesn't
-  show, such as templates or env vars, are kept.
+  show, such as `cmd_file` or `raw`, are kept.
+- **Vars** and **Env vars** are TOML, one `name = value` per line. Vars are what the task's
+  [templates](gorunfile.md#task-variables) read as `{{ .vars.name }}`, and can be numbers,
+  strings, lists or `[table]` sections. Env vars are exported to the command and must be quoted
+  strings; write a secret as `TOKEN = "${REGISTRY_TOKEN}"`, so the Gorunfile keeps the reference
+  and gorun fills it in from its own environment when the task runs.
 - **Files to copy** takes one copy per line: a local file or folder, `->`, and where it goes on
   the server, such as `scripts/stack-ok.sh -> /home/ubuntu/stack-ok.sh`. Start a line with
   `template` to render a Go template for each server. Local paths are relative to the Gorunfile.
@@ -309,7 +314,8 @@ it, with what each does; a task without them says so. The `check` and
   Copies of inline text (`content = ...`) can't be written this way, so the form says how many
   there are and keeps them.
 
-The Config page's **Add a task** form and **Edit** dialog have the same check and verify fields.
+The Config page's **Add a task** form and **Edit** dialog have the same check, verify, vars and env
+vars fields.
 
 **Filter tasks** searches each task's name, description, details, command, copies, check, verify,
 dependencies, flags and source file. Every word typed must match, so `deploy sudo` finds the sudo

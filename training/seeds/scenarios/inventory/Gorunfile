@@ -170,13 +170,27 @@ description = "Show who is logged in"
 cmd = "who"
 rerun = "safe"
 
+[tasks.stack]
+description = "Show the compose stack's containers"
+check = "false"
+cmd = "docker compose -f /opt/app/docker-compose.yml ps"
+
+[tasks.app-logs]
+description = "Show the end of the app's logs"
+check = "false"
+cmd = "docker logs --tail 20 app"
+
+[tasks.images]
+description = "List the docker images"
+cmd = "docker images"
+
 [bundles.deploy]
 description = "Install Docker and start the stack"
 tasks = ["compose-up"]
 
 [bundles.inspect]
 description = "Look at the server, changing nothing"
-tasks = ["container-stats", "containers", "docker-disk", "addresses", "listening", "disk", "memory", "os-release", "uptime", "who"]
+tasks = ["container-stats", "containers", "stack", "app-logs", "images", "docker-disk", "addresses", "listening", "disk", "memory", "os-release", "uptime", "who"]
 
 [bundles.inspect-container]
 description = "Inspect the service's container"

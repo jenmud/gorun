@@ -60,6 +60,7 @@ templ taskAddForm(files []FileOption) {
 			<textarea name="cmd" required rows="3" placeholder="command, e.g. systemctl restart web" class={ inputClass() + " font-mono sm:col-span-2" }></textarea>
 			@taskFilesField(EditFields{})
 			@taskCheckFields(EditFields{})
+			@taskVarsFields(EditFields{})
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" class="accent-violet-600"/> run with sudo</label>
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" class="accent-violet-600"/> run only on local servers</label>
 			<div class="sm:col-span-2">
@@ -111,6 +112,20 @@ templ taskCheckFields(e EditFields) {
 	<label class="flex items-center gap-2 text-xs text-zinc-300 sm:col-span-2"><input type="checkbox" name="check_copies" checked?={ e.CheckCopies } class="accent-violet-600"/> check copies: skip the task when the server already has every file it copies (MD5)</label>
 }
 
+// taskVarsFields is a task's vars and envvars, as TOML lines, in its add and edit forms.
+templ taskVarsFields(e EditFields) {
+	<div class="grid gap-2 sm:col-span-2 sm:grid-cols-2">
+		<label class="block text-xs text-zinc-400">
+			Vars <span class="text-zinc-600">TOML, one per line: the task's templates read them as {"{{ .vars.name }}"}. Not sent to the command.</span>
+			<textarea name="vars" rows="3" placeholder={ "port = 8080\ntag = \"2.4.1\"" } class={ inputClass() + " font-mono" }>{ e.Vars }</textarea>
+		</label>
+		<label class="block text-xs text-zinc-400">
+			Env vars <span class="text-zinc-600">TOML strings, one per line: exported to the command. Write secrets as "$NAME", read from gorun's environment.</span>
+			<textarea name="envvars" rows="3" placeholder={ "APP_ENV = \"production\"\nTOKEN = \"${REGISTRY_TOKEN}\"" } class={ inputClass() + " font-mono" }>{ e.EnvVars }</textarea>
+		</label>
+	</div>
+}
+
 templ taskEditPanel(d TasksPageData) {
 	<section class="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900/60 p-5">
 		<h2 class="text-lg font-semibold text-zinc-100">Edit task <span class="font-mono">{ d.EditingName }</span></h2>
@@ -123,6 +138,7 @@ templ taskEditPanel(d TasksPageData) {
 			</label>
 			@taskFilesField(d.Edit)
 			@taskCheckFields(d.Edit)
+			@taskVarsFields(d.Edit)
 			@editField("Description", "description", d.Edit.Description, "")
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="sudo" checked?={ d.Edit.Sudo } class="accent-violet-600"/> run with sudo</label>
 			<label class="flex items-center gap-2 text-xs text-zinc-300"><input type="checkbox" name="local" checked?={ d.Edit.Local } class="accent-violet-600"/> run only on local servers</label>

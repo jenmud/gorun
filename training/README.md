@@ -112,7 +112,8 @@ Check every answer against the context in its system message, not only its ratin
 the first reply of a conversation whose last one is wrong, and a correction from the user can be
 wrong too: the run's record decides. Each conversation is also saved again after every turn, so
 one conversation can be several lines. Round 5's seeds (`outputs.toml`, the `stats` and
-`inventory` scenarios, `api-summary`) came from a first export this way.
+`inventory` scenarios, `api-summary`) came from a first export this way, and round 6's
+corrections (the jq reports, line breaks, sudo and Docker questions) from the next.
 
 ## Publishing
 

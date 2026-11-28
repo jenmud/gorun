@@ -1594,6 +1594,12 @@ func (b *builder) runChatExamples(sc *dsScenario) {
 	srv := one(b.rng, r.servers)
 	r.servers = []gorun.Server{srv}
 	r.tasks = slices.DeleteFunc(r.tasks, func(t simTask) bool { return t.server != srv.Name })
+	// a third of the time the run is one task that printed, like a schedule that runs one
+	if b.rng.IntN(3) == 0 {
+		if p := slices.DeleteFunc(slices.Clone(r.tasks), func(t simTask) bool { return t.stdout == "" }); len(p) > 0 {
+			r.tasks = []simTask{one(b.rng, p)}
+		}
+	}
 	if len(r.tasks) > maxListedTasks {
 		return
 	}
@@ -1730,6 +1736,12 @@ func (b *builder) runChatExamples(sc *dsScenario) {
 		sum := fill(o.Summary, map[string]string{"server": t.server, "task": t.name})
 		q := one(b.rng, []string{"What did %s print?", "summarise the output of %s", "tell me more about the output of %s, what am I looking at?", "what does the stdout of %s say?"})
 		ask("output/"+t.name, "output", user(fmt.Sprintf(q, t.name)), fmt.Sprintf("%s on %s ran `%s`. %s", t.name, t.server, strings.TrimSpace(t.cmd), sum), o.Want)
+		// asked without the task's name, after the summary: the task is the one that printed
+		if len(printed) == 1 {
+			nq := one(b.rng, []string{"what can you tell me about the output of the task that was run", "what can you tell me about the output of the tasks command",
+				"no I am talking about the tasks stdout, what am I looking at, explain it to me", "explain the output to me", "what am I looking at in the stdout?"})
+			ask("output-unnamed/"+t.name, "output", turn(sumConv, summary, nq), fmt.Sprintf("%s on %s ran `%s`. %s", t.name, t.server, strings.TrimSpace(t.cmd), sum), o.Want)
+		}
 		sq := one(b.rng, []string{"show me the output of %s", "Show me what %s printed", "paste the stdout of %s"})
 		ask("show/"+t.name, "output", user(fmt.Sprintf(sq, t.name)),
 			fmt.Sprintf("%s printed this on %s (the end of its output, as the run kept it):\n\n```\n%s\n```", t.name, t.server, strings.TrimSpace(t.stdout)), o.Want[:1])

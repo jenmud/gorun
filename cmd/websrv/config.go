@@ -318,6 +318,8 @@ func editFields(body map[string]any) ui.EditFields {
 		Cmd:          str(body, "cmd"),
 		Check:        str(body, "check"),
 		Verify:       str(body, "verify"),
+		Vars:         tomlText(body["vars"]),
+		EnvVars:      tomlText(body["envvars"]),
 		CheckCopies:  checkCopies,
 		Copies:       copies,
 		InlineCopies: inline,
@@ -1096,8 +1098,8 @@ func applyCopies(body map[string]any, form url.Values) error {
 	return nil
 }
 
-// applyRunSettings writes the form's depends on, timeout and retries over body. A cleared field
-// removes the key; a field the form doesn't have leaves it as it is.
+// applyRunSettings writes the form's depends on, timeout, retries, vars and envvars over body.
+// A cleared field removes the key; a field the form doesn't have leaves it as it is.
 func applyRunSettings(body map[string]any, form url.Values) error {
 	if form.Has("depends_on") {
 		delete(body, "depends_on")
@@ -1122,7 +1124,42 @@ func applyRunSettings(body map[string]any, form url.Values) error {
 			body["retries"] = int64(n)
 		}
 	}
+	for _, key := range []string{"vars", "envvars"} {
+		if !form.Has(key) {
+			continue
+		}
+		delete(body, key)
+		text := formText(form.Get(key))
+		if text == "" {
+			continue
+		}
+		table := map[string]any{}
+		if _, err := toml.Decode(text, &table); err != nil {
+			return fmt.Errorf("%s isn't TOML: write one name = value per line, such as port = 8080 (%v)", key, err)
+		}
+		if key == "envvars" {
+			for name, v := range table {
+				if _, ok := v.(string); !ok {
+					return fmt.Errorf("env var %s must be a string in quotes, such as %s = \"%v\"", name, name, v)
+				}
+			}
+		}
+		body[key] = table
+	}
 	return nil
+}
+
+// tomlText is a vars or envvars table as the TOML lines its form field shows.
+func tomlText(v any) string {
+	table, ok := v.(map[string]any)
+	if !ok || len(table) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	if err := toml.NewEncoder(&b).Encode(table); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // str is m's string value at k, or "" when it has none.

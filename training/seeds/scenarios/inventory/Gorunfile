@@ -1,0 +1,202 @@
+title = "Service inventory"
+
+[tasks.compose-folders]
+description = "Make the compose folders"
+check = "test -d /opt/stack/config"
+cmd = "mkdir -p /opt/stack/config /opt/stack/data"
+verify = "test -d /opt/stack/config"
+sudo = true
+rerun = "safe"
+
+[tasks.compose-files]
+description = "Write the compose environment file"
+depends_on = ["compose-folders"]
+check = "test -s /opt/stack/.env"
+cmd = "printf 'TAG=3.8.0\\nPORT=8766\\n' > /opt/stack/.env"
+verify = "grep -q TAG= /opt/stack/.env"
+sudo = true
+rerun = "safe"
+
+[tasks.compose-render]
+description = "Render the compose file from its template"
+depends_on = ["compose-files"]
+cmd = "cd /opt/stack && envsubst < compose.tmpl > compose.yml"
+verify = "test -s /opt/stack/compose.yml"
+sudo = true
+rerun = "safe"
+
+[tasks.docker-install]
+description = "Install Docker Engine"
+check = "command -v docker >/dev/null"
+cmd = "curl -fsSL https://get.docker.com | sh"
+verify = "docker --version"
+sudo = true
+timeout = "10m"
+rerun = "safe"
+
+[tasks.docker-daemon]
+description = "Keep the Docker daemon running"
+depends_on = ["docker-install"]
+check = "systemctl is-active --quiet docker && systemctl is-enabled --quiet docker"
+cmd = "systemctl enable --now docker"
+verify = "systemctl is-active docker"
+sudo = true
+rerun = "safe"
+
+[tasks.docker-access]
+description = "Let the ops user use Docker"
+depends_on = ["docker-daemon"]
+check = "id -nG ops | grep -qw docker"
+cmd = "usermod -aG docker ops"
+verify = "id -nG ops | grep -qw docker"
+sudo = true
+rerun = "safe"
+
+[tasks.compose-validate]
+description = "Check the compose file is valid"
+depends_on = ["compose-render", "docker-daemon"]
+cmd = "docker compose -f /opt/stack/compose.yml config -q"
+sudo = true
+rerun = "safe"
+
+[tasks.compose-install]
+description = "Install the compose file as the stack's"
+depends_on = ["compose-validate"]
+cmd = "install -m 644 /opt/stack/compose.yml /opt/stack/docker-compose.yml"
+verify = "test -s /opt/stack/docker-compose.yml"
+sudo = true
+rerun = "safe"
+
+[tasks.image-copy]
+description = "Copy the image archive to the server"
+cmd = "curl -fsSL -o /var/tmp/image.tar https://files.example.com/images/mockservice-3.8.0.tar"
+verify = "test -s /var/tmp/image.tar"
+timeout = "10m"
+rerun = "safe"
+
+[tasks.image-load]
+description = "Load the image into Docker"
+depends_on = ["image-copy", "docker-daemon"]
+cmd = "docker load -i /var/tmp/image.tar"
+sudo = true
+timeout = "10m"
+rerun = "safe"
+
+[tasks.docker-login]
+description = "Log in to the registry"
+depends_on = ["docker-daemon"]
+cmd = 'printf %s "$TOKEN" | docker login registry.example.com -u ci --password-stdin'
+envvars = { TOKEN = "${REGISTRY_TOKEN}" }
+sudo = true
+rerun = "safe"
+
+[tasks.compose-pull]
+description = "Pull the stack's images"
+depends_on = ["compose-install", "docker-login"]
+check = "docker compose -f /opt/stack/docker-compose.yml images -q | grep -q ."
+cmd = "docker compose -f /opt/stack/docker-compose.yml pull"
+sudo = true
+retries = 2
+rerun = "safe"
+
+[tasks.compose-up]
+description = "Start the stack"
+depends_on = ["compose-pull", "image-load"]
+cmd = "docker compose -f /opt/stack/docker-compose.yml up -d --remove-orphans"
+verify = "docker compose -f /opt/stack/docker-compose.yml ps --status running --quiet | grep -q ."
+sudo = true
+rerun = "safe"
+
+[tasks.container-stats]
+description = "Show each container's CPU and memory"
+depends_on = ["compose-up"]
+cmd = "docker stats --no-stream"
+sudo = true
+rerun = "safe"
+
+[tasks.containers]
+description = "List the containers"
+depends_on = ["compose-up"]
+cmd = "docker ps"
+sudo = true
+rerun = "safe"
+
+[tasks.container-inspect]
+description = "Inspect the service's container"
+depends_on = ["docker-daemon"]
+cmd = "docker inspect mockservice"
+sudo = true
+rerun = "safe"
+
+[tasks.docker-disk]
+description = "Show Docker's disk usage"
+depends_on = ["docker-daemon"]
+cmd = "docker system df"
+sudo = true
+rerun = "safe"
+
+[tasks.addresses]
+description = "Show the network addresses"
+cmd = "ip -br addr"
+rerun = "safe"
+
+[tasks.listening]
+description = "Show the listening ports"
+cmd = "ss -ltn"
+rerun = "safe"
+
+[tasks.disk]
+description = "Show disk usage"
+cmd = "df -h"
+rerun = "safe"
+
+[tasks.memory]
+description = "Show memory usage"
+cmd = "free -h"
+rerun = "safe"
+
+[tasks.os-release]
+description = "Show the OS release"
+cmd = "cat /etc/os-release"
+rerun = "safe"
+
+[tasks.uptime]
+description = "Show uptime and load"
+cmd = "uptime"
+rerun = "safe"
+
+[tasks.who]
+description = "Show who is logged in"
+cmd = "who"
+rerun = "safe"
+
+[bundles.deploy]
+description = "Install Docker and start the stack"
+tasks = ["compose-up"]
+
+[bundles.inspect]
+description = "Look at the server, changing nothing"
+tasks = ["container-stats", "containers", "docker-disk", "addresses", "listening", "disk", "memory", "os-release", "uptime", "who"]
+
+[bundles.inspect-container]
+description = "Inspect the service's container"
+tasks = ["container-inspect"]
+
+[server_groups.services.ssh]
+username = "ops"
+
+[servers]
+tasks = ["@deploy", "@inspect"]
+
+[servers.hosts.app-1]
+hostname = "app-1.example.com"
+groups = ["services"]
+
+[servers.hosts.app-2]
+hostname = "app-2.example.com"
+groups = ["services"]
+
+[servers.hosts.app-3]
+hostname = "app-3.example.com"
+groups = ["services"]
+tasks = ["@inspect-container"]

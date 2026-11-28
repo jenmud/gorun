@@ -25,6 +25,7 @@ math kernel it would otherwise fall back to runs out of memory on the longest ex
 | `generate.toml` | requests for tasks, each with tasks that load; `<<key>>` is filled in from each `params` table |
 | `qa.toml` | questions about gorun, a few ways each, with answers from the docs |
 | `failures.toml` | ways tasks fail: the error output, its cause and the fix |
+| `outputs.toml` | what read-only commands (`df -h`, `docker ps`, …) print in simulated runs, and what it shows |
 | `scenarios/*/Gorunfile` | Gorunfiles the examples happen in, besides the repository's recipes and examples |
 
 `cmd/websrv/dataset_test.go` turns the seeds into conversations, behind the `dataset` build tag.
@@ -76,12 +77,12 @@ and a word of the error. It prints a score per kind and writes the replies to
 `out/eval-<model>.jsonl`.
 
 To build on the last model rather than start from the base, keep its adapter and continue it at
-a lower learning rate; v4 was v3's adapter trained one more epoch at 1e-4. Score the old model on
+a lower learning rate; v5 was v4's adapter trained one more epoch at 1e-4. Score the old model on
 the new held-out set too, so the two are compared on the same questions:
 
 ```bash
-HF_HOME=$PWD/.hf HF_HUB_OFFLINE=1 .venv/bin/python train.py --from-adapter out/v3-adapter --out out/adapter-v4 --lr 1e-4
-HF_HOME=$PWD/.hf HF_HUB_OFFLINE=1 .venv/bin/python export.py --adapter out/adapter-v4 --name gorun-qwen3-4b-v4
+HF_HOME=$PWD/.hf HF_HUB_OFFLINE=1 .venv/bin/python train.py --from-adapter out/adapter-v4 --out out/adapter-v5 --lr 1e-4
+HF_HOME=$PWD/.hf HF_HUB_OFFLINE=1 .venv/bin/python export.py --adapter out/adapter-v5 --name gorun-qwen3-4b-v5
 ```
 
 `.venv/`, `.hf/`, `.llama.cpp/`, `data/` and `out/` are ignored by git.
@@ -106,6 +107,12 @@ jq -c 'select(.meta.feedback >= 0 and (.meta.task_error // "") == "" and .meta.r
 
 A 👎 answer, or one whose tasks failed, is worth more as a new seed: write the right answer into
 `seeds/` by hand, so every build learns it.
+
+Check every answer against the context in its system message, not only its rating. A 👍 may be for
+the first reply of a conversation whose last one is wrong, and a correction from the user can be
+wrong too: the run's record decides. Each conversation is also saved again after every turn, so
+one conversation can be several lines. Round 5's seeds (`outputs.toml`, the `stats` and
+`inventory` scenarios, `api-summary`) came from a first export this way.
 
 ## Publishing
 

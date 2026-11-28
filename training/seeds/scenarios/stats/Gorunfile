@@ -1,0 +1,50 @@
+title = "Machine stats"
+
+[tasks.stats-dir]
+description = "Make the folder for the stats"
+check = "test -d /var/tmp/stats"
+cmd = "mkdir -p /var/tmp/stats"
+verify = "test -d /var/tmp/stats"
+local = true
+
+[tasks.stats-disk]
+description = "Show disk usage"
+depends_on = ["stats-dir"]
+check = "false"
+cmd = "df -h"
+verify = "true"
+local = true
+
+[tasks.stats-memory]
+description = "Show memory usage"
+depends_on = ["stats-dir"]
+check = "false"
+cmd = "free -h"
+local = true
+
+[tasks.stats-uptime]
+description = "Show uptime and load"
+cmd = "uptime"
+local = true
+
+[tasks.stats-who]
+description = "Show who is logged in"
+cmd = "who"
+local = true
+
+[bundles.stats]
+description = "All the stats"
+tasks = ["stats-disk", "stats-memory", "stats-uptime", "stats-who"]
+
+[[schedule]]
+name = "stats-disk-every-minute"
+target = "stats-disk"
+cron = "*/1 * * * *"
+
+[[schedule]]
+name = "stats-hourly"
+target = "@stats"
+cron = "0 * * * *"
+
+[servers.hosts.localhost]
+tasks = ["@stats"]

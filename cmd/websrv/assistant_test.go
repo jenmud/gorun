@@ -223,6 +223,39 @@ func TestChatContextSummarisesBigRuns(t *testing.T) {
 	}
 }
 
+// The run in detail is counted by state and carries what its passed tasks printed, and a
+// schedule's missed times, saved as runs of no tasks, don't push it out of the list.
+func TestChatContextCountsStatesAndShowsOutput(t *testing.T) {
+	a, _ := newTestApp(t)
+	t.Cleanup(a.stopScheduler)
+	ctx := context.Background()
+	st, now := a.store, time.Now()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(st.CreateRun(ctx, "run-1", "stats", "box", 1, now))
+	must(st.AddServer(ctx, "run-1", "localhost", "local"))
+	must(st.UpsertTask(ctx, "run-1", "localhost", "stats-dir", store.StateUnchanged, "mkdir -p /tmp/s", "", "", 0, time.Millisecond))
+	must(st.UpsertTask(ctx, "run-1", "localhost", "stats-disk", store.StateDone, "df -h", "Filesystem Size Used\n/dev/sda1 30G 12G", "", 0, time.Millisecond))
+	must(st.UpsertTask(ctx, "run-1", "localhost", "stats-touch", store.StateDone, "touch /tmp/s/x", "", "", 0, time.Millisecond))
+	must(st.FinishRun(ctx, "run-1", true, 3, 0, 0, time.Second, now.Add(time.Second)))
+	must(st.CreateRun(ctx, "missed", "schedule stats missed: paused", "box", 1, now.Add(time.Minute)))
+	must(st.FinishRun(ctx, "missed", true, 0, 0, 0, 0, now.Add(time.Minute)))
+
+	got := a.chatContext(ctx, a.cfg, "")
+	for _, want := range []string{"## Run run-1 in detail", "3 tasks: 2 done, 1 unchanged", "### stats-disk on localhost\nFilesystem Size Used", "Printed nothing: stats-touch on localhost"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no %q in context:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "missed: paused") {
+		t.Errorf("the missed run is listed:\n%s", got)
+	}
+}
+
 // streamingEngine reports a stage and writes its reply in pieces, as the built-in engine does.
 type streamingEngine struct{}
 
@@ -295,7 +328,7 @@ func TestAssistantStatsPanel(t *testing.T) {
 	a.gen = &generator{engine: &llm.Engine{Dir: t.TempDir()}}
 	a.gen.assistant.Engine = a.gen.engine
 	page := get(t, a, "/assistant").Body.String()
-	for _, want := range []string{`id="assistant-stats"`, "Not downloaded yet", "gorun-qwen3-4b-v4-q4_k_m.gguf"} {
+	for _, want := range []string{`id="assistant-stats"`, "Not downloaded yet", "gorun-qwen3-4b-v5-q4_k_m.gguf"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the Assistant page is missing %q", want)
 		}

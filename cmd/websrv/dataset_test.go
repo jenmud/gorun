@@ -66,6 +66,14 @@ type qaSeed struct {
 	Want []string `toml:"want"`
 }
 
+// output is what a read-only command prints, for simulated runs, and what it shows.
+type output struct {
+	Match   []string `toml:"match"`
+	Stdout  string   `toml:"stdout"`
+	Summary string   `toml:"summary"`
+	Want    []string `toml:"want"`
+}
+
 type failure struct {
 	ID        string   `toml:"id"`
 	Match     []string `toml:"match"`
@@ -117,6 +125,7 @@ type builder struct {
 	rng         *rand.Rand
 	scenarios   []*dsScenario
 	qa          []qaSeed
+	outputs     []output
 	train, eval []dsExample
 	counts      map[string]int
 }
@@ -135,12 +144,16 @@ func TestBuildDataset(t *testing.T) {
 	var fails struct {
 		Failure []failure `toml:"failure"`
 	}
-	for file, v := range map[string]any{"generate.toml": &gen, "qa.toml": &qa, "failures.toml": &fails} {
+	var outs struct {
+		Output []output `toml:"output"`
+	}
+	for file, v := range map[string]any{"generate.toml": &gen, "qa.toml": &qa, "failures.toml": &fails, "outputs.toml": &outs} {
 		if _, err := toml.DecodeFile(filepath.Join(seedDir, file), v); err != nil {
 			t.Fatalf("%s: %v", file, err)
 		}
 	}
 	b.qa = qa.QA
+	b.outputs = outs.Output
 
 	for _, s := range gen.Task {
 		b.taskExamples(s)
@@ -153,6 +166,9 @@ func TestBuildDataset(t *testing.T) {
 			b.gorunfileExamples(sc)
 			b.scheduleExamples(sc)
 			b.taskEditExamples(sc)
+			for range b.runChatRounds(sc) {
+				b.runChatExamples(sc)
+			}
 		}
 	}
 	for _, sc := range b.scenarios {
@@ -638,8 +654,8 @@ func (b *builder) clearRuns(sc *dsScenario) {
 
 // simTask is one task of a simulated run.
 type simTask struct {
-	server, addr, name, cmd, stderr, verify string
-	state, exit                             int
+	server, addr, name, cmd, stdout, stderr, verify string
+	state, exit                                     int
 }
 
 type simRun struct {
@@ -666,11 +682,18 @@ func runID(rng *rand.Rand) string {
 // simulate runs the scenario's SSH servers on paper: fail fails task on the servers in failOn,
 // tasks that depend on a failed or skipped one are skipped, and the rest pass.
 func (b *builder) simulate(sc *dsScenario, failOn []string, f *failure, task string) simRun {
-	var servers []gorun.Server
+	var servers, local []gorun.Server
 	for _, s := range pipelines(sc.cfg) {
-		if !s.IsLocal() && len(s.Tasks) > 0 {
+		switch {
+		case len(s.Tasks) == 0:
+		case s.IsLocal():
+			local = append(local, s)
+		default:
 			servers = append(servers, s)
 		}
+	}
+	if len(servers) == 0 {
+		servers = local
 	}
 	if len(servers) > 4 {
 		keep := servers[:0:0]
@@ -708,6 +731,9 @@ func (b *builder) simulate(sc *dsScenario, failOn []string, f *failure, task str
 				case (t.Check != "" || t.CheckCopies) && b.rng.IntN(5) < 2:
 					st.state = store.StateUnchanged
 				}
+			}
+			if st.state == store.StateDone {
+				st.stdout = b.outputFor(t.Cmd).Stdout
 			}
 			state[t.Name] = st.state
 			r.tasks = append(r.tasks, st)
@@ -773,7 +799,7 @@ func (b *builder) saveRun(sc *dsScenario, r simRun, at time.Time) {
 			d /= 20
 		}
 		total += d
-		must(st.UpsertTask(ctx, r.id, t.server, t.name, t.state, t.cmd, "", t.stderr, t.exit, d))
+		must(st.UpsertTask(ctx, r.id, t.server, t.name, t.state, t.cmd, strings.TrimLeft(t.stdout, "\n"), t.stderr, t.exit, d))
 		if t.state == store.StateFailed && strings.Contains(t.stderr, "verify failed") {
 			must(st.SetTaskSteps(ctx, r.id, t.server, t.name, nil, &store.Step{Command: t.verify, ExitCode: 3, Stdout: "inactive"}))
 		}
@@ -1526,3 +1552,192 @@ func dependsOn(cfg *gorun.Config, a, b string) bool {
 
 // durationText is a duration as Marshal writes it, such as 30m0s.
 func durationText(d time.Duration) string { return d.String() }
+
+// outputFor is what cmd prints when it is one of the catalogue's read-only commands, writing to
+// stdout, or else nothing.
+func (b *builder) outputFor(cmd string) output {
+	cmd = strings.TrimSpace(cmd)
+	if strings.ContainsAny(cmd, ">|\n") {
+		return output{}
+	}
+	for _, o := range b.outputs {
+		for _, m := range o.Match {
+			if cmd == m || strings.HasPrefix(cmd, m+" ") {
+				return o
+			}
+		}
+	}
+	return output{}
+}
+
+// runChatRounds is how many runs runChatExamples asks about: more where tasks print output.
+func (b *builder) runChatRounds(sc *dsScenario) int {
+	for _, t := range sc.cfg.Tasks {
+		if b.outputFor(t.Cmd).Stdout != "" {
+			return 10
+		}
+	}
+	return 3
+}
+
+// bullets lists lines as a markdown list.
+func bullets(lines []string) string { return "- " + strings.Join(lines, "\n- ") }
+
+// runChatExamples ask about a passed run on one server: its counts, which tasks were unchanged
+// and why, the list sorted, a wrong count put right, why tasks ran, and what they printed. The
+// answers come from the run's record, which the context counts and lists.
+func (b *builder) runChatExamples(sc *dsScenario) {
+	r := b.simulate(sc, nil, nil, "")
+	if len(r.tasks) == 0 {
+		return
+	}
+	srv := one(b.rng, r.servers)
+	r.servers = []gorun.Server{srv}
+	r.tasks = slices.DeleteFunc(r.tasks, func(t simTask) bool { return t.server != srv.Name })
+	if len(r.tasks) > maxListedTasks {
+		return
+	}
+	b.clearRuns(sc)
+	now := time.Date(2026, 11, 24+b.rng.IntN(4), b.rng.IntN(24), b.rng.IntN(60), 0, 0, time.UTC)
+	b.olderRuns(sc, now)
+	b.saveRun(sc, r, now)
+	focus, this := "", "the last run"
+	if b.rng.IntN(2) == 0 {
+		b.saveRun(sc, b.simulate(sc, nil, nil, ""), now.Add(time.Hour))
+		focus, this = r.id, "this run"
+	}
+	var ran, unchanged []simTask
+	for _, t := range r.tasks {
+		switch t.state {
+		case store.StateDone:
+			ran = append(ran, t)
+		case store.StateUnchanged:
+			unchanged = append(unchanged, t)
+		}
+	}
+	base := "runchat/" + sc.name + "/" + r.id[:8]
+	ask := func(id, kind string, conv []gorun.ChatMessage, a string, want []string) {
+		id = base + "/" + id
+		b.add(dsExample{ID: id, Kind: kind, Scenario: sc.name, Want: want,
+			Messages: b.chat(sc, conv, focus, a)}, id)
+	}
+	turn := func(conv []gorun.ChatMessage, a, q string) []gorun.ChatMessage {
+		return append(slices.Clone(conv), gorun.ChatMessage{Role: "assistant", Content: a}, gorun.ChatMessage{Role: "user", Content: q})
+	}
+	user := func(q string) []gorun.ChatMessage { return []gorun.ChatMessage{{Role: "user", Content: q}} }
+
+	// the summary, with the counts as the record has them
+	summary := fmt.Sprintf("Run %s (%s) passed: %d tasks on %s, none failed.", r.id, r.title, len(r.tasks), srv.Name)
+	switch {
+	case len(unchanged) == 0:
+		summary += " Every task ran."
+	case len(ran) == 0:
+		summary += " All of them were unchanged: their checks found nothing to do, which counts as a success."
+	default:
+		summary += fmt.Sprintf(" %d ran and %d %s unchanged: their checks found nothing to do, which counts as a success.", len(ran), len(unchanged), map[bool]string{true: "was", false: "were"}[len(unchanged) == 1])
+	}
+	sq := one(b.rng, []string{"Summarise " + this, "How did " + this + " go?", "summarise " + this + " for me"})
+	sumConv := user(sq)
+	ask("summary", "summary", sumConv, summary, []string{"passed", strconv.Itoa(len(r.tasks))})
+
+	// which were unchanged, and why: each one's check
+	why := func(ts []simTask) []string {
+		var out []string
+		for _, t := range ts {
+			c := sc.cfg.Tasks[t.name]
+			switch {
+			case c.Check != "":
+				out = append(out, fmt.Sprintf("%s: its check, `%s`, exited 0", t.name, c.Check))
+			case c.CheckCopies:
+				out = append(out, t.name+": its files were already there, as check_copies checks")
+			default:
+				out = append(out, t.name)
+			}
+		}
+		return out
+	}
+	if len(unchanged) > 0 {
+		lines := why(unchanged)
+		uq := one(b.rng, []string{"Which tasks were unchanged, and why?", "which checks were unchanged? show me why for each of them", "Which tasks didn't need to run?"})
+		ua := fmt.Sprintf("%d tasks were unchanged on %s. A check exits 0 when there is nothing to do, so the task's command didn't run:\n\n%s\n\nThe other %d ran.", len(unchanged), srv.Name, bullets(lines), len(ran))
+		if len(unchanged) == 1 {
+			ua = fmt.Sprintf("1 task was unchanged on %s. Its check exits 0 when there is nothing to do, so its command didn't run:\n\n%s\n\nThe other %d ran.", srv.Name, bullets(lines), len(ran))
+		}
+		ask("unchanged", "summary", user(uq), ua, []string{unchanged[0].name})
+
+		if len(unchanged) > 2 {
+			sorted := slices.Clone(lines)
+			slices.Sort(sorted)
+			if !slices.Equal(sorted, lines) {
+				oq := one(b.rng, []string{"order the list alphabetically", "sort them by name", "can you sort that list alphabetically?"})
+				ask("sorted", "summary", turn(user(uq), ua, oq), "Sorted by name:\n\n"+bullets(sorted), []string{strings.SplitN(sorted[0], ":", 2)[0]})
+			}
+		}
+
+		// the user remembers another count: the record decides, and says what ran
+		wrong := len(unchanged) + 1 + b.rng.IntN(6)
+		if b.rng.IntN(2) == 0 && len(unchanged) > 1 {
+			wrong = b.rng.IntN(len(unchanged))
+		}
+		names := make([]string, len(unchanged))
+		for i, t := range unchanged {
+			names[i] = t.name
+		}
+		pq := one(b.rng, []string{
+			fmt.Sprintf("not true, there are %d unchanged tasks, not %d", wrong, len(unchanged)),
+			fmt.Sprintf("no, %d of them were unchanged", wrong),
+			fmt.Sprintf("that's wrong, I count %d unchanged", wrong),
+		})
+		pa := fmt.Sprintf("The record of run %s shows %d unchanged on %s, not %d: %s.", r.id, len(unchanged), srv.Name, wrong, list(names))
+		if len(ran) > 0 {
+			rn := make([]string, len(ran))
+			for i, t := range ran {
+				rn[i] = t.name
+			}
+			pa += fmt.Sprintf(" The other %d ran (done): %s.", len(ran), list(rn))
+		}
+		pa += " If you're looking at another run, tell me which one and I'll check it."
+		ask("pushback", "summary", turn(sumConv, summary, pq), pa, []string{strconv.Itoa(len(unchanged))})
+	}
+
+	// why the ones that ran, ran: a check that found work, or no check at all
+	if len(ran) > 0 && len(ran) <= 15 {
+		var lines []string
+		for _, t := range ran {
+			c := sc.cfg.Tasks[t.name]
+			if c.Check != "" || c.CheckCopies {
+				lines = append(lines, t.name+": its check found something to do, so it ran")
+			} else {
+				lines = append(lines, t.name+": it has no check, so it runs every time")
+			}
+		}
+		rq := one(b.rng, []string{"Which tasks changed, and why?", "which tasks actually ran and why?", "Why did those tasks run?"})
+		ask("ran", "summary", user(rq), fmt.Sprintf("%d tasks ran on %s, and all of them passed:\n\n%s", len(ran), srv.Name, bullets(lines)), []string{ran[0].name})
+	}
+
+	// what a task printed, from the record's output
+	var printed, silent []simTask
+	for _, t := range ran {
+		if t.stdout != "" {
+			printed = append(printed, t)
+		} else {
+			silent = append(silent, t)
+		}
+	}
+	if len(printed) > 0 {
+		t := one(b.rng, printed)
+		o := b.outputFor(t.cmd)
+		sum := fill(o.Summary, map[string]string{"server": t.server, "task": t.name})
+		q := one(b.rng, []string{"What did %s print?", "summarise the output of %s", "tell me more about the output of %s, what am I looking at?", "what does the stdout of %s say?"})
+		ask("output/"+t.name, "output", user(fmt.Sprintf(q, t.name)), fmt.Sprintf("%s on %s ran `%s`. %s", t.name, t.server, strings.TrimSpace(t.cmd), sum), o.Want)
+		sq := one(b.rng, []string{"show me the output of %s", "Show me what %s printed", "paste the stdout of %s"})
+		ask("show/"+t.name, "output", user(fmt.Sprintf(sq, t.name)),
+			fmt.Sprintf("%s printed this on %s (the end of its output, as the run kept it):\n\n```\n%s\n```", t.name, t.server, strings.TrimSpace(t.stdout)), o.Want[:1])
+	}
+	if len(silent) > 0 {
+		t := one(b.rng, silent)
+		q := one(b.rng, []string{"show me the output of %s", "what did %s print?"})
+		ask("silent/"+t.name, "output", user(fmt.Sprintf(q, t.name)),
+			fmt.Sprintf("%s ran on %s and passed, but it printed nothing: the run kept no output from it.", t.name, t.server), []string{"nothing"})
+	}
+}

@@ -421,10 +421,11 @@ question sends it:
 - for a question about gorun, the two sections of these docs that match it best (from `docs/`,
   built into gorun), so it answers from them rather than from memory; requests, such as for
   tasks, and questions about runs aren't sent any;
-- the ten newest runs;
-- the newest run in detail: every task's state, and the command, exit code and end of the output
-  of each failed task. A run of more than 40 tasks is counted per server instead, and only its
-  tasks that didn't pass are listed.
+- the ten newest runs, leaving out a schedule's missed times (runs of no tasks);
+- the newest run in detail, or the one you asked from: how many tasks ended in each state, every
+  task's state, the command, exit code and end of the output of each failed task, and, while
+  there is room, the end of what each task that passed printed. A run of more than 40 tasks is
+  counted per server instead, and only its tasks that didn't pass are listed.
 
 The **Model** panel above the chat says where the model stands: not downloaded yet, downloaded
 but not loaded, or loaded on the GPU or the CPU, and why it is on the CPU. Once loaded it shows

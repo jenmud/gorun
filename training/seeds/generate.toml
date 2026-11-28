@@ -1879,3 +1879,46 @@ name = "monitoring"
 port = "5432"
 ip = "10.0.1.21"
 name = "app-1"
+
+# --- Real questions from gorun -serve's training data (round 5)
+
+[[task]]
+id = "api-summary"
+request = [
+  "write a task that pulls the output of <<url>> and summarises how many <<things>> passed and failed, and what the success rate was",
+  "Count the passed and failed <<things>> from <<url>> and give me the success rate",
+  "a task that fetches the JSON from <<url>> and reports passed, failed and the success rate",
+]
+note = "One task on this machine (local = true). It saves the API's reply to <<file>> and counts it with jq. It assumes the reply is a JSON array of objects whose status is \"passed\" or \"failed\": change .status to the field yours has. The URL is in single quotes, because its & would otherwise end the command. The script is a '''multi-line''' string, so its quotes need no escaping. It reports every time, so its check never passes, and verify fails it when the reply isn't a JSON array."
+answer = """
+[tasks.<<name>>]
+description = "Count the passed and failed <<things>> from the API"
+local = true
+check = "false"
+cmd = '''
+set -e
+curl -fsS '<<url>>' -o <<file>>
+jq -r '
+  (map(select(.status == "passed")) | length) as $p
+  | (map(select(.status == "failed")) | length) as $f
+  | "passed: \\($p)", "failed: \\($f)",
+    "success rate: \\(if $p + $f > 0 then ($p * 1000 / ($p + $f) | round) / 10 else 0 end)%"
+' <<file>>
+'''
+verify = "jq -e 'type == \\"array\\"' <<file>> >/dev/null"
+"""
+[[task.params]]
+url = "https://api.example.com/v1/services/1005/results?q=place&limit=3"
+things = "bets"
+name = "bet-stats"
+file = "/tmp/bet-stats.json"
+[[task.params]]
+url = "https://ci.example.com/api/builds?branch=main&limit=50"
+things = "builds"
+name = "build-stats"
+file = "/var/tmp/builds.json"
+[[task.params]]
+url = "https://tests.example.com/api/v2/runs?suite=smoke&last=20"
+things = "test runs"
+name = "smoke-stats"
+file = "/tmp/smoke-runs.json"

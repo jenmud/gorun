@@ -4,6 +4,19 @@ Release notes for each tag are generated from the commit subjects (see `.gorelea
 the subjects say what changed. This file lists the changes since the last tag, and is copied into
 the release notes when a version is cut.
 
+## v0.40.3 (since v0.40.2)
+
+### The assistant's model is v5, and it sees what passed tasks printed
+- The assistant is now sent the end of what each passed task printed (while there is room), the
+  run's counts by state ("23 tasks: 17 done, 6 unchanged"), and no longer a schedule's missed
+  times among the recent runs. Before, it only saw failed tasks' output and invented the rest.
+- The default model is now `gorun-qwen3-4b-v5-q4_k_m.gguf`, v4 trained further on real
+  conversations: what common commands print (`df -h`, `docker ps`, `docker inspect`, `ss`, …) and
+  how to summarise it, which tasks were unchanged and why, why others ran, and a wrong count put
+  right from the run's record. It scores 84.7% on the held-out set, against v4's 81.5%, with
+  summaries up from 87% to 99% and saying what a task printed from 71% to 100%; answers to general
+  questions about gorun are still its weak spot. Pin v4 with `GORUN_LLM_MODEL` if you need it.
+
 ## v0.40.2 (since v0.40.1)
 
 ### The assistant's model is v4

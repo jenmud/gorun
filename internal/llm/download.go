@@ -55,8 +55,8 @@ func ggml(suffix string) string {
 // (training/), 4-bit, 2.5 GB, Apache 2.0. Each build has its own file name because cached models
 // are keyed by name and never checked again.
 var DefaultModel = asset{
-	"https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF/resolve/main/gorun-qwen3-4b-v4-q4_k_m.gguf",
-	"2c2f04366ea17dbd8b57df8c457700c82f18656d879d597ef5b765403dcfa57f",
+	"https://huggingface.co/jenmud/gorun-qwen3-4b-GGUF/resolve/main/gorun-qwen3-4b-v5-q4_k_m.gguf",
+	"ae51617c61794d257bd7bf42682adf12274854b7c3f2cc1595b02f31c32ff2ea",
 }
 
 // Dir is where llama.cpp and the models are kept: GORUN_LLM_DIR, else llm in gorun's cache

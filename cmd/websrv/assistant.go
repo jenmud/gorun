@@ -586,6 +586,13 @@ func (a *app) chatContext(ctx context.Context, cfg *gorun.Config, runID string) 
 		b.WriteString("\nNo runs have been saved yet.\n")
 		return b.String()
 	}
+	// a schedule's missed or paused times are saved as runs of no tasks: they would crowd out
+	// the runs that did something
+	if real := slices.DeleteFunc(slices.Clone(runs), func(r store.RunSummary) bool {
+		return r.Finished && r.Success && r.TotalTasks == 0
+	}); len(real) > 0 {
+		runs = real
+	}
 	b.WriteString("\n## Recent runs, newest first\n")
 	for _, r := range runs[:min(len(runs), 10)] {
 		writeRunLine(&b, r)
@@ -718,6 +725,8 @@ func (a *app) writeRunDetail(ctx context.Context, b *strings.Builder, cfg *gorun
 			failed = append(failed, t)
 		}
 	}
+	// counted here, as a small model miscounts a list
+	writeStateCounts(b, run.Tasks)
 	// a big run is counted per server, and only its tasks that didn't pass are listed
 	listed := run.Tasks
 	if len(run.Tasks) > maxListedTasks {
@@ -774,6 +783,68 @@ func (a *app) writeRunDetail(ctx context.Context, b *strings.Builder, cfg *gorun
 			}
 		}
 	}
+	a.writeOutputs(ctx, b, run, listed, budget)
+}
+
+// writeOutputs writes the end of what each listed task that ran and passed printed, while
+// budget allows, and names the ones that printed nothing, so questions about a run's output are
+// answered from it.
+func (a *app) writeOutputs(ctx context.Context, b *strings.Builder, run *store.RunDetail, listed []store.TaskDetail, budget func() int) {
+	var silent []string
+	header, left := false, 0
+	for _, t := range listed {
+		if t.State != store.StateDone {
+			continue
+		}
+		if budget() < 1500 {
+			left++
+			continue
+		}
+		full, err := a.store.GetTask(ctx, run.ID, t.Server, t.Name)
+		if err != nil {
+			continue
+		}
+		// keep the first line's indent: it lines columns up
+		out := strings.TrimRight(strings.TrimLeft(full.Stdout, "\n"), " \t\n")
+		if strings.TrimSpace(out) == "" {
+			silent = append(silent, t.Name+" on "+t.Server)
+			continue
+		}
+		if !header {
+			b.WriteString("\n## What the tasks that ran printed (the end of stdout)\n")
+			header = true
+		}
+		fmt.Fprintf(b, "\n### %s on %s\n%s\n", t.Name, t.Server, tail(out, maxOutputChars/2))
+	}
+	if len(silent) > 0 {
+		fmt.Fprintf(b, "\nPrinted nothing: %s\n", strings.Join(silent, ", "))
+	}
+	if left > 0 {
+		fmt.Fprintf(b, "(the output of %d more tasks is left out for space)\n", left)
+	}
+}
+
+// stateOrder is the order writeStateCounts names the states in.
+var stateOrder = []int{store.StateDone, store.StateUnchanged, store.StateFailed, store.StateSkipped,
+	store.StateWouldRun, store.StateRunning, store.StatePending}
+
+// writeStateCounts writes how many of the tasks ended in each state.
+func writeStateCounts(b *strings.Builder, tasks []store.TaskDetail) {
+	counts := map[int]int{}
+	for _, t := range tasks {
+		counts[t.State]++
+	}
+	var parts []string
+	for _, s := range stateOrder {
+		if counts[s] > 0 {
+			parts = append(parts, fmt.Sprintf("%d %s", counts[s], shortStates[s]))
+		}
+	}
+	if len(parts) == 0 {
+		b.WriteString("No tasks ran.\n")
+		return
+	}
+	fmt.Fprintf(b, "%d tasks: %s\n", len(tasks), strings.Join(parts, ", "))
 }
 
 // maxListedTasks is how many of a run's tasks the context lists one by one.

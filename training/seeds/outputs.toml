@@ -1,0 +1,132 @@
+# What read-only commands print, for simulated runs: a task whose cmd contains match prints
+# stdout, and summary says what it shows. <<server>> and <<task>> are filled in.
+
+[[output]]
+match = ["df -h"]
+stdout = '''
+Filesystem      Size  Used Avail Use% Mounted on
+udev            3.9G     0  3.9G   0% /dev
+tmpfs           796M  1.2M  795M   1% /run
+/dev/sda1        49G   31G   16G  67% /
+tmpfs           3.9G     0  3.9G   0% /dev/shm
+/dev/sda15      124M   12M  113M  10% /boot/efi
+/dev/sdb1       197G  158G   30G  85% /var
+'''
+summary = "It is df -h: the disk usage of each mounted filesystem. / (/dev/sda1) is 67% full, 31G of 49G used with 16G free, and /var (/dev/sdb1) is the fullest at 85%, 158G of 197G with 30G free. The rest are small tmpfs and boot filesystems, nearly empty."
+want = ["85%", "/var"]
+
+[[output]]
+match = ["free -h", "free -m"]
+stdout = '''
+               total        used        free      shared  buff/cache   available
+Mem:           7.7Gi       2.9Gi       1.1Gi       212Mi       3.7Gi       4.5Gi
+Swap:          2.0Gi       256Mi       1.8Gi
+'''
+summary = "It is free: the memory use. Of 7.7Gi of memory, 2.9Gi is used and 4.5Gi is available (the 3.7Gi of cache is given back when programs need it). 256Mi of the 2.0Gi of swap is in use."
+want = ["4.5Gi", "available"]
+
+[[output]]
+match = ["uptime"]
+stdout = '''
+ 01:39:02 up 23 days,  4:11,  2 users,  load average: 0.42, 0.37, 0.31
+'''
+summary = "It is uptime: <<server>> has been up 23 days and 4 hours, 2 users are logged in, and the load average is 0.42 over the last minute, 0.37 over 5 minutes and 0.31 over 15: it is mostly idle."
+want = ["23 days", "load"]
+
+[[output]]
+match = ["cat /etc/os-release"]
+stdout = '''
+PRETTY_NAME="Ubuntu 24.04.1 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.1 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+'''
+summary = "It is /etc/os-release: <<server>> runs Ubuntu 24.04.1 LTS (Noble Numbat), a Debian-based release."
+want = ["Ubuntu 24.04"]
+
+[[output]]
+match = ["who"]
+stdout = '''
+ops      pts/0        2026-11-28 00:41 (192.0.2.10)
+deploy   pts/1        2026-11-28 01:02 (192.0.2.24)
+'''
+summary = "It is who: two people are logged in to <<server>>, ops since 00:41 from 192.0.2.10 and deploy since 01:02 from 192.0.2.24."
+want = ["ops", "deploy"]
+
+[[output]]
+match = ["ss -ltn", "ss -tln", "ss -tlnp"]
+stdout = '''
+State  Recv-Q Send-Q Local Address:Port Peer Address:Port
+LISTEN 0      4096       127.0.0.53%lo:53        0.0.0.0:*
+LISTEN 0      128          0.0.0.0:22        0.0.0.0:*
+LISTEN 0      4096         0.0.0.0:8766      0.0.0.0:*
+LISTEN 0      511        127.0.0.1:6379      0.0.0.0:*
+'''
+summary = "It is ss -ltn: the TCP ports listening on <<server>>. SSH on 22 and port 8766 listen on every address; DNS (53, systemd-resolved) and 6379 (Redis, usually) listen only on this machine."
+want = ["8766", "22"]
+
+[[output]]
+match = ["ip -br addr", "ip -br a"]
+stdout = '''
+lo               UNKNOWN        127.0.0.1/8 ::1/128
+eth0             UP             192.0.2.41/24 2001:db8::41/64
+docker0          UP             198.51.100.1/16
+'''
+summary = "It is ip -br addr: <<server>>'s network interfaces. eth0 is up with 192.0.2.41/24 (and an IPv6 address), docker0 is Docker's bridge at 198.51.100.1/16, and lo is the loopback."
+want = ["eth0", "192.0.2.41"]
+
+[[output]]
+match = ["docker ps"]
+stdout = '''
+CONTAINER ID   IMAGE                                       COMMAND           CREATED       STATUS       PORTS                    NAMES
+86f5bd376750   registry.example.com/mockservice:3.8.0      "/app/start.sh"   8 days ago    Up 8 days    0.0.0.0:8766->8766/tcp   mockservice
+4c1d2e3f5a6b   redis:7                                     "docker-entry…"   8 days ago    Up 8 days    6379/tcp                 redis
+'''
+summary = "It is docker ps: two containers are running on <<server>>, both up for 8 days. mockservice (registry.example.com/mockservice:3.8.0) publishes port 8766, and redis:7 listens on 6379 inside Docker's network only."
+want = ["mockservice", "8766"]
+
+[[output]]
+match = ["docker system df"]
+stdout = '''
+TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+Images          9         2         4.183GB   3.412GB (81%)
+Containers      2         2         1.2MB     0B (0%)
+Local Volumes   3         1         812.4MB   604.1MB (74%)
+Build Cache     0         0         0B        0B
+'''
+summary = "It is docker system df: Docker's disk use on <<server>>. Its 9 images take 4.2GB, but only 2 are in use, so 3.4GB (81%) could be freed with docker image prune; the 3 volumes take 812MB, 604MB of it unused. Nothing here says the disk is full."
+want = ["3.4", "prune"]
+
+[[output]]
+match = ["docker stats --no-stream"]
+stdout = '''
+CONTAINER ID   NAME          CPU %     MEM USAGE / LIMIT     MEM %     NET I/O           BLOCK I/O         PIDS
+86f5bd376750   mockservice   1.84%     312.4MiB / 7.7GiB     3.96%     1.21GB / 988MB    48.1MB / 0B       41
+4c1d2e3f5a6b   redis         0.21%     9.8MiB / 7.7GiB       0.12%     88.2MB / 61.4MB   1.2MB / 4.1MB     6
+'''
+summary = "It is docker stats: each container's use right now on <<server>>. mockservice uses 1.8% CPU and 312MiB of memory (4%), redis 0.2% CPU and 10MiB: both are light."
+want = ["mockservice", "312"]
+
+[[output]]
+match = ["docker inspect"]
+stdout = '''
+[{"Id":"86f5bd376750137cb9ba18d8108fb0b7078e62ccd6ef5f2123fa3cfe42579308","Created":"2025-06-02T11:20:07.512004311Z","Name":"/mockservice","RestartCount":0,"State":{"Status":"running","Running":true,"ExitCode":0,"Error":"","StartedAt":"2026-11-20T03:14:22.104558901Z","Health":null},"Config":{"Image":"registry.example.com/mockservice:3.8.0"},"HostConfig":{"RestartPolicy":{"Name":"unless-stopped"}},"NetworkSettings":{"Ports":{"8766/tcp":[{"HostIp":"0.0.0.0","HostPort":"8766"}]},"Networks":{"bridge":{"IPAddress":"198.51.100.2","Gateway":"198.51.100.1"}}}}]
+'''
+summary = "It is docker inspect, the container's settings as JSON. The container mockservice runs registry.example.com/mockservice:3.8.0, is running, and has been since 2026-11-20 03:14 UTC with no restarts; it restarts unless stopped. It publishes port 8766 on every address, and its address on Docker's bridge is 198.51.100.2. It has no health check."
+want = ["running", "8766"]
+
+[[output]]
+match = ["systemctl status"]
+stdout = '''
+● nginx.service - A high performance web server and a reverse proxy server
+     Loaded: loaded (/usr/lib/systemd/system/nginx.service; enabled; preset: enabled)
+     Active: active (running) since Tue 2026-11-24 09:12:40 UTC; 3 days ago
+   Main PID: 1123 (nginx)
+      Tasks: 3 (limit: 9414)
+     Memory: 6.1M
+'''
+summary = "It is systemctl status: the service is enabled at boot and active (running) on <<server>>, since 2026-11-24 09:12 UTC, 3 days ago, using 6.1M of memory."
+want = ["running", "enabled"]
